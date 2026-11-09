@@ -26,12 +26,22 @@ namespace Game.Gameplay.Ring.Stage
 
         private struct Mirror
         {
-            public Zone Zone;
+            /// <summary>Пара за рингом (склейка місця); на рингу — false.</summary>
+            public bool Outside;
             public Posture Posture;
             public int Damage;
         }
 
         private readonly Mirror[] _m = new Mirror[2];
+
+        /// <summary>
+        /// Скільки кроків планів зіграно підстановкою кліпа (<see cref="RingClipTable.StandIns"/>) за матч — критерій М1 «0»;
+        /// скидається в <see cref="Begin"/>. Кожна підстановка пишеться в журнал Unity рядком «[Ринг] підстановок кліпів».
+        /// </summary>
+        public int StandIns { get; private set; }
+
+        /// <summary>Скільки парних кроків стартувало посеред розбігу кліпа (<see cref="RunInStart"/>) — теж тимчасова підстановка до нових кліпів.</summary>
+        public int RunInStarts { get; private set; }
 
         public bool IsBusy
         {
@@ -48,15 +58,16 @@ namespace Game.Gameplay.Ring.Stage
             _walkCo.Clear();
             _running = false;
             _ended = false;
+            _afterCut = false;
+            StandIns = 0;
+            RunInStarts = 0;
             _q.Clear();
             _e = e;
             _seen = e != null ? e.State.Log.Count : 0;
-            _rest[0] = _rest[1] = null;
-            _pendingRest[0] = _pendingRest[1] = null;
             if (e != null)
             {
-                _m[0] = new Mirror { Zone = e.State.Player.Zone, Posture = e.State.Player.Posture, Damage = e.State.Player.Damage };
-                _m[1] = new Mirror { Zone = e.State.Rival.Zone, Posture = e.State.Rival.Posture, Damage = e.State.Rival.Damage };
+                _m[0] = new Mirror { Outside = e.State.Outside, Posture = e.State.Player.Posture, Damage = e.State.Player.Damage };
+                _m[1] = new Mirror { Outside = e.State.Outside, Posture = e.State.Rival.Posture, Damage = e.State.Rival.Damage };
             }
             else
             {
@@ -95,7 +106,7 @@ namespace Game.Gameplay.Ring.Stage
             if (!_running && _q.Count > 0 && !_ended) StartCoroutine(Run());
         }
 
-        // ============================ дзеркало зон і поз ============================
+        // ============================ дзеркало місця пари і поз ============================
 
         private static int I(MatchSide s) { return s == MatchSide.Player ? 0 : 1; }
 
@@ -110,7 +121,7 @@ namespace Game.Gameplay.Ring.Stage
                     case MatchEffectKind.Down: _m[k].Posture = Posture.Down; break;
                     case MatchEffectKind.Stand: _m[k].Posture = Posture.Standing; break;
                     case MatchEffectKind.Stunned: _m[k].Posture = Posture.Stunned; break;
-                    case MatchEffectKind.ZoneChange: _m[k].Zone = (Zone)fx.Amount; _rest[k] = null; break;
+                    case MatchEffectKind.Place: _m[0].Outside = _m[1].Outside = fx.Amount != 0; break;   // Amount 1 — пара за рингом, 0 — на рингу
                     case MatchEffectKind.Damage: _m[k].Damage += fx.Amount; break;
                 }
             }
@@ -118,26 +129,16 @@ namespace Game.Gameplay.Ring.Stage
             if (ev.Kind == MatchEventKind.TurnEnd && _m[I(ev.Actor)].Posture == Posture.Stunned) _m[I(ev.Actor)].Posture = Posture.Standing;
         }
 
-        /// <summary>
-        /// Місце спокою після кидка (біля канатів, у куті): там, де кліп закінчився, поки зона та сама. Без нього борці
-        /// ковзали б із кута чи від канатів на типові точки зон.
-        /// </summary>
-        private readonly Vector3?[] _rest = new Vector3?[2];
-
+        /// <summary>Місце борця пари зараз: на рингу — центр, за рингом — точка пари (одне місце на обох, див. <see cref="RingStage3D.PairPos"/>).</summary>
         private Vector3 Canon(MatchSide s)
         {
-            var r = _rest[I(s)];
-            return r.HasValue ? r.Value : RingStage3D.ZonePos(s, _m[I(s)].Zone);
+            return RingStage3D.PairPos(s, _m[I(s)].Outside);
         }
-
-        /// <summary>У куті після кидка — спирається на кут (петля), курс не міняє.</summary>
-        private bool LeansInCorner(MatchSide s) { return _rest[I(s)].HasValue && _m[I(s)].Zone == Zone.Corner && _m[I(s)].Posture != Posture.Down; }
 
         private string IdleName(MatchSide s)
         {
             var m = _m[I(s)];
             if (m.Posture == Posture.Down) return null;
-            if (LeansInCorner(s) && _s.Info("Move_Corner_Lean_Loop") != null) return "Move_Corner_Lean_Loop";
             if (m.Posture == Posture.Stunned) return "Idle_Hurt_Head_Loop";
             if (m.Damage >= MatchRules.ExhaustedDamage) return "Idle_Tired_Loop";
             return "Ring_Stance_Loop";
@@ -145,10 +146,28 @@ namespace Game.Gameplay.Ring.Stage
 
         private void PlaceCanonical()
         {
-            Vector3 pp = Canon(MatchSide.Player), pr = Canon(MatchSide.Rival);
-            _s.Place(_s.Actor(MatchSide.Player), pp, RingStage3D.YawTo(pp, pr), IdleName(MatchSide.Player) ?? "Ring_Stance_Loop");
-            _s.Place(_s.Actor(MatchSide.Rival), pr, RingStage3D.YawTo(pr, pp), IdleName(MatchSide.Rival) ?? "Ring_Stance_Loop");
-            _s.Place(_s.Referee, RingStage3D.RefPos, 180f, "Ref_Idle_Loop");
+            bool o = _m[0].Outside;
+            _s.Place(_s.Actor(MatchSide.Player), Canon(MatchSide.Player), RingStage3D.PairYaw(MatchSide.Player, o), IdleName(MatchSide.Player) ?? "Ring_Stance_Loop");
+            _s.Place(_s.Actor(MatchSide.Rival), Canon(MatchSide.Rival), RingStage3D.PairYaw(MatchSide.Rival, o), IdleName(MatchSide.Rival) ?? "Ring_Stance_Loop");
+            if (o)
+            {
+                // Старт зі стану «пара за рингом» (відновлення, демо): рефері — на своєму місці за рингом, кадр — «за рингом».
+                Vector3 rp = OutsideRefPos();
+                _s.Place(_s.Referee, rp, RingStage3D.YawTo(rp, RingStage3D.OutsideAnchor), "Ref_Idle_Loop");
+                OutsideStillShot();
+            }
+            else _s.Place(_s.Referee, RingStage3D.RefPos, 180f, "Ref_Idle_Loop");
+        }
+
+        /// <summary>
+        /// Склейка кадру на план <paramref name="cam"/> — не наїзд. <see cref="RingStage3D.SetShot"/> склеює лише з кіноплану чи
+        /// в низький план, тож спершу кіноплан-заглушка зі склейкою, у тому самому кадрі одразу змінений на <paramref name="cam"/>
+        /// (камера проміжного плану не бачить). Обхід до публічного <c>RingStage3D.CutTo</c> — запит «Изучение» через ПМ.
+        /// </summary>
+        private void HardCut(StageCam cam)
+        {
+            _s.Cine(Vector3.zero, Vector3.forward, 40f, true);
+            _s.SetShot(cam);
         }
 
         // ============================ черга ============================
@@ -269,6 +288,13 @@ namespace Game.Gameplay.Ring.Stage
                 _ev = ev;
                 _beatFired = false;
                 _plan = RingBeats.For(steps, _s.Events, ClipLen);
+                int si = RingClipTable.StandIns(steps);
+                if (si > 0)
+                {
+                    StandIns += si;
+                    Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] підстановок кліпів: +{0} (за матч {1}) — {2} {3} {4}",
+                        si, StandIns, ev.Kind, ev.Action, ev.MoveKey ?? "—"));
+                }
                 // Кінець матчу — дзвін (після відліку: подія йде слідом за утриманням). Світло-шоу — у RunEnd, на склейці.
                 if (_s.Sound != null && ev.Kind == MatchEventKind.MatchEnd) _s.Sound.BellEnd();
                 // Без кроків (кінець ходу, продаж) — такт одразу.
@@ -276,26 +302,25 @@ namespace Game.Gameplay.Ring.Stage
                 for (int i = 0; i < steps.Count; i++)
                 {
                     var st = steps[i];
-                    if (st.Kind == StageStepKind.Walk && !applied) { Apply(ev); applied = true; }
+                    if (st.Kind == StageStepKind.Place && !applied) { Apply(ev); applied = true; }   // місце пари міняється склейкою на кроці Place
                     yield return RunStep(st, ev, i);
                 }
                 // Такт, що не настав (кліпа нема чи крок коротший за мітку), — у кінці кроків: текст не губиться.
                 if (!_beatFired) BeatNow(ev);
                 _s.Reveal(ev.Seq);
                 if (!applied) Apply(ev);
-                // Після кидка — місце спокою там, де кліп закінчився (зону вже змінено ефектом події).
-                for (int k = 0; k < 2; k++)
-                    if (_pendingRest[k].HasValue) { _rest[k] = _pendingRest[k]; _pendingRest[k] = null; }
                 // Стан ядра = поза в кадрі: «лежить» без падіння — продаж падінням; «стоїть», а лежить — встає.
                 if (ev.Kind != MatchEventKind.MatchEnd) yield return MatchPoses(ev);
                 // Натовп живе за ажіотажем; кікаут і кінець матчу — вибух залу.
                 if (_e != null) _s.CrowdMood(_e.State.Hype);
                 if (ev.Kind == MatchEventKind.MatchEnd) _s.CrowdPop();
                 if (ev.Kind == MatchEventKind.MatchEnd) { _ended = true; break; }
+                _afterCut = false;
                 if (steps.Count > 0 || ev.Kind == MatchEventKind.TurnEnd) yield return Settle();
             }
             _running = false;
-            if (!_ended) _s.SetShot(StageCam.Overview);
+            // Пара за рингом лишається в кадрі «за рингом»: загальний план дивиться на ринг.
+            if (!_ended && !_m[0].Outside) _s.SetShot(StageCam.Overview);
         }
 
         // ============================ кроки ============================
@@ -303,56 +328,30 @@ namespace Game.Gameplay.Ring.Stage
         private IEnumerator RunStep(StageStep st, MatchEvent ev, int idx)
         {
             // Утримання — низька камера біля мату (рахунок «раз — два»), а не загальний кіноплан.
-            _s.SetShot(ev.Kind == MatchEventKind.Kickout ? StageCam.Low : st.Cam);
+            // Склейки (Cut, Place) ставлять кадр самі — в ту саму мить, що й стрибок тазу. За рингом кадр веде Cine пари.
+            if (st.Kind != StageStepKind.Cut && st.Kind != StageStepKind.Place && !_m[0].Outside)
+            {
+                var cam = ev.Kind == MatchEventKind.Kickout ? StageCam.Low : st.Cam;
+                // Після склейки приземлення (пара чи промах сам) — теж склейкою кадру, навіть якщо план склейки не вмістився
+                // і камера лишилась у низькому плані (тоді SetShot не склеює).
+                if ((st.Kind == StageStepKind.Pair || st.Kind == StageStepKind.Solo) && _afterCut) HardCut(cam);
+                else _s.SetShot(cam);
+            }
             switch (st.Kind)
             {
                 case StageStepKind.Pair: yield return RunPair(st, ev, idx); break;
                 case StageStepKind.Solo: yield return RunSolo(st, idx); break;
-                case StageStepKind.Walk: ArmBeat(idx); yield return RunWalk(st); break;
+                case StageStepKind.Cut: yield return RunCut(st); break;
+                case StageStepKind.Place: yield return RunPlace(st, ev); break;
                 case StageStepKind.Ref: yield return RunRef(st, idx); break;
                 case StageStepKind.End: yield return RunEnd(idx); break;
-                case StageStepKind.Whip: yield return st.Corner ? RunWhipCorner(st, idx) : RunWhipRopes(st, idx); break;
             }
         }
 
-        // ============================ кидок у канати й у кут ============================
+        // ============================ геометрія рингу ============================
 
         /// <summary>Лінія каната рингу від центру, м (спортзал 16 футів: 2,138 — <c>CAST_ANIM.md</c>, «Ринг і місця кліпів»).</summary>
         private static float RopeLine { get { return RingStage3D.RingHalf + 0.10f; } }
-
-        /// <summary>Стійка кута від центру по кожній осі, м (спортзал: 2,218).</summary>
-        private static float PostLine { get { return RingStage3D.RingHalf + 0.18f; } }
-
-        /// <summary>Лінія каната кліпа відскоку від його старту, одиниці ригу: ROPE_D + 0,12 (генератор ring_anims_ropes.py).</summary>
-        private const float RopeLineRig = 1.83f;
-
-        /// <summary>Кросфейд бігу в кліп відскоку, с (коротко: таз недовго несе стару швидкість).</summary>
-        private const float RopeFade = 0.12f;
-
-        private readonly Dictionary<RingActor, float> _scale = new Dictionary<RingActor, float>();
-
-        /// <summary>
-        /// Масштаб тіла: метри зсуву тазу на цьому тілі на одиницю ригу кліпа (Humanoid масштабує зсув під пропорції). З
-        /// кривої циклу бігу на тілі проти його зсуву в ring_anims_motion.txt.
-        /// </summary>
-        private float BodyScale(RingActor a)
-        {
-            float k;
-            if (_scale.TryGetValue(a, out k)) return k;
-            k = 1f;
-            var run = _s.Clip("Run_Loop");
-            float rig = _s.MotionNet("Run_Loop");
-            if (run != null && rig > 0.3f)
-            {
-                var pos = new Vector3[2];
-                var yaw = new float[2];
-                a.SamplePath(run, new[] { 0f, run.length - 1f / 60f }, pos, yaw);
-                float d = new Vector2(pos[1].x, pos[1].z).magnitude * run.length / (run.length - 1f / 60f);
-                if (d > 0.1f) k = Mathf.Clamp(d / rig, 0.6f, 1.6f);
-            }
-            _scale[a] = k;
-            return k;
-        }
 
         /// <summary>Шлях кліпа на тілі з кроком 1/30 с до <paramref name="tEnd"/>: таз (x праворуч, z уперед від старту) і курс.</summary>
         private static void Path(RingActor a, AnimationClip c, float tEnd, out float[] t, out Vector3[] p, out float[] y, bool slotFrame = false)
@@ -365,395 +364,165 @@ namespace Game.Gameplay.Ring.Stage
             a.SamplePath(c, t, p, y, slotFrame);
         }
 
-        /// <summary>Миті кліпа відскоку на цьому тілі: «попереду до каната» на кожній миті (м) і до якої миті входити.</summary>
-        private sealed class RopeGeo
-        {
-            public float[] T, Ahead, Speed;
-            public float EntryMax;
-
-            public float AheadAt(float t)
-            {
-                if (t <= T[0]) return Ahead[0];
-                for (int i = 1; i < T.Length; i++)
-                    if (t <= T[i]) return Mathf.Lerp(Ahead[i - 1], Ahead[i], (t - T[i - 1]) / Mathf.Max(1e-4f, T[i] - T[i - 1]));
-                return Ahead[Ahead.Length - 1];
-            }
-
-            /// <summary>Мить входу, щоб лінія каната кліпа лягла на канат: попереду до каната рівно <paramref name="need"/> м.</summary>
-            public float Solve(float need)
-            {
-                float lo = 0.04f, hi = EntryMax;
-                if (AheadAt(lo) <= need) return lo;
-                if (AheadAt(hi) >= need) return hi;
-                for (int i = 0; i < 30; i++) { float m = (lo + hi) * 0.5f; if (AheadAt(m) > need) lo = m; else hi = m; }
-                return (lo + hi) * 0.5f;
-            }
-        }
-
-        private RopeGeo Rope(RingActor a, AnimationClip rope)
-        {
-            float[] t; Vector3[] p; float[] y;
-            // Уздовж осі слота кліпа (кліп вирівнюється за ходом — travel), але від тазу першого кадру: лінія каната ROPE_D +
-            // 0,12 відміряна генератором від старту тазу (у слоті таз на першому кадрі вже на 0,36 м попереду — з відліком від
-            // початку слота лінія зсувалась на ці 0,36 м; демо 08.11.2026: план 2,40 проти лінії 2,22).
-            Path(a, rope, Mathf.Min(rope.length, 0.9f), out t, out p, out y, true);
-            var g = new RopeGeo { T = t, Ahead = new float[t.Length], Speed = new float[t.Length], EntryMax = 0.45f };
-            float line = RopeLineRig * BodyScale(a);
-            for (int i = 0; i < t.Length; i++)
-            {
-                g.Ahead[i] = line - (p[i].z - p[0].z);
-                g.Speed[i] = i > 0 ? new Vector2(p[i].x - p[i - 1].x, p[i].z - p[i - 1].z).magnitude / Mathf.Max(1e-4f, t[i] - t[i - 1]) : 0f;
-                // Входити в кліп — лише до розвороту спиною (курс стегон зрушив більше 12° від старту; стегна на бігу самі
-                // крутяться ±10°): посеред розвороту рветься поза.
-                if (g.EntryMax >= 0.45f && Mathf.Abs(Mathf.DeltaAngle(y[0], y[i])) > 12f) g.EntryMax = Mathf.Max(0.05f, t[i] - 0.03f);
-            }
-            if (g.Speed.Length > 1) g.Speed[0] = g.Speed[1];
-            return g;
-        }
-
-        /// <summary>Мить кліпа відскоку з найближчою до бігу швидкістю (не пізніше розвороту).</summary>
-        private static float BestEntry(RopeGeo g, float speed)
-        {
-            return g.T[BestEntryIndex(g, speed)];
-        }
-
-        private static int BestEntryIndex(RopeGeo g, float speed)
-        {
-            int best = 1;
-            float bd = float.MaxValue;
-            for (int i = 1; i < g.T.Length; i++)
-            {
-                if (g.T[i] < 0.04f || g.T[i] > g.EntryMax) continue;
-                float d = Mathf.Abs(g.Speed[i] - speed);
-                if (d < bd) { bd = d; best = i; }
-            }
-            return Mathf.Min(best, g.T.Length - 1);
-        }
 
         private static Vector3 Rot(float yaw, Vector3 v) { return Quaternion.Euler(0f, yaw, 0f) * v; }
         private static float YawOf(Vector3 d) { return Mathf.Atan2(d.x, d.z) * Mathf.Rad2Deg; }
-        private static float Along(Vector3 p, Vector3 u) { return p.x * u.x + p.z * u.z; }
 
-        private readonly Vector3?[] _pendingRest = new Vector3?[2];
 
-        /// <summary>
-        /// Кидок у канати (огляд 08.11.2026, пункт 8): A кидає B кліпом Whip_*, B біжить уздовж осі рингу (видно збоку з боку
-        /// залу) і б'ється спиною в канат кліпом Rope_*; лінія каната кліпа лягає рівно на канат рингу (місце входу в кліп
-        /// розв'язується щокадру з того, де B насправді, — без поправок, що ковзають); вхід у кліп — лише до розвороту.
-        /// Чисто — відскок і через ринг у протилежні канати. Переходи між кліпами — кросфейдом із вирівнюванням слота.
-        /// </summary>
-        private IEnumerator RunWhipRopes(StageStep st, int idx)
-        {
-            var ia = _s.Info(st.Clip + "_A");
-            var ca = _s.Clip(st.Clip + "_A");
-            var cb = _s.Clip(st.Clip + "_B");
-            var run = _s.Clip(st.Run);
-            var r1 = _s.Clip(st.Rope1);
-            var r2 = st.Rope2 != null ? _s.Clip(st.Rope2) : null;
-            if (ia == null || ca == null || cb == null || run == null || r1 == null) { Debug.LogWarning("[Ринг] 3D: немає кліпів кидка " + st.Clip); yield break; }
-            MatchSide sa = st.Actor, sb = RingClipTable.Opp(sa);
-            var A = _s.Actor(sa);
-            var B = _s.Actor(sb);
-            float ps = RingStage3D.PlaySpeed;
-
-            // Шлях B у кліпі кидка в системі A: B стартує на зсуві маніфесту, лицем до A (курс — мінус поворот B).
-            float[] tw; Vector3[] pw; float[] yw;
-            Path(B, cb, cb.length, out tw, out pw, out yw);
-            Vector3 off = new Vector3(ia.Offset.x, 0f, ia.Offset.z);
-            Func<int, Vector3> bInA = i => off + Rot(-ia.Rotation, new Vector3(pw[i].x, 0f, pw[i].z));
-            // Мить переходу з кидка в біг: B уже біжить рівно (швидкість ≥ 90 % найбільшої) і вже за спиною A.
-            float vmax = 0f;
-            for (int i = 1; i < tw.Length; i++) vmax = Mathf.Max(vmax, (bInA(i) - bInA(i - 1)).magnitude * 30f);
-            int ic = tw.Length - 2;
-            for (int i = 1; i < tw.Length - 1; i++)
-                if ((bInA(i) - bInA(i - 1)).magnitude * 30f >= 0.9f * vmax && bInA(i).z < -0.3f) { ic = Mathf.Min(tw.Length - 2, i + 2); break; }
-            Vector3 dirA = (bInA(ic) - bInA(Mathf.Max(0, ic - 4))).normalized;
-            float vRun = (bInA(ic) - bInA(ic - 1)).magnitude * 30f;
-
-            // Вісь: B біжить уздовж ±X (видно збоку з боку залу); з двох боків — той, де обом повертатись до кидка найменше
-            // (демо 08.11.2026: за боком місця A обидва перед кидком розверталися на 180°).
-            Vector3 u = Vector3.right;
-            float bestTurn = float.MaxValue;
-            foreach (var cand in new[] { Vector3.right, Vector3.left })
-            {
-                float ya = YawOf(cand) - YawOf(dirA);
-                float turn = Mathf.Abs(Mathf.DeltaAngle(A.PoseYaw, ya)) + Mathf.Abs(Mathf.DeltaAngle(B.PoseYaw, ya - ia.Rotation));
-                if (turn < bestTurn) { bestTurn = turn; u = cand; }
-            }
-            float yawA = YawOf(u) - YawOf(dirA);
-            Vector3 laneN = new Vector3(-u.z, 0f, u.x);                      // поперек осі
-            var g1 = Rope(B, r1);
-            float t0Star = BestEntry(g1, vRun);
-            float aheadStar = g1.AheadAt(t0Star);
-            // Усі вибірки кліпів — до старту (вибірка посеред руху на мить зсуває поточну позу).
-            float rel1 = _s.Events.Time(st.Rope1, "rope_release");
-            if (rel1 < 0f) rel1 = r1.length * 0.6f;
-            float end1 = UsableEnd(B, r1, rel1);
-            var g2 = r2 != null ? Rope(B, r2) : null;
-            float end2 = r2 != null ? UsableEnd(B, r2, Mathf.Max(0f, _s.Events.Time(st.Rope2, "rope_release"))) : 0f;
-            float vFill = GaitOf(B, run.name).Speed * ps;
-            // A: смуга B — по центральній лінії; вставка бігу до каната ~0,5 м, A не ближче 0,4 м до канатів.
-            Vector3 bc = Rot(yawA, bInA(ic));
-            float sA = RopeLine - aheadStar - 0.5f - Along(bc, u);
-            sA = Mathf.Clamp(sA, -(RingStage3D.RingHalf - 0.45f), RingStage3D.RingHalf - 0.45f);
-            Vector3 pA = u * sA - laneN * Vector3.Dot(bc, laneN);
-            pA.y = RingStage3D.MatY;
-            Vector3 pB0 = pA + Rot(yawA, off);
-            pB0.y = RingStage3D.MatY;
-            // Старт обох — у рингу (сезон 08.11.2026: A біля канатів, а B на зсуві кидка — за канатами, і він ковзав крізь
-            // канати туди й назад): зсув обох уздовж осі бігу й поперек неї.
-            {
-                float limS = RingStage3D.RingHalf - 0.45f;
-                float aA = Along(pA, u), aB = Along(pB0, u), nA = Vector3.Dot(pA, laneN), nB = Vector3.Dot(pB0, laneN);
-                float lo = Mathf.Min(aA, aB), hi = Mathf.Max(aA, aB);
-                float shU = lo < -limS ? -limS - lo : hi > limS ? limS - hi : 0f;
-                float loN = Mathf.Min(nA, nB), hiN = Mathf.Max(nA, nB);
-                float shN = loN < -limS ? -limS - loN : hiN > limS ? limS - hiN : 0f;
-                Vector3 sh = u * shU + laneN * shN;
-                pA += sh;
-                pB0 += sh;
-            }
-            float yawB0 = yawA - ia.Rotation;
-            // Рефері — збоку від смуги бігу, з дальнього від камери боку (+Z; демо 08.11.2026: стояв на передньому плані між
-            // камерою й дією), біля центру; якщо там A — з другого боку.
-            // Завжди з дальнього боку; якщо A теж там — рефері ще далі від смуги й на метр позаду A (сезон 08.11.2026, кадр 090:
-            // перекинутий на ближній бік, рефері закрив нападника від камери).
-            Vector3 nFar = laneN.z >= 0f ? laneN : -laneN;
-            float edge = RingStage3D.RingHalf - 0.35f;
-            float side = Mathf.Min(edge, Mathf.Max(1.35f, Vector3.Dot(pA, nFar) + 0.9f));
-            float along = Mathf.Clamp(Along(pA, u) - 1.0f, -edge, edge);
-            Vector3 pRef = nFar * side + u * along;
-            pRef.y = RingStage3D.MatY;
-            yield return Walk(new[] { new SlideItem(A, pA, yawA), new SlideItem(B, pB0, yawB0), new SlideItem(_s.Referee, pRef, YawOf(-pRef)) });
-
-            A.PlayAt(ca, false, pA, yawA, ps);
-            B.PlayAt(cb, false, pB0, yawB0, ps);
-            TraceWhip("старт", B, u, string.Format(CultureInfo.InvariantCulture, "sA={0:0.00} ahead*={1:0.00} t0*={2:0.00} vRun={3:0.00} scale={4:0.00} ic={5}",
-                sA, aheadStar, t0Star, vRun, BodyScale(B), ic));
-            // 1) кидок до миті переходу в біг; якщо B уже на бігу кидка дійде до місця входу в канат (за низької частоти
-            // кадрів склейка запізнюється на пів метра) — одразу в канат, без вставки бігу.
-            float need = aheadStar;
-            float prevAl = Along(B.PosePos, u);
-            while (B.ClipTime < tw[ic] && B.CurrentClip == cb)
-            {
-                yield return null;
-                float al = Along(B.PosePos, u);
-                float stepAl = Mathf.Max(al - prevAl, vRun * ps * Mathf.Max(Time.deltaTime, 0.1f));
-                prevAl = al;
-                if (B.ClipTime >= tw[Mathf.Max(0, ic - 6)] && al + stepAl >= RopeLine - need) break;
-            }
-            float yawU = YawOf(u);
-            TraceWhip("склейка в біг", B, u, "t=" + B.ClipTime.ToString("0.00", CultureInfo.InvariantCulture));
-            // 2) біг до місця входу в канат (щокадру: де B насправді)
-            if (Along(B.PosePos, u) < RopeLine - need - 0.05f)
-            {
-                B.PlayAtBlend(run, 0f, true, B.PosePos, yawU, 0.2f, ps, true);
-                yield return RunUntil(B, u, RopeLine - need, vFill);
-            }
-            // 3) канат: мить входу — щоб лінія каната кліпа лягла рівно на канат з того місця, де B зараз
-            float t0 = g1.Solve(RopeLine - Along(B.PosePos, u));
-            TraceWhip("вхід у канат", B, u, string.Format(CultureInfo.InvariantCulture, "need={0:0.00} t0={1:0.00} ahead(t0)={2:0.00}",
-                RopeLine - Along(B.PosePos, u), t0, g1.AheadAt(t0)));
-            B.PlayAtBlend(r1, t0, false, B.PosePos, yawU, RopeFade, ps, true);
-            ArmBeat(idx, t0);
-            if (Trace) StartCoroutine(TraceMax(B, u, r1));
-            if (r2 != null)
-            {
-                // 4) чисто: відскок, біг через ринг, другий канат спиною
-                while (B.ClipTime < rel1 + 0.15f && B.CurrentClip == r1) yield return null;
-                Vector3 u2 = -u;
-                float yawU2 = YawOf(u2);
-                float need2 = g2.AheadAt(BestEntry(g2, vRun));
-                if (Along(B.PosePos, u2) < RopeLine - need2 - 0.05f)
-                {
-                    B.PlayAtBlend(run, 0f, true, B.PosePos, yawU2, 0.2f, ps, true);
-                    yield return RunUntil(B, u2, RopeLine - need2, vFill);
-                }
-                float t2 = g2.Solve(RopeLine - Along(B.PosePos, u2));
-                TraceWhip("вхід у другий канат", B, u2, string.Format(CultureInfo.InvariantCulture, "need={0:0.00} t0={1:0.00}", RopeLine - Along(B.PosePos, u2), t2));
-                B.PlayAtBlend(r2, t2, false, B.PosePos, yawU2, RopeFade, ps, true);
-                if (Trace) StartCoroutine(TraceMax(B, u2, r2));
-                while (!B.Finished && B.CurrentClip == r2 && B.ClipTime + Time.deltaTime * ps * 1.5f < end2) yield return null;
-            }
-            else
-                while (!B.Finished && B.CurrentClip == r1 && B.ClipTime + Time.deltaTime * ps * 1.5f < end1) yield return null;
-            // Обірваний до стрибка кліп — одразу в стійку з того місця (інакше він дограє до стрибка вже під стійкою).
-            var idleB = IdleOf(B);
-            if (idleB != null && !B.Finished) B.PlayAtBlend(idleB, 0f, true, B.PosePos, B.PoseYaw, 0.3f);
-            TraceWhip("кінець", B, u, "");
-            _pendingRest[I(sb)] = B.PosePos;
-            _pendingRest[I(sa)] = A.PosePos;
-        }
-
-        /// <summary>
-        /// Біг, доки таз не дійде до <paramref name="mark"/> уздовж осі — з прогнозом на кадр: виходить, якщо наступний кадр
-        /// уже перетне мітку (за низької частоти кадрів огляду, ~10/с, біг перебігав мітку на пів метра, і мить входу в
-        /// канат упиралась у межу — тіло пролітало за канат).
-        /// </summary>
-        private static IEnumerator RunUntil(RingActor a, Vector3 u, float mark, float speed)
-        {
-            float prev = Along(a.PosePos, u), guard = Time.time + 4f;
-            while (Time.time < guard)
-            {
-                float al = Along(a.PosePos, u);
-                // Крок наступного кадру — обережно, щонайменше на 0,1 с уперед: ранній вхід розв'язується підбором миті в
-                // кліпі, пізній — ні (кадри огляду нерівні, 0,05–0,15 с).
-                float step = Mathf.Max(al - prev, speed * Mathf.Max(Time.deltaTime, 0.1f));
-                prev = al;
-                if (al + step >= mark) yield break;
-                yield return null;
-            }
-        }
-
-        /// <summary>
-        /// До якої миті кліп відскоку придатний: після rope_release — до першого стрибка тазу (понад 6 м/с між вибірками
-        /// 1/30 с). У Rope_Back_Stop наприкінці таз стрибає на 0,77 м за 0,1 с (вада кліпа, демо 08.11.2026) — кліп
-        /// обривається до стрибка, далі — стійка.
-        /// </summary>
-        private float UsableEnd(RingActor a, AnimationClip c, float release)
-        {
-            float[] t; Vector3[] p; float[] y;
-            Path(a, c, c.length - 0.02f, out t, out p, out y, true);
-            for (int i = 1; i < t.Length; i++)
-            {
-                if (t[i] <= release) continue;
-                float v = new Vector2(p[i].x - p[i - 1].x, p[i].z - p[i - 1].z).magnitude / Mathf.Max(1e-4f, t[i] - t[i - 1]);
-                if (v > 6f) return t[i - 1];
-            }
-            return c.length;
-        }
-
-        /// <summary>Трасування ланцюга канатів у демо (<c>-ring-demo</c>): де таз B уздовж осі бігу відносно лінії канатів.</summary>
+        /// <summary>Трасування ходи в демо (<c>-ring-demo</c>, <c>-ring-shots</c>).</summary>
         private static readonly bool Trace = RingStage3D.ReadArg("-ring-demo") != null || RingStage3D.ReadArg("-ring-shots") != null;
 
-        private static void TraceWhip(string what, RingActor b, Vector3 u, string extra)
-        {
-            if (!Trace) return;
-            var p = b.PosePos;
-            Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] канати: {0}: таз ({1:0.00}, {2:0.00}), уздовж осі {3:0.00} (канат {4:0.00}), курс {5:0} — {6} @{7:0.00} {8}",
-                what, p.x, p.z, Along(p, u), RopeLine, b.PoseYaw, b.CurrentClip != null ? b.CurrentClip.name : "—", b.ClipTime, extra));
-        }
+        /// <summary>
+        /// Нападник уже на місці склейки (канат чи кут): наступний парний крок стартує приземленням у центрі й склеюється
+        /// з кадром (без ходи по рингу).
+        /// </summary>
+        private bool _afterCut;
 
-        private IEnumerator TraceMax(RingActor b, Vector3 u, AnimationClip c)
+        /// <summary>
+        /// Склейка плану 1 (нападник на канаті чи куті): нападник жорстко стає на точку першого кадру кліпа
+        /// (<see cref="RingStage3D.PerchPos(MatchSide, MoveStaging, string, out float)"/>) і грає кліп; суперник стоїть у центрі
+        /// на місці пари. Камера склеюється в ТОЙ САМИЙ кадр, що й стрибок тазу (<see cref="RingCine.PerchShot"/>, запасний
+        /// <see cref="StageCam.Low"/>), фаз-тест забуває обох. Такт сюди не ставиться (кліп склейки — не дія події).
+        /// </summary>
+        private IEnumerator RunCut(StageStep st)
         {
-            float best = float.MinValue, at = 0f, side = 0f;
-            Vector3 n = new Vector3(-u.z, 0f, u.x);
-            var series = new System.Text.StringBuilder();
-            float t0 = b.ClipTime;
-            // План: таз кліпа в системі слота (уперед — хід) від миті входу.
-            float[] tt; Vector3[] pp; float[] yy;
-            Path(b, c, c.length - 0.02f, out tt, out pp, out yy, true);
-            var plan = new System.Text.StringBuilder();
-            for (int i = 0; i < tt.Length; i += 3) plan.AppendFormat(CultureInfo.InvariantCulture, " {0:0.0}:{1:0.00}", tt[i], pp[i].z);
-            while (b.CurrentClip == c && !b.Finished)
+            var a = _s.Actor(st.Actor);
+            var vs = RingClipTable.Opp(st.Actor);
+            var v = _s.Actor(vs);
+            var c = _s.Clip(st.Clip, _s.IsFemale(a));
+            if (a == null || c == null)
             {
-                float al = Along(b.PosePos, u);
-                if (al > best) { best = al; at = b.ClipTime; side = Vector3.Dot(b.PosePos, n); }
-                series.AppendFormat(CultureInfo.InvariantCulture, " {0:0.00}:{1:0.00}{2}", b.ClipTime, al, b.Blending ? "~" : "");
-                yield return null;
+                Debug.LogWarning("[Ринг] 3D: немає кліпа склейки " + st.Clip);
+                yield break;
             }
-            Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] канати: {0}: найдалі таз уздовж осі {1:0.00} (канат {2:0.00}) @{3:0.00}, поперек {4:0.00}\n  факт:{5}\n  план (z у слоті, лінія {6:0.00}):{7}",
-                c.name, best, RopeLine, at, side, series, RopeLineRig * BodyScale(b), plan));
+            float yaw;
+            Vector3 at = _s.PerchPos(st.Actor, st.Perch, st.Clip, out yaw);
+            // Суперник стоїть у центрі на своєму місці пари (хто лежить — лишається, де лежить).
+            Vector3 vPos = RingStage3D.PairPos(vs, false);
+            if (_m[I(vs)].Posture != Posture.Down)
+            {
+                Vector3 dv = v.PosePos - vPos;
+                dv.y = 0f;
+                if (dv.magnitude > 0.15f) _s.Place(v, vPos, RingStage3D.PairYaw(vs, false), IdleName(vs) ?? "Ring_Stance_Loop");
+            }
+            else { vPos = v.PosePos; vPos.y = RingStage3D.MatY; }
+            StopWalk(a);
+            a.Slot.position = at;
+            a.SetHeight(at.y);
+            a.PlayAt(c, false, at, yaw, RingStage3D.PlaySpeed);
+            _s.Watch.Forget(a);
+            _s.Watch.Forget(v);
+            var pts = new List<Vector3>();
+            RingCine.Body(pts, at, _s.BodyScale(a), true);
+            RingCine.Body(pts, vPos, _s.BodyScale(v));
+            var shot = RingCine.PerchShot(pts, at, vPos, _s.CamAspect);
+            if (shot.Ok) _s.Cine(shot.Pos, shot.Look, shot.Fov, true);
+            else
+            {
+                Debug.LogWarning("[Ринг] 3D: план склейки не вмістився — " + st.Clip);
+                _s.SetShot(StageCam.Low);
+            }
+            _afterCut = true;
+            yield return new WaitForSeconds(Mathf.Min(c.length, 1.7f) / RingStage3D.PlaySpeed);
         }
 
         /// <summary>
-        /// Кидок у кут: B біжить по діагоналі в дальній кут (видно з боку залу) і б'ється спиною в подушку; точка удару об кут
-        /// у кліпі (мітка corner_hit) лягає на 0,42 зросту від стійки по діагоналі (<c>CAST_ANIM.md</c>, «Ринг і місця кліпів»).
+        /// Склейка місця (пара за рингом чи знову на рингу): ефекти події (<see cref="MatchEffectKind.Place"/>) уже застосовані
+        /// в <see cref="Run"/>, тож обидва жорстко стають на місце пари (хто лежить — тілом, у своїй позі), рефері — на своє;
+        /// кадр склеюється в ту саму мить (<see cref="RingCine.OutsideShot"/>, запасний <see cref="StageCam.Big"/>; на ринг —
+        /// кадр кроку) і тримається <see cref="StageStep.Hold"/>. Такт сюди не ставиться.
         /// </summary>
-        private IEnumerator RunWhipCorner(StageStep st, int idx)
+        private IEnumerator RunPlace(StageStep st, MatchEvent ev)
         {
-            var ia = _s.Info(st.Clip + "_A");
-            var ca = _s.Clip(st.Clip + "_A");
-            var cb = _s.Clip(st.Clip + "_B");
-            if (ia == null || ca == null || cb == null) { Debug.LogWarning("[Ринг] 3D: немає кліпів кидка " + st.Clip); yield break; }
-            MatchSide sa = st.Actor, sb = RingClipTable.Opp(sa);
-            var A = _s.Actor(sa);
-            var B = _s.Actor(sb);
-            float ps = RingStage3D.PlaySpeed;
-            float hit = _s.Events.Time(st.Clip, "corner_hit");
-            if (hit < 0f) hit = cb.length * 0.65f;
-            float[] tw; Vector3[] pw; float[] yw;
-            Path(B, cb, hit, out tw, out pw, out yw);
-            Vector3 off = new Vector3(ia.Offset.x, 0f, ia.Offset.z);
-            Func<int, Vector3> bInA = i => off + Rot(-ia.Rotation, new Vector3(pw[i].x, 0f, pw[i].z));
-            int ih = tw.Length - 1;
-            Vector3 dirA = (bInA(ih) - bInA(Mathf.Max(0, ih - 8))).normalized;
-            // Кут і курс: кидок закручує B довкола A, тож шлях B не прямий — вирівнювання лише кінцевого бігу по діагоналі
-            // ставило старт A і B за канати (демо 08.11.2026: A на z = 2,49, B на 3,11). Перебір: чотири кути (дальні, з боку
-            // залу видно цілком, — з перевагою), курс у межах ±25° від діагоналі; умова — A, B і весь шлях B до удару в
-            // рингу; з придатних — де обом повертатись найменше.
-            float hitR = 0.42f * BodyScale(B) * 1.05f;
-            float lim = RingStage3D.RingHalf - 0.45f, pathLim = RopeLine - 0.12f;
-            float bestCost = float.MaxValue, yawA = 0f, sx = 1f, sz = 1f;
-            Vector3 target = Vector3.zero, pA = Vector3.zero, pB0 = Vector3.zero;
-            bool found = false;
-            // Підхід до кута — напрям від B за 0,6 с до удару до точки удару (останні кадри — розворот спиною, напрям там хибний).
-            Vector3 appA = bInA(ih) - bInA(Mathf.Max(0, ih - 18));
-            appA.y = 0f;
-            if (appA.sqrMagnitude > 1e-4f) dirA = appA.normalized;
-            foreach (var c in new[] { new Vector2(1f, 1f), new Vector2(-1f, 1f), new Vector2(1f, -1f), new Vector2(-1f, -1f) })
+            bool o = _m[0].Outside;
+            _afterCut = false;
+            foreach (var side in new[] { MatchSide.Player, MatchSide.Rival })
             {
-                Vector3 post = new Vector3(c.x * PostLine, 0f, c.y * PostLine);
-                Vector3 diag = new Vector3(c.x, 0f, c.y).normalized;
-                Vector3 tg = post - diag * hitR;
-                for (float dy = -40f; dy <= 40.01f; dy += 2.5f)
+                var a = _s.Actor(side);
+                StopWalk(a);
+                Vector3 pos = RingStage3D.PairPos(side, o);
+                if (_m[I(side)].Posture == Posture.Down)
                 {
-                    float ya = YawOf(diag) - YawOf(dirA) + dy;
-                    Vector3 qa = tg - Rot(ya, bInA(ih));
-                    Vector3 qb = qa + Rot(ya, off);
-                    if (Mathf.Abs(qa.x) > lim || Mathf.Abs(qa.z) > lim || Mathf.Abs(qb.x) > lim || Mathf.Abs(qb.z) > lim) continue;
-                    bool ok = true;
-                    for (int i = 0; i < ih && ok; i += 2)
-                    {
-                        Vector3 q = qa + Rot(ya, bInA(i));
-                        ok = Mathf.Abs(q.x) <= pathLim && Mathf.Abs(q.z) <= pathLim;
-                    }
-                    if (!ok) continue;
-                    float cost = Mathf.Abs(dy) * 0.6f + (c.y < 0f ? 120f : 0f)
-                        + Mathf.Abs(Mathf.DeltaAngle(A.PoseYaw, ya)) + Mathf.Abs(Mathf.DeltaAngle(B.PoseYaw, ya - ia.Rotation))
-                        + 15f * ((qa - A.PosePos).magnitude + (qb - B.PosePos).magnitude);
-                    if (cost < bestCost) { bestCost = cost; yawA = ya; target = tg; pA = qa; pB0 = qb; sx = c.x; sz = c.y; found = true; }
+                    // Лежачого переносимо разом із позою кліпа, не міняючи курсу тіла.
+                    a.SlideBegin();
+                    Set(new SlideItem(a, pos, a.PoseYaw) { StartPos = a.PosePos, StartYaw = a.PoseYaw }, 1f);
                 }
+                else _s.Place(a, pos, RingStage3D.PairYaw(side, o), IdleName(side) ?? "Ring_Stance_Loop");
             }
-            if (!found)
-            {
-                // Запасне — дальній кут з боку B, позиції в межах рингу.
-                sx = Canon(sb).x >= 0f ? 1f : -1f;
-                Vector3 diag = new Vector3(sx, 0f, 1f).normalized;
-                target = new Vector3(sx * PostLine, 0f, PostLine) - diag * hitR;
-                yawA = YawOf(diag) - YawOf(dirA);
-                pA = target - Rot(yawA, bInA(ih));
-                pB0 = pA + Rot(yawA, off);
-                pA = new Vector3(Mathf.Clamp(pA.x, -lim, lim), 0f, Mathf.Clamp(pA.z, -lim, lim));
-                pB0 = new Vector3(Mathf.Clamp(pB0.x, -lim, lim), 0f, Mathf.Clamp(pB0.z, -lim, lim));
-                Debug.LogWarning("[Ринг] 3D: кидок у кут не вміщається в ринг — запасна розстановка");
-            }
-            pA.y = RingStage3D.MatY;
-            pB0.y = RingStage3D.MatY;
-            float yawB0 = yawA - ia.Rotation;
-            Vector3 pRef = new Vector3(-sx * 1.3f, RingStage3D.MatY, -sz * 0.4f);
-            if (Trace)
-            {
-                var path = new System.Text.StringBuilder();
-                for (int i = 0; i <= ih; i += 4) { var q = bInA(i); path.AppendFormat(CultureInfo.InvariantCulture, " ({0:0.00},{1:0.00})", q.x, q.z); }
-                Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] кут: ціль ({0:0.00},{1:0.00}) A ({2:0.00},{3:0.00}) курс {4:0} B ({5:0.00},{6:0.00}) курс {7:0}; B зараз ({8:0.00},{9:0.00}), шлях до удару {10:0.00} м; знайдено {11}\n  шлях B у системі A:{12}",
-                    target.x, target.z, pA.x, pA.z, yawA, pB0.x, pB0.z, yawB0, B.PosePos.x, B.PosePos.z, (bInA(ih) - off).magnitude, found, path));
-            }
-            yield return Walk(new[] { new SlideItem(A, pA, yawA), new SlideItem(B, pB0, yawB0), new SlideItem(_s.Referee, pRef, YawOf(-pRef)) });
-            A.PlayAt(ca, false, pA, yawA, ps);
-            B.PlayAt(cb, false, pB0, yawB0, ps);
-            ArmBeat(idx);
-            yield return new WaitForSeconds(Mathf.Max(ca.length, cb.length) / ps);
-            _pendingRest[I(sb)] = B.PosePos;
-            _pendingRest[I(sa)] = A.PosePos;
+            var R = _s.Referee;
+            StopWalk(R);
+            Vector3 rp = o ? OutsideRefPos() : RefSpot(RingStage3D.PairPos(MatchSide.Player, false), RingStage3D.PairPos(MatchSide.Rival, false));
+            Vector3 mid = o ? RingStage3D.OutsideAnchor : new Vector3(0f, RingStage3D.MatY, 0f);
+            _s.Place(R, rp, RingStage3D.YawTo(rp, mid), "Ref_Idle_Loop");
+            _s.Watch.Forget(_s.Actor(MatchSide.Player));
+            _s.Watch.Forget(_s.Actor(MatchSide.Rival));
+            _s.Watch.Forget(R);
+            if (o) OutsideStillShot();
+            else HardCut(st.Cam);
+            if (st.Hold > 0f) yield return new WaitForSeconds(st.Hold);
+            else yield return null;
+        }
+
+        /// <summary>Кадр пари, що стоїть за рингом (обидва на місцях пари й край фартуха), — склейкою; запасний — <see cref="StageCam.Big"/>.</summary>
+        private void OutsideStillShot()
+        {
+            var pts = new List<Vector3>();
+            foreach (var side in new[] { MatchSide.Player, MatchSide.Rival })
+                RingCine.Body(pts, RingStage3D.PairPos(side, true), _s.BodyScale(_s.Actor(side)));
+            AddApron(pts);
+            var shot = RingCine.OutsideShot(pts, RingStage3D.OutsideAnchor, RingStage3D.OutsideOut, _s.CamAspect);
+            if (shot.Ok) _s.Cine(shot.Pos, shot.Look, shot.Fov, true);
+            else { Debug.LogWarning("[Ринг] 3D: план «за рингом» не вмістився"); HardCut(StageCam.Big); }
+        }
+
+        /// <summary>Місце рефері за рингом: на боці пари, за її лінією від рингу (між бійцями, ближче до огорожі).</summary>
+        private static Vector3 OutsideRefPos()
+        {
+            Vector3 p = RingStage3D.OutsideAnchor + RingStage3D.OutsideOut * 0.6f;
+            p.y = RingStage3D.Venue.GroundAt(p.x, p.z);
+            return p;
+        }
+
+        /// <summary>Край фартуха навпроти пари — у кадрі «за рингом»: видно, що пара поза рингом.</summary>
+        private static void AddApron(List<Vector3> pts)
+        {
+            Vector3 apron = RingStage3D.OutsideAnchor - RingStage3D.OutsideOut * RingVenue.PairOut;
+            apron.y = RingStage3D.MatY;
+            pts.Add(apron);
+        }
+
+        /// <summary>Кадр парного кроку за рингом: обидва борці (старт і кінець зсуву пари) і край фартуха; кадр плавно доганяє.</summary>
+        private void OutsidePairShot(RingActor A, RingActor B, Vector3 pAStart, Vector3 pB, Vector3 pA)
+        {
+            var pts = new List<Vector3>();
+            RingCine.Body(pts, pAStart, _s.BodyScale(A));
+            RingCine.Body(pts, pB, _s.BodyScale(B));
+            RingCine.Body(pts, pA, _s.BodyScale(A));
+            AddApron(pts);
+            var shot = RingCine.OutsideShot(pts, RingStage3D.OutsideAnchor, RingStage3D.OutsideOut, _s.CamAspect);
+            if (shot.Ok) _s.Cine(shot.Pos, shot.Look, shot.Fov, false);
+            else { Debug.LogWarning("[Ринг] 3D: план «за рингом» (пара) не вмістився"); _s.SetShot(StageCam.Big); }
         }
 
         private IEnumerator RunSolo(StageStep st, int idx)
         {
             var a = _s.Actor(st.Actor);
             var clip = _s.Clip(st.Clip);
+            bool fromCut = _afterCut;
+            _afterCut = false;
             if (clip == null) yield break;
-            a.PlayHere(clip, false, RingStage3D.PlaySpeed);
+            if (fromCut)
+            {
+                // План 2 склейки — промах зі стрибка: нападник «приземляється» в центрі на своєму місці пари (суперник ухилився),
+                // жорстко в тому самому кадрі, що й склейка камери (RunStep); фаз-тест його забуває.
+                Vector3 p = RingStage3D.PairPos(st.Actor, false);
+                StopWalk(a);
+                a.Slot.position = p;
+                a.SetHeight(p.y);
+                a.PlayAt(clip, false, p, RingStage3D.PairYaw(st.Actor, false), RingStage3D.PlaySpeed);
+                _s.Watch.Forget(a);
+            }
+            else a.PlayHere(clip, false, RingStage3D.PlaySpeed);
             ArmBeat(idx);
             float len = clip.length / RingStage3D.PlaySpeed;
             if (st.Once) len = Mathf.Min(len, 1.7f);
@@ -773,41 +542,7 @@ namespace Game.Gameplay.Ring.Stage
             yield return new WaitForSeconds(Mathf.Min(len, clip.length / RingStage3D.PlaySpeed));
         }
 
-        private IEnumerator RunWalk(StageStep st)
-        {
-            var a = _s.Actor(st.Actor);
-            var other = _s.Actor(RingClipTable.Opp(st.Actor));
-            var walk = _s.Clip(st.Clip);
-            Vector3 target = Canon(st.Actor);
-            Vector3 start = a.PosePos;
-            Vector3 dir = target - start;
-            dir.y = 0f;
-            float dist = dir.magnitude;
-            float yaw = dist > 0.1f ? RingStage3D.YawTo(start, target) : a.Slot.eulerAngles.y;
-            if (walk != null) a.PlayHere(walk, true, 1.25f);
-            a.SlideBegin();
-            float dur = Mathf.Clamp(dist / 2.2f, 0.5f, 1.8f);
-            float y0 = start.y;
-            for (float t = 0f; t < dur; t += Time.deltaTime)
-            {
-                float s = Mathf.SmoothStep(0f, 1f, t / dur);
-                Vector3 p = Vector3.Lerp(start, target, s);
-                a.SlideSet(p, yaw);
-                a.SetHeight(Mathf.Lerp(y0, target.y, s));
-                yield return null;
-            }
-            a.SlideSet(target, RingStage3D.YawTo(target, other.PosePos));
-            a.SetHeight(target.y);
-        }
 
-        /// <summary>
-        /// Чи прийом іде в центрі: обидва до прийому в зоні «центр». Зона — стан до прийому, тож «у канати» (Lockup_To_Ropes)
-        /// теж стартує з центру; біля канатів, у куті й поза рингом пара лишається там.
-        /// </summary>
-        private bool InCenter(StageStep st, MatchSide a, MatchSide b)
-        {
-            return _m[I(a)].Zone == Zone.Center && _m[I(b)].Zone == Zone.Center;
-        }
 
         /// <summary>Найдальший старт розбігу від суперника, м: прийом з довшим розбігом починається посеред бігу.</summary>
         private const float RunInMax = 1.5f;
@@ -873,29 +608,6 @@ namespace Game.Gameplay.Ring.Stage
             return sh;
         }
 
-        /// <summary>
-        /// Охорона канатів на час кліпа прийому: хто стоїть і біжить на канати (таз за 0,3 м від лінії канатів і віддаляється
-        /// від центру), — зупиняється в стійку на місці (сезон 08.11.2026: розбіг + пробіг ларіата довші за ринг — нападник
-        /// пробігав крізь канати). Лежачих не чіпає.
-        /// </summary>
-        private IEnumerator RopeGuard(RingActor a, AnimationClip c)
-        {
-            float edge = RopeLine - 0.3f;
-            Vector3 prev = a.PosePos;
-            while (a.CurrentClip == c && !a.Finished)
-            {
-                yield return null;
-                Vector3 p = a.PosePos;
-                float out0 = Mathf.Max(Mathf.Abs(prev.x), Mathf.Abs(prev.z)), out1 = Mathf.Max(Mathf.Abs(p.x), Mathf.Abs(p.z));
-                prev = p;
-                if (out1 > edge && out1 > out0 + 1e-3f && Upright(a))
-                {
-                    var idle = IdleOf(a) ?? _s.Clip("Ring_Stance_Loop");
-                    if (idle != null) a.PlayAtBlend(idle, 0f, true, p, a.PoseYaw, 0.25f);
-                    yield break;
-                }
-            }
-        }
 
         private static string BaseOf(string pairClip)
         {
@@ -917,14 +629,18 @@ namespace Game.Gameplay.Ring.Stage
             var A = _s.Actor(sa);
             var B = _s.Actor(sb);
             bool bDown = _m[I(sb)].Posture == Posture.Down;
+            // Після склейки (нападник на канаті чи куті) чекати нікого: приземлення стартує в тому самому кадрі, що й склейка кадру.
+            bool fromCut = _afterCut;
+            _afterCut = false;
             // Хто лежить — спершу долежує свій кліп падіння (той ще котить таз): точку пари беремо, коли він уже на місці
             // (сезон 08.11.2026: Cover_B стрибав на 1,3–2,4 м — точку взято, поки B ще ковзав у падінні).
-            if (bDown)
+            if (bDown && !fromCut)
             {
                 float gd = Time.time + 2.5f;
                 while (Time.time < gd && B.CurrentClip != null && !B.Finished && !(_s.Info(B.CurrentClip.name)?.Loop ?? false)) yield return null;
             }
             // Нападник, що ще встає (кліп підйому не дограв), — спершу встає, а вже тоді йде на місце (а не ковзає навстоячки).
+            if (!fromCut)
             {
                 float ga = Time.time + 2.5f;
                 while (Time.time < ga && !Upright(A) && A.CurrentClip != null && !A.Finished && !(_s.Info(A.CurrentClip.name)?.Loop ?? false)) yield return null;
@@ -934,6 +650,11 @@ namespace Game.Gameplay.Ring.Stage
             Vector3 relA = Vector3.zero;
             float relYawA = 0f, tStart = 0f;
             if (!bDown) tStart = RunInStart(A, ca, ia, out relA, out relYawA);
+            if (tStart > 0f)
+            {
+                RunInStarts++;
+                if (Trace) Debug.Log("[Ринг] розбіг кліпа " + st.Clip + ": старт з " + tStart.ToString("0.00", CultureInfo.InvariantCulture) + " с (підстановка до нових кліпів)");
+            }
 
             // Стартові пози. B — якір (стоїть на своєму місці або лежить там, де впав), A виходить із зсуву маніфесту.
             Vector3 pB, pA;
@@ -953,7 +674,9 @@ namespace Game.Gameplay.Ring.Stage
                 yawB = yawA - ia.Rotation;
             }
             pA = pB - Quaternion.Euler(0f, yawA, 0f) * ia.Offset;
-            pA.y = pB.y = _m[I(sb)].Zone == Zone.Outside ? 0f : RingStage3D.MatY;
+            bool outside = _m[I(sb)].Outside;
+            Vector3 hub = outside ? RingStage3D.OutsideAnchor : new Vector3(0f, RingStage3D.MatY, 0f);   // центр пари: центр рингу чи точка за рингом
+            pA.y = pB.y = hub.y;
 
             // Де A насправді стартує: з розбігом — посеред бігу (за кривою тазу кліпа на цьому тілі), інакше — на старті пари.
             float yawAStart = yawA + relYawA;
@@ -961,36 +684,20 @@ namespace Game.Gameplay.Ring.Stage
             Vector3 pAStart = pB + Quaternion.Euler(0f, yawA, 0f) * aStartRel;
             pAStart.y = pB.y;
 
-            // Прийом по центру рингу, якщо він не вимагає кута, канатів чи місця поза рингом (власник 30.10.2026 і 04.11.2026:
-            // «Чому прийому не по центру ринга? завжди по центру»): пара зсувається так, що її середина — у центрі. Раніше
-            // якорем був B на своїй точці (0,85 м убік) чи там, де впав, і пара працювала збоку. Прийом із розбігом —
-            // у центрі B (там контакт), а не середина розбігу.
-            // Хто лежить — лишається, де впав: до нього підходить A (раніше пару центрувало й тут, і лежачий «їхав» по мату
-            // до центру на 1,2 м — демо 08.11.2026).
-            if (InCenter(st, sa, sb) && !bDown)
+            // Усе в центрі рингу (рішення власника 08.11.2026: «усе в центрі рингу»; раніше — власник 30.10.2026 і 04.11.2026):
+            // пара зсувається так, що її середина — у центрі (за рингом — у точці пари). Прийом із розбігом — у центрі B (там
+            // контакт), а не середина розбігу. Хто лежить — лишається, де впав: до нього підходить A.
+            if (!bDown)
             {
-                Vector3 d = new Vector3(0f, RingStage3D.MatY, 0f) - (tStart > 0f ? pB : (pAStart + pB) * 0.5f);
+                Vector3 d = hub - (tStart > 0f ? pB : (pAStart + pB) * 0.5f);
                 d.y = 0f;
                 pA += d;
                 pB += d;
                 pAStart += d;
             }
-            // Обидва лишаються всередині рингу: зсув усієї пари до центру (лежачого не зсуваємо).
-            else if (!bDown && _m[I(sb)].Zone != Zone.Outside && _m[I(sa)].Zone != Zone.Outside)
-            {
-                Vector3 sh = Vector3.zero;
-                float lim = RingStage3D.RingHalf - 0.1f;
-                if (pAStart.x > lim) sh.x = lim - pAStart.x; else if (pAStart.x < -lim) sh.x = -lim - pAStart.x;
-                if (pAStart.z > lim) sh.z = lim - pAStart.z; else if (pAStart.z < -lim) sh.z = -lim - pAStart.z;
-                pA += sh;
-                pB += sh;
-                pAStart += sh;
-            }
-            // Увесь шлях обох у кліпі — у рингу (сезон 08.11.2026: Center_Sidestep біля кута — нападник пробіг крізь канати):
-            // пара зсувається всередину на найбільший вихід за лінію канатів (з запасом 0,25 м).
-            // Лежачого це теж стосується, але лише на потрібний мінімум: інакше нападник ішов утримувати крізь канати (сезон
-            // 08.11.2026, 4 перетини: суперник лежав біля канатів, місце нападника — за ними).
-            if (_m[I(sb)].Zone != Zone.Outside && _m[I(sa)].Zone != Zone.Outside)
+            // Увесь шлях обох у кліпі — у рингу: пара зсувається всередину на найбільший вихід за лінію канатів (з запасом
+            // 0,25 м). Лежачого це теж стосується, але лише на потрібний мінімум. За рингом смуги канатів немає.
+            if (!outside)
             {
                 Vector3 sh = PathInside(A, ca, B, cb, pB, yawA, yawB, ia, tStart);
                 pA += sh;
@@ -1003,7 +710,7 @@ namespace Game.Gameplay.Ring.Stage
             float sideX = mid.x > 0.15f ? -1f : 1f;
             Vector3 pRef = new Vector3(Mathf.Clamp(mid.x + sideX * 1.25f, -1.7f, 1.7f), RingStage3D.MatY, Mathf.Clamp(mid.z + 0.9f, -1.2f, 1.7f));
             if (RefOk(_s.Referee.PosePos, pAStart, pB) && RefOk(_s.Referee.PosePos, pA, pB)) pRef = _s.Referee.PosePos;
-            bool finisherShot = IsFinisherHit(ev) && idx == _plan.Step;
+            bool finisherShot = IsFinisherHit(ev) && idx == _plan.Step && !outside;
             if (finisherShot)
             {
                 // Фінішер знімається збоку від лінії удару: рефері — за парою, з дальнього від камери боку (кадр 073 огляду:
@@ -1016,33 +723,40 @@ namespace Game.Gameplay.Ring.Stage
                 pRef.z = Mathf.Clamp(pRef.z, -1.75f, 1.75f);
                 pRef.y = RingStage3D.MatY;
             }
-            float yawRef = RingStage3D.YawTo(pRef, mid);
+            // За рингом рефері має своє місце — за парою, ближче до огорожі (поза капсулами обох: ≥ 0,85 м від кожного).
+            if (outside) pRef = OutsideRefPos();
+            float yawRef = RingStage3D.YawTo(pRef, outside ? RingStage3D.OutsideAnchor : mid);
 
             var refActor = _s.Referee;
-            // Фінішер і відчайдушний таран — з розбігу від канатів (огляд 08.11.2026, пункт 8: у матчі не було бігу й канатів):
-            // нападник біжить до канатів за спиною, б'ється в них спиною й вилітає просто в кліп прийому.
-            bool ropeRun = tStart > 0f && !bDown && ev.Kind == MatchEventKind.Action && InCenter(st, sa, sb)
-                && (ev.Action == MatchActionId.Finisher || ev.Action == MatchActionId.Desperate);
-            if (ropeRun)
+            if (fromCut)
             {
-                yield return RopeRunIn(st, ev, idx, A, B, ca, cb, ia, pB, yawA, yawB, refActor, pRef, yawRef, finisherShot);
-                yield break;
+                // Склейка: нападник стає в точку старту разом із PlayAtTime нижче, решта — жорстко в цей самий кадр.
+                StopWalk(A); StopWalk(B); StopWalk(refActor);
+                // Висота слота склейки (верх кута — з підйомом) не лишається на приземленні: PlayAtTime висоти не міняє.
+                A.SetHeight(pAStart.y);
+                if (!bDown && (B.PosePos - pB).sqrMagnitude > 0.0025f) _s.Place(B, pB, yawB, IdleName(sb) ?? "Ring_Stance_Loop");
+                if ((refActor.PosePos - pRef).sqrMagnitude > 0.0025f) _s.Place(refActor, pRef, yawRef, "Ref_Idle_Loop");
+                _s.Watch.Forget(A); _s.Watch.Forget(B); _s.Watch.Forget(refActor);
             }
-            yield return Walk(new[]
+            else
             {
-                new SlideItem(A, pAStart, yawAStart),
-                new SlideItem(B, pB, yawB),
-                new SlideItem(refActor, pRef, yawRef)
-            });
+                // Перехід ланцюга — коротким кроком у стійці (0,15–0,25 с), а не ходою; ходять лише ті, кому далеко.
+                yield return Transit(new[]
+                {
+                    new SlideItem(A, pAStart, yawAStart),
+                    new SlideItem(B, pB, yawB),
+                    new SlideItem(refActor, pRef, yawRef)
+                });
+            }
 
             // Фінішер — склейкою в кіноплан до старту кліпа: обидва в кадрі від колін, контакт у кадрі (огляд 07.11.2026:
             // такт приходив, поки камера ще летіла з загального плану).
             if (finisherShot) FinisherShot(A, B, ca, pB, yawA, ia);
+            else if (outside) OutsidePairShot(A, B, pAStart, pB, pA);
 
             // Старт: слот у таз і новий кліп — в тому самому кадрі, обидва разом (з розбігом — посеред бігу).
             A.PlayAtTime(ca, tStart, false, pAStart, yawAStart, RingStage3D.PlaySpeed);
             B.PlayAtTime(cb, tStart, false, pB, yawB, RingStage3D.PlaySpeed);
-            if (InCenter(st, sa, sb)) { StartCoroutine(RopeGuard(A, ca)); StartCoroutine(RopeGuard(B, cb)); }   // біля канатів і в куті — прийоми навмисне там
             float len = (Mathf.Max(ca.length, cb.length) - tStart) / RingStage3D.PlaySpeed;
             if (!string.IsNullOrEmpty(st.RefClip))
             {
@@ -1151,89 +865,6 @@ namespace Game.Gameplay.Ring.Stage
             return (1f - ndc) * 0.5f;
         }
 
-        /// <summary>
-        /// Розбіг від канатів перед прийомом із розбігом (фінішер, відчайдушний таран): нападник розвертається, біжить до
-        /// канатів за спиною, б'ється в них спиною (кліп Rope_*, лінія каната кліпа — на канаті) і вилітає просто в кліп
-        /// прийому: мить входу в нього — та, де нападник у кліпі прийому стоїть там, де він зараз (щокадру), кросфейдом.
-        /// Смуга бігу йде через те місце, де нападник стоїть: суперник зсувається на смугу удару (до ~0,8 м від центру), щоб
-        /// нападник не біг боком.
-        /// </summary>
-        private IEnumerator RopeRunIn(StageStep st, MatchEvent ev, int idx, RingActor A, RingActor B, AnimationClip ca, AnimationClip cb,
-            RingClipInfo ia, Vector3 pB, float yawA, float yawB, RingActor refActor, Vector3 pRef, float yawRef, bool finisherShot)
-        {
-            float ps = RingStage3D.PlaySpeed;
-            var run = _s.Clip("Run_Loop");
-            var turn = _s.Clip("Move_Turn_180");
-            Vector3 u = Rot(yawA, Vector3.forward);
-            Vector3 laneN = new Vector3(-u.z, 0f, u.x);
-            Vector3 off = new Vector3(ia.Offset.x, 0f, ia.Offset.z);
-            float contact = _s.Events.Time(st.Clip, "contact");
-            float tMax = contact > 0f ? contact - 0.3f : ca.length * 0.3f;
-            float[] tc; Vector3[] pc; float[] yc;
-            Path(A, ca, tMax, out tc, out pc, out yc);
-            Func<int, Vector3> aRel = i => Rot(yawA, new Vector3(pc[i].x, 0f, pc[i].z) - off);   // A відносно B у світі
-            // Смуга удару через місце нападника: суперник зсувається поперек осі.
-            Vector3 a0 = A.PosePos;
-            float laneOff = Vector3.Dot(aRel(tc.Length - 1), laneN);
-            Vector3 pB2 = pB + laneN * (Vector3.Dot(a0 - pB, laneN) - laneOff);
-            pB2.y = RingStage3D.MatY;
-            float vIn = (aRel(tc.Length - 1) - aRel(tc.Length - 2)).magnitude * 30f;
-            // Варіант відскоку — найближчий за швидкістю до розбігу прийому.
-            AnimationClip rope = null;
-            RopeGeo g = null;
-            float best = float.MaxValue;
-            foreach (var n in new[] { "Rope_Back_L", "Rope_Back_R", "Rope_Light" })
-            {
-                var c = _s.Clip(n);
-                if (c == null) continue;
-                var gg = Rope(A, c);
-                float d = Mathf.Abs(gg.Speed[BestEntryIndex(gg, vIn)] - vIn);
-                if (d < best) { best = d; rope = c; g = gg; }
-            }
-            if (run == null || rope == null) { Debug.LogWarning("[Ринг] 3D: немає кліпів розбігу від канатів"); yield break; }
-            string ropeName = rope.name;
-            float vRunA = GaitOf(A, run.name).Speed * ps;              // вибірка — до руху
-
-            // 1) Розворот до канатів за спиною; суперник і рефері тим часом стають на місця.
-            StartCoroutine(Walk(new[] { new SlideItem(B, pB2, yawB), new SlideItem(refActor, pRef, yawRef) }));
-            if (turn != null)
-            {
-                A.PlayHere(turn, false, 1.3f * ps);
-                yield return new WaitForSeconds(turn.length * 0.82f / (1.3f * ps));
-            }
-            Vector3 back = -u;
-            float yawBack = YawOf(back);
-            float need = g.AheadAt(BestEntry(g, vIn));
-            // 2) Біг до канатів (щокадру: де нападник насправді), 3) удар спиною й відскок.
-            A.PlayAtBlend(run, 0f, true, A.PosePos, yawBack, 0.25f, ps, true);
-            yield return RunUntil(A, back, RopeLine - need, vRunA);
-            float t0 = g.Solve(RopeLine - Along(A.PosePos, back));
-            A.PlayAtBlend(rope, t0, false, A.PosePos, yawBack, RopeFade, ps, true);
-            float rel = _s.Events.Time(ropeName, "rope_release");
-            if (rel < 0f) rel = rope.length * 0.6f;
-            while (A.ClipTime < rel + 0.08f && A.CurrentClip == rope) yield return null;
-            // 4) Вилітає з канатів просто в кліп прийому: мить, де нападник у прийомі там, де зараз (уздовж осі).
-            float sNow = Vector3.Dot(A.PosePos - pB2, u);
-            int k = 0;
-            while (k < tc.Length - 1 && Vector3.Dot(aRel(k), u) < sNow) k++;
-            while (Vector3.Dot(aRel(k), u) > sNow && k == 0 && A.CurrentClip == rope && !A.Finished)
-            {
-                // ще не дібгав до старту розбігу прийому — біжить кліпом відскоку далі
-                yield return null;
-                sNow = Vector3.Dot(A.PosePos - pB2, u);
-            }
-            float tIn = tc[Mathf.Clamp(k, 0, tc.Length - 1)];
-            if (finisherShot) FinisherShot(A, B, ca, pB2, yawA, ia);
-            // Суперник — у кліп прийому; рефері доходить своє (зупинений посеред ходи, він лишався на передньому плані
-            // кіноплану — сезон 08.11.2026, кадри 097 і 118).
-            StopWalk(B);
-            A.PlayAtBlend(ca, tIn, false, A.PosePos, yawA + yc[Mathf.Clamp(k, 0, yc.Length - 1)], 0.12f, ps);
-            B.PlayAtTime(cb, tIn, false, pB2, yawB, ps);
-            StartCoroutine(RopeGuard(A, ca));
-            StartCoroutine(RopeGuard(B, cb));
-            ArmBeat(idx, tIn);
-            yield return new WaitForSeconds((Mathf.Max(ca.length, cb.length) - tIn) / ps);
-        }
 
         /// <summary>Курс кіноплану поточного фінішера (обраний у <see cref="RunPair"/>).</summary>
         private float _finYaw;
@@ -1293,14 +924,29 @@ namespace Game.Gameplay.Ring.Stage
             MatchSide sw = win == MatchWinner.Player ? MatchSide.Player : MatchSide.Rival;
             var W = _s.Actor(sw);
             var L = _s.Actor(RingClipTable.Opp(sw));
-            bool lDown = _m[I(RingClipTable.Opp(sw))].Posture == Posture.Down;
+            // Відлік за рингом (CountOut, ядро MatchEngine.CountOutside): той, хто програв, лежить за рингом, переможець устиг
+            // на ринг до «десяти». Ефекту Place ядро тут не дає (пара в ядрі так і лишається за рингом), тож склейкою
+            // переможець і рефері — на рингу, той, хто програв, лишається лежати, де лежав, і в кадр перемоги не береться.
+            // Нічия (подвійний відлік) — вище: лише дзвін, пара за рингом.
+            bool lAway = _m[0].Outside;
+            if (lAway)
+            {
+                StopWalk(W); StopWalk(R);
+                _s.Place(W, RingStage3D.PairPos(sw, false), RingStage3D.PairYaw(sw, false), IdleName(sw) ?? "Ring_Stance_Loop");
+                _s.Place(R, RingStage3D.RefPos, 180f, "Ref_Idle_Loop");
+                _s.Watch.Forget(W);
+                _s.Watch.Forget(R);
+                HardCut(StageCam.Overview);
+            }
+            bool lDown = !lAway && _m[I(RingClipTable.Opp(sw))].Posture == Posture.Down;
 
             // Кадр перемоги (огляд 07.11.2026: голова переможця за кадром, «ПЕРЕМОГА» на тілі, руки складені): камера низько
             // спереду, з краю рингу; переможець стоїть позаду того, хто програв, — над ним; рефері поруч піднімає руку.
             // Бік камери (огляд 08.11.2026, кадр поразки 410: той, хто програв, лежав біля ближніх канатів — камера не
             // вміщалась у ринг і знімала знизу крізь канати): пробуються чотири боки, спершу той, де від того, хто програв,
             // до канатів найбільше рингу (бік залу −Z — з невеликою перевагою); береться перший, де кадр уміщується в ринг.
-            Vector3 lp = L.PosePos;
+            // Той, хто програв, за рингом — кадр будується від центру рингу (переможець «за центром», як над тим, хто стоїть).
+            Vector3 lp = lAway ? new Vector3(0f, RingStage3D.MatY, 0f) : L.PosePos;
             Vector3 pB = Vector3.zero, pA = Vector3.zero;
             float yaw = 180f;
             var sides = new List<Vector3> { Vector3.back, Vector3.forward, Vector3.left, Vector3.right };
@@ -1316,7 +962,7 @@ namespace Game.Gameplay.Ring.Stage
 
             // Переможець і рефері йдуть на місце кроками (хода з кермом, не ковзання) і стають лицем до камери.
             yield return Walk(new[] { new SlideItem(W, pB, yaw), new SlideItem(R, pA, yaw) });
-            if (!lDown)
+            if (!lDown && !lAway)
             {
                 // Той, хто програв, не стоїть як на старті: зігнувся від болю (огляд 06.11.2026 — однакова поза на результаті).
                 var hurt = _s.Clip("Idle_Hurt_Body_Loop") ?? _s.Clip("Idle_Tired_Loop");
@@ -1461,8 +1107,8 @@ namespace Game.Gameplay.Ring.Stage
         // ============================ повернення в стійку ============================
 
         /// <summary>
-        /// Після події — у стійку лицем до суперника. Борці в центрі лишаються там, де закінчили (раніше щоразу верталися на
-        /// точки зони, а наступний прийом знов зводив їх у центр — дві перестановки ковзанням на кожну подію); виправляється
+        /// Після події — у стійку лицем до суперника. Борці на рингу лишаються там, де закінчили (без зайвих перестановок
+        /// ковзанням на кожну подію); за рингом — стають на точки пари; виправляється
         /// лише відстань між ними (не ближче 1,2 м, не далі 2,6 м) і край рингу. Рефері лишається, якщо не стоїть між ними
         /// чи перед ними з боку камери; інакше відходить убік від пари. Усі перестановки — кроками (<see cref="Walk"/>).
         /// </summary>
@@ -1473,7 +1119,7 @@ namespace Game.Gameplay.Ring.Stage
             var Rv = _s.Actor(MatchSide.Rival);
             Vector3 pp = SettlePos(MatchSide.Player), pr = SettlePos(MatchSide.Rival);
             bool upP = _m[0].Posture != Posture.Down, upR = _m[1].Posture != Posture.Down;
-            if (upP && upR && _m[0].Zone == Zone.Center && _m[1].Zone == Zone.Center)
+            if (upP && upR && !_m[0].Outside)
             {
                 Vector3 d = pr - pp;
                 d.y = 0f;
@@ -1492,28 +1138,67 @@ namespace Game.Gameplay.Ring.Stage
                 }
                 pp += sh; pr += sh;
                 pp.y = pr.y = RingStage3D.MatY;
-                _rest[0] = pp;
-                _rest[1] = pr;
             }
-            // Хто спирається на кут — лишається як є (курс кута); решта лицем до суперника.
-            if (upP)
-                items.Add(new SlideItem(P, pp, LeansInCorner(MatchSide.Player) ? P.PoseYaw : RingStage3D.YawTo(pp, pr)));
-            if (upR)
-                items.Add(new SlideItem(Rv, pr, LeansInCorner(MatchSide.Rival) ? Rv.PoseYaw : RingStage3D.YawTo(pr, pp)));
+            // Лицем до суперника.
+            if (upP) items.Add(new SlideItem(P, pp, RingStage3D.YawTo(pp, pr)));
+            if (upR) items.Add(new SlideItem(Rv, pr, RingStage3D.YawTo(pr, pp)));
 
             var R = _s.Referee;
             Vector3 fm = (pp + pr) * 0.5f;
-            Vector3 rp = RefOk(R.PosePos, pp, pr) ? R.PosePos : RefSpot(pp, pr);
+            Vector3 rp;
+            if (_m[0].Outside) { rp = OutsideRefPos(); fm = RingStage3D.OutsideAnchor; }
+            else rp = RefOk(R.PosePos, pp, pr) ? R.PosePos : RefSpot(pp, pr);
             items.Add(new SlideItem(R, rp, RingStage3D.YawTo(rp, fm)));
-            yield return Walk(items.ToArray());
+            yield return Transit(items.ToArray());
         }
 
-        /// <summary>Де борець стає після події: місце спокою (кут, канати після кидка), у центрі — там, де стоїть, біля краю — трохи всередину.</summary>
+        /// <summary>Найдальший перехід борця коротким кроком у стійці, м (за 0,15–0,25 с); далі — звичайна хода (<see cref="Walk"/>).</summary>
+        private const float QuickMaxDist = 0.85f;
+
+        /// <summary>
+        /// Перехід між діями ланцюга: борці, що стоять і мають зсунутись не далі <see cref="QuickMaxDist"/> з поворотом до
+        /// 100°, переходять у стійці ковзанням 0,15–0,25 с (рішення Ф2: переходи ланцюга без ходи 0,7 с); якщо кліп скінчився
+        /// не стійкою — спершу ще до 0,12 с кросфейду в стійку (<see cref="Slide"/> чекає кінця переходу: знімок тазу посеред
+        /// нього водив таз по колу). Ковзання стійки — підстановка до кліпа короткого переступу (CLIP_NEEDS). Решта — як раніше
+        /// (<see cref="Walk"/>: рефері — кроком, лежачий — ковзанням, далекий — ходою). Обидві групи йдуть разом.
+        /// </summary>
+        private IEnumerator Transit(SlideItem[] items)
+        {
+            var quick = new List<SlideItem>();
+            var rest = new List<SlideItem>();
+            for (int i = 0; i < items.Length; i++)
+            {
+                var a = items[i].Actor;
+                Vector3 d = items[i].Pos - a.PosePos;
+                d.y = 0f;
+                float dist = d.magnitude;
+                bool q = a != _s.Referee && Upright(a) && IdleOf(a) != null && dist > 0.06f && dist <= QuickMaxDist
+                    && Mathf.Abs(Mathf.DeltaAngle(a.PoseYaw, items[i].Yaw)) <= 100f;
+                if (q) quick.Add(items[i]); else rest.Add(items[i]);
+            }
+            Coroutine w = rest.Count > 0 ? StartCoroutine(Walk(rest.ToArray())) : null;
+            Coroutine k = quick.Count > 0 ? StartCoroutine(QuickStep(quick.ToArray())) : null;
+            if (w != null) yield return w;
+            if (k != null) yield return k;
+        }
+
+        private IEnumerator QuickStep(SlideItem[] items)
+        {
+            for (int i = 0; i < items.Length; i++)
+            {
+                var a = items[i].Actor;
+                StopWalk(a);
+                var idle = IdleOf(a);
+                // Кінцева поза минулого кліпа — спершу в стійку на місці (коротко), а вже тоді переходить.
+                if (a.CurrentClip != idle) a.PlayAtBlend(idle, 0f, true, a.PosePos, a.PoseYaw, 0.12f);
+            }
+            yield return Slide(items, 0.15f);
+        }
+
+        /// <summary>Де борець стає після події: за рингом — на точці пари, на рингу — там, де стоїть (біля краю — трохи всередину).</summary>
         private Vector3 SettlePos(MatchSide s)
         {
-            int k = I(s);
-            if (_rest[k].HasValue) return _rest[k].Value;
-            if (_m[k].Zone != Zone.Center) return RingStage3D.ZonePos(s, _m[k].Zone);
+            if (_m[I(s)].Outside) return RingStage3D.PairPos(s, true);
             Vector3 p = _s.Actor(s).PosePos;
             float lim = RingStage3D.RingHalf - 0.6f;
             return new Vector3(Mathf.Clamp(p.x, -lim, lim), RingStage3D.MatY, Mathf.Clamp(p.z, -lim, lim));
