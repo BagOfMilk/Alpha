@@ -1244,13 +1244,13 @@ def _met_sweep(p, t, T):
     return _hand_arc(p, "l", h) if h > 1e-4 else p
 
 
-def _met_lhand(p, t, T, vx, sp):
+def _met_lhand(p, t, T, vx, sp, fall=None):
     """Ліва кисть і лікоть A — від пози польоту до місця на B плавно (нульова швидкість на прибутті), а не за 0,1 с
     разом із тілом: у парах обмежувач ривка шару оживлення згладжує й руки і дотягував різкий захід із проскоком у B."""
     wl = smooth((t - (T - MET_LH0)) / MET_LH)
     if wl <= 0.0:
         return p
-    f_ = met_fall_pose(min(t, T), vx)
+    f_ = (fall or met_fall_pose)(min(t, T), vx)
     p.hands = dict(p.hands)
     p.hands["l"] = lerp_hand(sp.hands["l"], f_.hands["l"], wl)
     el_f, el_s = f_.elbows["l"], sp.elbows["l"]
@@ -1267,14 +1267,15 @@ def _hand_arc(p, side, h):
     return p
 
 
-def clip_land_meteor_a(t, L, partner=None):
+def clip_land_meteor_a(t, L, partner=None, fall=None):
+    fall = fall or met_fall_pose
     T = MET_HIT
     sp = met_splash(MET_Y0 - MET_VX * T - 0.04, hip_dy=-0.12)
     if t <= T:
-        return _met_sweep(_met_lhand(met_fall_pose(t, MET_VX), t, T, MET_VX, sp), t, T)
-    f0 = met_fall_pose(T, MET_VX)
+        return _met_sweep(_met_lhand(fall(t, MET_VX), t, T, MET_VX, sp, fall), t, T)
+    f0 = fall(T, MET_VX)
     p = blend_pose(_filled(f0), _filled(sp), smooth((t - T) / 0.1))      # груди зупинились, ноги ляскають об мат
-    p = _met_lhand(p, t, T, MET_VX, sp)
+    p = _met_lhand(p, t, T, MET_VX, sp, fall)
     hs = hit_spring(t, T, w=18.0, z=0.4)
     p.pelvis = p.pelvis + Vector((0.0, 0.0, -0.015 * hs))
     wp = smooth((t - T - 0.08) / 0.4)                                     # накриття ≤ 0,5 с від удару (§5.4)
@@ -1392,12 +1393,13 @@ def clip_land_meteor_partial_b(t, L, partner=None):
     return p
 
 
-def clip_land_meteor_miss_a(t, L, partner=None):
+def clip_land_meteor_miss_a(t, L, partner=None, fall=None):
+    fall = fall or met_fall_pose
     T = MET_HIT_M
     side = smooth(t / 0.3)
     if t <= T:
-        return met_fall_pose(t, MET_VX_M, side=side)
-    f0 = met_fall_pose(T, MET_VX_M, side=1.0)
+        return fall(t, MET_VX_M, side=side)
+    f0 = fall(T, MET_VX_M, side=1.0)
     y_s = MET_Y0 - MET_VX_M * T
     fl = met_floor(y_s)
     p = blend_pose(_filled(f0), _filled(fl), smooth((t - T) / 0.12))
@@ -1461,6 +1463,204 @@ def clip_land_meteor_miss_b(t, L, partner=None):
     p = met_roll_b(k, ka=t / 0.14)
     br = smooth((t - 0.6) / 0.4) * (1.0 - smooth((t - (L - 0.4)) / 0.35))
     p.pitch = p.pitch - 3.0 * br * (0.5 + 0.5 * math.sin(2 * math.pi * t / 0.9))   # важко дихає
+    return p
+
+
+# ================================================================ «Ластівка» (swallow_dive, P2-1) — кут → Air → Land
+# Склейка (ТЗ §1.2, swallow_dive): кут — Top_Rope_Perch_Loop (набір RING_Cast); Air_Swallow — пірнання вперед над
+# центром без сальто: з нахилу вперед тіло лягає горизонтально, спина прогнута, руки врозліт у сторони, ноги разом.
+# Стик Air → Land — той самий, що в «Метеора» (висота 1,45 м, 1,34 м/с униз, точка над B), тож пари Land 10+ і ≤6 —
+# ті самі функції «Метеора» з іншою позою падіння (руки врозліт, тіло горизонтально, оберт уперед).
+# Ступені: 10+ Land_Swallow (тіло на тіло, жертву підкидає, за 0,5 с — накриття); 7–9 Land_Swallow_Knees (жертва
+# підняла коліна: A б'ється животом об коліна, складається й відштовхується на свої коліна, тримаючись за живіт;
+# B продає — коліна вбило в груди); ≤6 Land_Swallow_Miss (жертва відкотилась ≤ 0,5 м, A б'ється об мат і продає груди).
+# Кут th — як у «Метеора» (оберт навколо LEFT на −th): 360 — стоїть, 270 — горизонтально обличчям донизу; пірнання
+# вперед — th спадає (сальто «Метеора» — росте).
+SW_LEN = 0.8             # §1.2.2: 0,6–0,9 с
+SW_TH_START = 335.0      # щойно відірвався від кута: нахил уперед 25°
+SW_TH0 = 280.0           # на стику: голова трохи вище таза, груди ведуть
+SW_W = -30.0             # °/с на стику: доводить до горизонталі якраз до удару (≈ 0,3 с)
+SW_WINGS = (Vector((0.95, 0.05, 0.12)), Vector((0.35, 0.35, 0.05)))   # руки врозліт у сторони (рамка тіла: x — ліво,
+SW_BRACE = (Vector((0.3, -0.3, 0.85)), Vector((0.35, 0.3, 0.1)))      #   y — назад, z — до голови); 7–9: уперед-униз
+
+
+def sw_arms(p, q, side=0.0, brace=0.0):
+    """Руки «ластівки» (крила врозліт); side — у боки до мату (промах, як у «Метеора»); brace — уперед-униз (7–9)."""
+    ak = BODY["arm"]
+    p.hands, p.elbows = {}, {}
+    for s_, sg in (("l", 1.0), ("r", -1.0)):
+        h_ = SW_WINGS[0].lerp(MET_SIDE[0], side).lerp(SW_BRACE[0], brace)
+        e_ = SW_WINGS[1].lerp(MET_SIDE[1], side).lerp(SW_BRACE[1], brace)
+        hv = Vector((h_.x * sg, h_.y, h_.z))
+        ev = Vector((e_.x * sg, e_.y, e_.z))
+        f = (q @ hv).normalized()
+        u = q @ Vector((0.0, -1.0, 0.0))
+        u = u - f * u.dot(f)
+        u = u.normalized() if u.length > 1e-4 else q @ UP
+        p.hands[s_] = (lambda S, s_=s_, hv=hv: S[s_] + q @ (hv * ak), f, u)
+        p.elbows[s_] = (lambda S, s_=s_, ev=ev: S[s_] + q @ ev)
+    p.forced = set()
+    p.fist = {"l": 0.1, "r": 0.1}
+    return p
+
+
+def sw_th(t, L):
+    """Кут нахилу: ермітова крива від SW_TH_START (швидкість 0) до SW_TH0 (швидкість SW_W)."""
+    u = t / L
+    h00, h01, h11 = 2 * u ** 3 - 3 * u ** 2 + 1, -2 * u ** 3 + 3 * u ** 2, u ** 3 - u ** 2
+    return h00 * SW_TH_START + h01 * SW_TH0 + h11 * SW_W * L
+
+
+def clip_air_swallow(t, L):
+    """Пірнання: вершина дуги на 0,35 L, тіло з нахилу лягає горизонтально, спина прогнута, руки врозліт; на стику —
+    висота, швидкість і кут ті самі, що на старті Land."""
+    u = t / L
+    ta = 0.35 * L
+    g_ = MET_V0 / (L - ta)
+    za = MET_Z0 + 0.5 * g_ * (L - ta) ** 2
+    z = za - 0.5 * g_ * (t - ta) ** 2
+    y = MET_Y0 + 0.4 * (1.0 - u)
+    q = Quaternion(LEFT, math.radians(-sw_th(t, L)))
+    p = body(off_for(Vector((MET_X, y, z))), q, knee_bend=0.08)
+    p.pitch = -14.0 * math.sin(math.pi * min(1.0, u * 1.15))         # прогин спини; на стику — 0, як у падінні
+    p.head_pitch = -25.0
+    return sw_arms(p, q)
+
+
+def sw_fall_pose(t, vx, side=0.0, brace=0.0):
+    """Падіння від стику Air_Swallow → Land: балістика (g), оберт SW_W, тіло горизонтально, руки врозліт."""
+    z = MET_Z0 - MET_V0 * t - 4.905 * t * t
+    q = Quaternion(LEFT, math.radians(-(SW_TH0 + SW_W * t)))
+    p = body(off_for(Vector((MET_X, MET_Y0 - vx * t, z))), q, knee_bend=0.08)
+    p.head_pitch = -25.0
+    return sw_arms(p, q, side=side, brace=brace)
+
+
+def clip_land_swallow_a(t, L, partner=None):
+    return clip_land_meteor_a(t, L, partner, fall=sw_fall_pose)
+
+
+def clip_land_swallow_b(t, L, partner=None):
+    """Як у «Метеора», але жертву підкидає сильніше: ноги й плечі відриваються від мату на ударі."""
+    T = MET_HIT
+    hit = hit_spring(t, T, w=14.0, z=0.3)
+    p = pin_b(pinned=smooth((t - T - 0.08) / 0.4), tuck=smooth(t / 0.3), legs=0.45 * max(0.0, hit))
+    look = smooth(t / 0.2) * (1.0 - smooth((t - T + 0.08) / 0.1))
+    p.pelvis = p.pelvis + Vector((0.0, 0.0, 0.03 * max(0.0, hit)))
+    p.pitch = p.pitch + 10.0 * abs(hit)
+    p.head_pitch = p.head_pitch + 22.0 * look - 16.0 * max(0.0, hit)
+    return _hand_arc(p, "r", 0.16 * max(0.0, hit))
+
+
+def clip_land_swallow_miss_a(t, L, partner=None):
+    return clip_land_meteor_miss_a(t, L, partner, fall=sw_fall_pose)
+
+
+# --- 7–9: коліна. B лежить так само поперек (90°), але зсунутий уздовж свого тіла до голови — під животом A його
+# підняті коліна (стопи по мату до сідниць). A влучає животом (не грудьми) і складається навколо колін.
+SW_ZHIT_K, SW_VX_K = 0.7, 0.3                  # таз A над колінами B у мить удару (коліна ≈ 0,55 м + живіт 0,12)
+SW_HIT_K = met_hit_time(SW_ZHIT_K)             # ≈ 0,28 с
+SW_KNEE_DX = 0.23                              # коліно B від його таза вздовж тіла (стопа зсунута на SW_KNEE_SLIDE)
+SW_KNEE_SLIDE = 0.44
+SW_BELLY = 0.2                                 # живіт A — на 0,2 м від таза до голови
+KNEES_OFF = Vector((MET_X - SW_KNEE_DX, MET_Y0 - SW_VX_K * SW_HIT_K - SW_BELLY, 0.0))
+KNEES_LEN = 2.4
+KNEES_KNEEL = Vector((MET_X, 0.12, 0.0))      # A стає на коліна позаду від місця удару (від B)
+
+
+def _shift(p, v):
+    """Уся поза зі зсувом v (таз, щиколотки, полюси колін); кисті й лікті — від плечей, ідуть самі."""
+    p.pelvis = p.pelvis + v
+    if p.ankles:
+        p.ankles = tuple(a_ + v for a_ in p.ankles)
+    if p.knees:
+        p.knees = tuple(k_ + v for k_ in p.knees)
+    return p
+
+
+def sw_knees_b(t, L):
+    """B бачить, що летить, і підтягує коліна (стопи по мату до сідниць); удар — коліна просідають; далі ноги
+    сповзають на мат, B обома руками за груди (продає), кінець — lying_back."""
+    T = SW_HIT_K
+    kup = _win(t, 0.0, 0.22, T + 0.25, T + 0.85)
+    hit = hit_spring(t, T, w=16.0, z=0.35)
+    sell = _win(t, T + 0.35, T + 0.75, L - 0.75, L - 0.25)
+    p = lying(knee_bend=0.15)
+    off_b = off_for(Vector((0.0, 0.0, LIE_Z)))
+    k_ = kup * (1.0 - 0.12 * max(0.0, hit))
+    a0 = Vector((0.0, -0.25 * 0.15, 0.35 * 0.15))                    # як у вузлі lying_back
+    p.ankles = (xf(off_b, Q_BACK, REST["ankle_l"] + a0.lerp(Vector((0.02, 0.0, SW_KNEE_SLIDE)), k_)),
+                xf(off_b, Q_BACK, REST["ankle_r"] + a0.lerp(Vector((-0.02, 0.0, SW_KNEE_SLIDE)), k_)))
+    p.knees = (xf(off_b, Q_BACK, REST["knee_l"] + Vector((0.03 + 0.05 * kup + 0.3 * sell, -0.6, 0.0))),
+               xf(off_b, Q_BACK, REST["knee_r"] + Vector((-0.03 - 0.05 * kup - 0.3 * sell, -0.6, 0.0))))
+    p.pelvis = p.pelvis + Vector((0.0, 0.0, -0.012 * max(0.0, hit)))
+    look = smooth(t / 0.2) * (1.0 - smooth((t - T + 0.05) / 0.12))
+    p.head_pitch = p.head_pitch + 25.0 * look - 10.0 * max(0.0, hit) + 15.0 * sell
+    p.pitch = p.pitch + 5.0 * abs(hit) + 8.0 * sell
+    if sell > 0.0:
+        ev = lambda v, S: v(S) if callable(v) else v
+        hs_ = dict(p.hands)
+        for s_, dx in (("l", 0.07), ("r", -0.07)):
+            g0, f0, u0 = hs_[s_]
+            hs_[s_] = (lambda S, g0=g0, dx=dx: ev(g0, S).lerp(S["chest"] + Vector((dx, 0.06, 0.17)), sell)
+                       + Vector((0.0, 0.0, 0.2 * math.sin(math.pi * sell))), f0, u0)
+        p.hands = hs_
+        el = dict(p.elbows)
+        for s_, dx in (("l", 0.3), ("r", -0.3)):
+            e0 = el[s_]
+            el[s_] = (lambda S, e0=e0, dx=dx, s_=s_: e0(S).lerp(S[s_] + Vector((dx, -0.1, 0.05)), sell))
+        p.elbows = el
+    return p
+
+
+def clip_land_swallow_knees_b(t, L, partner=None):
+    return sw_knees_b(t, L)
+
+
+def _sw_belly(S):
+    """Кисть на своєму животі (під ребрами, спереду)."""
+    fwd, lr = _body_ax(S)
+    return S["pelvis"] + (S["chest"] - S["pelvis"]) * 0.45 + fwd * 0.16
+
+
+def clip_land_swallow_knees_a(t, L, partner=None):
+    """Животом на коліна B: руки вперед-униз (пружинить), тіло складається навколо колін (голова й ноги вниз), далі
+    відштовхується назад на свої коліна позаду, обома руками за живіт; кінець — kneel_up."""
+    T = SW_HIT_K
+    br = smooth((t - (T - 0.3)) / 0.25)
+    if t <= T:
+        return sw_fall_pose(t, SW_VX_K, brace=br)
+    f0 = sw_fall_pose(T, SW_VX_K, brace=1.0)
+    hs = hit_spring(t, T, w=15.0, z=0.35)
+    fold = _win(t, T, T + 0.12, T + 0.3, T + 0.6)                        # склався навколо колін
+    ank0 = f0.ankles
+    p = _filled(f0)
+    p.pelvis = p.pelvis + Vector((0.0, 0.0, -0.02 * max(0.0, hs)))
+    p.pitch = 28.0 * fold
+    w2 = smooth((t - T - 0.25) / 0.75)                                    # на коліна
+    lean = 0.55 * (1.0 - smooth((t - (L - 0.75)) / 0.5))
+    kn = _shift(kneel_up(t, L, lean=lean), KNEES_KNEEL)
+    if w2 > 0.0:
+        p = blend_pose(_filled(p), _filled(kn), w2)
+    # ноги: падають униз (коліна на мат), стопи в повітрі, доки не стали на місце вузла
+    p.ankles = (feet_track(t, [(0.0, ank0[0]), (T + 0.1, ank0[0] + Vector((0.0, 0.0, -0.18))),
+                               (T + 0.75, kn.ankles[0]), (L + 1, kn.ankles[0])])[0],
+                feet_track(t, [(0.0, ank0[1]), (T + 0.16, ank0[1] + Vector((0.0, 0.0, -0.18))),
+                               (T + 0.85, kn.ankles[1]), (L + 1, kn.ankles[1])])[0])
+    clutch = _win(t, T + 0.3, T + 0.75, L - 0.7, L - 0.3)                # обидві руки — на живіт
+    if clutch > 0.0:
+        ev = lambda v, S: v(S) if callable(v) else v
+        hs_ = dict(p.hands)
+        el = dict(p.elbows)
+        for s_, dx in (("l", 0.06), ("r", -0.06)):
+            g0, f0_, u0 = hs_[s_]
+            hs_[s_] = (lambda S, g0=g0, dx=dx: ev(g0, S).lerp(_sw_belly(S) + Vector((dx, 0.0, 0.0)), clutch), f0_, u0)
+            e0 = el[s_]
+            sg = 1.0 if s_ == "l" else -1.0
+            el[s_] = (lambda S, e0=e0, sg=sg, s_=s_: e0(S).lerp(S[s_] + Vector((0.28 * sg, -0.05, -0.25)), clutch))
+        p.hands, p.elbows = hs_, el
+        p.fist = {"l": 0.3 * (1.0 - clutch) + 0.5 * clutch, "r": 0.3 * (1.0 - clutch) + 0.5 * clutch}
+        p.head_pitch = p.head_pitch + 12.0 * clutch
     return p
 
 
@@ -1583,6 +1783,7 @@ MOVE_CLIP_NODES.update({"Kneel_To_Stance": {"A": ("kneel_up", "stance")},
 MOVE_CLIP_NODES.update({_nm: {"A": ("ref_kneel", "ref_kneel")} for _nm in
                         ("Ref_Count_Pin_3_Slow", "Ref_Count_Pin_2_Slow", "Ref_Count_Pin_1_Slow", "Ref_Count_Pin_2_Half")})
 
+
 # P1-1b для старих швидких кліпів рахунку (крок 0,95 с, старий бій): той самий вхід і вихід через ref_kneel, на «два» —
 # той самий жест. Довжини й мітки не змінюються (вхід — до першого замаху, вихід — після останнього удару).
 def clip_ref_count3_node(t, L):
@@ -1631,4 +1832,31 @@ MOVE_EVENTS.update({
     "Land_Meteor": [("contact", MET_HIT, "spine_03", "spine_03"), ("sell", MET_HIT + 0.1, "-", "spine_03")],
     "Land_Meteor_Partial": [("contact", MET_HIT_P, "spine_02", "spine_03"), ("sell", MET_HIT_P + 0.1, "-", "spine_03")],
     "Land_Meteor_Miss": [("contact", MET_HIT_M, "spine_03", "-")],
+})
+
+
+# --- «Ластівка» (P2-1, swallow_dive)
+MOVE_CLIPS.append(("Air_Swallow", SW_LEN, clip_air_swallow, None, False, None, 0))
+CENTER_RULE.add("Air_Swallow")
+MOVE_CLIP_NODES["Air_Swallow"] = {"A": (None, None)}
+MOVE_EVENTS["Air_Swallow"] = []
+for _nm, _ln, _fa, _fb, _off in [("Land_Swallow", LAND_LEN, clip_land_swallow_a, clip_land_swallow_b, PIN_OFF),
+                                 ("Land_Swallow_Knees", KNEES_LEN, clip_land_swallow_knees_a, clip_land_swallow_knees_b,
+                                  KNEES_OFF),
+                                 ("Land_Swallow_Miss", MISS_LEN, clip_land_swallow_miss_a, clip_land_meteor_miss_b,
+                                  MISS_OFF)]:
+    MOVE_CLIPS.append((_nm, _ln, _fa, _fb, False, _off.copy(), 90))
+    CENTER_RULE.add(_nm)
+    MOVE_CONTACTS[_nm] = set(MET_CONTACTS)
+MOVE_CONTACTS["Land_Swallow_Knees"] |= {(a_, b_) for a_ in ("spine_01", "spine_02", "spine_03", "pelvis")
+                                        for b_ in ("thigh_l", "thigh_r", "calf_l", "calf_r")}
+MOVE_CLIP_NODES.update({
+    "Land_Swallow": {"A": (None, "pinned_A"), "B": ("lying_back", "pinned_B")},
+    "Land_Swallow_Knees": {"A": (None, "kneel_up"), "B": ("lying_back", "lying_back")},
+    "Land_Swallow_Miss": {"A": (None, "lying_front"), "B": ("lying_back", "lying_front")},
+})
+MOVE_EVENTS.update({
+    "Land_Swallow": [("contact", MET_HIT, "spine_03", "spine_03"), ("sell", MET_HIT + 0.1, "-", "spine_03")],
+    "Land_Swallow_Knees": [("contact", SW_HIT_K, "spine_01", "calf_l"), ("sell", SW_HIT_K + 0.1, "-", "spine_03")],
+    "Land_Swallow_Miss": [("contact", MET_HIT_M, "spine_03", "-")],
 })
