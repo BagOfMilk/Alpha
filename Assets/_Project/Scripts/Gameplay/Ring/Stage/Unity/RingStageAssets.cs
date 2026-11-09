@@ -33,6 +33,21 @@ namespace Game.Gameplay.Ring.Stage
         public AnimationClip[] crowdClips = new AnimationClip[0];
         public Avatar crowdAvatar;
         public TextAsset venueAnchors, venueProps, venueCrowd;
+
+        /// <summary>Зал: FBX і його тексти (якорі, реквізит, натовп).</summary>
+        [System.Serializable]
+        public sealed class VenueSet
+        {
+            public string id;
+            public GameObject venue;
+            public TextAsset anchors, props, crowd;
+        }
+
+        /// <summary>
+        /// Інші зали (клубна зала, палац спорту) — для огляду «за рингом» у трьох залах (<c>-ring-venue hall|arena</c>); у грі
+        /// досі спортзал (<see cref="venue"/>). Зали за рівнем федерації — окремий пункт.
+        /// </summary>
+        public VenueSet[] venueSets = new VenueSet[0];
         /// <summary>
         /// Процедурні набори текстур арени (Art/Ring/Textures, manifest): ім'я, карта кольору, нормаль, плитка (м) — для
         /// матеріалів Kit_* (<see cref="RingVenueKit"/>).

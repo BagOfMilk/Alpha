@@ -456,6 +456,18 @@ namespace Game.Gameplay.Ring.Stage
         /// Фанат упритул до камери не закриває кадр (огляд 04.11.2026: на виході пів екрана — голова фаната біля проходу):
         /// ховається, хто ближче 2 м до камери або стоїть на лінії камера → ціль ближче 0,7 м (у межах відрізка).
         /// </summary>
+        private bool _keep;
+        private float _kx0, _kz0, _kx1, _kz1;
+
+        /// <summary>
+        /// Смуга, з якої прибрано натовп і операторів (пара б'ється за рингом); <paramref name="on"/> = false — повернути.
+        /// Діє разом із <see cref="Occlude"/> (кличеться щокадру перед ним).
+        /// </summary>
+        public void KeepClear(bool on, float x0, float z0, float x1, float z1)
+        {
+            _keep = on; _kx0 = x0; _kz0 = z0; _kx1 = x1; _kz1 = z1;
+        }
+
         public void Occlude(Vector3 cam, Vector3 target)
         {
             Vector3 d = target - cam;
@@ -465,10 +477,12 @@ namespace Game.Gameplay.Ring.Stage
             foreach (var f in _fans)
             {
                 if (f.Go == null) continue;
-                Vector3 p = f.Go.transform.position + Vector3.up * (f.Standing ? 1.2f : 0.8f);
+                Vector3 g = f.Go.transform.position;
+                Vector3 p = g + Vector3.up * (f.Standing ? 1.2f : 0.8f);
                 float t = Vector3.Dot(p - cam, d);
                 bool hide = (p - cam).magnitude < 2.0f
-                    || (t > 0f && t < len - 0.6f && (p - (cam + d * t)).magnitude < 0.7f);
+                    || (t > 0f && t < len - 0.6f && (p - (cam + d * t)).magnitude < 0.7f)
+                    || (_keep && g.x >= _kx0 && g.x <= _kx1 && g.z >= _kz0 && g.z <= _kz1);
                 if (hide == f.Hidden) continue;
                 if (f.Rends == null) f.Rends = f.Go.GetComponentsInChildren<Renderer>(true);
                 foreach (var r in f.Rends) r.enabled = !hide;
