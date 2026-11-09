@@ -1798,10 +1798,16 @@ def _tuck(p, w):
     ev = lambda v, S: v(S) if callable(v) else v
     p = _filled(p)
     hs = dict(p.hands)
+    el = dict(p.elbows)
+    ak = BODY["arm"]
     for s_, v in BLOCK_TUCK:
         g, a_, b_ = hs[s_]
-        hs[s_] = (lambda S, g=g, v=v, s_=s_: lerp(ev(g, S), S[s_] + v, w), a_, b_)
-    p.hands = hs
+        hs[s_] = (lambda S, g=g, v=v, s_=s_: lerp(ev(g, S), S[s_] + v * ak, w), a_, b_)
+        # лікті — біля ребер, під плечима (з бігу лікті позаду: передпліччя йшло крізь живіт, жіночий набір 3,3 см)
+        sg = 1.0 if s_ == "l" else -1.0
+        e0 = el[s_]
+        el[s_] = lambda S, e0=e0, s_=s_, sg=sg: e0(S).lerp(S[s_] + Vector((0.04 * sg, -0.05, -0.25)) * ak, w)
+    p.hands, p.elbows = hs, el
     p.fist = {s_: lerp(p.fist[s_], 0.8, w) for s_ in "lr"}
     return p
 
@@ -2219,3 +2225,670 @@ for _nm, _ln, _fn in (("Rope_Return_Tired", RET_TIRED_LEN, clip_rope_return_tire
     CENTER_RULE.add(_nm)
     MOVE_CLIP_NODES[_nm] = {"A": (None, "stance")}
     MOVE_EVENTS[_nm] = []
+
+
+
+# ================================================================ springboard «Стрибок із канату» (P2-3) — канат → Air → Land
+# Склейка (ТЗ §1.2, springboard): Springboard_Perch — A стоїть на верхньому канаті боком до рингу, балансує, присідає
+# й відштовхується (QTE — тут, до відриву); Springboard_Air — над жертвою (без дуги від каната): кроссбоді — з
+# відштовху тіло лягає боком горизонтально, руки вперед обійняти; Land — пара, жертва СТОЇТЬ у центрі.
+# Простір пари Land: A у нулі (обличчям у −Y), B (90°) — корінь SPB_OFF; B стоїть на SPB_D перед коренем обличчям до
+# A (+X) і від удару падає на спину до кореня. A летить у −X боком: голова в −Y, груди в −X, лівий бік донизу; кінець
+# Air = старт Land (ті самі пози й швидкість), тож Air ставиться так само, як A обраного Land.
+# Правило середини пари (§1.2.3): таз кожного ≤ 0,5 м від середини коренів A і B на першому кадрі.
+SPB_OFF = Vector((-0.37, -0.4, 0.0))
+SPB_D = 0.25             # м: B стоїть перед своїм коренем; падає назад на SPB_D
+SPB_TC = 0.0             # с: Land починається з удару (склейка на контакті): згори A пройшов би крізь голову B
+SPB_VX, SPB_VZ = -0.6, -3.2   # м/с: швидкість таза A в кінці Air (з верхнього каната — круто згори)
+SPB_SLAM = 0.42          # с від удару: спина B об мат (з вагою A — швидше за звичайний бамп)
+SPB_UC = (0.37, 0.24)    # м × зріст: де груди A на B — від таза B: в удар — верх грудей (стійка: таз 0,83, плечі
+                         #   1,27), на маті — низ грудей (як у накритті); A сповзає вагою, поки B падає
+SPB_GAP = 0.36           # м × зріст: від хребта B до хребта A — груди в груди (по сітках; 0,24 — торси 9 см одне в одному)
+SPB_DY = (0.2, 0.385)    # м: таз A від грудей B уздовж Y: в удар плечі A — за правим плечем B (голова B не в A),
+                         #   на маті — як у накритті
+SPB_LEN = 1.6
+SPB_SPREAD = -0.06         # м: ноги A разом (кроссбоді — тіло однією «колодою»)
+SPB_KNEE_OUT = 0.14       # м: ліва кисть A — з зовнішнього боку ближнього коліна B (звідти — під коліно)
+
+
+def spb_hs():
+    return 0.89 if globals().get("FEMALE") else 1.0
+
+
+def spb_pt(v):
+    """Точка простору ригу B (90°) → простір A."""
+    return SPB_OFF + Vector((-v.y, v.x, v.z))
+
+
+def spb_dir(v):
+    return Vector((-v.y, v.x, v.z))
+
+
+def spb_b_rig(u):
+    """B у просторі свого ригу від удару (u, с): таз і нахил назад (°; 90 — на спині). До удару — стоїть на SPB_D
+    перед коренем (−Y ригу — уперед)."""
+    v = max(0.0, u)
+    th = track(v, [(0.0, 0.0), (0.1, 14.0), (0.3, 55.0), (SPB_SLAM, 90.0), (9.0, 90.0)])
+    y = track(v, [(0.0, 0.0), (0.12, 0.05), (0.33, 0.18), (SPB_SLAM, SPB_D), (9.0, SPB_D)]) - SPB_D
+    lk = BODY["leg"]
+    z = track(v, [(0.0, REST["pelvis"].z - 0.09), (0.16, 0.66 * lk), (0.34, 0.3 * lk), (SPB_SLAM, LIE_Z), (9.0, LIE_Z)])
+    if SPB_SLAM < v < SPB_SLAM + 0.2:
+        z += 0.025 * math.sin(math.pi * (v - SPB_SLAM) / 0.2)
+    return Vector((0.0, y, z)), th
+
+
+def spb_slide(u):
+    return smooth(max(0.0, u) / SPB_SLAM)
+
+
+def spb_b_chest(u):
+    """Точка на грудях B, де лежать груди A, і нормаль його грудей — у просторі A."""
+    pel, th = spb_b_rig(u)
+    q = Quaternion(LEFT, math.radians(-th))
+    h = (SPB_UC[0] + (SPB_UC[1] - SPB_UC[0]) * spb_slide(u)) * spb_hs()
+    return spb_pt(pel + q @ Vector((0.0, 0.0, h))), spb_dir(q @ Vector((0.0, -1.0, 0.0)))
+
+
+def spb_dy(u):
+    return SPB_DY[0] + (SPB_DY[1] - SPB_DY[0]) * spb_slide(u)
+
+
+def spb_a_pel(t, uf=None):
+    """Таз A: до удару — балістика (із SPB_VX, SPB_VZ на старті); від удару — їде на грудях B, що падає назад.
+    uf — час падіння B (7–9: B спершу тримає A, тоді завалюється — spb_ueff); за замовчуванням — від удару."""
+    u = t - SPB_TC
+    uf = u if uf is None else uf
+    if u <= 0.0:
+        c, n = spb_b_chest(0.0)
+        c = c + n * SPB_GAP * spb_hs() + Vector((0.0, SPB_DY[0], 0.0))
+        dt = -u
+        vzc = SPB_VZ - 9.81 * SPB_TC
+        return c + Vector((-SPB_VX * dt, 0.0, -vzc * dt - 4.905 * dt * dt))
+    c, n = spb_b_chest(uf)
+    hs = hit_spring(t, SPB_TC, w=18.0, z=0.4)
+    return c + n * (SPB_GAP * spb_hs() + 0.012 * max(0.0, hs)) + Vector((0.0, spb_dy(uf), 0.0))   # удар — без
+    #   стискання (тулуб у тулуб), лише відскок угору
+
+
+def spb_a_q(t, uf=None):
+    """Боком (груди до B) → обличчям донизу, разом із B, що падає."""
+    _, th = spb_b_rig(t - SPB_TC if uf is None else uf)
+    return Quaternion(BACK, math.radians(90.0 - th)) @ Quaternion(LEFT, math.radians(90.0))
+
+
+SPB_REACH = {"r": (Vector((-0.1, -0.52, 0.3)), Vector((-0.4, 0.05, 0.05))),     # руки вперед — обійняти (рамка тіла:
+             "l": (Vector((0.14, -0.33, 0.0)), Vector((0.4, 0.05, -0.1)))}     #   x — ліво, y — назад, z — до голови);
+#   ліва (нижня) — до правого боку B на рівні таза: за спину B не заходить (B ляже на неї), спереду — стегна B
+
+
+def spb_reach_arms(p, q):
+    ak = BODY["arm"]
+    p.hands, p.elbows = {}, {}
+    for s_ in "lr":
+        hv, ev = SPB_REACH[s_]
+        p.hands[s_] = (lambda S, s_=s_, hv=hv: S[s_] + q @ (hv * ak), q @ Vector((0.0, -1.0, 0.25)), q @ UP)
+        p.elbows[s_] = (lambda S, s_=s_, ev=ev: S[s_] + q @ ev)
+    p.fist = {"l": 0.25, "r": 0.25}
+    return p
+
+
+def spb_air_pose(t):
+    """A у повітрі на підльоті (і кінець Air): боком горизонтально, ноги разом, руки вперед."""
+    q = spb_a_q(min(t, SPB_TC))
+    p = body(off_for(spb_a_pel(min(t, SPB_TC))), q, knee_bend=0.25, spread=SPB_SPREAD)
+    p.pitch = 8.0
+    p.head_pitch = 10.0
+    spb_reach_arms(p, q)
+    return p
+
+
+def clip_spb_body_a(t, L, partner=None):
+    if t <= SPB_TC:
+        return spb_air_pose(t)
+    return spb_a_land(t, t - SPB_TC)
+
+
+def spb_a_land(t, uf, pin=True, sink=0.0):
+    """A від удару на грудях B, що падає (uf — час падіння B); pin — накриття (10+)."""
+    u = t - SPB_TC
+    q = spb_a_q(t, uf)
+    p = body(off_for(spb_a_pel(t, uf) + Vector((0.0, 0.0, -sink))), q, knee_bend=0.25 + 0.15 * smooth(uf / 0.3),
+             spread=SPB_SPREAD)
+    p.pitch = 8.0 + 10.0 * smooth(uf / 0.2)
+    p.head_pitch = 10.0
+    _, n = spb_b_chest(uf)
+    ra = spb_reach_arms(RPose(), q)
+    # обійняв: права — згори на праве плече B (не за шию: спина B ляже на мат; на маті «згори» — за плечем, де й
+    # долоня накриття). Ліва (нижня) з обхвату за правий бік B виходить уздовж його боку вперед (не крізь пояс і не
+    # під спину: B ляже на неї), далі — угору й над стегнами B до зовнішнього боку ближнього (лівого) коліна, рука
+    # майже пряма (зігнута лікоть ішов у таз B); у накритті — униз по зовнішньому боці й під коліно.
+    pel_b, th_b = spb_b_rig(uf)
+    up_b = spb_dir(Quaternion(LEFT, math.radians(-th_b)) @ UP)
+    # права (верхня): плече A над правим плечем B — до плеча кисть складала руку ліктем угору («куряче крило»); тепер
+    # рука лягає через праве плече B, кисть — за шию B (обійняв за шию), поки B стоїть; спина B іде до мату — кисть
+    # виходить угору над праве плече (до голови), звідти накриття кладе долоню на мат за плечем
+    k_r = smooth((uf - 0.1) / 0.2)
+    neck_r = lambda S: (P(S, "neck_01", 0.5) or S["r"]) - n * 0.15 + Vector((0.0, 0.04, 0.0))
+    top_r = lambda S: (P(S, "upperarm_r", 0.0) or S["r"]) + up_b * 0.2 + n * 0.02 + Vector((0.0, -0.08, 0.0))
+    hug_r = lambda S: neck_r(S).lerp(top_r(S), k_r)
+    side_hip = lambda S: (P(S, "pelvis", 0.5) or S["l"]) + Vector((0.0, -0.25, 0.0))
+    side_knee = lambda S: (P(S, "calf_l", 0.0) or S["l"]) + Vector((0.0, SPB_KNEE_OUT, 0.0)) + n * 0.04
+    k2 = smooth((uf - 0.12) / 0.38)
+    kx = smooth((k2 - 0.15) / 0.7)
+    lift = 0.2 * smooth(k2 / 0.35) * (1.0 - smooth((k2 - 0.7) / 0.3))
+    hug_l = lambda S: side_hip(S).lerp(side_knee(S), kx) + n * lift
+    fore_l = (-n).lerp(Vector((0.0, 1.0, 0.0)), kx)
+    up_l = up_b.lerp(Vector((0.0, 1.0, 0.0)).cross(n), kx)
+    wh = smooth(u / 0.1)
+    whl = smooth(u / 0.12)
+    fore_r = (Vector((0.0, 1.0, 0.0)) - n * 0.3).lerp(up_b - n * 0.5, k_r)
+    p.hands = {"r": lerp_hand((hug_r, fore_r, -n), ra.hands["r"], wh),
+               "l": lerp_hand((hug_l, fore_l, up_l), ra.hands["l"], whl)}
+    el_r, el_l = ra.elbows["r"], ra.elbows["l"]
+    el_hug_r = (-n * 0.3 + Vector((0.0, 0.0, 0.2))).lerp(up_b * 0.3 + n * 0.15 + Vector((0.0, -0.1, 0.0)), k_r)
+    p.elbows = {"r": lambda S: el_r(S).lerp(S["r"] + el_hug_r, wh),
+                "l": lambda S: el_l(S).lerp(S["l"] + q @ Vector((0.3, 0.35, -0.1)), whl)}
+    p.fist = {"l": 0.3, "r": 0.3}
+    wp = smooth((uf - 0.34) / 0.5) if pin else 0.0                      # накриття: коліна під себе, ліва — під коліно B
+    if wp > 0.0:
+        s = SPB_OFF - PIN_OFF
+        pn = _shift_v(pin_a(), s)
+        hook = pn.hands["l"][0]
+        p = blend_pose(_filled(p), _filled(pn), wp)
+        a1, a2 = smooth(wp / 0.55), smooth((wp - 0.45) / 0.55)
+
+        def hl(S):                                                       # з боку коліна: униз, далі — під коліно
+            sk, hk = side_knee(S), (hook(S) if callable(hook) else hook)
+            low = Vector((hk.x, sk.y, hk.z))
+            return sk.lerp(low, a1).lerp(hk, a2)
+        p.hands = dict(p.hands)
+        p.hands["l"] = (hl,) + tuple(p.hands["l"][1:])
+    return p
+
+
+SPB_BRACE = {"l": (Vector((0.25, 0.3, -0.35)), Vector((0.3, 0.1, -0.15)), Vector((0.2, 0.4, -0.8))),
+             "r": (Vector((-0.25, 0.3, -0.35)), Vector((-0.3, 0.1, -0.15)), Vector((-0.2, 0.4, -0.8)))}
+
+
+def spb_b_brace(t, L, k, look=1.0):
+    """B стоїть на SPB_D перед коренем; k — від стійки (0) до «зустріти грудьми» (1): випрямився, груди вперед, руки
+    назад-униз-убік (у стійці кисті спереду на рівні грудей — саме там у мить удару тулуб і стегна A); look — голова
+    вгору, на A."""
+    st = _shift(stance(t, L, sway=0.0), -SPB_D)
+    st.ankles = (foot(0.2, -0.105 - SPB_D), foot(-0.2, 0.075 - SPB_D))
+    st.foot_rot = (Quaternion(UP, math.radians(10.0)), Quaternion(UP, math.radians(-14.0)))
+    st.knees = (st.ankles[0] + Vector((0.22, -0.9, 0.45)), st.ankles[1] + Vector((-0.22, -0.9, 0.45)))  # без полюсів
+    #   змішування губило полюси колін і в кінці — коліна B не ті, що у вузлі pinned_B
+    st = _filled(st)
+    st.head_pitch = st.head_pitch + (-12.0 - st.head_pitch) * look
+    if k <= 0.0:
+        return st
+    ak = BODY["arm"]
+    hands, elbows = {}, {}
+    for s_ in "lr":
+        hv, ev, fv = SPB_BRACE[s_]
+        hb = (lambda S, s_=s_, hv=hv: S[s_] + hv * ak, fv, Vector((0.0, -1.0, 0.0)))
+        hands[s_] = lerp_hand(hb, st.hands[s_], k)
+        e0 = st.elbows[s_]
+        elbows[s_] = (lambda S, s_=s_, e0=e0, ev=ev: (e0(S) if callable(e0) else e0).lerp(S[s_] + ev, k))
+    st.hands, st.elbows = hands, elbows
+    st.fist = {s_: lerp(st.fist[s_], 0.1, k) for s_ in "lr"}
+    st.pitch = st.pitch + (2.0 - st.pitch) * k
+    return st
+
+
+def clip_spb_body_b(t, L, partner=None):
+    u = t - SPB_TC
+    st = spb_b_brace(t, L, 1.0)
+    if u <= 0.0:
+        return st
+    p = spb_b_fall(t, u)
+    p = blend_pose(_filled(st), _filled(p), smooth(u / 0.15))
+    wpn = smooth((u - SPB_SLAM - 0.12) / 0.4)                            # під A: у вузол pinned_B
+    if wpn > 0.0:
+        pb_ = pin_b(pinned=smooth((u - SPB_SLAM - 0.2) / 0.4), tuck=smooth((u - SPB_SLAM - 0.05) / 0.3))
+        p = blend_pose(_filled(p), _filled(pb_), wpn)
+    return p
+
+
+def spb_b_fall(t, u):
+    """B падає на спину (u — час падіння): стопи — де стояли, поки таз над п'ятами; руки — на мат."""
+    pel, th = spb_b_rig(u)
+    q = Quaternion(LEFT, math.radians(-th))
+    kb = track(u, [(0.0, 0.0), (SPB_SLAM, 0.22), (SPB_SLAM + 0.3, 0.2), (SPB_SLAM + 0.6, 0.15), (9.0, 0.15)])  # коліна
+    #   не задирає: зверху вага A, і ліва рука A йде над стегнами B до коліна
+    p = body(off_for(pel), q, knee_bend=kb * smooth(th / 90.0))
+    planted = 1.0 - smooth((th - 25.0) / 35.0)                          # стопи — де стояли, поки таз над п'ятами
+    sl, sr = foot(0.2, -0.105 - SPB_D), foot(-0.2, 0.075 - SPB_D)
+    p.ankles = (lerp(p.ankles[0], sl, planted), lerp(p.ankles[1], sr, planted))
+    yl, yr = Quaternion(UP, math.radians(10.0)), Quaternion(UP, math.radians(-14.0))
+    p.foot_rot = (yl.slerp(q, 1 - planted), yr.slerp(q, 1 - planted))
+    p.knees = (lerp(p.knees[0], Vector((0.2, -0.6 - SPB_D, 0.5)), planted),
+               lerp(p.knees[1], Vector((-0.2, -0.6 - SPB_D, 0.5)), planted))
+    hs = hit_spring(t, SPB_TC, w=14.0, z=0.35)
+    p.head_pitch = -18.0 * max(0.0, hs) + 35.0 * smooth((th - 30.0) / 50.0)   # голову відкидає, далі — підборіддя до грудей
+    arms_on_mat(p, q)                                                    # руки — убік-униз назад, б'ють по мату (не
+                                                                         #   вперед: там A; угору — в голову й ноги A)
+    return p
+
+
+MOVE_CLIPS.append(("Springboard_Land_Body", SPB_LEN, clip_spb_body_a, clip_spb_body_b, False, SPB_OFF.copy(), 90))
+CENTER_RULE.add("Springboard_Land_Body")
+PAIR_MID_RULE.add("Springboard_Land_Body")
+SPB_TORSO = ("spine_02", "spine_03", "clavicle_l", "clavicle_r", "upperarm_l", "upperarm_r", "neck_01")
+MOVE_CONTACTS["Springboard_Land_Body"] = set(MET_CONTACTS) | {(a_, b_) for a_ in SPB_TORSO for b_ in SPB_TORSO} | {
+    (a_, b_) for a_ in ("hand_l", "hand_r", "lowerarm_l", "lowerarm_r") for b_ in SPB_TORSO + ("head", "spine_01")}
+MOVE_CLIP_NODES["Springboard_Land_Body"] = {"A": (None, "pinned_A"), "B": (None, "pinned_B")}   # B — з кінця
+#   Springboard_Air (spb_b_brace(1)): у стійці кисті B — там, де в мить удару A
+MOVE_EVENTS["Springboard_Land_Body"] = [("contact", SPB_TC, "spine_03", "spine_03"),
+                                        ("sell", SPB_TC + SPB_SLAM + 0.05, "-", "spine_03")]
+
+
+
+# --- springboard: Air (пара) і Perch (A на канаті)
+# Air — парний, у просторі Land (B — SPB_OFF, 90°): A від відриву над центром (таз ≤ 0,5 м від точки над B — вище за
+# канат, без дуги від каната) падає боком, перевертаючись з вертикалі в горизонталь; B бачить, що летить, дивиться
+# вгору і в останні 0,32 с розводить руки назад-униз (spb_b_brace) — у стійці його кисті там, де в мить удару тулуб і
+# стегна A. Кінець Air = старт Land (пози обох і висота A), швидкість A — з балістики: удар зверху.
+SPB_AIR_LEN = 0.65
+SPB_AIR_VX, SPB_AIR_VZ = -0.15, -4.9      # м/с на стику: пік — за 0,5 с до удару, на 1,2 м над стиком
+SPB_WING = {"l": (Vector((0.55, -0.08, 0.2)), Vector((0.35, 0.15, -0.1))),    # руки врозліт (рамка тіла)
+            "r": (Vector((-0.55, -0.08, 0.2)), Vector((-0.35, 0.15, -0.1)))}
+
+
+def spb_air_pel(t, L):
+    dt = max(0.0, L - t)
+    return spb_a_pel(0.0) + Vector((-SPB_AIR_VX * dt, 0.0, -SPB_AIR_VZ * dt - 4.905 * dt * dt))
+
+
+def spb_air_q(t, L):
+    q_up = Quaternion(UP, math.radians(-90.0))                          # стоїть обличчям до B (−X)
+    return q_up.slerp(spb_a_q(0.0), smooth(t / (L - 0.08)))            # перекид уліво: голова в −Y, лівий бік донизу
+
+
+def clip_spb_air_a(t, L, partner=None):
+    q = spb_air_q(t, L)
+    off = off_for(spb_air_pel(t, L))
+    p = body(off, q, knee_bend=0.25, spread=SPB_SPREAD)
+    kf = track(t, [(0.0, 0.0), (0.35, 0.1), (L, 0.25)])                # згин, як у Land (стопи трохи вперед)
+    kk = track(t, [(0.0, 0.7), (0.3, 0.45), (L - 0.08, 0.0), (L, 0.0)])   # з відштовху п'яти підібрані НАЗАД (вперед —
+    #   у голову B: A над ним), розгинає до удару
+    p.ankles = tuple(xf(off, q, REST[nm_] + Vector((sx_, 0.3 * kk - 0.25 * kf, 0.45 * kk + 0.35 * kf)))
+                     for nm_, sx_ in (("ankle_l", SPB_SPREAD), ("ankle_r", -SPB_SPREAD)))
+    p.pitch = track(t, [(0.0, -5.0), (L, 8.0)])
+    p.head_pitch = track(t, [(0.0, 0.0), (0.3, 12.0), (L, 10.0)])      # дивиться на B
+    ra = spb_reach_arms(RPose(), q)
+    ka = smooth((t - 0.1) / 0.45)
+    ak = BODY["arm"]
+    p.hands, p.elbows = {}, {}
+    for s_ in "lr":
+        hv, ev = SPB_WING[s_]
+        wing = (lambda S, s_=s_, hv=hv: S[s_] + q @ (hv * ak), q @ (Vector((1.0 if s_ == "l" else -1.0, 0.0, 0.0))),
+                q @ Vector((0.0, -1.0, 0.0)))
+        p.hands[s_] = lerp_hand(ra.hands[s_], wing, ka)
+        e_r = ra.elbows[s_]
+        p.elbows[s_] = (lambda S, s_=s_, ev=ev, e_r=e_r: (S[s_] + q @ ev).lerp(e_r(S), ka))
+    p.fist = {"l": 0.25, "r": 0.25}
+    return p
+
+
+def clip_spb_air_b(t, L, partner=None):
+    return spb_b_brace(t, L, smooth((t - (L - 0.32)) / 0.32), look=smooth(t / 0.3))
+
+
+# Perch — A сам, на верхньому канаті: канат уздовж X через корінь на висоті ROPE_H[2], A обличчям у ринг (−Y), стопи
+# поперек каната. Баланс (0–0,45 с: руки в боки, хитається й ловить рівновагу) → присід (0,45–0,8: руки назад, канат
+# під стопами прогинається на SPB_SINK) → відштовх (0,8–1,0: руки вперед-угору врозліт, стопи сходять з каната в
+# останні 0,07 с, коліна підбираються). QTE — на канаті, до відриву. Далі склейка (cut) на Air над центром: кінцева
+# поза Perch — та сама за рамкою тіла, що й перша поза Air.
+SPB_PERCH_LEN = 1.0
+SPB_SINK = 0.05
+SPB_QTE = (0.15, 0.8)
+
+
+def clip_spb_perch(t, L, partner=None):
+    rz = ROPE_H[2]
+    sink = SPB_SINK * _win(t, 0.45, 0.7, 0.85, 0.95)
+    crouch = _win(t, 0.45, 0.78, 0.8, 0.95)
+    spring = smooth((t - 0.8) / 0.2)
+    wob = math.sin(2.0 * math.pi * 2.2 * t) * (1.0 - smooth(t / 0.55))
+    p = stance(t, L, sway=0.0)
+    lift = 0.13 * smooth((t - 0.93) / 0.07)                              # стопи сходять з каната, п'яти — назад
+    p.pelvis = p.pelvis + Vector((0.03 * wob, -0.12 * spring, rz - sink - 0.22 * crouch + 0.36 * spring))
+    p.pitch = 4.0 + 24.0 * crouch - 9.0 * spring
+    p.roll = 4.0 * wob
+    p.head_pitch = 8.0 + 6.0 * crouch                                    # дивиться в центр рингу, на B
+    p.ankles = (foot(0.12, 0.0) + Vector((0.0, -0.12 * spring + 0.8 * lift, rz - sink + lift)),
+                foot(-0.12, 0.0) + Vector((0.0, -0.12 * spring + 0.8 * lift, rz - sink + lift)))
+    p.foot_rot = (Quaternion(), Quaternion())
+    p.knees = tuple(a_ + Vector((0.05 * sg, -0.6, 0.45)) for a_, sg in zip(p.ankles, (1.0, -1.0)))
+    p.hands, p.elbows = {}, {}
+    for s_, sg in (("l", 1.0), ("r", -1.0)):
+        bal = Vector((0.55 * sg, -0.12, -0.05 + 0.06 * wob * sg))
+        back = Vector((0.2 * sg, 0.35, -0.4))
+        wing = Vector((0.5 * sg, -0.12, 0.3))
+        v = bal.lerp(back, crouch).lerp(wing, spring)
+        fore = Vector((sg, 0.0, 0.0)).lerp(Vector((0.0, 0.5, -1.0)), crouch).lerp(Vector((sg, 0.0, 0.5)), spring)
+        p.hands[s_] = (lambda S, s_=s_, v=v: S[s_] + v * BODY["arm"], fore, FWD)
+        el = Vector((0.25 * sg, 0.15, -0.3)).lerp(Vector((0.3 * sg, 0.25, -0.1)), crouch)
+        p.elbows[s_] = (lambda S, s_=s_, el=el: S[s_] + el)
+    p.fist = {"l": 0.15, "r": 0.15}
+    return p
+
+
+MOVE_CLIPS.append(("Springboard_Air", SPB_AIR_LEN, clip_spb_air_a, clip_spb_air_b, False, SPB_OFF.copy(), 90))
+CENTER_RULE.add("Springboard_Air")
+MOVE_CONTACTS["Springboard_Air"] = set(MOVE_CONTACTS["Springboard_Land_Body"])
+MOVE_CLIP_NODES["Springboard_Air"] = {"A": (None, None), "B": ("stance", None)}
+MOVE_EVENTS["Springboard_Air"] = []
+MOVE_CLIPS.append(("Springboard_Perch", SPB_PERCH_LEN, clip_spb_perch, None, False, None, 0))
+CENTER_RULE.add("Springboard_Perch")
+MOVE_CLIP_NODES["Springboard_Perch"] = {"A": (None, None)}
+MOVE_EVENTS["Springboard_Perch"] = [("qte_open", SPB_QTE[0], "-", "-"), ("qte_close", SPB_QTE[1], "-", "-")]
+
+
+
+# --- springboard 7–9 (Land_Catch) і ≤6 (Land_Counter): B ловить A в мить удару
+# Air_Catch — той самий політ A, що в Air; B в останні 0,35 с підставляє руки під лівий (нижній) бік таза A і під ліве
+# стегно (spb_b_catch). Кисті B задані точками тіла A (рамка тіла A від таза: x — ліво, y — назад, z — до голови): B
+# розв'язується першим і кісток A не бачить, тож A рахується тут аналітично — тими самими spb_a_pel / spb_a_q.
+# 7–9: B тримає A SPB_HOLD, присідає під вагою, далі завалюється назад, як у Body (spb_ueff — з розгоном, не від удару),
+# руки відпускає на мат; A на грудях B — без накриття: відштовхується на коліна, ліва — на свої ребра; B продає спину.
+# ≤6: B тримає, перевертає A в руках обличчям угору (колиска), відхитується на крок назад (передня стопа — на
+# SPB_CNT_STEP), згинається в стегнах (не сідає над A) і кидає A спиною об мат перед собою (0,8 с від ловлі); кисті
+# з-під спини A виходять йому на бік і відпускають за 0,06 с до удару (SPB_CNT_REL) — A падає сам; далі B
+# випрямляється й відступає назад-убік (SPB_CNT_BACK, SPB_CNT_SIDE), A продає спину й лягає (lying_back).
+SPB_HOLD = 0.3
+SPB_CATCH_LEN = 2.6
+SPB_CNT_LEN = 2.4
+SPB_CNT_SLAM = 0.8
+SPB_CNT_X = 0.3           # м: таз A на маті (≤ 0,5 м від середини пари)
+SPB_CNT_BACK = 0.45       # м: B відступає від A після кидка (ліва рука A лягає на мат повз стопу B)
+SPB_CNT_SIDE = 0.1        # м: і вбік — до ніг A: розкинута ліва рука A лягає між стопами B, ≥ 0,2 м від кожної
+SPB_CNT_ROCK = 0.1        # м: B відхитується назад з A на руках (таз), передня (ліва) стопа — на SPB_CNT_STEP
+SPB_CNT_STEP = 0.28
+SPB_CNT_EL = {"r": Vector((-0.15, -0.08, -0.36)), "l": Vector((0.22, -0.08, -0.36))}  # лікті B у колисці — нижче
+SPB_CNT_REL = 0.74        # с від ловлі: B відпускає A (кидок) — кисті з боків A йдуть донизу-вперед, A падає сам
+SPB_CATCH_EL = {"r": Vector((-0.08, -0.12, -0.3)), "l": Vector((0.18, -0.08, -0.36))}   # лікті B (простір ригу B)
+X_, Y_, Z_ = Vector((1.0, 0.0, 0.0)), Vector((0.0, 1.0, 0.0)), Vector((0.0, 0.0, 1.0))
+SPB_CATCH_PTS = {"r": (Vector((0.25, 0.06, 0.05)), Y_, -X_),    # точка, пальці, нормаль долоні (до A) — рамка тіла A
+                 "l": (Vector((0.28, -0.04, -0.25)), Y_, -X_)}
+
+
+def spb_to_b(v):
+    """Точка простору пари → простір ригу B (90°)."""
+    return Vector((v.y - SPB_OFF.y, -(v.x - SPB_OFF.x), v.z))
+
+
+def spb_dir_b(d):
+    return Vector((d.y, -d.x, d.z))
+
+
+def spb_al(pa, qa, v, f, n, side):
+    """Ціль кисті B у точці тіла A (рамка тіла A) → (точка, пальці, великий) у просторі ригу B."""
+    fw, nw = (qa @ f).normalized(), (qa @ n).normalized()
+    up = fw.cross(nw) if side == "r" else nw.cross(fw)
+    return (spb_to_b(pa + qa @ (v * spb_hs())), spb_dir_b(fw), spb_dir_b(up))
+
+
+def spb_catch_hands(pa, qa, pts=None):
+    pts = pts or SPB_CATCH_PTS
+    return {s_: spb_al(pa, qa, pts[s_][0], pts[s_][1], pts[s_][2], s_) for s_ in "lr"}
+
+
+def spb_b_catch(t, L, k, look=1.0, hands=None, els=None):
+    """Стійка B → руки під A (k); hands — цілі кистей (за замовчуванням — під A в мить удару); els — лікті."""
+    st = spb_b_brace(t, L, 0.0, look)
+    if k <= 0.0:
+        return st
+    hands = hands or spb_catch_hands(spb_a_pel(0.0), spb_a_q(0.0))
+    hs_, el = {}, {}
+    for s_ in "lr":
+        hs_[s_] = lerp_hand(hands[s_], st.hands[s_], k)
+        e0 = st.elbows[s_]
+        ev_ = (els or SPB_CATCH_EL)[s_]
+        el[s_] = (lambda S, s_=s_, e0=e0, ev_=ev_: (e0(S) if callable(e0) else e0).lerp(S[s_] + ev_, k))
+    st.hands, st.elbows = hs_, el
+    st.fist = {s_: lerp(st.fist[s_], 0.2, k) for s_ in "lr"}
+    st.pitch = st.pitch + (8.0 - st.pitch) * k
+    return st
+
+
+def clip_spb_air_catch_b(t, L, partner=None):
+    return spb_b_catch(t, L, smooth((t - (L - 0.35)) / 0.35), look=smooth(t / 0.3))
+
+
+# ---- 7–9
+def spb_ueff(u):
+    v = u - SPB_HOLD
+    if v <= 0.0:
+        return 0.0
+    return v * v / 0.4 if v < 0.2 else v - 0.1
+
+
+def spb_sink(u):
+    return 0.05 * smooth(u / 0.15) * (1.0 - smooth(spb_ueff(u) / 0.2))
+
+
+SPB_CATCH_DOWN = SPB_HOLD + 0.1 + SPB_SLAM          # с: спина B об мат
+SPB_KNEEL_DX = Vector((0.25, 0.0, 0.0))             # м: коліна A — біля пояса B, повз його ліву руку на маті
+
+
+def clip_spb_catch_a(t, L, partner=None):
+    u = t - SPB_TC
+    uf = spb_ueff(u)
+    p = spb_a_land(t, uf, pin=False, sink=spb_sink(u))
+    T = SPB_CATCH_DOWN
+    s = SPB_OFF - PIN_OFF + Vector((0.1, 0.0, 0.0))                      # ≤ 0,5 м від середини пари
+    w1 = smooth((t - T - 0.1) / 0.45)                                    # підтягує коліна, відштовхується від B
+    w2 = smooth((t - T - 0.6) / 0.7)                                     # на коліна
+    if w1 > 0.0:
+        p = blend_pose(_filled(p), _filled(_shift_v(pin_a(thrown=0.55), s)), w1)
+        p.pelvis = p.pelvis + Vector((0.0, 0.0, 0.07 * math.sin(math.pi * w1)))
+    if w2 > 0.0:
+        lean = 0.45 * (1.0 - smooth((t - (L - 0.7)) / 0.5))
+        p = blend_pose(_filled(p), _filled(_shift_v(kneel_up(t, L, lean=lean), s + SPB_KNEEL_DX)), w2)
+    if t >= T + 0.2:                                                     # стопи: з повітря — на мат, далі під себе
+        p1a = _shift_v(pin_a(thrown=0.55), s).ankles
+        kna = _shift_v(kneel_up(t, L), s + SPB_KNEEL_DX).ankles
+        a0 = spb_a_land(T + 0.2, spb_ueff(T + 0.2), pin=False).ankles
+        p.ankles = (feet_track(t, [(0.0, a0[0]), (T + 0.2, a0[0]), (T + 0.5, p1a[0]), (T + 0.75, p1a[0]),
+                                   (T + 1.05, kna[0]), (L + 1, kna[0])])[0],
+                    feet_track(t, [(0.0, a0[1]), (T + 0.2, a0[1]), (T + 0.45, p1a[1]), (T + 0.65, p1a[1]),
+                                   (T + 0.95, kna[1]), (L + 1, kna[1])])[0])
+    clutch = _win(t, T + 0.14, T + 0.5, L - 0.7, L - 0.3)                 # ліва — на свої ребра (продає)
+    if clutch > 0.0:
+        hl = p.hands["l"]
+        ev = lambda v, S: v(S) if callable(v) else v
+        p.hands = dict(p.hands)
+        p.hands["l"] = (lambda S: ev(hl[0], S).lerp(_met_rib(S), clutch), hl[1], hl[2])
+        el = p.elbows["l"]
+        p.elbows = dict(p.elbows)
+        p.elbows["l"] = lambda S: (el(S) if callable(el) else el).lerp(_met_rib_elbow(S), clutch)
+        p.fist = dict(p.fist)
+        p.fist["l"] = p.fist["l"] * (1.0 - clutch) + 0.1 * clutch
+        p.pitch = p.pitch + 10.0 * clutch * w2
+    return p
+
+
+def clip_spb_catch_b(t, L, partner=None):
+    u = t - SPB_TC
+    uf = spb_ueff(u)
+    sink = spb_sink(u)
+    pa, qa = spb_a_pel(t, uf) + Vector((0.0, 0.0, -sink)), spb_a_q(t, uf)
+    st = spb_b_catch(t, L, 1.0, hands=spb_catch_hands(pa, qa))
+    st.pelvis = st.pelvis + Vector((0.0, 0.0, -sink))
+    st.pitch = st.pitch - 6.0 * smooth(u / 0.25)                        # відхиляється під вагою
+    if uf <= 0.0:
+        return st
+    p = spb_b_fall(t, uf)
+    p = blend_pose(_filled(st), _filled(p), smooth(uf / 0.12))         # руки — з-під A на мат
+    T = SPB_CATCH_DOWN
+    tuck = smooth((t - T - 0.05) / 0.3) * (1.0 - smooth((t - (T + 0.7)) / 0.5))
+    sell = _win(t, T + 0.6, T + 1.0, L - 0.8, L - 0.25)                   # обидві руки на груди, коліна вгору
+    wl = smooth((t - T - 0.1) / 0.4)
+    if wl > 0.0:
+        pb_ = pin_b(pinned=0.0, tuck=tuck, legs=0.45 * sell)
+        pb_.pitch = pb_.pitch + 8.0 * sell
+        pb_.head_pitch = pb_.head_pitch + 15.0 * sell
+        pb_.roll = pb_.roll - 12.0 * sell
+        if sell > 0.0:
+            ev = lambda v, S: v(S) if callable(v) else v
+            hs_ = dict(pb_.hands)
+            arc_ = 0.22 if t < T + 1.2 else 0.05
+            for s_, dx in (("l", 0.07), ("r", -0.07)):
+                g0, f0, u0 = hs_[s_]
+                hs_[s_] = (lambda S, g0=g0, dx=dx: ev(g0, S).lerp(S["chest"] + Vector((dx, 0.06, 0.21)), sell)
+                           + Vector((0.0, 0.0, arc_ * math.sin(math.pi * sell))), f0, u0)
+            pb_.hands = hs_
+            el = dict(pb_.elbows)
+            for s_, dx in (("l", 0.3), ("r", -0.3)):
+                e0 = el[s_]
+                el[s_] = (lambda S, e0=e0, dx=dx, s_=s_: e0(S).lerp(S[s_] + Vector((dx, -0.1, 0.05)), sell))
+            pb_.elbows = el
+        p = blend_pose(_filled(p), _filled(pb_), wl)
+    return p
+
+
+# ---- ≤6
+SPB_CNT_PTS = [  # кисті B у рамці тіла A: ловить (під лівим боком) → під спиною (колиска) → з боку → на грудях
+    {"r": (Vector((0.25, 0.06, 0.05)), Y_, -X_), "l": (Vector((0.28, -0.04, -0.25)), Y_, -X_)},
+    {"r": (Vector((0.0, 0.16, 0.25)), -X_, -Y_), "l": (Vector((0.0, 0.13, -0.3)), -X_, -Y_)},
+    {"r": (Vector((0.3, 0.0, 0.25)), -Y_, -X_), "l": (Vector((0.3, 0.0, -0.3)), -Y_, -X_)},
+    {"r": (Vector((0.05, -0.17, 0.25)), -X_, Y_), "l": (Vector((0.05, -0.13, -0.3)), -X_, Y_)},
+]
+
+
+def spb_cnt_k(u):
+    """Фази кистей B: 0 — ловить, 1 — колиска, 2 — з боку, 3 — на грудях (за мить до удару об мат)."""
+    return track(u, [(0.0, 0.0), (0.2, 0.0), (0.6, 1.0), (0.64, 1.0), (SPB_CNT_REL, 2.0), (9.0, 2.0)])
+
+
+def spb_cnt_pts(k):
+    i = min(2, int(k))
+    w = smooth(k - i)
+    a, b = SPB_CNT_PTS[i], SPB_CNT_PTS[i + 1]
+    return {s_: (a[s_][0].lerp(b[s_][0], w), a[s_][1].lerp(b[s_][1], w), a[s_][2].lerp(b[s_][2], w)) for s_ in "lr"}
+
+
+def spb_cnt_frame(u):
+    """Таз і рамка A у колисці: присів під вагою, перевертається обличчям угору, удар спиною об мат перед B."""
+    p0, q0 = spb_a_pel(0.0), spb_a_q(0.0)
+    q1 = Quaternion(UP, math.radians(180.0)) @ Q_BACK
+    q = q0.slerp(q1, smooth((u - 0.2) / 0.42))
+    zh = p0.z + 0.02
+    if u < 0.5:
+        z = track(u, [(0.0, p0.z), (0.15, p0.z - 0.07), (0.45, zh), (0.5, zh)])
+    elif u < SPB_CNT_SLAM:
+        k = (u - 0.5) / (SPB_CNT_SLAM - 0.5)
+        z = zh - (zh - LIE_Z) * k * k                                    # кидок — з розгоном
+    else:
+        z = LIE_Z + 0.03 * max(0.0, hit_spring(u, SPB_CNT_SLAM, w=16.0, z=0.4))
+    x = p0.x + (SPB_CNT_X - p0.x) * smooth((u - 0.3) / 0.5)
+    return Vector((x, p0.y, z)), q
+
+
+def clip_spb_counter_a(t, L, partner=None):
+    u = t - SPB_TC
+    pel, q = spb_cnt_frame(u)
+    kb = track(u, [(0.0, 0.25), (0.35, 0.25), (0.6, 0.45), (SPB_CNT_SLAM, 0.3), (9.0, 0.3)])   # стегна не в руки B
+    p = body(off_for(pel), q, knee_bend=kb, spread=SPB_SPREAD)
+    p.pitch = track(u, [(0.0, 8.0), (0.3, 14.0), (SPB_CNT_SLAM - 0.05, 18.0), (SPB_CNT_SLAM + 0.1, 0.0), (9.0, 0.0)])
+    p.head_pitch = track(u, [(0.0, 10.0), (0.4, 18.0), (SPB_CNT_SLAM, 25.0), (SPB_CNT_SLAM + 0.15, -10.0),
+                             (9.0, -10.0)])                              # підборіддя до грудей — потилицю бережe
+    ra = spb_reach_arms(RPose(), q)
+    ak = BODY["arm"]
+    flail_r = (lambda S: S["r"] + q @ (Vector((-0.45, -0.1, 0.25)) * ak), q @ Vector((-1.0, 0.0, 0.3)), q @ FWD)
+    chest_l = (lambda S: S["pelvis"] + q @ (Vector((0.02, -0.2, 0.33)) * spb_hs()), q @ Vector((-1.0, 0.0, 0.3)),
+               q @ Vector((0.0, 0.0, 1.0)))                              # ліва (до B) — на свої груди
+    kfl = smooth((u - 0.2) / 0.3)
+    hr = ra.hands["r"]                                                   # права — з тягнення одразу махає
+    p.hands = {"r": lerp_hand(flail_r, hr, kfl) if kfl > 0.0 else hr,
+               "l": lerp_hand(chest_l, ra.hands["l"], smooth((u - 0.05) / 0.3))}
+    el_r, el_l = ra.elbows["r"], ra.elbows["l"]
+    p.elbows = {"r": lambda S: el_r(S).lerp(S["r"] + q @ Vector((-0.35, -0.05, 0.0)), kfl),
+                "l": lambda S: el_l(S).lerp(S["l"] + q @ Vector((0.18, 0.05, -0.25)), smooth((u - 0.05) / 0.3))}
+    p.fist = {"l": 0.3, "r": 0.3}
+    # після удару: продає спину (коліна вгору, права теж на груди), далі лягає (lying_back), коли B відступив
+    wl = smooth((u - SPB_CNT_SLAM - 0.05) / 0.3)
+    if wl > 0.0:
+        sell = _win(u, SPB_CNT_SLAM, SPB_CNT_SLAM + 0.3, L - 0.75, L - 0.3)
+        ly2 = lying(SPB_CNT_X, spb_a_pel(0.0).y, yaw=180.0, knee_bend=0.15 + 0.5 * sell)
+        ly2.head_pitch = ly2.head_pitch + 15.0 * sell
+        if sell > 0.0:
+            ev = lambda v, S: v(S) if callable(v) else v
+            hs_ = dict(ly2.hands)
+            for s_, dx in (("l", 0.07), ("r", -0.07)):
+                g0, f0, u0 = hs_[s_]
+                hs_[s_] = (lambda S, g0=g0, dx=dx: ev(g0, S).lerp(S["chest"] + q @ Vector((dx, -0.16, -0.05)), sell)
+                           + Vector((0.0, 0.0, 0.18 * math.sin(math.pi * sell))), f0, u0)
+            ly2.hands = hs_
+            el2 = dict(ly2.elbows)
+            for s_, dx in (("l", 0.15), ("r", -0.15)):
+                e0 = el2[s_]
+                el2[s_] = (lambda S, e0=e0, dx=dx, s_=s_: (e0(S) if callable(e0) else e0).lerp(
+                    S[s_] + q @ Vector((dx, -0.05, -0.12)), sell))
+            ly2.elbows = el2
+        p = blend_pose(_filled(p), _filled(ly2), wl)
+    return p
+
+
+def clip_spb_counter_b(t, L, partner=None):
+    u = t - SPB_TC
+    ur = min(u, SPB_CNT_REL)                                             # після кидка кисті не йдуть за A
+    pel_a, qa = spb_cnt_frame(ur)
+    kc = spb_cnt_k(ur)
+    hands = spb_catch_hands(pel_a, qa, spb_cnt_pts(kc))
+    els = {s_: SPB_CATCH_EL[s_].lerp(SPB_CNT_EL[s_], smooth(min(1.0, kc))) for s_ in "lr"}
+    if u > SPB_CNT_REL:                                                  # доведення кидка: донизу й трохи вперед
+        fo = Vector((0.0, -0.05, -0.2)) * smooth((u - SPB_CNT_REL) / 0.2)
+        hands = {s_: (h[0] + fo, h[1], h[2]) for s_, h in hands.items()}
+    st = spb_b_catch(t, L, 1.0, hands=hands, els=els)
+    absorb = smooth(u / 0.15) * (1.0 - smooth((u - 0.3) / 0.2))
+    rock = smooth((u - 0.3) / 0.25)
+    bend = smooth((u - 0.45) / (SPB_CNT_SLAM - 0.45)) * (1.0 - smooth((u - 1.05) / 0.45))
+    back = smooth((u - 1.25) / 0.5)
+    st.pelvis = st.pelvis + Vector((SPB_CNT_SIDE * back, SPB_CNT_ROCK * rock * (1.0 - back) + 0.15 * bend + SPB_CNT_BACK * back,
+                                    -0.05 * absorb - 0.15 * bend))    # згинається в стегнах, не сідає над A
+    st.pitch = st.pitch + 50.0 * bend - 6.0 * absorb
+    st.head_pitch = st.head_pitch + 25.0 * bend
+    D = SPB_D
+    st.ankles = steps(t, [(0.0, (0.2, -0.105 - D)), (0.3, (0.2, -0.105 - D)), (0.52, (0.2, -0.105 - D + SPB_CNT_STEP)),
+                          (1.3, (0.2, -0.105 - D + SPB_CNT_STEP)), (1.6, (0.2 + SPB_CNT_SIDE, -0.105 - D + SPB_CNT_BACK))],
+                      [(0.0, (-0.2, 0.075 - D)), (1.5, (-0.2, 0.075 - D)),
+                       (1.8, (-0.2 + SPB_CNT_SIDE, 0.075 - D + SPB_CNT_BACK))])
+    st.knees = tuple(a_ + Vector((0.22 * sg, -0.9, 0.45)) for a_, sg in zip(st.ankles, (1.0, -1.0)))
+    rel = smooth((u - SPB_CNT_SLAM - 0.2) / 0.5)                         # з грудей A — у стійку
+    if rel > 0.0:
+        sb = spb_b_brace(t, L, 0.0, look=0.0)
+        for s_ in "lr":
+            st.hands[s_] = lerp_hand(sb.hands[s_], st.hands[s_], rel)
+            e0, e1 = st.elbows[s_], sb.elbows[s_]
+            st.elbows[s_] = (lambda S, e0=e0, e1=e1: (e0(S) if callable(e0) else e0).lerp(e1(S) if callable(e1) else e1, rel))
+        st.head_pitch = st.head_pitch + (sb.head_pitch - st.head_pitch) * rel
+        st.pitch = st.pitch + (sb.pitch - st.pitch) * smooth((u - 1.5) / 0.5)
+    return st
+
+
+SPB_CATCH_CONTACTS = set(MOVE_CONTACTS["Springboard_Land_Body"]) | {
+    (a_, b_) for a_ in ("pelvis", "spine_01", "spine_02", "spine_03", "thigh_l", "thigh_r", "upperarm_l", "clavicle_l",
+                        "calf_l", "calf_r")
+    for b_ in ("hand_l", "hand_r", "lowerarm_l", "lowerarm_r")}
+MOVE_CLIPS.append(("Springboard_Air_Catch", SPB_AIR_LEN, clip_spb_air_a, clip_spb_air_catch_b, False, SPB_OFF.copy(), 90))
+CENTER_RULE.add("Springboard_Air_Catch")
+MOVE_CONTACTS["Springboard_Air_Catch"] = set(SPB_CATCH_CONTACTS)
+MOVE_CLIP_NODES["Springboard_Air_Catch"] = {"A": (None, None), "B": ("stance", None)}
+MOVE_EVENTS["Springboard_Air_Catch"] = []
+for _nm, _ln, _fa, _fb in [("Springboard_Land_Catch", SPB_CATCH_LEN, clip_spb_catch_a, clip_spb_catch_b),
+                           ("Springboard_Land_Counter", SPB_CNT_LEN, clip_spb_counter_a, clip_spb_counter_b)]:
+    MOVE_CLIPS.append((_nm, _ln, _fa, _fb, False, SPB_OFF.copy(), 90))
+    CENTER_RULE.add(_nm)
+    PAIR_MID_RULE.add(_nm)
+    MOVE_CONTACTS[_nm] = set(SPB_CATCH_CONTACTS)
+MOVE_CLIP_NODES["Springboard_Land_Catch"] = {"A": (None, "kneel_up"), "B": (None, "lying_back")}
+MOVE_CLIP_NODES["Springboard_Land_Counter"] = {"A": (None, "lying_back"), "B": (None, "stance")}
+MOVE_EVENTS["Springboard_Land_Catch"] = [("contact", SPB_TC, "spine_03", "spine_03"),
+                                         ("sell", SPB_TC + SPB_CATCH_DOWN + 0.05, "spine_03", "spine_02")]
+MOVE_EVENTS["Springboard_Land_Counter"] = [("contact", SPB_TC, "spine_03", "spine_03"),
+                                           ("contact", SPB_TC + SPB_CNT_SLAM, "spine_02", "-"),
+                                           ("sell", SPB_TC + SPB_CNT_SLAM + 0.05, "spine_02", "-")]
