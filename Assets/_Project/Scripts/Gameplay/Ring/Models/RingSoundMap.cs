@@ -191,13 +191,20 @@ namespace Game.Gameplay.Ring.Models
         /// <summary>Фінішери-больові: прийом звучить захватом (<see cref="RingCue.HoldStrain"/>), а не падінням.</summary>
         public static IReadOnlyCollection<string> HoldFinishers { get { return HoldFinisherKeys; } }
 
-        // Повітряні фінішери (категорія aerial у career_moves.json): meteor — з кута, задумано стрибок (RingClipTable поки ставить таран
-        // Center_ShoulderTackle, «бракує стрибка з кута»). Звук іде за задуманим рухом, як у стрибка з канатів (TopRope) — приземлення.
-        // Охоронець — RingSoundMapTests звіряє набір із каталогом прийомів.
+        // Повітряні фінішери (категорія aerial у career_moves.json): meteor — стрибок із кута (RingClipTable.AddAerial, Ф2 крок 7:
+        // Air_Meteor → Land_Meteor / _Partial, такт — на контакті приземлення). Звук — приземлення, як у стрибка з канатів (TopRope);
+        // провал — Land_Meteor_Miss, нападник сам падає на мат (Slam). Охоронець — RingSoundMapTests звіряє набір із каталогом прийомів.
         private static readonly HashSet<string> AerialFinisherKeys = new HashSet<string> { "meteor" };
 
         /// <summary>Повітряні фінішери: прийом звучить приземленням (<see cref="RingCue.Land"/>), як стрибок з канатів.</summary>
         public static IReadOnlyCollection<string> AerialFinishers { get { return AerialFinisherKeys; } }
+
+        // Прийоми, чий такт — удар тілом об місце (RingClipTable: склейка Cut з Impact). Звук місця — склейка режисера: канат —
+        // RopeRebound на мітці rope_hit, кут — CornerHit на corner_hit (RingMatchDirector.RunCut). Подія додає лише те, чого місце не дає.
+        // «Затягнути до канатів» (whip, AddWhip): 7–9 і провал (реверс: у канати летить нападник) — лише спина в канат, удару немає —
+        // гул залу (CrowdBed); 10+ — зустрічний удар у центрі (Hit). «Затягнути в кут» (corner_drag, AddCornerDrag): тіло б'ється об
+        // кут на кожному ступені — удар тілом (Hit) під CornerHit; провал — той самий удар, у кут летить нападник (раніше Whiff: ухилу немає).
+        private const string RopeSendKey = "whip", CornerSendKey = "corner_drag";
 
         /// <summary>Звук події матчу без ступеня кидка й місця пари (як у журналі без кидка, на рингу).</summary>
         public static RingCue ForEvent(MatchEventKind kind, MatchActionId action)
@@ -292,7 +299,8 @@ namespace Game.Gameplay.Ring.Models
         /// провокація — борцю боляче, оплесків немає (<c>Idle_Hurt_Body_Loop</c>); підйом — той самий кліп, що в «відновитися»
         /// (<c>Idle_Tired_Loop</c>), тож і звук той самий. Провал важить більше за місце: за рингом промах удару — теж ухил.
         /// Фінішер — за ключем прийому (з 2937113 подія фінішера несе ключ ґіміка): больовий (<see cref="HoldFinishers"/>) — захват,
-        /// повітряний (<see cref="AerialFinishers"/>) — приземлення, решта — падіння суперника. Предмет 10+ — реквізит режисера (стілець чи стіл), 7–9 — стілець, ≤6 —
+        /// повітряний (<see cref="AerialFinishers"/>) — приземлення, решта — падіння суперника. «Затягнути до канатів» 7–9 і провал — лише
+        /// канат склейки (гул залу), «затягнути в кут» — удар тілом під звук кута на кожному ступені. Предмет 10+ — реквізит режисера (стілець чи стіл), 7–9 — стілець, ≤6 —
         /// замах повз (бар'єр — другим дотиком); за рингом удар і кидок ідуть у бар'єр.
         /// </summary>
         private static RingCue Refine(string action, RingCue c, bool hasRoll, RollTier tier, bool outside, RingProp prop, string moveKey)
@@ -305,6 +313,9 @@ namespace Game.Gameplay.Ring.Models
             }
             // Промінь надії: провал рахується як 7–9 — так само ступінь підміняє таблиця кліпів, тож звук іде за тим самим планом.
             if (action == "HopeSpot" && hasRoll && tier == RollTier.Miss) tier = RollTier.Partial;
+            // Удар об канат чи кут (склейка з тактом): за рингом канатів і кута немає — план загальний (RingClipTable.PlanMove).
+            if (hasRoll && !outside && moveKey == RopeSendKey && tier != RollTier.Strong) return RingCue.CrowdBed;
+            if (hasRoll && !outside && moveKey == CornerSendKey) return RingCue.Hit;
             if (hasRoll && tier == RollTier.Miss)
             {
                 switch (action)
