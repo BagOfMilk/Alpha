@@ -25,7 +25,7 @@
 
 | Крок | Що | Чекає |
 |---|---|---|
-| 0 | Влити API «Изучение» (`claude/ring-stage-outside`) і звук (be13e01 — **злито**, f3d4e88) | коміту «Изучение» |
+| 0 | Влити API «Изучение» (`claude/ring-stage-outside`) і звук (be13e01 — **злито**, f3d4e88) — **зроблено 09.11:** API dd904dc → 5b89d79; звук f258867 → 2fbd6af, 85bfa1d (ff) | — |
 | 1 | Компіляція: дзеркало без `Zone` + `bool Outside` пари; `Apply` — `MatchEffectKind.Place` (Amount 1 — за рингом); **каст `(Zone)fx.Amount` видалити явно** (`ZoneChange` і `Place` обидва = 6 — без помилки компіляції дав би тиху ваду); `Canon` / `PlaceCanonical` / `SettlePos` → `PairPos` / `PairYaw`; `LeansInCorner` і кут-стійку з `IdleName` прибрати | 0 |
 | 2 | Прибрати `RunWhipRopes`, `RunWhipCorner`, `RunUntil`, `UsableEnd`, `Rope*`, `RopeRunIn`, `RopeGuard`, `RunWalk`, `_pendingRest`, свій `BodyScale` (→ `stage.BodyScale`); `Apply(ev)` — на кроці `Place` або в кінці події, не на першому `Walk`. Публічні `WalkFree` / `StopWalkFree` / `DebugWalk` / `SlideItem` (вихід борця, `RingShow`) не ламати | 1 |
 | 3 | `RunCut` / `RunPlace` у `RunStep`. Cut: `stage.PerchPos` → `PlayAt(stage.Clip(clip, female), …, PlaySpeed)` + `Watch.Forget` (`stage.Place` — старий, лише чоловічий), кадр `RingCine.PerchShot`, fallback `Low`. Place: `PairPos/PairYaw(s, outside)`, кадр `OutsideShot`, fallback `Big`. **Склейка камери — у той самий кадр, що й стрибок тазу**, інакше `RingStageWatch` рахує телепорт. `ArmBeat` з Cut/Place не кликати | 2; кліпи `*_Perch/_Air/_Land` — до них підстановка з лічильником |
@@ -39,11 +39,33 @@
 
 Рішення ПМ на відкриті питання карти: п. 4 звірки — переглянуто (таблиця нижче); `TopRope` без постановки в каталозі
 (`Staging = Center`) — однаково склейкою з канату (дія — «стрибок із канатів чи кута»), розбіжність двох гілок таблиці
-звести в кроці 3; Cut до кліпів `*_Air` / `*_Land` — підстановка з лічильником; `KeepOutsideClear` потребує
-`RingVenueDress.KeepClear` — приходить лише зі злиттям «Изучение». Бік «за рингом» у коді не зашитий: `PlanOutside` бере
+звести в кроці 3; Cut до кліпів `*_Air` / `*_Land` — підстановка з лічильником; `KeepOutsideClear` — private, крутиться
+сам у `RingStage3D.LateUpdate` (режисерові нічого кликати). Бік «за рингом» у коді не зашитий: `PlanOutside` бере
 перший вільний бік E, S, W, N за картою підлоги (виправлення нотатки нижче).
 
-## API «за рингом» від «Изучение» (гілка `claude/ring-stage-outside` від 1c03451, 08.11.2026)
+## API «за рингом» від «Изучение» (`dd904dc` на `claude/ring-stage-outside`, батько 1c03451; злито в бій 09.11.2026 — 5b89d79)
+
+**Поправки «Изучение» 09.11.2026 (до пунктів нижче; чинні вони):**
+1. Смуга за рингом у всіх трьох залах повна: `Outside.HalfLength` = 2,0 м. 1,7 і 1,4 — лише запасні кроки `PlanOutside`,
+   коли на повну довжину вільного боку немає (тест `Outside_PicksAFreeSide_FullLength`).
+2. Кадрів «за рингом» ще немає: боки взято з тестів `RingVenueTests` на якорях і текстах залів. У грі `PlanFloor` додає
+   трикутники сітки залу, тож бік у кадрі підтверджує слот кадрів «Изучение» (п. 8 черги Unity).
+3. `PairPos` і `PerchPos`: x, z — точка тазу (`PlayAt` вирівнює таз кліпа в мить t саме сюди), y — висота слота (підлога
+   чи мат; для верху кута — з підйомом). Не «ноги», а таз над слотом. Кліп пари за рингом — як `PairOutside` у
+   `RingStageDemo`: слоти пари навпіл довкола `OutsideAnchor`, y = `Venue.GroundAt`.
+4. `KeepOutsideClear` — private, сам у `RingStage3D.LateUpdate`; `RingVenueDress.KeepClear` уже в dd904dc.
+5. Публічні static: `RingStage3D.Venue` (`RingVenue`: `Plat`, `RopeLine`, `PostLine`, `GroundAt`, `TopAt`) і
+   `RingStage3D.Outside` (`OutsideSpot`: `Side`, `X/Z`, `Shift`, `Ok`). `PerchPos` має перевантаження без кліпа — бере
+   `RingClipTable.DefaultPerch`; `TopRope` зі `Staging = Center` дає `Rope_Back_R_Fast`, тобто гілку каната.
+6. Клубна зала й палац у сцені — лише в збірці огляду, якщо Unity запущено з `RING_REVIEW_VENUES=1`
+   (`RingStageSceneSetup`). Звичайна збірка — лише спортзал (PERF-01); `-ring-venue hall` у ній — попередження й
+   спортзал. «FBX +3 МБ у білді» скасовано.
+
+Перевірка «Изучение» на dd904dc: лінт 0, тести 2310/0; компіляція проти DLL Unity (Gameplay, Editor, тести) — 0 помилок
+із заглушкою режисера. ПМ після злиття: повний набір 2344/0 (2338 пройдено, 5 пропущено, 1 без висновку); Unity-код без
+редактора падає лише на `RingMatchDirector.cs:29` (`Zone`) — `RingStage3D` під нове ядро вже збирається.
+
+**Первісний лист (08.11.2026; де розходиться з поправками — чинні поправки):**
 
 - `RingStage3D.PairPos(MatchSide, bool outside)` (static) — заміна `ZonePos`: на рингу (±0,85; `MatY`; 0), за рингом —
   пара на підлозі з одного боку між фартухом і першим рядом; `PairYaw(s, outside)` — обличчям одне до одного.
