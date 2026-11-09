@@ -78,6 +78,10 @@ namespace Game.Gameplay.Ring.Stage
         RopeLean,
         /// <summary>Мітка <c>raise</c> (рефері підняв руку переможцю) чи <c>bell</c>.</summary>
         Raise,
+        /// <summary>Перша мітка <c>tap</c> — здався, стукає по мату (больовий).</summary>
+        Tap,
+        /// <summary>Мітка <c>reach</c> — тягнеться до каната (больовий, 7–9).</summary>
+        Reach,
         /// <summary>Запасне правило: <see cref="RingBeats.RuleMax"/> с, але не пізніше <see cref="RingBeats.RuleFrac"/> довжини кліпа.</summary>
         Rule
     }
@@ -94,7 +98,10 @@ namespace Game.Gameplay.Ring.Stage
         public string Clip;
         /// <summary>Відлік утримання (кікаут): мітки кліпа рефері кроку — «раз», «два» і розв'язка (вирвався чи «три»).</summary>
         public bool IsCount;
+        /// <summary>Мітки відліку від старту кліпа рефері, с; «два» немає (рахунок до «раз») — <see cref="Count2"/> = −1.</summary>
         public float Count1, Count2, Final;
+        /// <summary>Розв'язка — долоня «три» (мітка <c>count_3</c>), а не кікаут чи рефері, що зупинився.</summary>
+        public bool Three;
     }
 
     /// <summary>
@@ -138,6 +145,26 @@ namespace Game.Gameplay.Ring.Stage
             return clip;
         }
 
+        /// <summary>База парного кліпа (без <c>_A</c>/<c>_B</c>): мітки пар записані за базою, а склейка грає половину пари.</summary>
+        public static string PairBase(string clip)
+        {
+            if (clip == null || clip.Length < 3) return clip;
+            return clip.EndsWith("_A", StringComparison.Ordinal) || clip.EndsWith("_B", StringComparison.Ordinal) ? clip.Substring(0, clip.Length - 2) : clip;
+        }
+
+        /// <summary>Мітка кліпа за повним ім'ям, а якщо там немає — за базою пари (половина пари в склейці).</summary>
+        public static float MarkTime(RingClipEvents ev, string clip, string mark)
+        {
+            if (ev == null || clip == null) return -1f;
+            float t = ev.Time(clip, mark);
+            if (t < 0f)
+            {
+                string b = PairBase(clip);
+                if (b != clip) t = ev.Time(b, mark);
+            }
+            return t;
+        }
+
         /// <summary>Кліп кроку для міток: пара — база, соло — ім'я, рефері — кліп рефері; кінець — підняття руки.</summary>
         public static string StepClip(StageStep st)
         {
@@ -148,6 +175,8 @@ namespace Game.Gameplay.Ring.Stage
                 case StageStepKind.Ref: return st.RefClip;
                 case StageStepKind.End: return "Ref_Raise_Hand";
                 // Склейка: план «на канаті/куті» такту не несе (удар спиною в канат — не контакт прийому); такт — на приземленні.
+                // Хіба що удар спиною в канат чи кут і є ударом події (кидок у кут, 7–9 кидка в канати) — StageStep.Impact.
+                case StageStepKind.Cut: return st.Impact ? st.Clip : null;
                 default: return null;
             }
         }
@@ -161,8 +190,8 @@ namespace Game.Gameplay.Ring.Stage
             if (ev != null)
             {
                 if ((t = ev.Time(mb, "contact")) >= 0f) { src = BeatSource.Contact; return true; }
-                if ((t = ev.Time(clip, "rope_hit")) >= 0f) { src = BeatSource.RopeHit; return true; }
-                if ((t = ev.Time(clip, "corner_hit")) >= 0f) { src = BeatSource.CornerHit; return true; }
+                if ((t = MarkTime(ev, clip, "rope_hit")) >= 0f) { src = BeatSource.RopeHit; return true; }
+                if ((t = MarkTime(ev, clip, "corner_hit")) >= 0f) { src = BeatSource.CornerHit; return true; }
             }
             float m;
             if (Measured.TryGetValue(clip, out m)) { t = m; src = BeatSource.Measured; return true; }
@@ -179,6 +208,8 @@ namespace Game.Gameplay.Ring.Stage
             if ((t = ev.Time(clip, "rope_lean")) >= 0f) { src = BeatSource.RopeLean; return true; }
             if ((t = ev.Time(clip, "raise")) >= 0f) { src = BeatSource.Raise; return true; }
             if ((t = ev.Time(clip, "bell")) >= 0f) { src = BeatSource.Raise; return true; }
+            if ((t = ev.Time(clip, "tap")) >= 0f) { src = BeatSource.Tap; return true; }
+            if ((t = ev.Time(clip, "reach")) >= 0f) { src = BeatSource.Reach; return true; }
             t = -1f;
             return false;
         }
@@ -198,17 +229,19 @@ namespace Game.Gameplay.Ring.Stage
             var p = new BeatPlan { Step = -1, ClipTime = 0f, Source = BeatSource.None, Count1 = -1f, Count2 = -1f, Final = -1f };
             if (steps == null || steps.Count == 0) return p;
 
-            // Утримання: відлік рефері (кліп рефері кроку з мітками count_*).
+            // Утримання: відлік рефері (кліп рефері кроку з мітками count_*). «Два» може не бути: 10+ вирвався на «раз»
+            // (Ref_Count_Pin_1_Slow — count_1 і kickout).
             for (int i = 0; i < steps.Count; i++)
             {
                 string rc = steps[i].RefClip;
                 if (steps[i].Kind != StageStepKind.Pair || rc == null || ev == null) continue;
                 float c1 = ev.Time(rc, "count_1"), c2 = ev.Time(rc, "count_2");
-                if (c1 < 0f || c2 < 0f) continue;
-                float fin = ev.Time(rc, "count_3");
+                if (c1 < 0f) continue;
+                float c3 = ev.Time(rc, "count_3"), fin = c3;
                 if (fin < 0f) fin = ev.Time(rc, "kickout");
                 if (fin < 0f) fin = c2;
-                p.Step = i; p.IsCount = true; p.Count1 = c1; p.Count2 = c2; p.Final = fin;
+                if (fin < 0f) fin = c1;
+                p.Step = i; p.IsCount = true; p.Count1 = c1; p.Count2 = c2; p.Final = fin; p.Three = c3 >= 0f;
                 p.ClipTime = fin; p.Source = BeatSource.Contact; p.Clip = rc;
                 return p;
             }

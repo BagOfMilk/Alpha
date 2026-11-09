@@ -14,8 +14,11 @@ namespace Game.Tests.EditMode
     /// </summary>
     public sealed class RingBeatStandInTests
     {
-        /// <summary>Базова лінія 08.11.2026 (після 3-P1-3). Лише спадає: кліп прийшов — зменшити число тут.</summary>
-        private const int Baseline = 20;
+        /// <summary>
+        /// Базова лінія 08.11.2026 (після 3-P1-3) — 20; 09.11.2026 (Ф2 кроки 5 і 7, кліпи P1–P2) — 17. Лише спадає: кліп прийшов —
+        /// зменшити число тут.
+        /// </summary>
+        private const int Baseline = 17;
 
         private static readonly RollTier[] Tiers = { RollTier.Miss, RollTier.Partial, RollTier.Strong };
 

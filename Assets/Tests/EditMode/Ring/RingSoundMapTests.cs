@@ -307,6 +307,10 @@ namespace Game.Tests.EditMode
             { "Lockup_Stalemate", RingCue.Lockup },        // нічия в захваті
             { "Bump_Back", RingCue.Slam },                 // падіння
             { "Idle_Hurt_Body_Loop", RingCue.CrowdBed },   // борцю боляче: ні удару, ні оплесків
+            // Ф2 кроки 5 і 7 (ПМ, 09.11.2026; звук не змінено — зоні звуку підтвердити, ZONES.md): больовий не взяв — спроба захвату
+            // ноги, яку відбили (той самий Lockup, що мав Lockup_Stalemate); стрибок повз — нападник падає на мат (той самий Slam).
+            { "LegLock_Enter_Fail", RingCue.Lockup },
+            { "Land_Swallow_Miss", RingCue.Slam },
         };
 
         [Test]
@@ -318,7 +322,7 @@ namespace Game.Tests.EditMode
                 var ev = Act(a, RollTier.Miss);
                 StageStep last = null;
                 foreach (var st in RingClipTable.Plan(ev))
-                    if (st.Kind == StageStepKind.Pair || st.Kind == StageStepKind.Solo) last = st;
+                    if ((st.Kind == StageStepKind.Pair || st.Kind == StageStepKind.Solo) && !st.Aside) last = st;   // крок-наслідок (встає з колін) звуку провалу не несе
                 if (last == null) continue;                       // кроків пари немає (утримання — у Kickout, союзник — рефері)
                 var cue = RingSoundMap.ForEvent(ev);
                 if (last.Clip == "Idle_Tired_Loop")

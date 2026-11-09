@@ -23,9 +23,13 @@ namespace Game.Tests.EditMode
         /// <summary>
         /// Храповик підстановок кліпів у планах усіх сценаріїв (09.11.2026, 204ba0c: 101 разом, 16 різних). Лише спадає: коли
         /// кліпи «Кліпів» (P1–P3) зайдуть у таблицю — знизити до нового числа; критерій М1 — 0.
+        /// Ф2 кроки 5 і 7 (09.11.2026): різних 16 → 14 (кліпи P1–P2 прибрали замок ноги-гамерлок і три тарани замість стрибків,
+        /// додали дві чесні: план на куті знизу замість Top_Rope_Perch_Loop і невдачу больового на лікоть). Разом 101 → 103 —
+        /// не нові заглушки: «Затягнути в кут» і «Таран плечем» тепер зі склейкою, а підготовка сценаріїв бере лише удари в центрі
+        /// (<c>RingDemoScript.All</c>), тож у черзі частіше випадає дропкік-підстановка (6 → 13).
         /// </summary>
-        private const int StandInCeiling = 101;
-        private const int StandInKindsCeiling = 16;
+        private const int StandInCeiling = 103;
+        private const int StandInKindsCeiling = 14;
 
         /// <summary>Прийомів у каталозі гри (`Ring/career_moves`) — не менше; випадкова втрата прийому з JSON — червоний тест.</summary>
         private const int CatalogMovesFloor = 24;
@@ -196,10 +200,11 @@ namespace Game.Tests.EditMode
                 foreach (var ev in Shown(d))
                 {
                     var plan = RingClipTable.Plan(ev);
-                    foreach (var st in plan)
+                    for (int i = 0; i < plan.Count; i++)
                     {
+                        var st = plan[i];
                         foreach (var clip in st.AllClips())
-                            Assert.IsFalse(clip.StartsWith("Run_") || clip.StartsWith("Walk_") || clip.StartsWith("Whip_"),
+                            Assert.IsFalse(RingBeatTests.RunsAcross(plan, i, clip),
                                 spec + ": " + ev.Kind + " " + ev.Action + " грає біг «" + clip + "» — бігу по рингу немає (08.11.2026)");
                         if (st.IsStandIn) { int n; notes.TryGetValue(st.Note, out n); notes[st.Note] = n + 1; }
                     }
