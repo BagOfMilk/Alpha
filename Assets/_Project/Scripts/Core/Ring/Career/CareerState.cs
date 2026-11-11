@@ -34,6 +34,8 @@ namespace Game.Core.Ring.Career
         public bool TitleWon;
         /// <summary>Очки розвитку, нараховані за матч (різниця DevPoints).</summary>
         public int DevPointsGained;
+        /// <summary>P1-6: чому поразка не дала популярності — 0 (не застосовно), 1 — ажіотаж нижче 9, 2 — уже було цього сезону.</summary>
+        public int LossPopularityBlocked;
 
         public int TotalFee { get { return Fee + FeeWinBonus + FeeHypeBonus; } }
 
@@ -44,7 +46,7 @@ namespace Game.Core.Ring.Career
                 B(Played), B(Withdrew), B(IsBig), B(IsTitle), B(IsFeud), Uri.EscapeDataString(OpponentId ?? ""), I((int)Position),
                 I((int)Winner), I((int)EndKind), I(Hype), I(Rounds), I((int)PlanOutcome), I(Fee), I(FeeWinBonus), I(FeeHypeBonus),
                 I(PopularityBefore), I(PopularityAfter), I(TrustBefore), I(TrustAfter), I(InjuredZone), I(InjuryWeeks), B(TitleWon),
-                I(DevPointsGained)
+                I(DevPointsGained), I(LossPopularityBlocked)
             });
         }
 
@@ -52,7 +54,8 @@ namespace Game.Core.Ring.Career
         {
             if (string.IsNullOrEmpty(s)) return null;
             var p = s.Split(',');
-            if (p.Length != 23) throw new FormatException("пошкоджений підсумок шоу у зліпку кар'єри");
+            // 24-те поле (LossPopularityBlocked) додано 11.11.2026: старі зліпки мають 23
+            if (p.Length != 23 && p.Length != 24) throw new FormatException("пошкоджений підсумок шоу у зліпку кар'єри");
             int i = 0;
             var r = new ShowResult();
             r.Played = Bo(p[i++]); r.Withdrew = Bo(p[i++]); r.IsBig = Bo(p[i++]); r.IsTitle = Bo(p[i++]); r.IsFeud = Bo(p[i++]);
@@ -61,6 +64,7 @@ namespace Game.Core.Ring.Career
             r.PlanOutcome = (FeudPlanOutcome)In(p[i++]); r.Fee = In(p[i++]); r.FeeWinBonus = In(p[i++]); r.FeeHypeBonus = In(p[i++]);
             r.PopularityBefore = In(p[i++]); r.PopularityAfter = In(p[i++]); r.TrustBefore = In(p[i++]); r.TrustAfter = In(p[i++]);
             r.InjuredZone = In(p[i++]); r.InjuryWeeks = In(p[i++]); r.TitleWon = Bo(p[i++]); r.DevPointsGained = In(p[i++]);
+            if (p.Length > 23) r.LossPopularityBlocked = In(p[i++]);
             return r;
         }
 
@@ -216,6 +220,8 @@ namespace Game.Core.Ring.Career
         /// </summary>
         public readonly int[] SeasonRecord = new int[3];
         public int SeasonPopStart;
+        /// <summary>P1-6: сезон, у якому поразка вже дала популярність (0 — ще ні). Раз за сезон.</summary>
+        public int LossPopularitySeason;
 
         public int GetNpcFeud(string id)
         {
@@ -274,6 +280,7 @@ namespace Game.Core.Ring.Career
             foreach (var g in Grudges) gr.Add(Esc(g));
             sb.Append("|grudges=").Append(string.Join(",", gr));
             sb.Append("|srec=").Append(Ints(SeasonRecord)).Append("|spop=").Append(SeasonPopStart);
+            sb.Append("|losspop=").Append(LossPopularitySeason);
         }
 
         internal void Restore(Dictionary<string, string> kv)
@@ -332,6 +339,8 @@ namespace Game.Core.Ring.Career
             Array.Clear(SeasonRecord, 0, SeasonRecord.Length);
             if (kv.TryGetValue("srec", out v)) Fill(SeasonRecord, v);
             SeasonPopStart = kv.TryGetValue("spop", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : -1;
+            // P1-6 додано 11.11.2026: старі зліпки — поразка цього сезону популярності ще не давала
+            LossPopularitySeason = kv.TryGetValue("losspop", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
         }
 
         private static string Need(Dictionary<string, string> kv, string key)

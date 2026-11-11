@@ -1022,6 +1022,15 @@ namespace Game.Core.Ring.Career
             if (res.FinalHype >= CareerRules.HypeBonusAt) r.FeeHypeBonus = CareerRules.HypeBonus;
             State.Money += r.TotalFee;
 
+            // P1-6: поразка чи нічия дає популярність лише з ажіотажем ≥ 9 і раз за сезон. Приріст від поразки в стані ворожнечі —
+            // лише правило ажіотажу (≥ 7) і «звернув і зал за тебе»: якщо їх не можна — популярність лишається, як до матчу.
+            if (res.Winner != MatchWinner.Player && Popularity > popBefore)
+            {
+                if (res.FinalHype < CareerRules.LossPopularityHype) { Feud.State.Audience = popBefore; r.LossPopularityBlocked = 1; }
+                else if (State.LossPopularitySeason == State.Season) { Feud.State.Audience = popBefore; r.LossPopularityBlocked = 2; }
+                else State.LossPopularitySeason = State.Season;
+            }
+
             // «Злам плану» (Бунтар): звернутий план букера — зал це любить і букер запам'ятовує.
             if (outcome == FeudPlanOutcome.Swerved && Feud.State.Perks.Contains(PerkCatalog.PlanBreaker))
             {

@@ -171,16 +171,21 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>Кар'єра до розв'язки ворожнечі (або 5 сезонів); кінцівка — null, якщо розв'язки не було.</summary>
-        public static FeudEnding? PlayCareer(CareerSession s, int variant, FeudEnding target)
+        /// <param name="goal">Ціль матчу замість <see cref="FeudBot.GoalFor"/> (тести правил кар'єри); null — ціль кінцівки.</param>
+        /// <param name="onResult">Після кожного зіграного матчу — його підсумок.</param>
+        /// <param name="untilSeason">Грати до кінця цього сезону навіть після розв'язки ворожнечі; 0 — до розв'язки.</param>
+        public static FeudEnding? PlayCareer(CareerSession s, int variant, FeudEnding target, Func<CareerSession, MatchGoal?> goal = null,
+                                             Action<ShowResult> onResult = null, int untilSeason = 0)
         {
             var rep = new CareerRunReport();
             for (int guard = 0; guard < 8000; guard++)
             {
-                if (s.State.FeudResolved || (s.Stage != CareerStage.Title && s.Stage != CareerStage.Create && s.State.Season > 5)) break;
+                bool started = s.Stage != CareerStage.Title && s.Stage != CareerStage.Create;
+                if (untilSeason > 0 ? started && s.State.Season > untilSeason : s.State.FeudResolved || (started && s.State.Season > 5)) break;
                 switch (s.Stage)
                 {
                     case CareerStage.Week: DoWeek(s, variant, target); break;
-                    case CareerStage.Show: DoShow(s, target); break;
+                    case CareerStage.Show: DoShow(s, target, goal, onResult); break;
                     default: CareerBot.Step(s, variant, rep); break;
                 }
             }
@@ -225,14 +230,15 @@ namespace Game.Tests.EditMode
             s.FinishBackstage();
         }
 
-        private static void DoShow(CareerSession s, FeudEnding target)
+        private static void DoShow(CareerSession s, FeudEnding target, Func<CareerSession, MatchGoal?> goal, Action<ShowResult> onResult)
         {
             switch (s.State.Phase)
             {
                 case ShowPhase.Card: s.StartShow(); break;
                 case ShowPhase.Match:
-                    PlayCareerMatch(s, FeudBot.GoalFor(target, false, s.CurrentMatchPlan));
-                    s.FinishMatch();
+                    PlayCareerMatch(s, GoalOf(s, target, goal));
+                    var wr = s.FinishMatch();
+                    if (onResult != null) onResult(wr);
                     break;
                 case ShowPhase.Feud:
                     var c = s.Feud;
@@ -245,14 +251,21 @@ namespace Game.Tests.EditMode
                             break;
                         case RingStage.MatchPrep:
                             s.StartFeudMatch();
-                            PlayCareerMatch(s, FeudBot.GoalFor(target, s.CurrentMatchDecisive, s.CurrentMatchPlan));
-                            s.FinishMatch();
+                            PlayCareerMatch(s, GoalOf(s, target, goal));
+                            var fr = s.FinishMatch();
+                            if (onResult != null) onResult(fr);
                             break;
                         default: s.FinishBigShow(); break;
                     }
                     break;
                 case ShowPhase.Result: s.ContinueFromShow(); break;
             }
+        }
+
+        private static MatchGoal GoalOf(CareerSession s, FeudEnding target, Func<CareerSession, MatchGoal?> goal)
+        {
+            var g = goal == null ? null : goal(s);
+            return g ?? FeudBot.GoalFor(target, s.CurrentMatchDecisive, s.CurrentMatchPlan);
         }
 
         /// <summary>Матч кар'єри як в огляді: дію обирає бот кінцівок, виконує вивчений прийом із цією дією (без повтору, якщо є).</summary>
