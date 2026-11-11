@@ -75,6 +75,10 @@ namespace Game.Gameplay.Ring.Models
         public string TitleText { get { return _t.Get(_runner.Promo.TitleKey); } }
         public string PlaceText { get { return _t.Get(_runner.Promo.PlaceKey); } }
         public int Act { get { return _runner.Promo.Act; } }
+        /// <summary>Сцени закулісся актів не мають (Act 0): «Акт 0» у шапці не показувати (плейтест P3, 08.11.2026).</summary>
+        public bool HasAct { get { return Act > 0; } }
+        /// <summary>«Акт N» для шапки; null — сцена без акту (закулісся).</summary>
+        public string ActText { get { return HasAct ? _t.Format("promo.act", Act) : null; } }
 
         public PromoViewKind Kind
         {

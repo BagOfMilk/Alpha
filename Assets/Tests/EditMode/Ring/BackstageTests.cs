@@ -6,6 +6,7 @@ using Game.Core.Ring;
 using Game.Core.Ring.Career;
 using Game.Core.Ring.Match;
 using Game.Gameplay.Combat;
+using Game.Gameplay.Ring.Models;
 using NUnit.Framework;
 
 namespace Game.Tests.EditMode
@@ -811,6 +812,12 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(r.NeedsScene);
             Assert.AreEqual("ev_contract", r.SceneId);
             Assert.IsNull(s.ForcedBackstageScene, "одноразова");
+            var pm = new PromoScreenModel(s.CurrentBackstage, RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json"), CareerKit.Read("backstage_uk.json")));
+            Assert.IsFalse(pm.HasAct, "у закулісся немає актів — без «Акт 0»");
+            Assert.IsNull(pm.ActText);
+            var fm = new PromoScreenModel(RingCampaignDriver.NewCampaign(1).StartPromo(), RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json")));
+            Assert.IsTrue(fm.HasAct, "промо ворожнечі — з актом");
+            StringAssert.Contains(fm.Act.ToString(), fm.ActText);
             CareerKit.PlayScene(s);
 
             var r2 = s.Backstage();
