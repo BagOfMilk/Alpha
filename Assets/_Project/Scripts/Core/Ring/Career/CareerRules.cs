@@ -69,6 +69,11 @@ namespace Game.Core.Ring.Career
 
         // ---------- довгі шкали ----------
         public const int MaxPopularity = 10;
+        /// <summary>
+        /// P1-6 (рішення власника за планом П5): поразка чи нічия дає популярність лише з ажіотажем фіналу ≥ 9 і щонайбільше раз
+        /// за сезон (раніше — будь-який матч з ажіотажем ≥ 7). Перемога — як і була.
+        /// </summary>
+        public const int LossPopularityHype = 9;
         public const int MaxTrust = 5;
         public const int MaxFeud = 4;
         public const int TitleShotTrust = 4;
