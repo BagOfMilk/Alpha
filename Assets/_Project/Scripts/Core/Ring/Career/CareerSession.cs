@@ -1150,6 +1150,7 @@ namespace Game.Core.Ring.Career
                 State.Report.TitleDone = true;
                 State.Report.TitleWon = State.Last != null && State.Last.TitleWon;
                 State.Report.BeltIsPlayers = IsChampion;
+                RefreshSeasonReport();
                 State.IsTitle = false;
                 State.IsBig = false;
                 Stage = CareerStage.SeasonEnd;
@@ -1198,6 +1199,26 @@ namespace Game.Core.Ring.Career
 
         public SeasonReport GetSeasonReport() { Require(CareerStage.SeasonEnd); return State.Report; }
 
+        /// <summary>
+        /// Підсумок сезону остаточний: титульний матч зіграно, від нього відмовились або його не було (3-P2-6, плейтест 08.11.2026:
+        /// титульний матч дописувався в уже показаний підсумок, і кінець сезону показувався двічі). Поки титульний шанс відкритий,
+        /// екран кінця сезону показує лише його, підсумок — після.
+        /// </summary>
+        public bool SeasonSummaryFinal { get { return Stage == CareerStage.SeasonEnd && !CanStartTitleMatch; } }
+
+        /// <summary>
+        /// Шкали підсумку — після титульного матчу чи відмови: популярність, довіра, гроші й звільнення такими, якими сезон
+        /// закрився (знімок кінця тижня 4 їх не знав: гонорар титулу, ажіотаж, довіра за відмову чемпіона).
+        /// </summary>
+        private void RefreshSeasonReport()
+        {
+            var rep = State.Report;
+            if (rep == null) return;
+            rep.Popularity = Popularity; rep.Trust = Trust; rep.Money = State.Money;
+            rep.Fired = Popularity <= 0;
+            rep.BeltIsPlayers = IsChampion;
+        }
+
         public bool CanStartTitleMatch { get { return Stage == CareerStage.SeasonEnd && State.Report != null && State.Report.TitleEligible && !State.Report.TitleDone; } }
 
         /// <summary>Титульний матч сезону (§6.4): шанс — або захист пояса. Іде як велике шоу зі своєю карткою.</summary>
@@ -1224,6 +1245,7 @@ namespace Game.Core.Ring.Career
             if (State.Report.TitleDone) return;
             if (State.Report.TitleEligible && IsChampion) Feud.State.Trust -= 1;
             State.Report.TitleDone = true;
+            RefreshSeasonReport();
         }
 
         public bool CanStartNextSeason
