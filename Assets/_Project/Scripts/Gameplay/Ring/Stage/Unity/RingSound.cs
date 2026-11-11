@@ -212,12 +212,13 @@ namespace Game.Gameplay.Ring.Stage
         /// <para>Гілки Kickout і MatchEnd — запасні. Чинний режисер ці події сюди не подає: долоню б'є сам на мітках кліпа рефері
         /// (<see cref="Slap"/>), а pinEnd завжди false. Якщо режисер почне подавати їх сюди, хай прибере свої Slap — інакше долоня
         /// подвоїться.</para>
-        /// <paramref name="prop"/> — реквізит чистого удару предметом 10+, який обрав режисер (стілець чи стіл).
+        /// <paramref name="prop"/> — реквізит чистого удару предметом 10+, який обрав режисер (стілець чи стіл). <paramref name="beatClip"/>
+        /// — кліп такту (<c>RingBeats.For(...).Clip</c>): перехоплення стрибка з каната звучить ударом, а не приземленням (null — як раніше).
         /// </summary>
-        public void OnEvent(MatchEvent ev, float delay, bool pinEnd, RingProp prop = RingProp.Chair)
+        public void OnEvent(MatchEvent ev, float delay, bool pinEnd, RingProp prop = RingProp.Chair, string beatClip = null)
         {
             // Слід — до розгалуження: Kickout і MatchEnd теж стають попередньою подією, і слід журналу не рветься.
-            var cue = _trail.Next(ev, prop);
+            var cue = _trail.Next(ev, prop, beatClip);
             switch (ev.Kind)
             {
                 case MatchEventKind.Kickout: StartCoroutine(Repeat(RingCue.MatSlap, 2, 0.45f, 0.9f, delay)); return;
@@ -250,13 +251,22 @@ namespace Game.Gameplay.Ring.Stage
         }
 
         /// <summary>
-        /// Другий дотик предмета на мітці кліпа (режисер): 7–9 — нападник зачепив себе, ≤6 — після замаху сам у бар'єр. Без мітки не
-        /// звучить: краще тиша, ніж звук не в такт показу.
+        /// Другий дотик дії на мітці <c>touch_2</c> кліпа (режисер кличе на старті кроку з затримкою до мітки): що звучить —
+        /// <see cref="RingSoundMap.FollowUpOf(MatchEvent)"/> (предмет 7–9 — самоудар, падіння після перехоплення стрибка, падіння після
+        /// тарана й фінішера-удару). Без мітки не звучить: краще тиша, ніж звук не в такт показу. Рішення — в мить звуку, а не виклику:
+        /// такт події до того вже прозвучав, і другий дотик не повторює його звук (<see cref="RingSoundTrail.SecondTouch"/>).
         /// </summary>
         public void FollowUp(MatchEvent ev, float delay = 0f)
         {
-            var c = RingSoundMap.FollowUpOf(ev);
-            if (c != RingCue.None) Play(c, c == RingCue.Hit ? 0.7f : 0.85f, delay, true);
+            if (RingSoundMap.FollowUpOf(ev) == RingCue.None) return;
+            StartCoroutine(SecondTouchAt(ev, delay));
+        }
+
+        private IEnumerator SecondTouchAt(MatchEvent ev, float delay)
+        {
+            if (delay > 0f) yield return new WaitForSeconds(delay);
+            var c = _trail.SecondTouch(ev);
+            if (c != RingCue.None) Play(c, c == RingCue.Hit ? 0.7f : 0.85f, 0f, true);
         }
 
         private void OneShot(AudioClip c, float vol, bool second = false)
