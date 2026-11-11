@@ -306,8 +306,9 @@ namespace Game.Tests.EditMode
                     {
                         var actor = e.CurrentActor; int n = e.State.Log.Count;
                         MatchAi.Step(e);
-                        Assert.AreEqual(MatchPhase.AwaitReaction, e.Phase, "фінішер — великий прийом");
-                        e.React(ReactionChoice.Sell);
+                        // великий прийом: захисник реагує, а без жетонів реверсу кидок одразу — AwaitBoost (P2-1: матчі довші, жетони встигають вичерпатись)
+                        Assert.IsTrue(e.Phase == MatchPhase.AwaitReaction || e.Phase == MatchPhase.AwaitBoost, "фінішер — великий прийом");
+                        if (e.Phase == MatchPhase.AwaitReaction) e.React(ReactionChoice.Sell);
                         if (e.Phase == MatchPhase.AwaitBoost) e.Commit(0);
                         if (e.Phase == MatchPhase.AwaitBoost) e.Commit(0);
                         var ev = e.State.Log.Skip(n).First(x => x.Kind == MatchEventKind.Action);

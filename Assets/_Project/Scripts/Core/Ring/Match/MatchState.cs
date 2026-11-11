@@ -36,7 +36,7 @@ namespace Game.Core.Ring.Match
         public Fighter Rival;
         public int Hype;
         public bool RefereeDistracted;
-        /// <summary>Номер наступної дії матчу (від 1; ліміт — MatchSetup.RoundLimit). Назва лишилась від раундів зрізу 03.11.2026.</summary>
+        /// <summary>Номер наступної дії матчу без підйомів (GetUp не рахується, P2-1; від 1; ліміт — MatchSetup.RoundLimit). Назва лишилась від раундів зрізу 03.11.2026.</summary>
         public int Round = 1;
         /// <summary>Хто виграв стартовий Обмін.</summary>
         public MatchSide FirstActor;

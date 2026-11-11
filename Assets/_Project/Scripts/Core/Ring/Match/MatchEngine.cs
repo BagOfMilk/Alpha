@@ -249,6 +249,7 @@ namespace Game.Core.Ring.Match
                             else if (me.Momentum < MatchRules.FinisherMomentum) r = UnavailableReason.NeedImpulse;
                             else if (_s.Hype < MatchRules.FinisherHype) r = UnavailableReason.NeedHype;
                             else if (opp.Damage < MatchRules.FinisherTargetDamage) r = UnavailableReason.TargetNotHurt;
+                            else if (_s.Round < MatchRules.FinisherMinRound && _setup.RoundLimit <= MatchRules.ActionLimit) r = UnavailableReason.TooEarly;
                             break;
                         case MatchActionId.Desperate:
                             if (me.DesperateUsed) r = UnavailableReason.AlreadyUsed;
@@ -310,7 +311,12 @@ namespace Game.Core.Ring.Match
             return 0;
         }
 
-        private int Late() { return _s.Round >= MatchRules.LateStageRound ? MatchRules.LateStagePenalty : 0; }
+        /// <summary>Пізня стадія (P2-1): з <see cref="MatchRules.LateStageRound"/>-ї дії штраф <see cref="MatchRules.LateStagePenalty"/>, далі +1 за кожні <see cref="MatchRules.LateStageStep"/> дій.</summary>
+        private int Late()
+        {
+            if (_s.Round < MatchRules.LateStageRound) return 0;
+            return MatchRules.LateStagePenalty + (_s.Round - MatchRules.LateStageRound) / MatchRules.LateStageStep;
+        }
 
         private static bool IsWinded(MatchActionId id, Fighter me) { return me.Stamina <= 0 && id != MatchActionId.HopeSpot; }
 
@@ -831,7 +837,8 @@ namespace Game.Core.Ring.Match
                 var def = _s.Get(Opp(_actionSide));
                 def.Stamina = Math.Min(MatchRules.MaxStamina, def.Stamina + MatchRules.DefenderStaminaRegen);
             }
-            _s.Round++;
+            // P2-1: підйом після нокдауну лишається дією (журнал, екран), але не рахується в довжину матчу.
+            if (_actionId != MatchActionId.GetUp) _s.Round++;
             if (_s.Round > _setup.RoundLimit) End(MatchWinner.Draw, MatchEndKind.TimeLimit);
         }
 

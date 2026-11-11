@@ -59,7 +59,9 @@ namespace Game.Core.Ring.Match
         /// <summary>Щойно накривав: утримати знову можна лише після іншого прийому.</summary>
         JustPinned = 24,
         /// <summary>Предмети — лише в матчі «без дискваліфікації».</summary>
-        NeedNoDq = 25
+        NeedNoDq = 25,
+        /// <summary>Фінішер раніше за <see cref="MatchRules.FinisherMinRound"/>-ї дії недоступний (P2-1: матч — історія, а не один ланцюг).</summary>
+        TooEarly = 26
     }
 
     /// <summary>
