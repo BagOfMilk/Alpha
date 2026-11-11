@@ -71,6 +71,21 @@ namespace Game.Core.Ring.Career
         /// <summary>Матч, що йде зараз: звичайний (окремий) або матч ворожнечі на великому шоу. null — матчу немає.</summary>
         public MatchEngine Engine { get { return State.Phase == ShowPhase.Feud ? Feud.CurrentMatch : _engine; } }
 
+        /// <summary>
+        /// План, яким іде поточний матч: ворожнечі — план кампанії (після підготовки матчу, з планом за замовчуванням), титульний —
+        /// без плану, щотижневий — план букера. Для бота кінцівок огляду (<see cref="FeudBot.GoalFor"/>).
+        /// </summary>
+        public BookerPlan CurrentMatchPlan
+        {
+            get { return State.Phase == ShowPhase.Feud ? Feud.State.Plan : State.IsTitle ? BookerPlan.None : State.Plan; }
+        }
+
+        /// <summary>Поточний матч — розв'язка ворожнечі з Молотом.</summary>
+        public bool CurrentMatchDecisive
+        {
+            get { return State.Phase == ShowPhase.Feud && Feud.Stage == RingStage.Match && Feud.CurrentMatchDef.Decisive; }
+        }
+
         public int FeudLevel(string npcId)
         {
             if (npcId == CareerContent.HammerId && !State.FeudResolved) return Feud.State.Heat;

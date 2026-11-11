@@ -48,6 +48,19 @@ namespace Game.Gameplay.Ring
 
         public bool HasSave { get { return _shotsDir == null && RingSaveFile.Exists(SavePath); } }
 
+        /// <summary>
+        /// Звідки «Продовжити» читає сейв: огляд із <c>-ring-shot-load &lt;сейв&gt;</c> — заданий файл (QA стартує з потрібного місця
+        /// кар'єри), інакше — <see cref="SavePath"/>. Пише огляд усе одно у свій ring_career_bot.txt: заданий сейв не переписується.
+        /// </summary>
+        private string LoadPath
+        {
+            get
+            {
+                ReadCareerShotArgs();
+                return _shotLoad ?? SavePath;
+            }
+        }
+
         public void NewGame()
         {
             _career = CareerSession.New(_content, new SeededDiceRoller(_seed), _seed);
@@ -65,7 +78,7 @@ namespace Game.Gameplay.Ring
             {
                 CareerSession c = null;
                 bool fromBackup;
-                var lines = RingSaveFile.Read(SavePath, l =>
+                var lines = RingSaveFile.Read(LoadPath, l =>
                 {
                     var t = CareerSession.New(_content, new SeededDiceRoller(_seed), _seed);
                     t.RestoreState(l[0]);
@@ -298,10 +311,154 @@ namespace Game.Gameplay.Ring
         private bool BotWeekStep(out bool grew)
         {
             grew = false;
+            ReadCareerShotArgs();
+            if (BotLoadStep() || BotEndingStep()) { grew = true; return true; }
             bool week = !_onTitle && _career.Stage == CareerStage.Week && !_career.BackstageOpen;
             if (!week) return false;
             if (_shotGrow && BotGrow()) { _view.Refresh(); grew = true; return true; }
             if (_career.State.ActionsLeft > 0 || _career.State.PromoChoicePending) { _view.OnDigit(1 + _shotDigit++ % 6); return true; }
+            return false;
+        }
+
+        // ---------------- огляд QA: старт із сейву й бот кінцівок (п. 8 П5, 11.11.2026) ----------------
+
+        private bool _shotArgsRead;
+        /// <summary><c>-ring-shot-load &lt;сейв&gt;</c>: повний шлях, шлях від теки запуску або ім'я файла в persistentDataPath.</summary>
+        private string _shotLoad;
+        /// <summary>0 — сейв ще не відкривали, 1 — «Продовжити» запущено, 2 — готово або не вдалося.</summary>
+        private int _shotLoadState;
+        private bool _shotHasEnding;
+        private FeudEnding _shotEnding;
+        private bool _shotEndingNoted;
+        private MatchEngine _shotGoalNoted;
+        private PromoRunner _botRewardsRunner;
+        private string _botRewardsNode;
+        private readonly HashSet<string> _botRewardsPressed = new HashSet<string>();
+
+        /// <summary>Прапорці огляду кар'єри — лише разом з <c>-ring-shots</c> (сейв і гра гравця не чіпаються).</summary>
+        private void ReadCareerShotArgs()
+        {
+            if (_shotArgsRead) return;
+            _shotArgsRead = true;
+            if (_shotsDir == null) return;
+            string load = ReadArg("-ring-shot-load");
+            if (!string.IsNullOrEmpty(load))
+            {
+                if (System.IO.Path.IsPathRooted(load)) _shotLoad = load;
+                else if (System.IO.File.Exists(load)) _shotLoad = System.IO.Path.GetFullPath(load);
+                else _shotLoad = System.IO.Path.Combine(Application.persistentDataPath, load);
+            }
+            string end = ReadArg("-ring-shot-ending");
+            if (end != null)
+            {
+                if (FeudBot.TryParseEnding(end, out _shotEnding)) _shotHasEnding = true;
+                else Debug.LogWarning("[Ринг] -ring-shot-ending: невідома кінцівка '" + end + "' (own_script, outcast, crowd_favorite, hated_heel, honorable_loss, forgotten)");
+            }
+        }
+
+        /// <summary>
+        /// <c>-ring-shot-load</c>: на титулі — «Продовжити» з заданого сейву (тим самим входом, що й кнопка: розріз, завантаження,
+        /// екран за етапом). Не відкрився — лог і звичайний огляд з нової кар'єри.
+        /// </summary>
+        private bool BotLoadStep()
+        {
+            if (_shotLoad == null || !_onTitle || _shotLoadState == 2) return false;
+            if (_shotLoadState == 0)
+            {
+                if (!RingSaveFile.Exists(_shotLoad))
+                {
+                    Debug.LogError("[Ринг] -ring-shot-load: сейву немає — " + _shotLoad);
+                    ShotNote("сейв не знайдено: " + _shotLoad + " — нова кар'єра");
+                    _shotLoadState = 2;
+                    return false;
+                }
+                ShotNote("старт із сейву: " + _shotLoad);
+                _shotLoadState = 1;
+                StartGame(true);
+                return true;
+            }
+            // «Продовжити» запущено: чекаємо розрізу й завантаження; скінчилось, а ми ще на титулі — сейв не відкрився
+            if (_wipe.Busy || _loading != null) return true;
+            Debug.LogError("[Ринг] -ring-shot-load: сейв не відкрився — " + _shotLoad);
+            ShotNote("сейв не відкрився: " + _shotLoad + " — нова кар'єра");
+            _shotLoadState = 2;
+            return false;
+        }
+
+        /// <summary>
+        /// Ціль матчу бота кінцівок (<c>-ring-shot-ending</c>) для ходу за героя (RingGameBootstrap.Match.cs): розв'язка — сама
+        /// кінцівка з урахуванням плану, решта матчів — план букера і стиль потрібного шляху (<see cref="FeudBot.GoalFor"/>).
+        /// null — огляд без цілі (звичайний бот).
+        /// </summary>
+        public MatchGoal? ShotMatchGoal
+        {
+            get
+            {
+                if (!_shotHasEnding || _onTitle || _career == null || _career.Engine == null) return null;
+                var eng = _career.Engine;
+                bool decisive = _career.CurrentMatchDecisive;
+                var plan = _career.CurrentMatchPlan;
+                var g = FeudBot.GoalFor(_shotEnding, decisive, plan);
+                if (decisive && _shotGoalNoted != eng && _shotsDir != null)
+                {
+                    _shotGoalNoted = eng;
+                    ShotNote("розв'язка ворожнечі: план " + FeudVars.PlanNames[(int)plan] + ", ціль матчу " + g
+                             + (FeudBot.PlanAllows(_shotEnding, plan) ? "" : " — з цим планом кінцівка " + FeudBot.EndingName(_shotEnding) + " недосяжна"));
+                }
+                return g;
+            }
+        }
+
+        /// <summary>
+        /// Бот кінцівок у промо ворожнечі й сценах закулісся: вибір — цифрою варіанта, який обрав <see cref="FeudBot.ChooseOption"/>;
+        /// нагороди кидка — цифрами <see cref="FeudBot.ChooseRewards"/> по одній за крок, далі «Підтвердити». Репліки й сам кидок —
+        /// каркас («Далі»). Кінцівка ворожнечі — рядок у screens.txt і лог: ціль і що вийшло.
+        /// </summary>
+        private bool BotEndingStep()
+        {
+            if (!_shotHasEnding || _onTitle || _career == null) return false;
+            if (!_shotEndingNoted && _career.Feud.HasEnding)
+            {
+                _shotEndingNoted = true;
+                string line = "кінцівка ворожнечі: ціль " + FeudBot.EndingName(_shotEnding) + ", вийшло " + FeudBot.EndingName(_career.Feud.Ending)
+                              + (_career.Feud.Ending == _shotEnding ? " — так" : " — ні");
+                Debug.Log("[Ринг] Огляд: " + line);
+                if (_shotsDir != null) ShotNote(line);
+            }
+            PromoRunner r = null;
+            MatchDef next = null;
+            if (_career.Stage == CareerStage.Week && _career.BackstageOpen) r = _career.CurrentBackstage;
+            else if (_career.Stage == CareerStage.Show && _career.State.Phase == ShowPhase.Feud && _career.Feud.Stage == RingStage.Promo)
+            {
+                r = _career.Feud.CurrentPromoRunner;
+                next = FeudBot.NextMatch(_career.Feud);
+            }
+            if (r == null || r.IsFinished || !(_view is PromoScreenView) || !ReferenceEquals(_viewKey, r)) return false;
+            if (r.Current.Type == PromoNodeType.Choice)
+            {
+                string id = FeudBot.ChooseOption(r, _shotEnding, next);
+                int n = id == null ? 0 : FeudBot.OptionNumber(r, id);
+                if (n <= 0) return false;
+                ShotNote("кінцівка " + FeudBot.EndingName(_shotEnding) + ": " + r.Promo.Id + "/" + r.Current.Id + " → " + id);
+                _view.OnDigit(n);
+                return true;
+            }
+            if (r.Current.Type == PromoNodeType.Check && r.AwaitingRewards)
+            {
+                if (_botRewardsRunner != r || _botRewardsNode != r.Current.Id)
+                {
+                    _botRewardsRunner = r; _botRewardsNode = r.Current.Id; _botRewardsPressed.Clear();
+                }
+                foreach (var id in FeudBot.ChooseRewards(r, _shotEnding))
+                {
+                    if (_botRewardsPressed.Contains(id)) continue;
+                    _botRewardsPressed.Add(id);
+                    _view.OnDigit(FeudBot.RewardNumber(r, id));
+                    return true;
+                }
+                _view.OnConfirm();
+                return true;
+            }
             return false;
         }
     }
