@@ -563,9 +563,30 @@ namespace Game.Core.Ring.Career
             return true;
         }
 
+        /// <summary>
+        /// Сцена, яку відкриє наступне «Закулісся» замість звичайного вибору (огляд QA: <c>-ring-shot-event</c>,
+        /// <c>-ring-shot-backstage all</c>) — без умов, тижня й «раз за сезон». Одноразова: скидається, щойно сцену відкрито.
+        /// У сейв не входить.
+        /// </summary>
+        public string ForcedBackstageScene { get; private set; }
+
+        /// <summary>Примусити сцену наступного «Закулісся» (null — скасувати). Невідомий id — виняток.</summary>
+        public void ForceBackstage(string sceneId)
+        {
+            if (sceneId != null && (Content.Backstage == null || Content.Backstage.Find(sceneId) == null))
+                throw new ArgumentException("немає закулісної сцени '" + sceneId + "'");
+            ForcedBackstageScene = sceneId;
+        }
+
         private BackstageScene PickBackstageScene()
         {
             var all = Content.Backstage.Scenes;
+            if (ForcedBackstageScene != null)
+            {
+                var forced = Content.Backstage.Find(ForcedBackstageScene);
+                ForcedBackstageScene = null;
+                if (forced != null) return forced;
+            }
             foreach (var sc in all)
             {
                 if (sc.Kind != BackstageKind.Event) continue;

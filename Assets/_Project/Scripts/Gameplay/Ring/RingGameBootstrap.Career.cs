@@ -312,7 +312,8 @@ namespace Game.Gameplay.Ring
         {
             grew = false;
             ReadCareerShotArgs();
-            if (BotLoadStep() || BotEndingStep()) { grew = true; return true; }
+            BotForceScenes();
+            if (BotLoadStep() || BotEndingStep() || BotDeclineTitleStep()) { grew = true; return true; }
             bool week = !_onTitle && _career.Stage == CareerStage.Week && !_career.BackstageOpen;
             if (!week) return false;
             if (_shotGrow && BotGrow()) { _view.Refresh(); grew = true; return true; }
@@ -334,6 +335,11 @@ namespace Game.Gameplay.Ring
         private PromoRunner _botRewardsRunner;
         private string _botRewardsNode;
         private readonly HashSet<string> _botRewardsPressed = new HashSet<string>();
+        private bool _shotDeclineTitle;
+        /// <summary><c>-ring-shot-event &lt;id&gt;</c>: сцена, яку відкриє перше «Закулісся» огляду (поки не примушено — не null).</summary>
+        private string _shotEvent;
+        private bool _shotBackstageAll;
+        private Queue<string> _shotBackstageQueue;
 
         /// <summary>Прапорці огляду кар'єри — лише разом з <c>-ring-shots</c> (сейв і гра гравця не чіпаються).</summary>
         private void ReadCareerShotArgs()
@@ -347,6 +353,14 @@ namespace Game.Gameplay.Ring
                 if (System.IO.Path.IsPathRooted(load)) _shotLoad = load;
                 else if (System.IO.File.Exists(load)) _shotLoad = System.IO.Path.GetFullPath(load);
                 else _shotLoad = System.IO.Path.Combine(Application.persistentDataPath, load);
+            }
+            _shotDeclineTitle = RingLaunchArgs.Has("-ring-shot-decline-title");
+            _shotEvent = ReadArg("-ring-shot-event");
+            string bs = ReadArg("-ring-shot-backstage");
+            if (bs != null)
+            {
+                if (bs == "all") _shotBackstageAll = true;
+                else Debug.LogWarning("[Ринг] -ring-shot-backstage: відоме значення лише all, а не '" + bs + "'");
             }
             string end = ReadArg("-ring-shot-ending");
             if (end != null)
@@ -460,6 +474,55 @@ namespace Game.Gameplay.Ring
                 return true;
             }
             return false;
+        }
+
+        /// <summary>
+        /// <c>-ring-shot-event &lt;id&gt;</c> і <c>-ring-shot-backstage all</c>: перед «Закуліссям» тижня примусити сцену
+        /// (<see cref="CareerSession.ForceBackstage"/>) — спершу задану подію, далі всі сцени каталогу по черзі, по одній на кожне
+        /// «Закулісся». Кроку бота не займає: дію тижня тисне каркас.
+        /// </summary>
+        private void BotForceScenes()
+        {
+            if (_onTitle || _career == null || _career.Stage != CareerStage.Week || _career.BackstageOpen || _career.ForcedBackstageScene != null) return;
+            if (_shotEvent != null)
+            {
+                string id = _shotEvent;
+                _shotEvent = null;
+                ForceScene(id, "подія примусово");
+                return;
+            }
+            if (!_shotBackstageAll || _career.Content.Backstage == null) return;
+            if (_shotBackstageQueue == null)
+            {
+                _shotBackstageQueue = new Queue<string>();
+                foreach (var sc in _career.Content.Backstage.Scenes) _shotBackstageQueue.Enqueue(sc.Id);
+            }
+            if (_shotBackstageQueue.Count > 0) ForceScene(_shotBackstageQueue.Dequeue(), "закулісся по черзі (" + _shotBackstageQueue.Count + " ще)");
+        }
+
+        private void ForceScene(string id, string why)
+        {
+            try
+            {
+                _career.ForceBackstage(id);
+                ShotNote(why + ": наступне «Закулісся» — " + id);
+            }
+            catch (ArgumentException)
+            {
+                Debug.LogWarning("[Ринг] немає закулісної сцени '" + id + "'");
+                ShotNote("немає закулісної сцени " + id);
+            }
+        }
+
+        /// <summary><c>-ring-shot-decline-title</c>: на кінці сезону з титульним шансом — «Відмовитись» (той самий виклик, що й кнопка).</summary>
+        private bool BotDeclineTitleStep()
+        {
+            if (!_shotDeclineTitle || _onTitle || _career == null || _career.Stage != CareerStage.SeasonEnd || !_career.CanStartTitleMatch) return false;
+            ShotNote("титульний шанс: відмова (-ring-shot-decline-title)");
+            _career.SkipTitle();
+            Save();
+            _view.Refresh();
+            return true;
         }
     }
 }
