@@ -62,6 +62,86 @@ namespace Game.Gameplay.Ring.Models
         /// <summary>[провал, 7–9, 10+] у відсотках, сума 100 (порожньо, якщо кидка нема).</summary>
         public int[] Percents = new int[0];
         public bool IsBig;
+        /// <summary>
+        /// Готові тексти трьох шансів у порядку «10+ / 7–9 / ≤6» (порожньо, якщо кидка нема). Для «Утримання» (<see cref="RollIsOpponents"/>)
+        /// — з боку суперника: «Вирвався / На два / Три»; для «променя надії» ≤6 не провал.
+        /// </summary>
+        public string[] ChanceTexts = new string[0];
+        /// <summary>Шанси — суперника: колонка «10+» тут погана для гравця («вирвався»), а «≤6» — добра («три»); колір смужки інвертується.</summary>
+        public bool ChancesInverted;
+        /// <summary>false для «променя надії»: ≤6 не провал.</summary>
+        public bool MissIsFailure = true;
+        /// <summary>Пояснення до шансів (для «променя надії»), інакше порожньо.</summary>
+        public string ChanceNote = "";
+        /// <summary>«Сили» до і після дії (з прев'ю рушія) і готовий рядок «Сили після дії: 7 → 5»; порожньо, якщо сили не змінюються.</summary>
+        public int StaminaBefore;
+        public int StaminaAfter;
+        public string StaminaAfterText = "";
+        /// <summary>Попередження «Сил немає: −1 до кидка» (<see cref="Winded"/>) і «Той самий прийом двічі» (<see cref="RepeatWarning"/>) текстом.</summary>
+        public string WindedText = "";
+        public string RepeatText = "";
+        /// <summary>Підказка рядка (та сама, що при наведенні мишею); для клавіатури й геймпада.</summary>
+        public string HintText = "";
+    }
+
+    /// <summary>Що зробить суперник (показ «як свій», до виконання): дія, продаж, реверс чи докрутка.</summary>
+    public enum MatchIntentKind { Action = 0, Sell = 1, Reverse = 2, Boost = 3 }
+
+    public sealed class MatchIntentView
+    {
+        public MatchIntentKind Kind;
+        public MatchSide Side;
+        public string Text;
+        /// <summary>Рядок дії суперника (шанси й ціна — тими самими текстами, що в гравця); лише для <see cref="MatchIntentKind.Action"/>.</summary>
+        public MatchActionRow Row;
+        public MatchActionId Action;
+        /// <summary>Реакція: відсотки реверсу [≤6, 7–9, 10+]. Докрутка: витрата імпульсу й ступінь, що вийде.</summary>
+        public int[] ReversePercents = new int[0];
+        public int BoostPoints;
+        public RollTier BoostTier;
+    }
+
+    /// <summary>Рядок журналу для екрана: текст, хто діяв (бік підкладки), чи це найновіший.</summary>
+    public sealed class MatchLogLine
+    {
+        public int Seq;
+        public string Text;
+        public MatchSide Actor;
+        public bool IsLatest;
+    }
+
+    /// <summary>Сторона табло: «Сили» з максимумом і часткою, штраф за нуль.</summary>
+    public sealed class ScoreboardSide
+    {
+        public MatchSide Side;
+        public string Name;
+        public int Stamina;
+        public int StaminaMax;
+        public float Stamina01;
+        public string StaminaText;
+        /// <summary>«Сил» 0: −1 до кожного кидка.</summary>
+        public bool Winded;
+        public string WindedText;
+        public bool HasInitiative;
+    }
+
+    /// <summary>Табло матчу: ініціатива ×N, «Сили» обох, місце пари й відлік, ажіотаж, номер дії.</summary>
+    public sealed class ScoreboardModel
+    {
+        public bool Over;
+        public MatchSide InitiativeSide;
+        /// <summary>Номер дії, що ось-ось буде в ланцюгу ініціативи (×N).</summary>
+        public int ChainNumber;
+        public string InitiativeText;
+        public ScoreboardSide Player;
+        public ScoreboardSide Rival;
+        public bool Outside;
+        /// <summary>«На рингу» або «За рингом» — завжди непорожнє.</summary>
+        public string PlaceLabel;
+        /// <summary>«Відлік за рингом: x/10» або порожньо (на рингу, «без DQ»).</summary>
+        public string CountText;
+        public string HypeText;
+        public string RoundText;
     }
 
     /// <summary>Реакція захисника: продати прийом чи спробувати реверс (gdd §2.5).</summary>
@@ -267,6 +347,7 @@ namespace Game.Gameplay.Ring.Models
                 var r = Row(mo.Option, _t.Get(mo.Move.NameKey));
                 r.MoveId = mo.Move.Id;
                 r.RepeatWarning = mo.RepeatWarning;
+                if (mo.RepeatWarning) r.RepeatText = _t.Get("match.action.repeat");
                 if (r.Available && n <= 9) r.Number = n++;
                 rows.Add(r);
             }
@@ -279,7 +360,9 @@ namespace Game.Gameplay.Ring.Models
             return rows;
         }
 
-        private MatchActionRow Row(ActionOption o, string name)
+        private MatchActionRow Row(ActionOption o, string name) { return Build(o, name, MatchSide.Player); }
+
+        private MatchActionRow Build(ActionOption o, string name, MatchSide side)
         {
             var r = new MatchActionRow
             {
@@ -298,10 +381,57 @@ namespace Game.Gameplay.Ring.Models
             {
                 r.Percents = RingChances.Percent(o.Chances);
                 r.ModifierText = RingChances.Signed(o.Modifier);
+                FillChanceTexts(r);
             }
             if (!o.Available) r.ReasonText = RingLabels.Unavailable(_t, o.Reason);
+            // «Сили після дії» — з прев'ю рушія (одна правда з Perform); WrongPhase не заважає: сторона може й не ходити.
+            var pv = _e.Preview(side, o.Id);
+            r.StaminaBefore = pv.StaminaBefore;
+            r.StaminaAfter = pv.StaminaAfter;
+            if (pv.StaminaAfter != pv.StaminaBefore) r.StaminaAfterText = _t.Format("match.action.stamina_after", pv.StaminaBefore, pv.StaminaAfter);
+            if (o.Winded) r.WindedText = _t.Get("match.action.winded");
+            r.HintText = HintFor(r);
             return r;
         }
+
+        /// <summary>Готові підписи трьох шансів: «10+ 42%», «7–9 39%», «≤6 19%»; для суперника й «променя надії» — свої.</summary>
+        private void FillChanceTexts(MatchActionRow r)
+        {
+            int p0 = r.Percents[0], p1 = r.Percents[1], p2 = r.Percents[2];
+            if (r.RollIsOpponents)
+            {
+                r.ChancesInverted = true;
+                r.ChanceTexts = new[]
+                {
+                    _t.Format("match.chance.opp.strong", p2), _t.Format("match.chance.opp.partial", p1), _t.Format("match.chance.opp.miss", p0)
+                };
+                return;
+            }
+            bool hope = r.Id == MatchActionId.HopeSpot;
+            if (hope) { r.MissIsFailure = false; r.ChanceNote = _t.Get("match.chance.hope.note"); }
+            r.ChanceTexts = new[]
+            {
+                _t.Format("match.chance.strong", p2), _t.Format("match.chance.partial", p1),
+                _t.Format(hope ? "match.chance.hope.miss" : "match.chance.miss", p0)
+            };
+        }
+
+        /// <summary>
+        /// Підказка рядка дії: «Назва · N сил · Атрибут ±mod | шанси» — той самий текст, що при наведенні мишею; клавіатура й геймпад
+        /// показують саме його (фокус — <see cref="MatchFocusModel"/>). «Перевести подих» — свій пояснювальний текст.
+        /// </summary>
+        public string HintFor(MatchActionRow a)
+        {
+            if (a.Id == MatchActionId.CatchBreath) return _t.Get("match.endturn");
+            string s = a.Name + "  ·  " + a.CostText;
+            if (a.AttrText.Length > 0) s += "  ·  " + a.AttrText + " " + a.ModifierText;
+            if (a.HasRoll && a.Percents.Length == 3)
+                s += "   |   " + _t.Format(a.RollIsOpponents ? "match.action.chances.opp" : "match.chances.short", a.Percents[0], a.Percents[1], a.Percents[2]);
+            return s;
+        }
+
+        /// <summary>Підказка, поки ніщо не в фокусі й не під мишею.</summary>
+        public string DefaultHint { get { return _t.Get("match.hint.default"); } }
 
         /// <summary>Виконати рядок: прийом кар'єри або дію рушія.</summary>
         public bool PerformRow(MatchActionRow row)
@@ -336,6 +466,154 @@ namespace Game.Gameplay.Ring.Models
         {
             foreach (var r in Actions()) if (r.Number == number) return PerformRow(r);
             return false;
+        }
+
+        // ---------- табло ----------
+
+        /// <summary>Табло: ініціатива ×N, «Сили» обох із максимумом, місце пари («На рингу»/«За рингом») і відлік. Лише читання.</summary>
+        public ScoreboardModel Scoreboard()
+        {
+            return new ScoreboardModel
+            {
+                Over = _e.IsOver,
+                InitiativeSide = _e.CurrentActor,
+                ChainNumber = _e.Chain + 1,
+                InitiativeText = InitiativeText,
+                Player = ScoreSide(MatchSide.Player),
+                Rival = ScoreSide(MatchSide.Rival),
+                Outside = IsOutside,
+                PlaceLabel = _t.Get(IsOutside ? "match.place.outside" : "match.place.ring"),
+                CountText = CountText,
+                HypeText = HypeText,
+                RoundText = RoundText
+            };
+        }
+
+        private ScoreboardSide ScoreSide(MatchSide side)
+        {
+            var f = _e.State.Get(side);
+            return new ScoreboardSide
+            {
+                Side = side,
+                Name = _t.Get(f.Stats.NameKey),
+                Stamina = f.Stamina,
+                StaminaMax = MatchRules.MaxStamina,
+                Stamina01 = MatchRules.MaxStamina > 0 ? (float)f.Stamina / MatchRules.MaxStamina : 0f,
+                StaminaText = _t.Format("match.card.stamina", f.Stamina, MatchRules.MaxStamina),
+                Winded = f.Stamina <= 0,
+                WindedText = f.Stamina <= 0 ? _t.Get("match.stamina.zero") : "",
+                HasInitiative = !_e.IsOver && _e.CurrentActor == side
+            };
+        }
+
+        // ---------- хід суперника «як свій» ----------
+
+        /// <summary>
+        /// Що зробить суперник просто зараз (лише коли <see cref="Input"/> == Ai): його дія з тими самими шансами й ціною, що в
+        /// гравця, або реакція чи докрутка. Вибір — той самий ШІ, що виконає <see cref="StepAi"/>; кубика й стану не торкається
+        /// (прев'ю + <see cref="MatchAi"/> без побічних ефектів).
+        /// </summary>
+        public MatchIntentView RivalIntent()
+        {
+            if (Input != MatchInput.Ai) return null;
+            var side = PendingSide;
+            string who = _t.Get(_e.State.Get(side).Stats.NameKey);
+            switch (_e.Phase)
+            {
+                case MatchPhase.AwaitReaction:
+                {
+                    var pr = _e.PendingReaction;
+                    var choice = MatchAi.ChooseReaction(_e);
+                    var p = RingChances.Percent(pr.ReverseChances);
+                    string act = RingLabels.ActionName(_t, pr.Action);
+                    if (choice == ReactionChoice.Reverse)
+                        return new MatchIntentView
+                        {
+                            Kind = MatchIntentKind.Reverse, Side = side, Action = pr.Action, ReversePercents = p,
+                            Text = _t.Format("match.intent.reverse", who, _e.State.Get(side).ReversalTokens, p[0], p[1], p[2])
+                        };
+                    return new MatchIntentView
+                    {
+                        Kind = MatchIntentKind.Sell, Side = side, Action = pr.Action, ReversePercents = p,
+                        Text = _t.Format("match.intent.sell", who, act)
+                    };
+                }
+                case MatchPhase.AwaitBoost:
+                {
+                    var pr = _e.PendingRoll;
+                    int pts = MatchAi.ChooseBoost(_e);
+                    var tier = pts == 0 ? pr.Tier : (pts == pr.PointsToPartial ? RollTier.Partial : RollTier.Strong);
+                    return new MatchIntentView
+                    {
+                        Kind = MatchIntentKind.Boost, Side = side, Action = pr.Action, BoostPoints = pts, BoostTier = tier,
+                        Text = pts == 0
+                            ? _t.Format("match.intent.noboost", who, RingLabels.TierName(_t, tier))
+                            : _t.Format("match.intent.boost", who, pts, RingLabels.TierName(_t, tier))
+                    };
+                }
+                default:
+                {
+                    var id = MatchAi.ChooseAction(_e);
+                    var pv = _e.Preview(side, id);
+                    var row = Build(PreviewToOption(pv), RingLabels.ActionName(_t, id), side);
+                    return new MatchIntentView
+                    {
+                        Kind = MatchIntentKind.Action, Side = side, Action = id, Row = row,
+                        Text = _t.Format("match.intent.action", who, row.Name)
+                    };
+                }
+            }
+        }
+
+        private static ActionOption PreviewToOption(ActionPreview p)
+        {
+            return new ActionOption
+            {
+                Id = p.Id, Cost = p.Cost, IsBig = p.IsBig, HasAttr = p.HasAttr, Attr = p.Attr, Available = p.Available,
+                Reason = p.Reason, HasRoll = p.HasRoll, RollIsOpponents = p.RollIsOpponents, Modifier = p.Modifier,
+                Winded = p.Winded, Chances = p.Chances36
+            };
+        }
+
+        // ---------- фокус без миші ----------
+
+        /// <summary>Ідентифікатор рядка дії для фокуса: прийом кар'єри або дія рушія (стабільний між оновленнями рядків).</summary>
+        public static string FocusId(MatchActionRow r) { return r.MoveId != null ? "move:" + r.MoveId : "act:" + (int)r.Id; }
+
+        /// <summary>
+        /// Кандидати на фокус для поточного входу: дії (підказка — як при наведенні мишею), «продати/реверс» у реакції, варіанти
+        /// докрутки. Порожньо, коли вводу від гравця немає.
+        /// </summary>
+        public List<MatchFocusItem> FocusItems()
+        {
+            var items = new List<MatchFocusItem>();
+            switch (Input)
+            {
+                case MatchInput.PlayerAction:
+                    foreach (var r in Actions())
+                        items.Add(new MatchFocusItem { Id = FocusId(r), Label = r.Name, Available = r.Available, Hint = r.HintText, Number = r.Number });
+                    break;
+                case MatchInput.PlayerReaction:
+                {
+                    var rv = Reaction();
+                    items.Add(new MatchFocusItem { Id = "react:sell", Label = rv.SellText, Available = true, Hint = rv.SellText, Number = 1 });
+                    items.Add(new MatchFocusItem { Id = "react:reverse", Label = rv.ReverseText, Available = rv.CanReverse, Hint = rv.ReverseText, Number = 2 });
+                    break;
+                }
+                case MatchInput.PlayerBoost:
+                    foreach (var b in BoostOptions())
+                        items.Add(new MatchFocusItem { Id = "boost:" + b.Points, Label = b.Text, Available = true, Hint = b.Text, Number = b.Number });
+                    break;
+            }
+            return items;
+        }
+
+        /// <summary>Оновити фокус свіжими кандидатами: фокус лишається на тому ж Id (екран перебудовується на кожен крок).</summary>
+        public void RefreshFocus(MatchFocusModel focus)
+        {
+            if (focus == null) throw new ArgumentNullException(nameof(focus));
+            focus.DefaultHint = DefaultHint;
+            focus.Set(FocusItems());
         }
 
         // ---------- реакція ----------
@@ -435,11 +713,23 @@ namespace Game.Gameplay.Ring.Models
         public List<string> LogTexts(int shownSeq = int.MaxValue)
         {
             var res = new List<string>();
+            foreach (var l in LogEntries(shownSeq)) res.Add(l.Text);
+            return res;
+        }
+
+        /// <summary>
+        /// Те саме, що <see cref="LogTexts"/> (те саме відсікання за <paramref name="shownSeq"/>), але рядками з боком діяча й
+        /// познакою найновішого — для підкладки на боці того, хто діє.
+        /// </summary>
+        public List<MatchLogLine> LogEntries(int shownSeq = int.MaxValue)
+        {
+            var res = new List<MatchLogLine>();
             var log = _e.State.Log;
             int end = log.Count;
             while (end > 0 && log[end - 1].Seq > shownSeq) end--;
             int from = Math.Max(0, end - LogLines);
-            for (int i = from; i < end; i++) res.Add(EventText(log[i]));
+            for (int i = from; i < end; i++)
+                res.Add(new MatchLogLine { Seq = log[i].Seq, Text = EventText(log[i]), Actor = log[i].Actor, IsLatest = i == end - 1 });
             return res;
         }
 
