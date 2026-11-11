@@ -457,6 +457,13 @@ namespace Game.Tests.EditMode
         // Мітка другого дотику — RingMatchDirector.FollowUpMark (Stage/Unity, у тести не входить).
         private const string Touch2 = "touch_2";
 
+        // Хто падає на другому дотику: половина пари з маніфесту (0 — A, виконавець; 1 — B, суперник), що кінчається лежачи.
+        private static readonly Dictionary<string, int> SecondTouchFaller = new Dictionary<string, int>
+        {
+            { "Springboard_Land_Catch", 1 }, { "Springboard_Land_Counter", 0 }, { "Center_Clothesline_Flip", 1 },
+            { "Center_ShoulderBlock", 1 }, { "Center_ShoulderBlock_Heavy", 1 },
+        };
+
         private static readonly Dictionary<string, RingCue> ExpectedSecondTouch = new Dictionary<string, RingCue>
         {
             { "Springboard_Land_Catch", RingCue.Land },     // 7–9: після перехоплення падають обоє (sell 0,897)
@@ -500,11 +507,14 @@ namespace Game.Tests.EditMode
                 var beatCue = RingSoundMap.ForEvent(e, RingProp.Chair, null, bp.Clip);
                 if (beatCue == second) bad.Add(title + ": другий дотик повторює такт (" + second + " на «" + bp.Clip + "»)");
                 string[] n;
-                if ((second == RingCue.Slam || second == RingCue.Land) && (!nodes.TryGetValue(clip, out n) || !(Falls(n[0]) || Falls(n[1]))))
-                    bad.Add(title + ": «" + clip + "» не кінчається падінням, а звучить " + second);
+                int who;
+                if ((second == RingCue.Slam || second == RingCue.Land)
+                    && (!nodes.TryGetValue(clip, out n) || !SecondTouchFaller.TryGetValue(clip, out who) || !Falls(n[who])))
+                    bad.Add(title + ": у «" + clip + "» не лягає той, чиє падіння звучить " + second);
             }
             foreach (var c in ExpectedSecondTouch.Keys)
                 if (!reached.Contains(c)) bad.Add("«" + c + "»: мітку touch_2 не озвучує жодна подія");
+            CollectionAssert.AreEquivalent(ExpectedSecondTouch.Keys, SecondTouchFaller.Keys, "у кожного другого дотику — хто падає");
             // справжні мітки touch_2 (коли «Кліпи» їх додадуть) — кожна має звук: інакше мітка мертва
             foreach (var c in real.Clips)
                 if (real.Time(c, Touch2) >= 0f && !reached.Contains(c) && !ExpectedSecondTouch.ContainsKey(c))
@@ -638,7 +648,9 @@ namespace Game.Tests.EditMode
                         var beat = RingBeats.For(steps, marks, _ => 0f);
                         if (beat.Step < 0 || beat.IsCount) continue;
                         string at = m.Id + " " + t + (ctx.VictimDown ? " (лежачий)" : "") + ": такт на «" + beat.Clip + "»";
-                        var cue = RingSoundMap.ForEvent(ev, RingProp.Chair, null, beat.Clip);   // кліп такту подає режисер
+                        // кліп такту — як режисер подаватиме його (запит звуку ПМ, 09.11.2026: BeatNow → OnEvent(..., _plan.Clip)); доки
+                        // не подає, перехоплення стрибка звучить старим Land / Slam (SecondTouch_NeverRepeatsTheBeatOfTheSameEvent)
+                        var cue = RingSoundMap.ForEvent(ev, RingProp.Chair, null, beat.Clip);
                         var st = steps[beat.Step];
                         if (st.Kind == StageStepKind.Cut)
                         {
