@@ -129,6 +129,7 @@ namespace Game.Gameplay.Ring.Stage
             Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] огляд за рингом: {0}; бік {1}, центр ({2:0.00}; {3:0.00}), смуга ±{4:0.0} м, вільна: {5}",
                 RingStage3D.Venue, o.Side, o.X, o.Z, o.HalfLength, o.Ok ? "так" : "НІ"));
             RingActor pl = stage.Actor(MatchSide.Player), rv = stage.Actor(MatchSide.Rival), rf = stage.Referee;
+            _outYaw = null;
             // Рефері — на своєму місці, поки пара за рингом (RingStage3D.OutsideRefPos — його має взяти й режисер замість свого
             // OutsideRefPos, запит п. 4а): на фартуху навпроти пари, обличчям до неї, рахує відлік (Ref_Count_Outside_Loop).
             Vector3 refAt = RingStage3D.OutsideRefPos;
@@ -154,10 +155,10 @@ namespace Game.Gameplay.Ring.Stage
             // 2) Кидок і ларіат пари за рингом (кліпи ядра для Throw і Weapon): кадри на третині й двох третинах кліпа.
             foreach (string clip in new[] { "Bodyslam", "Center_Lariat_Heavy" })
             {
-                if (!PairOutside(stage, clip)) continue;
-                var ca = stage.Clip(clip + "_A");
-                float len = ca != null ? ca.length / RingStage3D.PlaySpeed : 2f;
-                yield return OutsideFrame(stage, folder, v + "_outside_" + clip + "_a", len * 0.33f);
+                AnimationClip ca, cb;
+                if (!PairOutside(stage, clip, out ca, out cb)) continue;
+                float len = ca.length / RingStage3D.PlaySpeed;
+                yield return OutsideFrame(stage, folder, v + "_outside_" + clip + "_a", len * 0.33f, ca, cb);
                 yield return new WaitForSeconds(len * 0.3f);
                 Capture(folder, v + "_outside_" + clip + "_b");
                 yield return new WaitForSeconds(len * 0.45f);
@@ -242,14 +243,14 @@ namespace Game.Gameplay.Ring.Stage
         /// Пару за рингом — у кліп пари: A дивиться вздовж боку, зсув B (бічний і вперед) розкладено навпіл довкола центру
         /// смуги, тож обидва в смузі; слоти — на підлозі (мати).
         /// </summary>
-        private static bool PairOutside(RingStage3D stage, string clip)
+        private static bool PairOutside(RingStage3D stage, string clip, out AnimationClip ca, out AnimationClip cb)
         {
             RingActor a = stage.Actor(MatchSide.Player), b = stage.Actor(MatchSide.Rival);
             // Стать — за постаттю (жіночі кліпи й рядок жіночого маніфесту, якщо є; як у режисера).
             bool fa = stage.IsFemale(a), fb = stage.IsFemale(b);
             var ia = stage.Info(clip + "_A", fa);
-            var ca = stage.Clip(clip + "_A", fa);
-            var cb = stage.Clip(clip + "_B", fb);
+            ca = stage.Clip(clip + "_A", fa);
+            cb = stage.Clip(clip + "_B", fb);
             if (ia == null || ca == null || cb == null) { Debug.LogWarning("[Ринг] огляд: немає пари " + clip); return false; }
             Vector3 along = RingStage3D.OutsideAlong, c = RingStage3D.OutsideAnchor;
             float ya = RingStage3D.YawTo(Vector3.zero, along), yb = ya - ia.Rotation;
@@ -267,8 +268,16 @@ namespace Game.Gameplay.Ring.Stage
             return true;
         }
 
-        /// <summary>Кадр «за рингом»: обидва борці, край фартуха біля пари; камера — планом <see cref="RingCine.OutsideShot"/>.</summary>
-        private static IEnumerator OutsideFrame(RingStage3D stage, string folder, string tag, float wait)
+        /// <summary>Курс попереднього кадру огляду «за рингом» — новий план тримається того самого боку, як у режисера.</summary>
+        private static float? _outYaw;
+
+        /// <summary>
+        /// Кадр «за рингом»: обидва борці, край фартуха біля пари; камера — планом <see cref="RingCine.OutsideShot"/>. Якщо пара
+        /// грає кліпи <paramref name="ca"/> / <paramref name="cb"/> — у кадр ідуть і тіла на третині, двох третинах і в кінці
+        /// кліпа (ларіат зсуває пару на ~2 м: огляд 8e/8f — на _b і _end пара виходила з кадру).
+        /// </summary>
+        private static IEnumerator OutsideFrame(RingStage3D stage, string folder, string tag, float wait,
+            AnimationClip ca = null, AnimationClip cb = null)
         {
             yield return null;
             RingActor a = stage.Actor(MatchSide.Player), b = stage.Actor(MatchSide.Rival);
@@ -277,17 +286,36 @@ namespace Game.Gameplay.Ring.Stage
             ga.y = a.Slot.position.y; gb.y = b.Slot.position.y;
             RingCine.Body(pts, ga, stage.BodyScale(a));
             RingCine.Body(pts, gb, stage.BodyScale(b));
+            ClipBodies(stage, pts, a, ca);
+            ClipBodies(stage, pts, b, cb);
             // Край фартуха навпроти пари — у кадрі: видно, що пара за рингом.
             Vector3 apron = RingStage3D.OutsideAnchor - RingStage3D.OutsideOut * RingVenue.PairOut;
             apron.y = RingStage3D.MatY;
             pts.Add(apron);
-            var shot = RingCine.OutsideShot(pts, RingStage3D.OutsideAnchor, RingStage3D.OutsideOut, stage.CamAspect);
-            if (shot.Ok) stage.Cine(shot.Pos, shot.Look, shot.Fov, true);
+            var shot = RingCine.OutsideShot(pts, RingStage3D.OutsideAnchor, RingStage3D.OutsideOut, stage.CamAspect, preferYaw: _outYaw);
+            if (shot.Ok) { stage.Cine(shot.Pos, shot.Look, shot.Fov, true); _outYaw = RingCine.YawOf(shot); }
             else { Debug.LogWarning("[Ринг] огляд: план «за рингом» не вмістився — " + tag); stage.SetShot(StageCam.Big); }
             Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] план за рингом {0}: камера ({1:0.00}; {2:0.00}; {3:0.00}) → ({4:0.00}; {5:0.00}; {6:0.00}), кут {7:0}°, {8}",
                 tag, shot.Pos.x, shot.Pos.y, shot.Pos.z, shot.Look.x, shot.Look.y, shot.Look.z, shot.Fov,
                 !shot.Ok ? "НЕ вмістився" : shot.Compromise != null ? "вмістився з поступкою: " + shot.Compromise : "вмістився"));
             yield return Shot(folder, tag, wait);
+        }
+
+        /// <summary>Тіла постаті <paramref name="a"/> на третині, двох третинах і в кінці кліпа <paramref name="c"/> (таз зі
+        /// слота кліпа, на висоті слота) — у кадр «за рингом».</summary>
+        private static void ClipBodies(RingStage3D stage, List<Vector3> pts, RingActor a, AnimationClip c)
+        {
+            if (c == null) return;
+            float scale = stage.BodyScale(a);
+            for (int k = 1; k <= 3; k++)
+            {
+                Vector3 h;
+                float hy;
+                a.SampleLocal(c, Mathf.Min(c.length * k / 3f, c.length - 0.02f), out h, out hy);
+                Vector3 w = a.Slot.position + a.Slot.rotation * new Vector3(h.x, 0f, h.z);
+                w.y = a.Slot.position.y;
+                RingCine.Body(pts, w, scale);
+            }
         }
 
         public static IEnumerator Run(RingStage3D stage, RingMatchDirector dir, string folder)
