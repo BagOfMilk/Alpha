@@ -104,7 +104,7 @@ namespace Game.Gameplay.Ring.UI
 
             string reason;
             bool can = C.CanCreate(_d, out reason);
-            _gold = new GoldPlate(T.Get("c.create.start"), T.Get("m.hint.enter"), OnConfirm, can);
+            _gold = new GoldPlate(T.Get("c.create.start"), ArenaKit.ConfirmHint(T), OnConfirm, can);
             ArenaKit.Place(_gold, null, null, ArenaKit.Edge, ArenaKit.RowBottom, ArenaKit.GoldW, ArenaKit.TileH);
             Root.Add(_gold);
 
@@ -190,7 +190,7 @@ namespace Game.Gameplay.Ring.UI
                 foreach (var o in _tiles) o.Focused = o == t;
                 if (_hint != null) _hint.text = desc ?? "";
             };
-            t.RegisterCallback<PointerLeaveEvent>(e => { t.Focused = false; if (_hint != null) _hint.text = _hintDefault; });
+            t.OnUnhover = () => { t.Focused = false; if (_hint != null) _hint.text = _hintDefault; };
             _tiles.Add(t);
             _row.Add(t);
             return t;
@@ -239,6 +239,8 @@ namespace Game.Gameplay.Ring.UI
                 input.style.paddingLeft = 6f;
             }
             well.Add(field);
+            // ціль фокусу без миші: A / Enter ставить курсор у поле (друкувати — з клавіатури); ранг 5 — першою стає плитка ґіміка
+            PadMark.Mark(well, () => field.Focus(), "name", 5);
             var under = ArenaKit.Abs(0f, null, 0f, 0f, null, 3f);
             under.style.backgroundColor = RingTheme.Gold;
             well.Add(under);
@@ -276,6 +278,9 @@ namespace Game.Gameplay.Ring.UI
                 s.RegisterCallback<PointerDownEvent>(e => { if (e.button == 0) { _d.CostumeColor = ci; Refresh(); } });
                 sw.Add(s);
             }
+            int colors = Math.Max(1, _v.CostumeCount);
+            Action<int> stepColor = d => { _d.CostumeColor = (_d.CostumeColor + d + colors) % colors; Refresh(); };
+            PadMark.Mark(sw, () => stepColor(1), "costume", 4, null, stepColor);
             box.Add(sw);
 
             var body = Carousel(T.Get("c.create.body"), BodyName(Host.HeroBody),
@@ -309,6 +314,8 @@ namespace Game.Gameplay.Ring.UI
             mid.Add(val);
             row.Add(mid);
             row.Add(new ArrowButton(false, () => { step(1); Refresh(); }));
+            // ціль фокусу без миші — уся карусель: ← → гортають, A — наступне (як стрілки з боків)
+            PadMark.Mark(row, () => { step(1); Refresh(); }, "carousel:" + label, 4, null, d => { step(d); Refresh(); });
             return row;
         }
 
@@ -453,6 +460,12 @@ namespace Game.Gameplay.Ring.UI
             row.pickingMode = PickingMode.Position;
             if (sel) row.style.backgroundColor = RingTheme.WithAlpha(RingTheme.Bg, 0.12f);
             row.RegisterCallback<PointerDownEvent>(e => { if (e.button == 0 && ok) { _d.FreePoint = a; Refresh(); } });
+            VisualElement frame = null;
+            PadMark.Mark(row, ok ? (Action)(() => { _d.FreePoint = a; Refresh(); }) : null, "attr:" + i, 4, on =>
+            {
+                if (on && frame == null) { frame = PadFocus.Frame(RingTheme.Bg); row.Add(frame); }
+                else if (!on && frame != null) { frame.RemoveFromHierarchy(); frame = null; }
+            });
 
             var mark = new Marker(sel);
             row.Add(mark);

@@ -266,12 +266,13 @@ namespace Game.Gameplay.Ring.UI
             Root.Add(ropes);
 
             // коротке слово на плиті (повна фраза «Велике шоу: ворожнеча з Молотом» не влазила); шоу названо на афіші
-            var gold = new GoldPlate(T.Get(c.IsFeud ? "c.hub.card.go_feud" : "c.card.go"), T.Get("m.hint.enter"), OnConfirm, true);
+            var gold = new GoldPlate(T.Get(c.IsFeud ? "c.hub.card.go_feud" : "c.card.go"), ArenaKit.ConfirmHint(T), OnConfirm, true);
             bar.Add(Root, gold, ArenaKit.GoldW, ArenaKit.GoldWNarrow);
             if (c.CanWithdraw)
             {
                 var wd = new ActionTile(0, T.Get("c.card.withdraw"), "", null, true);
                 wd.Accent = RingTheme.Signal;
+                wd.PadRankValue = 6;     // фокус без миші стає на «Вийти на ринг», не на відмову
                 wd.OnClick = () => { C.WithdrawFromShow(); Host.Save(); };
                 bar.Add(Root, wd, 300f, 230f);
             }
@@ -387,7 +388,7 @@ namespace Game.Gameplay.Ring.UI
             _bar = new ShowBottomRow();
             _end = null; _hype = null; _devBox = null;
             var r = C.GetShowResult();
-            var gold = new GoldPlate(T.Get("ui.next"), T.Get("m.hint.enter"), OnConfirm, true);
+            var gold = new GoldPlate(T.Get("ui.next"), ArenaKit.ConfirmHint(T), OnConfirm, true);
             if (r == null)
             {
                 _bar.Add(Root, gold, ArenaKit.GoldW, ArenaKit.GoldWNarrow);
@@ -650,6 +651,7 @@ namespace Game.Gameplay.Ring.UI
             head.Add(pl);
             head.Add(ArenaKit.Big(C.DevPoints.ToString(), 44f, RingTheme.Gold));
             head.RegisterCallback<PointerDownEvent>(e => { if (e.button == 0) { _dev = !_dev; Refresh(); } });
+            PadMark.Mark(head, () => { _dev = !_dev; Refresh(); }, "devhead", 4);   // розгорнути «Розвиток» без миші
             col.Add(head);
             if (_dev)
             {
@@ -704,15 +706,16 @@ namespace Game.Gameplay.Ring.UI
 
             if (C.CanStartTitleMatch)
             {
-                _bar.Add(Root, new GoldPlate(T.Get("c.season.title_go"), T.Get("m.hint.enter"), () => { C.StartTitleMatch(); Host.Save(); }, true),
+                _bar.Add(Root, new GoldPlate(T.Get("c.season.title_go"), ArenaKit.ConfirmHint(T), () => { C.StartTitleMatch(); Host.Save(); }, true),
                     ArenaKit.GoldW, ArenaKit.GoldWNarrow);
                 var skip = new ActionTile(0, T.Get("c.season.title_skip"), "", null, true);
                 skip.Accent = RingTheme.TextDim;
+                skip.PadRankValue = 6;
                 skip.OnClick = () => { C.SkipTitle(); Host.Save(); Refresh(); };
                 _bar.Add(Root, skip, 340f, 260f);
             }
             if (C.CanStartNextSeason)
-                _bar.Add(Root, new GoldPlate(T.Get("season.next"), C.CanStartTitleMatch ? "" : T.Get("m.hint.enter"), OnConfirm, true),
+                _bar.Add(Root, new GoldPlate(T.Get("season.next"), C.CanStartTitleMatch ? "" : ArenaKit.ConfirmHint(T), OnConfirm, true),
                     ArenaKit.GoldW, ArenaKit.GoldWNarrow);
             _bar.Fit(Root.layout.width);
         }

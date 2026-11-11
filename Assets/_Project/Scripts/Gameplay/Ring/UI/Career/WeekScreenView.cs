@@ -113,7 +113,7 @@ namespace Game.Gameplay.Ring.UI
             }
             Root.Add(_row);
 
-            _gold = new GoldPlate(T.Get("week.end"), T.Get("m.hint.enter"), OnConfirm, !w.PromoChoicePending);
+            _gold = new GoldPlate(T.Get("week.end"), ArenaKit.ConfirmHint(T), OnConfirm, !w.PromoChoicePending);
             ArenaKit.Place(_gold, null, null, ArenaKit.Edge, ArenaKit.RowBottom, ArenaKit.GoldW, ArenaKit.TileH);
             Root.Add(_gold);
             Fit();
@@ -192,7 +192,7 @@ namespace Game.Gameplay.Ring.UI
                 foreach (var o in _tiles) o.Focused = o == t;
                 SetHint(desc);
             };
-            t.RegisterCallback<PointerLeaveEvent>(e => { t.Focused = false; SetHint(_hintDefault); });
+            t.OnUnhover = () => { t.Focused = false; SetHint(_hintDefault); };
             _tiles.Add(t);
             _row.Add(t);
             return t;

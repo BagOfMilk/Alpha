@@ -11,6 +11,9 @@ namespace Game.Gameplay.Ring.UI
     /// </summary>
     public sealed class FeudScreenView : RingScreenView
     {
+        /// <summary>Проходиться без миші (P3 геймпад, 11.11.2026): усі дії — кнопки RingUi, цілі фокусу.</summary>
+        public override bool PadEnabled { get { return true; } }
+
         private readonly FeudScreenModel _m;
 
         public FeudScreenView(RingUiContext ctx) : base(ctx)
@@ -99,7 +102,7 @@ namespace Game.Gameplay.Ring.UI
                 next.Add(RingUi.Lbl(_m.ProgressText, 18f));
             }
             next.Add(RingUi.PrimaryButton(_m.ContinueText, OnConfirm));
-            next.Add(RingUi.Lbl(t.Get("ui.hint.keys"), 14f, RingUi.Dim));
+            next.Add(RingUi.Lbl(ArenaKit.ChooseHint(t), 14f, RingUi.Dim));
             right.Add(next);
             body.Add(right);
 

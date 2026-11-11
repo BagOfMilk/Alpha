@@ -357,6 +357,7 @@ namespace UnityEngine.UIElements
     {
         public bool focusable { get; set; }
         public FocusController focusController { get { return null; } }
+        public void Focus() { }
         public void Blur() { }
     }
 

@@ -133,10 +133,16 @@ namespace Game.Gameplay.Ring.UI.Menus
             return true;
         }
 
+        /// <summary>
+        /// Останній «кнопковий» пристрій — геймпад (колесо миші не рахується). Підписи клавіш на екранах кар'єри («Enter» / «A»)
+        /// беруть його (P3 геймпад, 11.11.2026).
+        /// </summary>
+        public static bool PadLast { get; internal set; }
+
         private void Send(IMenuNavigable sink, RingAction a, MenuDevice d)
         {
             LastDevice = d;
-            if (d != MenuDevice.Mouse) MouseArmed = false;
+            if (d != MenuDevice.Mouse) { MouseArmed = false; PadLast = d == MenuDevice.Gamepad; }
             if (sink != null) sink.OnMenu(a, d);
         }
 
@@ -210,6 +216,18 @@ namespace Game.Gameplay.Ring.UI.Menus
 
         /// <summary>Клавіша скасування перепризначення (Esc; B геймпада приходить як Esc).</summary>
         public static bool IsCancel(KeyCode k) { return k == KeyCode.Escape; }
+
+        /// <summary>
+        /// Вийти з поля вводу (ім'я героя): Enter, Enter цифрового блоку або Esc — сталі клавіші, не перепризначувані: перепризначене
+        /// «Підтвердити» на літеру інакше не друкувалося б у полі (P3 геймпад, 11.11.2026).
+        /// </summary>
+        public static bool LeaveTextDown()
+        {
+            return Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || Input.GetKeyDown(KeyCode.Escape);
+        }
+
+        /// <summary>Start на геймпаді цього кадру: меню бере його як «Підтвердити», екрани гри — як паузу.</summary>
+        public static bool StartDown() { return Input.GetKeyDown(KeyCode.JoystickButton7); }
 
         /// <summary>Перепризначення: перша натиснута клавіша клавіатури (миша й кнопки геймпада — ні; Esc — скасувати).</summary>
         private void CaptureStep()

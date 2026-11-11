@@ -39,6 +39,9 @@ namespace Game.Gameplay.Ring.UI
             if (RingStageHub.Has3D) Root.style.backgroundColor = Color.clear;
         }
 
+        /// <summary>Екрани кар'єри B03 v2 проходяться без миші (P3 геймпад, 11.11.2026): усі дії — цілі фокусу.</summary>
+        public override bool PadEnabled { get { return true; } }
+
         protected VisualElement Glass(float pad = 10f)
         {
             var c = RingUi.Card(pad);
@@ -64,8 +67,10 @@ namespace Game.Gameplay.Ring.UI
             b.style.borderLeftWidth = 3f;
             if (!string.IsNullOrEmpty(hint))
             {
-                b.RegisterCallback<PointerEnterEvent>(e => { if (HintLine != null) { HintLine.text = hint; HintLine.style.color = RingUi.Text; } });
-                b.RegisterCallback<PointerLeaveEvent>(e => { if (HintLine != null) { HintLine.text = ""; } });
+                b.RegisterCallback<PointerEnterEvent>(e => { if (HintLine != null && PadFocus.MouseMayHover) { HintLine.text = hint; HintLine.style.color = RingUi.Text; } });
+                b.RegisterCallback<PointerLeaveEvent>(e => { if (HintLine != null && PadFocus.MouseMayHover) { HintLine.text = ""; } });
+                // фокус без миші показує той самий опис (і причину недоступності), що й наведення (аудит P3 геймпад, 11.11.2026)
+                PadMark.AddHot(b, on => { if (HintLine == null) return; HintLine.text = on ? hint : ""; if (on) HintLine.style.color = RingUi.Text; });
             }
             return b;
         }

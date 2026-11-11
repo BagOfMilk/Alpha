@@ -64,6 +64,26 @@ namespace Game.Gameplay.Ring.UI
 
         /// <summary>Кожен кадр (для ходу суперника з паузою).</summary>
         public virtual void Tick(float unscaledDeltaTime) { }
+
+        /// <summary>
+        /// Екран приймає фокус без миші (хрестовина, стік, стрілки; A / Enter натискає ціль у фокусі; P3 геймпад, 11.11.2026).
+        /// Вимкнено за замовчуванням: екран вмикає сам, коли всі його дії мають ціль фокусу (кнопки <see cref="RingUi"/>,
+        /// плитки, плити й <see cref="PadMark"/>).
+        /// </summary>
+        public virtual bool PadEnabled { get { return false; } }
+
+        private PadFocus _pad;
+        private VisualElement _padRoot;
+
+        /// <summary>Фокус без миші цього екрана (цілі збираються з <see cref="Root"/>).</summary>
+        public PadFocus Pad
+        {
+            get
+            {
+                if (_pad == null || _padRoot != Root) { _pad = new PadFocus(Root); _padRoot = Root; }
+                return _pad;
+            }
+        }
     }
 
     /// <summary>
@@ -247,12 +267,22 @@ namespace Game.Gameplay.Ring.UI
             b.style.borderLeftColor = accent ?? (enabled ? Gold : Disabled);
             b.style.backgroundColor = back;
             b.style.color = textColor;
-            if (enabled && onClick != null)
+            bool live = enabled && onClick != null;
+            if (live)
             {
                 b.clicked += onClick;
-                b.RegisterCallback<PointerEnterEvent>(e => b.style.backgroundColor = hover);
-                b.RegisterCallback<PointerLeaveEvent>(e => b.style.backgroundColor = back);
+                // поки фокус без миші (P3 геймпад), нерухомий курсор не перехоплює підсвіт
+                b.RegisterCallback<PointerEnterEvent>(e => { if (PadFocus.MouseMayHover) b.style.backgroundColor = hover; });
+                b.RegisterCallback<PointerLeaveEvent>(e => { if (PadFocus.MouseMayHover) b.style.backgroundColor = back; });
             }
+            // ціль фокусу без миші: доступна — підсвіт, як наведення; недоступна — рамка кольору тексту (видно, де фокус; У0 11.11.2026)
+            Color frame = enabled ? Border : RingTheme.WithAlpha(Border, 0.4f);
+            PadMark.Mark(b, live ? onClick : null, "btn:" + text, 3, on =>
+            {
+                if (live) { b.style.backgroundColor = on ? hover : back; return; }
+                Color c = on ? Text : frame;
+                b.style.borderTopColor = c; b.style.borderRightColor = c; b.style.borderBottomColor = c;
+            });
             return b;
         }
 
@@ -270,6 +300,8 @@ namespace Game.Gameplay.Ring.UI
             b.style.unityTextAlign = TextAnchor.MiddleCenter;
             b.style.borderLeftWidth = 8f;
             b.style.marginTop = 8f;
+            var pad = PadMark.Of(b);
+            if (pad != null) pad.Rank = 2;      // головна дія — перша ціль фокусу
             return b;
         }
 
@@ -334,8 +366,9 @@ namespace Game.Gameplay.Ring.UI
             b.style.borderLeftWidth = 3f;
             if (hint != null && !string.IsNullOrEmpty(hintText))
             {
-                b.RegisterCallback<PointerEnterEvent>(e => { hint.text = hintText; hint.style.color = Text; });
-                b.RegisterCallback<PointerLeaveEvent>(e => { hint.text = ""; });
+                b.RegisterCallback<PointerEnterEvent>(e => { if (PadFocus.MouseMayHover) { hint.text = hintText; hint.style.color = Text; } });
+                b.RegisterCallback<PointerLeaveEvent>(e => { if (PadFocus.MouseMayHover) hint.text = ""; });
+                PadMark.AddHot(b, on => { hint.text = on ? hintText : ""; if (on) hint.style.color = Text; });
             }
             return b;
         }

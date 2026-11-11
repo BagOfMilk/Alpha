@@ -16,6 +16,12 @@ namespace Game.Gameplay.Ring.UI
     /// </summary>
     public static class ArenaKit
     {
+        /// <summary>Підпис клавіші головної дії на золотій плиті: «Enter» або «A» — за пристроєм, яким гравець грав останнім (P3 геймпад).</summary>
+        public static string ConfirmHint(RingText t) { return t.Get(Menus.RingMenuInput.PadLast ? "m.hint.pad_a" : "m.hint.enter"); }
+
+        /// <summary>Рядок клавіш екрана вибору (промо, ворожнеча): клавіатурний чи геймпадний — за останнім пристроєм.</summary>
+        public static string ChooseHint(RingText t) { return t.Get(Menus.RingMenuInput.PadLast ? "m.hint.pad_choose" : "ui.hint.keys"); }
+
         // ---- розкладка (еталон 900; B03 §2: значення 1080p × 0,833) ----
         public const float Edge = 80f;          // безпечні боки ACC-04
         public const float Top = 45f;
@@ -403,7 +409,7 @@ namespace Game.Gameplay.Ring.UI
     /// Стани: звичайна (смужка золота) · фокус (золота заливка, зсув угору) · вибрана (заливка кольору <see cref="SelectColor"/> + галочка) ·
     /// недоступна (сіра смужка, причина сигналом). Наведення — фокус і опис у рядку-підказці; клік — дія.
     /// </summary>
-    public sealed class ActionTile : VisualElement
+    public sealed class ActionTile : VisualElement, IPadTarget
     {
         private readonly ArenaPlate _plate;
         private readonly Label _title, _effect, _risk, _key;
@@ -414,7 +420,12 @@ namespace Game.Gameplay.Ring.UI
         private float _bodyTop = 10f;
         private bool _focus, _selected;
         public Action OnClick;
+        /// <summary>Наведення мишею або фокус без миші: екран показує фокус плитки й опис у рядку-підказці.</summary>
         public Action OnHover;
+        /// <summary>Мишу прибрали з плитки або фокус пішов: екран повертає рядок-підказку.</summary>
+        public Action OnUnhover;
+        /// <summary>Ранг цілі фокусу без миші (<see cref="IPadTarget.PadRank"/>): дія — 1; «відмовитись» (зійти з вечора, пропустити титул) — 6.</summary>
+        public int PadRankValue = 1;
         /// <summary>Висота тексту плитки змінилась (перенос рядків, компактний режим) — ряд перераховує свою висоту.</summary>
         public Action OnContentChanged;
         public Color Accent = RingTheme.Gold;
@@ -486,12 +497,35 @@ namespace Game.Gameplay.Ring.UI
             _check.style.right = 50f; _check.style.top = 14f;   // ліворуч від ключа: унизу лягала на рядок ефекту (кадр 4:3)
             _check.style.display = DisplayStyle.None;
             _face.Add(_check);
-            RegisterCallback<PointerEnterEvent>(e => { if (OnHover != null) OnHover(); });
+            RegisterCallback<PointerEnterEvent>(e => { if (PadFocus.MouseMayHover && OnHover != null) OnHover(); });
+            RegisterCallback<PointerLeaveEvent>(e => { if (PadFocus.MouseMayHover && OnUnhover != null) OnUnhover(); });
             RegisterCallback<PointerDownEvent>(e => { if (_enabled && e.button == 0 && OnClick != null) OnClick(); });
             Sync();
         }
 
         public bool Enabled { get { return _enabled; } }
+
+        // ---- ціль фокусу без миші (P3 геймпад, 11.11.2026): той самий фокус і той самий опис, що при наведенні ----
+        bool IPadTarget.PadEnabled { get { return _enabled && OnClick != null; } }
+        string IPadTarget.PadKey { get { return "tile:" + _title.text; } }
+        int IPadTarget.PadRank { get { return PadRankValue; } }
+
+        void IPadTarget.PadHot(bool on)
+        {
+            if (on)
+            {
+                if (OnHover != null) OnHover();
+                else Focused = true;
+            }
+            else
+            {
+                Focused = false;
+                if (OnUnhover != null) OnUnhover();
+            }
+        }
+
+        void IPadTarget.PadActivate() { if (_enabled && OnClick != null) OnClick(); }
+        bool IPadTarget.PadStep(int delta) { return false; }
 
         /// <summary>
         /// Компактна плитка (вузька панель — 4:3 чи великий масштаб інтерфейсу; кадри 08.11.2026: на ~120 одиниць ширини назви
@@ -619,18 +653,22 @@ namespace Game.Gameplay.Ring.UI
     }
 
     /// <summary>Золота плита головної дії (B03: «ПЕРЕЙТИ ДО ВЕЧОРА», «ДАЛІ», «ПОЧАТИ КАР'ЄРУ»): лівий край скошений, слово display Black, «ENTER».</summary>
-    public sealed class GoldPlate : VisualElement
+    public sealed class GoldPlate : VisualElement, IPadTarget
     {
         private const float WordSize = 36f, WordMin = 26f, WordTrack = 0.01f;   // 36 → не нижче 26 (У0, ПМ 09.11.2026)
         private const float WordLeft = 40f, WordRight = 16f, WordTop = 12f, WordBottom = 6f;
         private readonly bool _enabled;
         private readonly ArenaPlate _plate;
         private readonly Label _word, _probe;
+        private readonly Action _onClick;
+        private readonly string _text;
         private float _size = WordSize, _fitW = -1f;
 
         public GoldPlate(string text, string keyHint, Action onClick, bool enabled = true)
         {
             _enabled = enabled;
+            _onClick = onClick;
+            _text = text ?? "";
             style.overflow = Overflow.Visible;
             _plate = new ArenaPlate { Fill = enabled ? RingTheme.Gold : RingTheme.PanelRaised, Mirror = true };
             Add(_plate);
@@ -655,9 +693,23 @@ namespace Game.Gameplay.Ring.UI
             hint.style.right = 18f; hint.style.bottom = 10f;
             Add(hint);
             RegisterCallback<PointerDownEvent>(e => { if (_enabled && e.button == 0 && onClick != null) onClick(); });
-            RegisterCallback<PointerEnterEvent>(e => { if (_enabled) { _plate.Outline = RingTheme.Text; _plate.Redraw(); } });
-            RegisterCallback<PointerLeaveEvent>(e => { _plate.Outline = null; _plate.Redraw(); });
+            RegisterCallback<PointerEnterEvent>(e => { if (_enabled && PadFocus.MouseMayHover) { _plate.Outline = RingTheme.Text; _plate.Redraw(); } });
+            RegisterCallback<PointerLeaveEvent>(e => { if (PadFocus.MouseMayHover) { _plate.Outline = null; _plate.Redraw(); } });
         }
+
+        // ---- ціль фокусу без миші: головна дія екрана (ранг 2), фокус — та сама обводка, що наведення ----
+        bool IPadTarget.PadEnabled { get { return _enabled && _onClick != null; } }
+        string IPadTarget.PadKey { get { return "gold:" + _text; } }
+        int IPadTarget.PadRank { get { return 2; } }
+
+        void IPadTarget.PadHot(bool on)
+        {
+            _plate.Outline = on ? (Color?)RingTheme.Text : null;
+            _plate.Redraw();
+        }
+
+        void IPadTarget.PadActivate() { if (_enabled && _onClick != null) _onClick(); }
+        bool IPadTarget.PadStep(int delta) { return false; }
 
         /// <summary>
         /// Кегль напису під плиту: ширина слова-проби ∝ кеглю, тож за один крок — пропорційно; зайвий рядок — мінус 2. Нова ширина
@@ -700,10 +752,24 @@ namespace Game.Gameplay.Ring.UI
     }
 
     /// <summary>Вкладка-акордеон шапки ряду («РОЗВИТОК 6», «ВИТРАТИ 2»): плита зі зрізом, число золотом; відкрита — обводка паперу.</summary>
-    public sealed class TabPlate : VisualElement
+    public sealed class TabPlate : VisualElement, IPadTarget
     {
+        private readonly ArenaPlate _plate;
+        private readonly Action _onClick;
+        private readonly string _text;
+
+        // ---- ціль фокусу без миші: фокус — заливка наведення кнопок (RingTheme.Hover); відкрита — як була, обводка ----
+        bool IPadTarget.PadEnabled { get { return _onClick != null; } }
+        string IPadTarget.PadKey { get { return "tab:" + _text; } }
+        int IPadTarget.PadRank { get { return 4; } }
+        void IPadTarget.PadHot(bool on) { _plate.Fill = on ? RingTheme.Hover : RingTheme.Panel; _plate.Redraw(); }
+        void IPadTarget.PadActivate() { if (_onClick != null) _onClick(); }
+        bool IPadTarget.PadStep(int delta) { return false; }
+
         public TabPlate(string text, int number, bool open, Action onClick, bool goldStripe)
         {
+            _onClick = onClick;
+            _text = text ?? "";
             style.flexDirection = FlexDirection.Row;
             style.alignItems = Align.Center;
             style.height = 40f;
@@ -711,6 +777,7 @@ namespace Game.Gameplay.Ring.UI
             style.marginLeft = 10f;
             style.overflow = Overflow.Visible;
             var plate = new ArenaPlate { Fill = RingTheme.Panel, Stripe = goldStripe ? (Color?)RingTheme.Gold : null, StripeW = 5f, Outline = open ? (Color?)RingTheme.Text : null, OutlineW = 2f };
+            _plate = plate;
             Add(plate);
             var l = MenuKit.Display(text, 19f, RingTheme.Text, RingFontRole.Display800, 0.06f);
             Add(l);

@@ -33,6 +33,39 @@ namespace Game.Gameplay.Ring
             if (nav != null) nav.OnMenu(a, d);
         }
 
+        /// <summary>
+        /// Геймпад на екрані кар'єри (P3, 11.11.2026): дія тим самим шляхом, що A / B / хрестовина, і кадр; у лог — ключ цілі
+        /// у фокусі, щоб кадр читався без здогадок. Повертає ключ через <paramref name="key"/>[0].
+        /// </summary>
+        private static IEnumerator Pad(RingGameBootstrap h, RingAction a, string name, string[] key)
+        {
+            h.PadNavForShots(a);
+            yield return Wait(0.3f);
+            string k = h.PadKeyForShots;
+            if (key != null) key[0] = k;
+            Debug.Log("[Ринг] огляд меню: " + name + " — фокус «" + (k ?? "немає") + "»");
+            yield return Snap(h, name);
+        }
+
+        /// <summary>Хрестовиною в один бік до краю (фокус перестав рухатись) — кадр на кожну ціль; ← → один раз на перемикачі.</summary>
+        private static IEnumerator PadWalk(RingGameBootstrap h, RingAction dir, string prefix, int max)
+        {
+            var key = new string[1];
+            string was = h.PadKeyForShots;
+            bool stepped = false;
+            for (int i = 0; i < max; i++)
+            {
+                yield return Pad(h, dir, prefix + "_" + i, key);
+                if (key[0] == was) yield break;
+                was = key[0];
+                if (!stepped && was != null && (was.StartsWith("carousel:") || was.StartsWith("costume")))
+                {
+                    stepped = true;
+                    yield return Pad(h, RingAction.Right, prefix + "_" + i + "_right", key);
+                }
+            }
+        }
+
         /// <summary>Кадри екрана завантаження на 30 %, 70 % і 100 % (показ іде не швидше мінімального часу, тож усі три є).</summary>
         public static IEnumerator LoadingShots(RingGameBootstrap h)
         {
@@ -203,6 +236,16 @@ namespace Game.Gameplay.Ring
             yield return Snap(h, "pause_closing");
             yield return Wait(0.6f);
             yield return Snap(h, "pause_resumed");
+            // ---- геймпад без миші на створенні героя (P3, 11.11.2026): перше A лише показує фокус, хрестовина водить, ← → крутить
+            //      карусель; натискань, що створюють героя, немає ----
+            var padKey = new string[1];
+            yield return Pad(h, RingAction.Confirm, "create_pad_focus", padKey);
+            if (padKey[0] == null) Debug.LogError("[Ринг] огляд меню: перше A на створенні не показало фокус");
+            yield return PadWalk(h, RingAction.Up, "create_pad_up", 10);
+            yield return PadWalk(h, RingAction.Down, "create_pad_down", 16);
+            h.PadHideForShots();
+            yield return Wait(0.3f);
+            yield return Snap(h, "create_pad_mouse");
             // ---- тиждень: пауза з рядком «Сезон · Тиждень» і безпечним «На титул?» ----
             UI.CareerScreenView.ExpandForShots = true;   // тиждень відкриється з шухлядою (є очки — «Розвиток», P1-5; інакше «Витрати») — перевірка Esc
             h.CurrentView.OnConfirm();                    // «Почати кар'єру» на створенні героя → тиждень
@@ -225,6 +268,26 @@ namespace Game.Gameplay.Ring
             injury[(int)Game.Core.Ring.Career.BodyZone.Body] = wasInjury;
             h.CurrentView.Refresh();
             yield return Wait(0.3f);
+            // ---- геймпад без миші на тижні: фокус на плитці, хрестовиною до вкладки шухляди, A відкриває, B закриває (не пауза) ----
+            yield return Pad(h, RingAction.Confirm, "week_pad_focus", padKey);
+            yield return Pad(h, RingAction.Right, "week_pad_right", padKey);
+            bool onTab = false;
+            for (int i = 0; i < 6 && !onTab; i++)
+            {
+                yield return Pad(h, RingAction.Up, "week_pad_up_" + i, padKey);
+                onTab = padKey[0] != null && padKey[0].StartsWith("tab:");
+            }
+            if (onTab)
+            {
+                yield return Pad(h, RingAction.Confirm, "week_pad_drawer", padKey);
+                yield return PadWalk(h, RingAction.Up, "week_pad_drawer_up", 6);   // шухляда росте вгору над рядом вкладок
+                yield return Pad(h, RingAction.Back, "week_pad_back", padKey);
+                if (h.CurrentPause != null) Debug.LogError("[Ринг] огляд меню: B на відкритій шухляді відкрив паузу замість закрити шухляду");
+            }
+            else Debug.LogError("[Ринг] огляд меню: хрестовина вгору з плиток тижня не дійшла до вкладки шухляди");
+            h.PadHideForShots();
+            yield return Wait(0.3f);
+            yield return Snap(h, "week_pad_mouse");
             h.OpenPauseForShots();
             yield return Wait(0.6f);
             yield return Snap(h, "pause_week");

@@ -14,6 +14,9 @@ namespace Game.Gameplay.Ring.UI
     /// </summary>
     public sealed class PromoScreenView : RingScreenView
     {
+        /// <summary>Проходиться без миші (P3 геймпад, 11.11.2026): усі дії — кнопки RingUi, цілі фокусу.</summary>
+        public override bool PadEnabled { get { return true; } }
+
         private readonly PromoScreenModel _m;
         private string _lastSpeaker = "";
         private string _lastLine = "";
@@ -114,7 +117,7 @@ namespace Game.Gameplay.Ring.UI
                     box.Add(RingUi.PrimaryButton(t.Get("ui.next"), OnConfirm));
                     break;
             }
-            box.Add(RingUi.Lbl(t.Get("ui.hint.keys"), 14f, RingUi.Dim));
+            box.Add(RingUi.Lbl(ArenaKit.ChooseHint(t), 14f, RingUi.Dim));
         }
 
         // ---------- шкали ворожнечі: компактно в кутку, зміна — коротким «+1 Популярність» ----------

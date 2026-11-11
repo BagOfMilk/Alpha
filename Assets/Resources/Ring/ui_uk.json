@@ -576,6 +576,8 @@
  "m.title.summary": "Сезон {0} · Тиждень {1}",
  "m.title.checking": "Перевіряємо сейв…",
  "m.hint.enter": "Enter",
+ "m.hint.pad_a": "A",
+ "m.hint.pad_choose": "Хрестовина — вибір · A — обрати · Start — пауза",
  "m.footer.title.keys": "↑ ↓ — вибір · Enter — підтвердити",
  "m.footer.title.pad": "Хрестовина — вибір · A — підтвердити",
  "m.footer.set.keys": "Q / E — вкладка · ↑ ↓ — пункт · ← → — значення · Enter — обрати · Esc — назад",
