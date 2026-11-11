@@ -14,6 +14,8 @@
       (так обходили P0-3 08.11.2026) — відмова, якщо не передано -AllowNoBurst;
     - проєкт не відкритий іншим Unity (редактор чи інша збірка) — інакше Unity сам відмовить;
     - запуск без оболонки Windows (UseShellExecute = false) — без «Open File — Security Warning»;
+    - перед збіркою — окремий запуск Unity лише для імпорту й компіляції: перша збірка плеєра після зміни скриптів
+      пише стару сцену («level0 is corrupted», 08.11.2026; чистка Library/Bee не лікує). -SkipCompilePass — без нього;
     - після збірки: є Ring_Data/Plugins/x86_64/lib_burst_generated.dll (код Burst AOT), у boot.config немає
       player-connection (Development відкриває мережевий порт), у журналі немає помилок Burst.
 
@@ -23,7 +25,7 @@
     powershell -ExecutionPolicy Bypass -File tools/ring-build.ps1                     # Build/Ring/Ring.exe
     powershell -ExecutionPolicy Bypass -File tools/ring-build.ps1 -Method BuildPlayerShow
 
-  Коди виходу: 0 — зібрано з Burst; 5 — Unity не знайдено або впав; 6 — помилки компіляції C#; 9 — тайм-аут;
+  Коди виходу: 0 — зібрано з Burst; 5 — Unity не знайдено або прохід компіляції впав; 6 — помилки компіляції C#; 9 — тайм-аут;
   10 — проєкт зайнятий іншим Unity; 11 — Burst вимкнено в налаштуваннях; 12 — збірка не вдалась;
   13 — зібрано, але без коду Burst або з помилками Burst у журналі; 14 — у збірці лишився мережевий порт.
 #>
@@ -33,7 +35,8 @@ param(
     [string]$ProjectPath = '',
     [string]$UnityPath = 'C:\Program Files\Unity\Hub\Editor\6000.4.10f1\Editor\Unity.exe',
     [int]$TimeoutMinutes = 90,
-    [switch]$AllowNoBurst
+    [switch]$AllowNoBurst,
+    [switch]$SkipCompilePass
 )
 
 $ErrorActionPreference = 'Stop'
@@ -77,22 +80,42 @@ $log = Join-Path $ProjectPath "Logs\ring_build_$($Method)_$stamp.log"
 New-Item -ItemType Directory -Force -Path (Split-Path $log) | Out-Null
 $before = if (Test-Path $exe) { (Get-Item $exe).LastWriteTimeUtc } else { [DateTime]::MinValue }
 
-$psi = New-Object System.Diagnostics.ProcessStartInfo
-$psi.FileName = $UnityPath
-$psi.Arguments = "-quit -batchmode -projectPath `"$ProjectPath`" -logFile `"$log`" -executeMethod Game.Gameplay.EditorTools.RingSceneBuilder.$Method"
-$psi.UseShellExecute = $false
-$psi.EnvironmentVariables['TMP'] = $tmp
-$psi.EnvironmentVariables['TEMP'] = $tmp
-$sw = [System.Diagnostics.Stopwatch]::StartNew()
-$p = [System.Diagnostics.Process]::Start($psi)
-Write-Host "Збірка $Method (PID $($p.Id)), журнал: $log"
-if (-not $p.WaitForExit($TimeoutMinutes * 60 * 1000)) {
-    Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-    Write-Host "Збірка не скінчилась за $TimeoutMinutes хв — зупинено."
-    exit 9
+function Invoke-Unity([string]$UnityArgs, [string]$What) {
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $UnityPath
+    $psi.Arguments = $UnityArgs
+    $psi.UseShellExecute = $false
+    $psi.EnvironmentVariables['TMP'] = $tmp
+    $psi.EnvironmentVariables['TEMP'] = $tmp
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    $p = [System.Diagnostics.Process]::Start($psi)
+    Write-Host "$What (PID $($p.Id))…"
+    if (-not $p.WaitForExit($TimeoutMinutes * 60 * 1000)) {
+        Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+        Write-Host "$What не скінчився за $TimeoutMinutes хв — зупинено."
+        exit 9
+    }
+    Write-Host ("{0}: Unity завершився з кодом {1} за {2:N0} с." -f $What, $p.ExitCode, $sw.Elapsed.TotalSeconds)
+    return $p.ExitCode
 }
-$code = $p.ExitCode
-Write-Host ("Unity завершився з кодом {0} за {1:N0} с." -f $code, $sw.Elapsed.TotalSeconds)
+
+# 3а. Окремий прохід імпорту й компіляції (граблі «level0 is corrupted»).
+if (-not $SkipCompilePass) {
+    $clog = Join-Path $ProjectPath "Logs\ring_build_compile_$stamp.log"
+    $ccode = Invoke-Unity "-quit -batchmode -projectPath `"$ProjectPath`" -logFile `"$clog`"" 'Прохід компіляції'
+    $clines = if (Test-Path $clog) { Get-Content -Encoding UTF8 $clog } else { @() }
+    $cErr = @($clines | Where-Object { $_ -match 'error CS\d{4}' } | Select-Object -Unique)
+    if ($cErr.Count) {
+        Write-Host "Помилки компіляції C# ($($cErr.Count)), журнал: $clog"
+        $cErr | Select-Object -First 15 | ForEach-Object { Write-Host "  $_" }
+        exit 6
+    }
+    if ($ccode -ne 0) { Write-Host "Прохід компіляції впав (код $ccode), журнал: $clog"; exit 5 }
+}
+
+# 3б. Збірка.
+Write-Host "Журнал збірки: $log"
+$code = Invoke-Unity "-quit -batchmode -projectPath `"$ProjectPath`" -logFile `"$log`" -executeMethod Game.Gameplay.EditorTools.RingSceneBuilder.$Method" "Збірка $Method"
 
 # 4. Розбір журналу.
 $lines = if (Test-Path $log) { Get-Content -Encoding UTF8 $log } else { @() }
