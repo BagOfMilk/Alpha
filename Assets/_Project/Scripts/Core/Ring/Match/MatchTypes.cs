@@ -153,6 +153,33 @@ namespace Game.Core.Ring.Match
         public int[] Chances;
     }
 
+    /// <summary>
+    /// Прев'ю дії для будь-якої сторони (<see cref="MatchEngine.Preview"/>): чисте читання, без кубика. Для сторони, що не ходить,
+    /// Available=false (WrongPhase), але Modifier і Chances36 пораховані її статами.
+    /// </summary>
+    public sealed class ActionPreview
+    {
+        public MatchSide Side;
+        public MatchActionId Id;
+        public bool Available;
+        public UnavailableReason Reason;
+        public int Cost;
+        public int StaminaBefore;
+        /// <summary>«Сили» після дії (перевести подих — +3 до максимуму; решта — мінус ціна, не нижче 0).</summary>
+        public int StaminaAfter;
+        public bool Winded;
+        public bool HasAttr;
+        public RingAttr Attr;
+        public bool HasRoll;
+        public bool RollIsOpponents;
+        public int Modifier;
+        /// <summary>Шанси у тридцять шостих: [≤6, 7–9, 10+] (для кидка суперника — його ступені).</summary>
+        public int[] Chances36;
+        public bool IsBig;
+        /// <summary>false для «променя надії»: провал не віддає ініціативу.</summary>
+        public bool MissPassesInitiative;
+    }
+
     /// <summary>Кидок нападника відомий, наслідки ще ні — тут гравець може докрутити імпульсом.</summary>
     public sealed class PendingRoll
     {
