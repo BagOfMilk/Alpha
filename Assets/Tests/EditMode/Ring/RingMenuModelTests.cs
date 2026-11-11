@@ -139,6 +139,58 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void Settings_MatchPrefs_ChangedFiresOncePerRealChange_WithNewValues()
+        {
+            // Подія «змінилось» для бою (Ф3) і камери (П4 ПМ 11.11.2026): лише на справжню зміну, нові значення вже стоять
+            var keep = new RingSettingsValues { Qte = RingMatchPrefs.Qte, ActionShots = RingMatchPrefs.ActionShots, FinisherSlowMo = RingMatchPrefs.FinisherSlowMo };
+            int fired = 0;
+            bool seenQte = true; RingActionShots seenShots = RingActionShots.Normal; float seenChance = -1f;
+            Action h = () => { fired++; seenQte = RingMatchPrefs.Qte; seenShots = RingMatchPrefs.ActionShots; seenChance = RingMatchPrefs.ActionShotChance; };
+            RingMatchPrefs.ResetToDefaults();
+            RingMatchPrefs.Changed += h;
+            try
+            {
+                Assert.IsTrue(RingMatchPrefs.Qte);
+                Assert.AreEqual(RingActionShots.Normal, RingMatchPrefs.ActionShots);
+                Assert.IsTrue(RingMatchPrefs.FinisherSlowMo);
+
+                RingMatchPrefs.SetFrom(new RingSettingsValues());
+                Assert.AreEqual(0, fired, "той самий набір — без події");
+
+                RingMatchPrefs.SetFrom(new RingSettingsValues { Qte = false, ActionShots = RingActionShots.Rare });
+                Assert.AreEqual(1, fired, "одна зміна «Застосувати» — одна подія, хоч полів два");
+                Assert.IsFalse(seenQte, "підписник бачить нові значення");
+                Assert.AreEqual(RingActionShots.Rare, seenShots);
+                Assert.AreEqual(RingSettingsValues.ActionShotChance(RingActionShots.Rare), seenChance);
+
+                RingMatchPrefs.SetFrom(new RingSettingsValues { Qte = false, ActionShots = RingActionShots.Rare });
+                Assert.AreEqual(1, fired, "повтор — без події");
+
+                RingMatchPrefs.SetFrom(new RingSettingsValues { Qte = false, ActionShots = RingActionShots.Rare, FinisherSlowMo = false });
+                Assert.AreEqual(2, fired, "сповільнення — теж зміна");
+
+                RingMatchPrefs.SetFrom(new RingSettingsValues { ActionShots = (RingActionShots)9 });
+                Assert.AreEqual(RingActionShots.Normal, RingMatchPrefs.ActionShots, "невідомий рівень — заводський");
+                Assert.AreEqual(3, fired);
+
+                RingMatchPrefs.SetFrom(null);
+                Assert.AreEqual(3, fired, "null — нічого");
+
+                RingMatchPrefs.ResetToDefaults();
+                Assert.AreEqual(3, fired, "уже заводські — без події");
+                RingMatchPrefs.SetFrom(new RingSettingsValues { FinisherSlowMo = false });
+                RingMatchPrefs.ResetToDefaults();
+                Assert.AreEqual(5, fired, "скидання — подія, як і будь-яка зміна");
+                Assert.IsTrue(RingMatchPrefs.FinisherSlowMo);
+            }
+            finally
+            {
+                RingMatchPrefs.Changed -= h;
+                RingMatchPrefs.SetFrom(keep);
+            }
+        }
+
+        [Test]
         public void Settings_Rebind_SwapsConflicts_NoActionLosesItsKey()
         {
             var m = new RingSettingsModel();

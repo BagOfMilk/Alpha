@@ -289,20 +289,45 @@ namespace Game.Gameplay.Ring.Models
     public static class RingMatchPrefs
     {
         /// <summary>Показувати QTE-натиск у прийомі. Вимкнено — натиску немає й ажіотажу від нього теж (результату кидка він не змінює ніколи).</summary>
-        public static bool Qte = true;
+        public static bool Qte { get; private set; } = true;
         /// <summary>Рівень частоти екшн-кадрів.</summary>
-        public static RingActionShots ActionShots = RingActionShots.Normal;
+        public static RingActionShots ActionShots { get; private set; } = RingActionShots.Normal;
         /// <summary>Сповільнення часу на фінішері.</summary>
-        public static bool FinisherSlowMo = true;
+        public static bool FinisherSlowMo { get; private set; } = true;
+
+        /// <summary>
+        /// Хоч одне з трьох значень змінилось (гравець натиснув «Застосувати», пауза → налаштування посеред матчу). Нові значення
+        /// вже стоять, коли подія приходить; той самий набір удруге події не дає. Підписник читає <see cref="Qte"/> тощо сам і
+        /// відписується, коли зникає (статична подія тримає його живим). Лише головний потік.
+        /// </summary>
+        public static event Action Changed;
 
         /// <summary>Частка накопичувача екшн-кадрів для поточного рівня (0 — кадрів немає).</summary>
         public static float ActionShotChance { get { return RingSettingsValues.ActionShotChance(ActionShots); } }
 
+        /// <summary>Єдиний спосіб змінити значення (ставить <c>RingSettingsRuntime.ApplyAll</c>); <c>null</c> — нічого.</summary>
         public static void SetFrom(RingSettingsValues v)
         {
-            Qte = v.Qte;
-            ActionShots = v.ActionShots;
-            FinisherSlowMo = v.FinisherSlowMo;
+            if (v == null) return;
+            Set(v.Qte, v.ActionShots, v.FinisherSlowMo);
+        }
+
+        /// <summary>Заводські значення (як без меню) — для тестів і оглядів; подія — як у <see cref="SetFrom"/>.</summary>
+        public static void ResetToDefaults()
+        {
+            var d = new RingSettingsValues();
+            Set(d.Qte, d.ActionShots, d.FinisherSlowMo);
+        }
+
+        private static void Set(bool qte, RingActionShots shots, bool slowMo)
+        {
+            if (!Enum.IsDefined(typeof(RingActionShots), shots)) shots = RingActionShots.Normal;
+            if (qte == Qte && shots == ActionShots && slowMo == FinisherSlowMo) return;
+            Qte = qte;
+            ActionShots = shots;
+            FinisherSlowMo = slowMo;
+            var h = Changed;
+            if (h != null) h();
         }
     }
 }
