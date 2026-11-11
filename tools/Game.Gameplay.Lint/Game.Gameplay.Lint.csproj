@@ -110,6 +110,8 @@
       події Play Mode, RingSceneBuilder). RingLaunchArgs у Gameplay лінтується — редакторна частина під UNITY_EDITOR.
     -->
     <Compile Remove="../../Assets/_Project/Scripts/Editor/RingInEditor.cs" />
+    <!-- Зонд FPS (P0-3, звіт М1): FrameTimingManager, QualitySettings, SystemInfo — поза заглушками; перевірка — компіляцією проти DLL Unity. -->
+    <Compile Remove="../../Assets/_Project/Scripts/Gameplay/Ring/RingFpsProbe.cs" />
     <!--
       Модульні персонажі й екран створення (Поправка №19, 07.10.2026): SkinnedMeshRenderer,
       bindposes, RenderTexture, MaterialPropertyBlock, Image/TextField/події вказівника UI Toolkit —
