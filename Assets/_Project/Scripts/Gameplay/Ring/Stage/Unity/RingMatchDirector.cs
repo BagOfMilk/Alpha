@@ -1787,6 +1787,7 @@ namespace Game.Gameplay.Ring.Stage
                     spot = new Vector3(sx, RingStage3D.MatY, sz);
                     yaw = RingStage3D.YawTo(spot, sh);
                 }
+                else Debug.LogWarning("[Ринг] відлік: вільного місця для рефері біля пари немає — лишається на старому (можливий перетин з тілом)");
             }
             yield return Walk(new[] { new SlideItem(R, spot, yaw) });
             var down = _s.Clip("Ref_Kneel_Down");

@@ -514,11 +514,6 @@ namespace Game.Gameplay.Ring.Stage
         }
 
         /// <summary>
-        /// Підйом борця з того вузла, де він лежить (<see cref="PlanContext.ActorNode"/> / <see cref="PlanContext.VictimNode"/>):
-        /// з колін (кікаут, стрибок, що не вдався) — у стійку з колін; обличчям донизу — підйом зі спини склейкою кадру (кліпа
-        /// підйому з живота немає, <c>CLIP_NEEDS.md</c> §9); інакше — підйом зі спини.
-        /// </summary>
-        /// <summary>
         /// Кінцевий вузол кліпа, з якого в стійку тільки кліпом підйому: лежить (<c>lying_*</c>), на колінах (<c>kneel_up</c>)
         /// чи під накриттям (<c>pinned_*</c>). null — вузол невідомий (стійка).
         /// </summary>
@@ -541,6 +536,11 @@ namespace Game.Gameplay.Ring.Stage
         /// </summary>
         public static bool ChainNeedsShift(float gap) { return gap >= ChainGapMin && gap <= ChainGapMax; }
 
+        /// <summary>
+        /// Підйом борця з того вузла, де він лежить (<see cref="PlanContext.ActorNode"/> / <see cref="PlanContext.VictimNode"/>):
+        /// з колін (кікаут, стрибок, що не вдався) — у стійку з колін; обличчям донизу — підйом зі спини склейкою кадру (кліпа
+        /// підйому з живота немає, <c>CLIP_NEEDS.md</c> §9); інакше — підйом зі спини.
+        /// </summary>
         private static StageStep StandUp(MatchSide who, string node, bool aside)
         {
             var up = StageStep.Solo(who, node == "kneel_up" ? KneelUp : "GetUp_Back", StageCam.Overview);
