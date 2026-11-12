@@ -575,6 +575,9 @@ namespace Game.Gameplay.Ring.UI
             }
 
             col.Add(ScaleRow(T.Get("c.hub.pop"), r.PopularityBefore, r.PopularityAfter, !lostLoved));
+            // поразка не дала популярності — чому (ядро «Кар'єри», P1-6, 11.11.2026: ажіотаж нижче порога чи вже цього сезону)
+            string lossPop = CareerScreenLines.LossPopularity(T, r);
+            if (lossPop != null) col.Add(ShowKit.Bullet(lossPop));
             // довіра — лише якщо змінилась («1 → 1» — шум; плейтест 08.11.2026, P3, 8c3f16b)
             if (r.TrustAfter != r.TrustBefore) col.Add(ScaleRow(T.Get("c.hub.trust"), r.TrustBefore, r.TrustAfter, true));
             if (!r.Withdrew && r.DevPointsGained != 0)
@@ -732,6 +735,14 @@ namespace Game.Gameplay.Ring.UI
             title.style.whiteSpace = WhiteSpace.Normal;
             col.Add(title);
             col.Add(ShowKit.Rule());
+            // Поки титульний шанс відкритий — лише він (3-P2-6, 11.11.2026): шкали ще зміняться після матчу чи відмови, а
+            // підсумок показувався б двічі — до і після.
+            if (!CareerScreenLines.SeasonSummaryShown(C))
+            {
+                col.Add(ShowKit.Bullet(T.Get(rep.IsDefense ? "season.defense" : "season.title_shot")));
+                box.Add(col);
+                return box;
+            }
             // Підсумок сезону (плейтест 08.11.2026, P1-7, 8c3f16b): рекорд, популярність «було → стало», ворожнеча з Молотом,
             // умова титулу.
             var rec = C.State.SeasonRecord;

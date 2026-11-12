@@ -110,62 +110,44 @@ namespace Game.Gameplay.Ring.UI
         /// <summary>
         /// Розвиток: спершу до трьох рекомендацій, кожна з поясненням одним рядком (огляд фану 06.11.2026, R6/F7: ~16 кнопок без
         /// пояснень, «Спритність −1» на кнопці), далі «Усе (N)» — повний список. Атрибут — «було → стане».
-        /// Рекомендація: доступний перк (найдешевший), доступний прийом (спершу свого ґіміка), найслабший атрибут, який можна купити.
+        /// Рекомендації — від ядра «Кар'єри» (<c>DevelopmentAdvice.For</c>, P2-2, 11.11.2026): від ролі, ґіміка й того, чого бракувало
+        /// в минулому матчі; очок багато — на одну більше. Рядки — <see cref="CareerScreenLines.DevRecs"/>.
         /// </summary>
         protected VisualElement DevelopmentPanel(Action changed, int maxRecs = 3)
         {
             var card = Glass(8f);
             card.Add(Section(T.Format("dev.points", C.DevPoints)));
 
-            var recs = new List<VisualElement>();
             string gimmick = C.Content.GimmickOf(C.State.Gimmick).Key;
-            int all = 0;
-            string perkId = null; int perkCost = int.MaxValue; RingPath? perkPath = null;
+            int all = 5;   // атрибути — завжди п'ять
             foreach (var p in PerkCatalog.All)
-            {
-                if (C.Feud.State.Perks.Contains(p.Id)) continue;
-                all++;
-                string r;
-                if (C.CanBuyPerk(p.Id, out r) && p.Cost < perkCost) { perkId = p.Id; perkCost = p.Cost; perkPath = p.Path; }
-            }
-            MoveDef bestMove = null;
+                if (!C.Feud.State.Perks.Contains(p.Id)) all++;
             foreach (var m in C.Content.Moves.All)
+                if (m.IsLearnable && !C.KnowsMove(m.Id) && (m.GimmickId == null || m.GimmickId == gimmick)) all++;
+
+            var recs = new List<VisualElement>();
+            foreach (var l in CareerScreenLines.DevRecs(T, C, maxRecs))
             {
-                if (!m.IsLearnable || C.KnowsMove(m.Id)) continue;
-                if (m.GimmickId != null && m.GimmickId != gimmick) continue;
-                all++;
-                string r;
-                if (!C.CanLearnMove(m.Id, out r)) continue;
-                if (bestMove == null || (m.GimmickId != null && bestMove.GimmickId == null)) bestMove = m;
+                var a = l.Advice;
+                Color accent;
+                Action buy;
+                switch (a.Kind)
+                {
+                    case AdviceKind.Perk:
+                        accent = l.Path.HasValue ? RingUi.PathColor(l.Path.Value) : RingUi.Gold;
+                        buy = () => { C.BuyPerk(a.Id); changed(); };
+                        break;
+                    case AdviceKind.Move:
+                        accent = RingUi.Warn;
+                        buy = () => { C.LearnMove(a.Id); changed(); };
+                        break;
+                    default:
+                        accent = RingUi.Text;
+                        buy = () => { C.BuyAttr(a.Attr); changed(); };
+                        break;
+                }
+                recs.Add(Rec(l.Title, l.Why, accent, buy, l.PadKey));
             }
-            int bestAttr = -1;
-            for (int i = 0; i < 5; i++)
-            {
-                all++;
-                string r;
-                if (!C.CanBuyAttr((RingAttr)i, out r)) continue;
-                if (bestAttr < 0 || C.Player.Get((RingAttr)i) < C.Player.Get((RingAttr)bestAttr)) bestAttr = i;
-            }
-            if (perkId != null)
-            {
-                string id = perkId;
-                recs.Add(Rec(RingLabels.PerkName(T, id) + " · " + perkCost, RingLabels.PerkDesc(T, id),
-                    perkPath.HasValue ? RingUi.PathColor(perkPath.Value) : RingUi.Gold, () => { C.BuyPerk(id); changed(); }));
-            }
-            if (bestMove != null)
-            {
-                string id = bestMove.Id;
-                recs.Add(Rec(T.Get(bestMove.NameKey) + " · " + bestMove.Cost, T.Format("c.dev.move.why", RingLabels.ActionName(T, bestMove.Action)),
-                    RingUi.Warn, () => { C.LearnMove(id); changed(); }));
-            }
-            if (bestAttr >= 0)
-            {
-                var a = (RingAttr)bestAttr;
-                int v = C.Player.Get(a);
-                recs.Add(Rec(RingLabels.AttrName(T, a) + " " + Signed(v) + " → " + Signed(v + 1) + " · " + Development.AttrCost,
-                    T.Get("c.dev.attr.why." + bestAttr), RingUi.Text, () => { C.BuyAttr(a); changed(); }));
-            }
-            if (recs.Count > maxRecs) recs.RemoveRange(maxRecs, recs.Count - maxRecs);
             if (recs.Count > 0)
             {
                 card.Add(RingUi.Lbl(T.Get("c.dev.recommended"), 12f, RingUi.Dim));
@@ -232,12 +214,15 @@ namespace Game.Gameplay.Ring.UI
             return card;
         }
 
-        /// <summary>Рекомендація: кнопка-назва з ціною і під нею пояснення одним рядком (видно одразу, без наведення).</summary>
-        private VisualElement Rec(string title, string why, Color accent, Action buy)
+        /// <summary>
+        /// Рекомендація: кнопка-назва з ціною і під нею пояснення одним рядком (видно одразу, без наведення). Ключ фокуса сталий
+        /// («rec:…»): після покупки напис міняється, а фокус без миші лишається на місці.
+        /// </summary>
+        private VisualElement Rec(string title, string why, Color accent, Action buy, string padKey)
         {
             var box = RingUi.Column();
             box.style.marginBottom = 4f;
-            var b = Small(title, buy, true, accent);
+            var b = RingUi.PadKey(Small(title, buy, true, accent), padKey);
             b.style.marginBottom = 0f;
             box.Add(b);
             var l = RingUi.Lbl(why, BrandTokens.TypeMinInfo, RingUi.Dim);

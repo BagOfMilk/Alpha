@@ -28,17 +28,25 @@ namespace Game.Tests.EditMode
         // ---------------- промо: підпис акту ----------------
 
         /// <summary>
-        /// Шапка промо пише «Акт N» лише коли акт є (PromoScreenView: `_m.Act &gt; 0`): у ворожнечі акти з 1, у сцен кар'єри
-        /// (розмова з букером, події поза рингом) — 0, і «Акт 0» плейтест 08.11.2026 (P3) читав як помилку.
+        /// Шапка промо пише «Акт N» лише коли акт є (PromoScreenView: <c>_m.ActText</c>, null — рядка немає): у ворожнечі акти з 1,
+        /// у сцен кар'єри (розмова з букером, події поза рингом) — 0, і «Акт 0» плейтест 08.11.2026 (P3) читав як помилку.
         /// </summary>
         [Test]
         public void PromoAct_FeudHasActs_CareerScenesHaveNone()
         {
-            Assert.Greater(RingCampaignDriver.NewCampaign(1).StartPromo().Promo.Act, 0, "промо ворожнечі — з актом");
+            var t = RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json"));
+            var feud = new PromoScreenModel(RingCampaignDriver.NewCampaign(1).StartPromo(), t);
+            Assert.Greater(feud.Act, 0, "промо ворожнечі — з актом");
+            Assert.IsTrue(feud.HasAct);
+            Assert.AreEqual(t.Format("promo.act", feud.Act), feud.ActText);
+            StringAssert.DoesNotContain("⟦", feud.ActText, "ключ promo.act є в рядках");
             var s = CareerKit.NewHero(1);
             var r = s.Backstage();
             Assert.IsTrue(r.NeedsScene, "сцена не відкрилась: " + r.Reason);
-            Assert.AreEqual(0, s.CurrentBackstage.Promo.Act, "у сцени кар'єри актів немає — підпис акту не показується");
+            var scene = new PromoScreenModel(s.CurrentBackstage, t);
+            Assert.AreEqual(0, scene.Act, "у сцени кар'єри актів немає");
+            Assert.IsFalse(scene.HasAct);
+            Assert.IsNull(scene.ActText, "підпис акту не показується — рядка «Акт 0» немає");
         }
 
         // ---------------- налаштування ----------------
