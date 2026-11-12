@@ -119,7 +119,7 @@ namespace Game.Core.Ring.Career
             }
             State.Female = female;
             State.FemaleKnown = true;
-            if (changed && Stage == CareerStage.Week && State.ActionsDone.Count == 0 && _bs == null) BookShow();
+            if (changed && Stage == CareerStage.Week && State.ActionsDone.Count == 0 && _bs == null) { BookShow(); OpenAutoScene(); }
         }
 
         /// <summary>Пояси всіх федерацій і дивізіонів, яких ще немає в стані, — у їхніх стартових чемпіонів.</summary>
@@ -266,6 +266,7 @@ namespace Game.Core.Ring.Career
             State.SeasonPopStart = Popularity;
             StartWeek();
             Stage = CareerStage.Week;
+            OpenAutoScene();
         }
 
         // ---------- тиждень ----------
@@ -634,6 +635,8 @@ namespace Game.Core.Ring.Career
             public readonly List<FeudEffect> Pending = new List<FeudEffect>();
             public int Money;
             public int Actions;
+            /// <summary>Подія відкрилась сама (<see cref="BackstageScene.Auto"/>): дії тижня не витрачає.</summary>
+            public bool Auto;
         }
 
         private BackstageRun _bs;
@@ -730,13 +733,35 @@ namespace Game.Core.Ring.Career
             }
             foreach (var sc in all)
             {
-                if (sc.Kind != BackstageKind.Event) continue;
+                if (sc.Kind != BackstageKind.Event || sc.Auto != BackstageAuto.None) continue;
                 if (BackstageSeenThisSeason(sc.Id) || State.Season < sc.MinSeason || State.Week < BackstageDueWeek(sc)) continue;
                 if (sc.Once && BackstageSeenEver(sc.Id)) continue;
                 if (SceneHolds(sc)) return sc;
             }
             foreach (var sc in all) if (sc.Kind == BackstageKind.Booker && SceneHolds(sc)) return sc;
             throw new InvalidOperationException("Немає закулісної сцени для відкриття");
+        }
+
+        /// <summary>Іде подія, що відкрилась сама (подія мішаного матчу): після неї дій тижня стільки ж, скільки було.</summary>
+        public bool AutoSceneOpen { get { return _bs != null && _bs.Auto; } }
+
+        /// <summary>
+        /// Подія, що відкривається сама (<see cref="BackstageAuto.FeudFirst"/>, P2-6, ПМ 12.11.2026: «Молот — єдиний мішаний суперник
+        /// кар'єри, перший матч ворожнечі відкриває подія мішаного матчу»): на початку тижня першого шоу ворожнечі (жодної дії,
+        /// сцени, матчу ворожнечі ще не було), раз на кар'єру й лише за її умов (героїня — <c>{"career":"female"}</c>). Відкривається
+        /// на початку тижня, після відновлення з сейва — знову з початку.
+        /// </summary>
+        private void OpenAutoScene()
+        {
+            if (Content.Backstage == null || _bs != null || Stage != CareerStage.Week || State.ActionsDone.Count > 0) return;
+            if (!State.IsFeudShow || State.FeudResolved || Feud.Records.Count > 0) return;
+            foreach (var sc in Content.Backstage.Scenes)
+            {
+                if (sc.Auto != BackstageAuto.FeudFirst || BackstageSeenEver(sc.Id) || !SceneHolds(sc)) continue;
+                OpenBackstage(sc);
+                _bs.Auto = true;
+                return;
+            }
         }
 
         private void OpenBackstage(BackstageScene sc)
@@ -767,6 +792,7 @@ namespace Game.Core.Ring.Career
                 case "week": return State.Week >= c.Min;
                 case "parity": return State.Week % 2 == c.Min;
                 case "injured": return State.IsInjured;
+                case "female": return State.Female;
                 case "champion": return IsChampion;
                 case "last_won": return State.LastOutcome == 1;
                 case "last_lost": return State.LastOutcome == 2;
@@ -803,7 +829,7 @@ namespace Game.Core.Ring.Career
             State.BackstageSeen.Add(SeenKey(State.Season, run.Scene.Id));
             _bs = null;
             if (run.Scene.Kind == BackstageKind.Booker) r.RumorKey = RumorKey();
-            Done(r);
+            if (!run.Auto) Done(r);
             if (extraActions < 0)
             {
                 int spend = Math.Min(State.ActionsLeft, -extraActions);
@@ -1321,6 +1347,7 @@ namespace Game.Core.Ring.Career
                 State.Week++;
                 StartWeek();
                 Stage = CareerStage.Week;
+                OpenAutoScene();
             }
         }
 
@@ -1549,6 +1576,7 @@ namespace Game.Core.Ring.Career
             State.Strained = false;
             StartWeek();
             Stage = CareerStage.Week;
+            OpenAutoScene();
         }
 
         // ---------- сейв ----------
@@ -1607,6 +1635,7 @@ namespace Game.Core.Ring.Career
             Stage = stage;
             _engine = null;
             _bs = null;   // незавершена сцена не зберігається: дія тижня не витрачена, сцена відкриється з початку
+            if (Stage == CareerStage.Week) OpenAutoScene();   // подія, що відкривається сама, — знову з початку
         }
     }
 }

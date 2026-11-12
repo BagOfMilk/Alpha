@@ -72,11 +72,12 @@ namespace Game.Core.Ring
     public static class CareerFx
     {
         /// <summary>Умови: money(min), season(min), week(min), parity(min 0/1 — парність тижня), injured, champion, last_won,
-        /// last_lost, last_draw, last_swerved, plan_set, title_eligible, actions(min), npc_feud(target, min), tier(min — рівень федерації).</summary>
+        /// last_lost, last_draw, last_swerved, plan_set, title_eligible, actions(min), npc_feud(target, min), tier(min — рівень федерації),
+        /// female (героїня — жіночий дивізіон, P2-6).</summary>
         public static readonly string[] Conditions =
         {
             "money", "season", "week", "parity", "injured", "champion", "last_won", "last_lost", "last_draw", "last_swerved",
-            "plan_set", "title_eligible", "actions", "npc_feud", "tier"
+            "plan_set", "title_eligible", "actions", "npc_feud", "tier", "female"
         };
 
         /// <summary>Ефекти: money(add), injure(target зона head/body/legs/random, add — ушкодження), npc_feud(target NPC | opponent |

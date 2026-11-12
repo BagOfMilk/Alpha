@@ -830,5 +830,142 @@ namespace Game.Tests.EditMode
             s.ForceBackstage(null);
             Assert.IsNull(s.ForcedBackstageScene);
         }
+
+        // ---------- подія мішаного матчу (P2-6) ----------
+
+        private const string Mixed = "ev_mixed";
+
+        private static CareerSession Heroine(ulong seed)
+        {
+            var s = CareerKit.NewAtCreate(seed);
+            var d = CareerKit.Draft();
+            d.Female = true;
+            s.CreateHero(d);
+            return s;
+        }
+
+        /// <summary>Ботом кар'єри — до початку тижня першого шоу ворожнечі (подію, що відкрилась сама, бот не грає: цикл стає раніше).</summary>
+        private static void ToFirstFeudWeek(CareerSession s)
+        {
+            var rep = new CareerRunReport();
+            for (int guard = 0; !(s.Stage == CareerStage.Week && s.State.IsFeudShow); guard++)
+            {
+                Assert.Less(guard, 3000);
+                if (s.Stage == CareerStage.Week && s.State.ActionsDone.Count == 0)
+                    Assert.IsFalse(s.BackstageOpen, "до тижня шоу ворожнечі подія сама не відкривається (тиждень " + s.State.Week + ")");
+                CareerBot.Step(s, 0, rep);
+            }
+        }
+
+        private static int SeenTimes(CareerSession s, string id)
+        {
+            int n = 0;
+            foreach (var k in s.State.BackstageSeen) if (k.EndsWith(":" + id, StringComparison.Ordinal)) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// P2-6 (ПМ 12.11.2026: «Молот — єдиний мішаний суперник кар'єри, перший матч ворожнечі відкриває подія мішаного матчу»):
+        /// героїні на початку тижня першого шоу ворожнечі подія відкривається сама — без «Закулісся» і без дії тижня; після сейва —
+        /// знову з початку; за кар'єру — рівно раз.
+        /// </summary>
+        [Test]
+        public void MixedMatchEvent_OpensItself_ForTheHeroine_OnTheFirstFeudWeek_OnceAndWithoutAnAction()
+        {
+            var s = Heroine(61);
+            Assert.IsTrue(s.State.Female);
+            ToFirstFeudWeek(s);
+            Assert.AreEqual(0, s.Feud.Records.Count, "перший матч ворожнечі ще попереду");
+            Assert.AreEqual(CareerContent.HammerId, s.State.Opponent);
+            Assert.IsTrue(s.BackstageOpen && s.AutoSceneOpen, "подія відкрилась сама");
+            Assert.AreEqual(Mixed, s.CurrentBackstageScene.Id);
+            Assert.AreEqual(BackstageKind.Event, s.CurrentBackstageScene.Kind);
+            int actions = s.State.ActionsLeft;
+            Assert.AreEqual("scene_open", s.Train(false).Reason, "до кінця події інших дій немає");
+
+            // сейв посеред події: сцена не зберігається — відкривається знову з початку, дії ті самі
+            var t = CareerKit.Fresh(61, s.Content);
+            t.RestoreState(s.CaptureState());
+            Assert.IsTrue(t.AutoSceneOpen);
+            Assert.AreEqual(Mixed, t.CurrentBackstageScene.Id);
+            Assert.AreEqual(t.CurrentBackstageScene.Promo.Start, t.CurrentBackstage.Current.Id, "з початку");
+            Assert.AreEqual(actions, t.State.ActionsLeft);
+
+            var r = CareerKit.PlayScene(s);
+            Assert.IsTrue(r.Ok);
+            Assert.AreEqual(Mixed, r.SceneId);
+            Assert.AreEqual(actions, s.State.ActionsLeft, "дій тижня не забирає");
+            Assert.AreEqual(0, s.State.ActionsDone.Count);
+            Assert.IsFalse(s.BackstageOpen);
+            var u = CareerKit.Fresh(61, s.Content);
+            u.RestoreState(s.CaptureState());
+            Assert.IsFalse(u.BackstageOpen, "побачена подія після сейва не повертається");
+
+            // далі — уся ворожнеча (три сезони): подія більше не відкривається, ні сама, ні через «Закулісся»
+            var rep = CareerBot.Play(s, 3, 1);
+            Assert.IsTrue(s.State.FeudResolved, "ворожнеча розв'язалась");
+            Assert.AreEqual(1, SeenTimes(s, Mixed), "рівно раз за кар'єру");
+            Assert.IsFalse(rep.Scenes.Contains(Mixed), "«Закулісся» її не вибирає");
+        }
+
+        /// <summary>
+        /// Старий сейв (до події) посеред ворожнечі: перший матч з Молотом уже зіграно, а події героїня не бачила. Подія відкриває
+        /// саме перший матч — на другому шоу ворожнечі вона вже не з'являється.
+        /// </summary>
+        [Test]
+        public void MixedMatchEvent_OldSaveMidFeud_DoesNotOpenLate()
+        {
+            var s = Heroine(63);
+            ToFirstFeudWeek(s);
+            CareerKit.PlayScene(s);
+            var rep = new CareerRunReport();
+            for (int guard = 0; !(s.Stage == CareerStage.Week && s.State.IsFeudShow && s.Feud.Records.Count == 1 && s.State.ActionsDone.Count == 0); guard++)
+            {
+                Assert.Less(guard, 3000);
+                CareerBot.Step(s, 0, rep);
+            }
+            Assert.IsFalse(s.BackstageOpen, "друге шоу ворожнечі — події немає");
+            s.State.BackstageSeen.RemoveWhere(k => k.EndsWith(":" + Mixed, StringComparison.Ordinal));   // сейв до події
+            var t = CareerKit.Fresh(63, s.Content);
+            t.RestoreState(s.CaptureState());
+            Assert.AreEqual(CareerStage.Week, t.Stage);
+            Assert.IsTrue(t.State.IsFeudShow);
+            Assert.IsFalse(t.BackstageOpen, "перший матч ворожнечі вже позаду — подія не відкривається запізно");
+        }
+
+        [Test]
+        public void MixedMatchEvent_NotForTheHero_ForcedOnlyThroughTheBackstageAction()
+        {
+            var s = CareerKit.NewHero(61);
+            Assert.IsFalse(s.State.Female);
+            ToFirstFeudWeek(s);
+            Assert.IsFalse(s.BackstageOpen, "герою події немає");
+            CareerBot.Play(s, 3, 1);
+            Assert.AreEqual(0, SeenTimes(s, Mixed));
+
+            // примусово (огляд QA, -ring-shot-event ev_mixed) — через «Закулісся», і тоді коштує дію, як будь-яка сцена
+            var h = Heroine(62);
+            h.ForceBackstage(Mixed);
+            int before = h.State.ActionsLeft;
+            Assert.IsTrue(h.Backstage().NeedsScene);
+            Assert.IsFalse(h.AutoSceneOpen);
+            CareerKit.PlayScene(h);
+            Assert.AreEqual(before - 1, h.State.ActionsLeft);
+        }
+
+        [Test]
+        public void AutoScene_IsAnEventOncePerCareer_OtherwiseTheContentIsRejected()
+        {
+            const string booker = "{\"id\":\"b\",\"kind\":\"booker\",\"title\":\"t\",\"place\":\"p\",\"start\":\"n1\",\"nodes\":[{\"id\":\"n1\",\"type\":\"end\"}]}";
+            Func<string, string> scene = extra =>
+                "{\"scenes\":[" + booker + ",{\"id\":\"a\",\"title\":\"t\",\"place\":\"p\",\"start\":\"n1\",\"nodes\":[{\"id\":\"n1\",\"type\":\"end\"}]," + extra + "}]}";
+            var ok = BackstageContent.Load(scene("\"kind\":\"event\",\"once\":true,\"auto\":\"feud_first\""));
+            Assert.AreEqual(BackstageAuto.FeudFirst, ok.Find("a").Auto);
+            Assert.AreEqual(BackstageAuto.None, ok.Find("b").Auto);
+            Assert.Throws<FormatException>(() => BackstageContent.Load(scene("\"kind\":\"event\",\"auto\":\"feud_first\"")), "без once");
+            Assert.Throws<FormatException>(() => BackstageContent.Load(scene("\"kind\":\"booker\",\"once\":true,\"auto\":\"feud_first\"")), "розмова з букером");
+            Assert.Throws<FormatException>(() => BackstageContent.Load(scene("\"kind\":\"event\",\"once\":true,\"auto\":\"later\"")), "невідоме значення");
+            Assert.AreEqual(BackstageAuto.FeudFirst, CareerKit.Content().Backstage.Find(Mixed).Auto, "подія мішаного матчу — сама");
+        }
     }
 }
