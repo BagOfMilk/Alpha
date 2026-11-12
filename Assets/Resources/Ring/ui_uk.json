@@ -232,7 +232,7 @@
  "match.actions.title": "Дії",
  "match.rematch.title": "Реванш",
  "log.round": "Д{0}",
- "log.exchange": "Обмін {1}:{2} — ініціатива в {0}",
+ "log.exchange": "Обмін {1}:{2} — ініціатива: {0}",
  "log.sell": "{0} продає «{1}»",
  "log.reverse": "{0} реверсує «{1}»: {2}",
  "log.kickout": "{0} вириває: {1}",

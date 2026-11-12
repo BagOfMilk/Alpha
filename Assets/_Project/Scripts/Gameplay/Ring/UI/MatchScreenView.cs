@@ -181,9 +181,20 @@ namespace Game.Gameplay.Ring.UI
             var head = RingUi.Row();
             head.style.justifyContent = Justify.SpaceBetween;
             head.style.alignItems = Align.Center;
-            head.Add(RingUi.Lbl(c.Name, 17f, accent, true));
-            // Стан і «Сили» — коротко: «Стоїть · Сили 7/10».
-            head.Add(RingUi.Lbl(c.PostureText + " · " + c.StaminaText, 13f, RingUi.Dim));
+            // Вузька плашка (4:3, довге ім'я — «Тарас «Молот» Гребінь»): стан переходить на другий рядок, а не за край плашки
+            // й екрана (слот 30, 12.11.2026: «Сили 10/10» обрізало на 4:3).
+            head.style.flexWrap = Wrap.Wrap;
+            var name = RingUi.Lbl(c.Name, 17f, accent, true);
+            name.style.flexShrink = 1f;
+            name.style.maxWidth = Length.Percent(100f);
+            name.style.marginRight = 8f;
+            head.Add(name);
+            // Стан і «Сили» — коротко: «Стоїть · Сили 7/10»; при переносі — притиснутий праворуч.
+            var state = RingUi.Lbl(c.PostureText + " · " + c.StaminaText, 13f, RingUi.Dim);
+            state.style.flexShrink = 0f;
+            state.style.flexGrow = 1f;
+            state.style.unityTextAlign = TextAnchor.MiddleRight;
+            head.Add(state);
             p.Add(head);
 
             p.Add(BarLine(c.Damage, c.DamageMax, c.Penalty > 0 ? RingUi.Bad : RingUi.Warn, 8f, Ctx.Text.Get("match.card.short.damage"), c.Damage + "/" + c.DamageMax));
