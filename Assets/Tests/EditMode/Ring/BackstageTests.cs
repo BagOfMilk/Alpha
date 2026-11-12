@@ -526,6 +526,25 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void Parking_NotForTheHeroine_TheFightWithTheBaronIsTheHerosScene()
+        {
+            // рішення ПМ 12.11.2026 (P2-6: суперник своєї статі): героїні не показувати; варіант із чемпіонкою — вміст на пізніше
+            var c = Shared();
+            var h = Heroine(71);
+            h.State.Week = 4;
+            foreach (var e in EventIds)
+            {
+                if (e == "ev_parking") break;
+                h.State.BackstageSeen.Add("1:" + e);
+            }
+            Assert.AreNotEqual("ev_parking", h.Backstage().SceneId, "героїні — наступна подія сезону, не парковка");
+            var s = HeroForEvent(c, "ev_parking", 71);
+            Assert.AreEqual("ev_parking", s.Backstage().SceneId, "герою — як і була");
+            var cond = c.Backstage.Find("ev_parking").Requires;
+            Assert.IsTrue(cond.Exists(x => x.Kind == ConditionKind.Career && x.Key == "female" && x.Negate));
+        }
+
+        [Test]
         public void Parking_Guard_KeepsTheBodySafe_AndGainsTrust()
         {
             var s = HeroForEvent(Shared(), "ev_parking");

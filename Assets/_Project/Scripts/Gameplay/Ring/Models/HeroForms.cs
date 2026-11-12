@@ -26,6 +26,22 @@ namespace Game.Gameplay.Ring.Models
 
         public static string FemaleKey(string key) { return key + FemaleSuffix; }
 
+        /// <summary>
+        /// Чи показувати жіночі форми. На створенні ядро стать ще не знає (SyncHeroSex — після CreateHero): вона береться з тіла,
+        /// вибраного на екрані (body_f_*), — і підписи «Героїня / Лиходійка» міняються разом із тілом (рішення ПМ 12.11.2026).
+        /// На титулі — базові тексти; далі — стать кар'єри.
+        /// </summary>
+        public static bool IsHeroine(Game.Core.Ring.Career.CareerSession s, int heroBody)
+        {
+            if (s == null || s.Stage == Game.Core.Ring.Career.CareerStage.Title) return false;
+            if (s.Stage == Game.Core.Ring.Career.CareerStage.Create)
+            {
+                var bodies = CareerLooks.HeroBodies;
+                return bodies.Length > 0 && CareerLooks.IsFemaleBody(bodies[Math.Max(0, Math.Min(heroBody, bodies.Length - 1))]);
+            }
+            return s.State.FemaleKnown && s.State.Female;
+        }
+
         /// <summary>Базові ключі, що мають жіночу форму: є і «ключ», і «ключ.f».</summary>
         public static List<string> FormKeys(IDictionary<string, string> d)
         {

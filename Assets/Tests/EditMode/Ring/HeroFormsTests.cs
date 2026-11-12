@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Game.Core.Ring;
+using Game.Gameplay.Ring;
 using Game.Gameplay.Ring.Models;
 using NUnit.Framework;
 
@@ -12,6 +13,11 @@ namespace Game.Tests.EditMode
     /// Жіночі форми звертання (П5, ПМ 12.11.2026): «охоронець: кожен ключ ворожнечі й закулісся, де є чоловічий рід, має `.f`,
     /// або тест-перелік винятків з причиною». Межі — тексти ворожнечі (strings_uk.json), закулісся (backstage_uk.json) і ключі
     /// кінцівок та кар'єри в ui_uk.json. Вибір форми — <see cref="HeroForms"/>: RingText відступу на базовий ключ не знає.
+    /// <para>
+    /// Сітка мінімальна: ловить «ти + минулий час», «ти + прикметник на -ий», минулий час на початку речення й перелік
+    /// слів-назв героя. Прикметник без «ти» поруч («готовий до бою?»), «Ти, мабуть, програв», назви шляхів у непрямих відмінках
+    /// («Вінець Героя») вона не бачить — нові тексти перевіряти й очима.
+    /// </para>
     /// </summary>
     public class HeroFormsTests
     {
@@ -20,6 +26,10 @@ namespace Game.Tests.EditMode
         /// <summary>«Ти виграв», «ти вже домовився», «Ти сам просив» — минулий час чоловічого роду після «ти».</summary>
         private static readonly Regex YouPastMasc = new Regex(
             "(?<!" + L + ")[Тт]и\\s+(?:(?:вже|не|ж|теж|так|сам|його|її|їх|це|мене|тоді|знову|навіть)\\s+)*" + L + "+(?:в|вся)(?!" + L + ")");
+
+        /// <summary>«Ти ще не виснажений», «ти готовий» — прикметник чоловічого роду після «ти».</summary>
+        private static readonly Regex YouAdjMasc = new Regex(
+            "(?<!" + L + ")[Тт]и\\s+(?:(?:вже|не|ще|ж|теж|так|зовсім|справді|дуже|точно|був)\\s+)*" + L + "+ий(?!" + L + ")");
 
         /// <summary>«Думав, дійдеш…», «Виграв раз…», «Програв — але…» — минулий час на початку речення (звертання без «ти»).</summary>
         private static readonly Regex OpeningPastMasc = new Regex(
@@ -36,16 +46,19 @@ namespace Game.Tests.EditMode
         {
             { "w.player.name", "ім'я героя в окремій ворожнечі (RingFeud — лише герой); у кар'єрі його заступає ім'я героя чи героїні" },
             { "p3.n5", "«сам Молот» — про Молота" },
+            { "p4.n2", "«Молоте, ти перший» — букер до Молота" },
             { "p4.n4.recall", "«Ти сам просив» — героїня каже Молотові, він чоловік" },
             { "bs.booker_talk.t3.price", "«такий шанс» — про шанс" },
             { "bs.ev_friend.n7", "«Я якось сам» — Сталевий про себе" },
             { "bs.ev_mixed.n2", "«Молот сам попросив» — про Молота; сцена лише героїні" },
             { "bs.ev_mixed.n4.crowd", "«зал сам вирішить» — про зал" },
-            { "c.create.default_name", "екран створення: стать там ще не вибрано (SyncHeroSex — після CreateHero), поле — «Меню»" },
+            { "c.create.default_name", "ім'я за замовчуванням у полі вводу створення — «Новачок» лишається винятком (ПМ 12.11.2026)" },
+            { "path.face", "назва ролі обох борців (CareerScreens: і героя, і суперника) — рід за статтю борця, не через «.f»" },
+            { "path.heel", "назва ролі обох борців (CareerScreens: і героя, і суперника) — рід за статтю борця, не через «.f»" },
         };
 
         private static readonly string[] Files = { "strings_uk.json", "backstage_uk.json", "ui_uk.json" };
-        private static readonly string[] UiPrefixes = { "ending.", "c.", "season.", "show.", "role.", "week.", "feud." };
+        private static readonly string[] UiPrefixes = { "ending.", "c.", "season.", "show.", "role.", "week.", "feud.", "reason.", "unavail.", "perk.", "path." };
 
         private static Dictionary<string, string> Read(string file)
         {
@@ -63,6 +76,7 @@ namespace Game.Tests.EditMode
         {
             var res = new List<string>();
             foreach (Match m in YouPastMasc.Matches(text)) res.Add(m.Value);
+            foreach (Match m in YouAdjMasc.Matches(text)) res.Add(m.Value);
             if (withOpening) foreach (Match m in OpeningPastMasc.Matches(text)) res.Add(m.Value.Trim());
             foreach (Match m in HeroWords.Matches(text)) res.Add(m.Value);
             return res;
@@ -195,6 +209,33 @@ namespace Game.Tests.EditMode
             Assert.AreEqual("Улюблениця публіки", t.Get("ending.crowd_favorite"));
             Assert.AreEqual("Ти лишилася. Пропозиція повториться наступного сезону, поки обидва ключі в тебе.", t.Get("c.offer.declined"));
             Assert.AreEqual("Героїня", t.Get("role.hero"));
+        }
+
+        [Test]
+        public void IsHeroine_OnCreateFollowsTheChosenBody_OnTitleIsTheBaseText_LaterIsTheCareersSex()
+        {
+            int fb = Array.FindIndex(CareerLooks.HeroBodies, CareerLooks.IsFemaleBody);
+            int mb = Array.FindIndex(CareerLooks.HeroBodies, b => !CareerLooks.IsFemaleBody(b));
+            Assert.GreaterOrEqual(fb, 0); Assert.GreaterOrEqual(mb, 0);
+            var title = CareerKit.NewAtTitle(1);
+            Assert.IsFalse(HeroForms.IsHeroine(title, fb), "титул — базові тексти");
+            var s = CareerKit.NewAtCreate(1);
+            Assert.IsTrue(HeroForms.IsHeroine(s, fb), "створення: жіноче тіло — «Героїня / Лиходійка»");
+            Assert.IsFalse(HeroForms.IsHeroine(s, mb));
+            Assert.IsTrue(HeroForms.IsHeroine(s, fb + 10 * CareerLooks.HeroBodies.Length) == CareerLooks.IsFemaleBody(CareerLooks.HeroBodies[CareerLooks.HeroBodies.Length - 1]),
+                "індекс поза межами — останнє тіло, як у SyncHeroSex");
+            var t = AllText();
+            HeroForms.Apply(t, HeroForms.IsHeroine(s, fb));
+            Assert.AreEqual("Героїня", t.Get("role.hero"));
+            Assert.AreEqual("Лиходійка", t.Get("role.villain"));
+            HeroForms.Apply(t, HeroForms.IsHeroine(s, mb));
+            Assert.AreEqual("Герой", t.Get("role.hero"));
+
+            s.CreateHero(CareerKit.Draft());
+            s.SetFemale(true);
+            Assert.IsTrue(HeroForms.IsHeroine(s, mb), "після створення — стать кар'єри, не тіла");
+            s.SetFemale(false);
+            Assert.IsFalse(HeroForms.IsHeroine(s, fb));
         }
     }
 }

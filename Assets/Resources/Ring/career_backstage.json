@@ -658,6 +658,12 @@
    "title": "bs.ev_parking.title",
    "place": "bs.ev_parking.place",
    "start": "n1",
+   "requires": [
+    {
+     "career": "female",
+     "not": true
+    }
+   ],
    "nodes": [
     {
      "id": "n1",
