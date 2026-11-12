@@ -252,6 +252,11 @@ namespace Game.Gameplay.Ring
         private RingScreenView MakeView()
         {
             if (_onTitle) return new TitleMenuView(_ctx, this);
+            // Жіночі форми звертання (П5): героїні — «ключ.f» замість чоловічого роду в промо, закулісся, кінцівках і кар'єрі.
+            // Тут, а не в Rebind: стать стає відомою після створення героя (SyncHeroSex), а меню може перечитати тексти.
+            bool female = _career.State.FemaleKnown && _career.State.Female;
+            HeroForms.Apply(_text, female);
+            if (_ctx != null && !ReferenceEquals(_ctx.Text, _text)) HeroForms.Apply(_ctx.Text, female);
             switch (_career.Stage)
             {
                 case CareerStage.Create: return new CreateScreenView(_ctx);
@@ -395,6 +400,13 @@ namespace Game.Gameplay.Ring
                     _shotHeroName = name;
                     ShotNote("ім'я героя: «" + name + "» (" + name.Length + " знаків, межа " + CareerSession.MaxNameLength + ")");
                 }
+            }
+            // -ring-shot-heroine: огляд героїні (жіночі форми тексту, подія мішаного матчу) — перше жіноче тіло на екрані створення.
+            // Лише нова кар'єра (стадія створення): стать сейва не чіпає.
+            if (RingLaunchArgs.Has("-ring-shot-heroine") && _career != null && _career.Stage == CareerStage.Create)
+            {
+                int fb = Array.FindIndex(CareerLooks.HeroBodies, CareerLooks.IsFemaleBody);
+                if (fb >= 0 && HeroBody != fb) { HeroBody = fb; ShotNote("героїня: тіло " + CareerLooks.HeroBodies[fb]); }
             }
             _shotOpponent = ReadArg("-ring-shot-opponent");
             _shotEvent = ReadArg("-ring-shot-event");

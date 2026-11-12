@@ -111,7 +111,9 @@ namespace Game.Tests.EditMode
             foreach (var kv in own)
             {
                 bool service = kv.Key.StartsWith("speaker.") || kv.Key.StartsWith("week.reason.") || kv.Key.StartsWith("bs.kind.") || kv.Key.StartsWith("bs.ui.");
-                if (!service) StringAssert.Contains("\"" + kv.Key + "\"", scenes, "невикористаний ключ " + kv.Key);
+                // жіноча форма «ключ.f» (HeroForms) у сценах не згадується — досить, щоб був базовий ключ
+                string used = kv.Key.EndsWith(HeroForms.FemaleSuffix) ? kv.Key.Substring(0, kv.Key.Length - HeroForms.FemaleSuffix.Length) : kv.Key;
+                if (!service) StringAssert.Contains("\"" + used + "\"", scenes, "невикористаний ключ " + kv.Key);
                 string v = (string)kv.Value;
                 Assert.IsFalse(string.IsNullOrWhiteSpace(v), kv.Key);
                 foreach (var bad in new[] { "ы", "э", "ё", "ъ" }) StringAssert.DoesNotContain(bad, v.ToLowerInvariant(), kv.Key);
