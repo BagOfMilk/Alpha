@@ -316,7 +316,7 @@ namespace Game.Tests.EditMode
             h.Perform(MatchActionId.Throw);
             Assert.AreEqual(ReactionChoice.Reverse, MatchAi.ChooseReaction(h));
             var f = MatchKit.Engine(true);
-            f.State.Player.Momentum = 5; f.State.Hype = 4; f.State.Rival.Damage = 6;
+            f.State.Player.Momentum = 5; f.State.Hype = 4; f.State.Rival.Damage = 6; f.State.Round = MatchRules.FinisherMinRound;
             f.Perform(MatchActionId.Finisher);
             Assert.AreEqual(ReactionChoice.Reverse, MatchAi.ChooseReaction(f));
         }
@@ -327,9 +327,11 @@ namespace Game.Tests.EditMode
             var e = MatchKit.Engine(false);
             e.State.Player.Posture = Posture.Down; e.State.Player.Damage = Math.Max(e.State.Player.Damage, MatchRules.PinMinDamage); MatchKit.NotFresh(e.State.Player); e.State.Player.Damage = 8;
             Assert.AreEqual(MatchActionId.Pin, MatchAi.ChooseAction(e));
-            e.State.Player.Damage = 6;
+            e.State.Player.Damage = MatchRules.AiSubmissionDamage;
             Assert.AreEqual(MatchActionId.Submission, MatchAi.ChooseAction(e));
             e.State.Rival.Momentum = 5; e.State.Hype = 4;
+            Assert.AreNotEqual(MatchActionId.Finisher, MatchAi.ChooseAction(e), "P2-1: до FinisherMinRound-ї дії ШІ не бере фінішер");
+            e.State.Round = MatchRules.FinisherMinRound;
             Assert.AreEqual(MatchActionId.Finisher, MatchAi.ChooseAction(e));
             var g = MatchKit.Engine(false);
             g.State.Rival.Posture = Posture.Down; g.State.Rival.Damage = Math.Max(g.State.Rival.Damage, MatchRules.PinMinDamage);

@@ -10,6 +10,12 @@ namespace Game.Gameplay.Ring.Models
     /// <summary>Рівень графіки: Авто — автопідбір під машину (GraphicsTierPicker), далі — рівні якості URP проєкту.</summary>
     public enum RingGraphics { Auto = 0, Low = 1, Medium = 2, High = 3 }
 
+    /// <summary>
+    /// Частота екшн-кадрів матчу (Налаштування → Гра; TRPG_DESIGN §4.12 «частота екшн-кадрів і уповільнення (як було)»):
+    /// камера через плече на великому прийомі. Значення стабільні — пишуться в сховище числом.
+    /// </summary>
+    public enum RingActionShots { Off = 0, Rare = 1, Normal = 2, Often = 3 }
+
     /// <summary>Дії, які гравець може перепризначити (Налаштування → Керування). Цифри 1–9 і миша — сталі.</summary>
     public enum RingAction { Up = 0, Down, Left, Right, Confirm, Back, TabPrev, TabNext, Log }
 
@@ -48,6 +54,30 @@ namespace Game.Gameplay.Ring.Models
 
         public string Language = "uk";
 
+        // ---- подача матчу (Налаштування → Гра; §4.12) ----
+        /// <summary>QTE-натиск у послідовності прийому — лише видовище (рішення власника 08.11.2026): вимкнено — натиску немає.</summary>
+        public bool Qte = true;
+        /// <summary>Як часто великий прийом показує екшн-кадр; частку для накопичувача дає <see cref="ActionShotChance"/>.</summary>
+        public RingActionShots ActionShots = RingActionShots.Normal;
+        /// <summary>Сповільнення на фінішері (крупний план лишається, змінюється лише швидкість часу).</summary>
+        public bool FinisherSlowMo = true;
+
+        /// <summary>
+        /// Частка накопичувача екшн-кадрів за рівнем (без випадковості: кадр, коли накопичене ≥ 1; два поспіль — ні, §4.12).
+        /// «Звично» — 0,34, як у бойовій камері, з якої механізм узято (≈ один кадр на три великі прийоми). ПЛЕЙСХОЛДЕР —
+        /// камера може тюнити числа, сенс рівнів лишається: Off — ніколи, Rare &lt; Normal &lt; Often.
+        /// </summary>
+        public static float ActionShotChance(RingActionShots level)
+        {
+            switch (level)
+            {
+                case RingActionShots.Off: return 0f;
+                case RingActionShots.Rare: return 0.2f;
+                case RingActionShots.Often: return 0.5f;
+                default: return 0.34f;
+            }
+        }
+
         public readonly Dictionary<RingAction, string> Keys = DefaultKeys();
 
         public static Dictionary<RingAction, string> DefaultKeys()
@@ -75,6 +105,7 @@ namespace Game.Gameplay.Ring.Models
             Master = o.Master; Music = o.Music; Sfx = o.Sfx; Voice = o.Voice; MuteInBackground = o.MuteInBackground;
             ReduceMotion = o.ReduceMotion; ScreenShake = o.ScreenShake; Flashes = o.Flashes; UiScale = o.UiScale;
             Language = o.Language;
+            Qte = o.Qte; ActionShots = o.ActionShots; FinisherSlowMo = o.FinisherSlowMo;
             if (!ReferenceEquals(Keys, o.Keys))
             {
                 Keys.Clear();
@@ -88,6 +119,7 @@ namespace Game.Gameplay.Ring.Models
             if (Master != o.Master || Music != o.Music || Sfx != o.Sfx || Voice != o.Voice || MuteInBackground != o.MuteInBackground) return false;
             if (ReduceMotion != o.ReduceMotion || ScreenShake != o.ScreenShake || Flashes != o.Flashes || UiScale != o.UiScale) return false;
             if (!string.Equals(Language, o.Language, StringComparison.Ordinal)) return false;
+            if (Qte != o.Qte || ActionShots != o.ActionShots || FinisherSlowMo != o.FinisherSlowMo) return false;
             if (Keys.Count != o.Keys.Count) return false;
             foreach (var kv in Keys)
             {
@@ -106,6 +138,7 @@ namespace Game.Gameplay.Ring.Models
             if (Resolution < -1) Resolution = -1;
             if (!Enum.IsDefined(typeof(RingDisplayMode), Display)) Display = RingDisplayMode.Fullscreen;
             if (!Enum.IsDefined(typeof(RingGraphics), Graphics)) Graphics = RingGraphics.Auto;
+            if (!Enum.IsDefined(typeof(RingActionShots), ActionShots)) ActionShots = RingActionShots.Normal;
             if (string.IsNullOrEmpty(Language)) Language = "uk";
             var def = DefaultKeys();
             foreach (var kv in def)
@@ -204,6 +237,9 @@ namespace Game.Gameplay.Ring.Models
             s.Set(Prefix + "flashes", v.Flashes ? "1" : "0");
             s.Set(Prefix + "uiscale", v.UiScale.ToString(CultureInfo.InvariantCulture));
             s.Set(Prefix + "language", v.Language ?? "uk");
+            s.Set(Prefix + "qte", v.Qte ? "1" : "0");
+            s.Set(Prefix + "actionshots", ((int)v.ActionShots).ToString(CultureInfo.InvariantCulture));
+            s.Set(Prefix + "slowmo", v.FinisherSlowMo ? "1" : "0");
             foreach (var kv in v.Keys) s.Set(KeyPrefix + kv.Key, kv.Value);
             s.Save();
         }
@@ -224,6 +260,9 @@ namespace Game.Gameplay.Ring.Models
             v.ScreenShake = Int(s, Prefix + "shake", v.ScreenShake ? 1 : 0) != 0;
             v.Flashes = Int(s, Prefix + "flashes", v.Flashes ? 1 : 0) != 0;
             v.UiScale = Int(s, Prefix + "uiscale", v.UiScale);
+            v.Qte = Int(s, Prefix + "qte", v.Qte ? 1 : 0) != 0;
+            v.ActionShots = (RingActionShots)Int(s, Prefix + "actionshots", (int)v.ActionShots);
+            v.FinisherSlowMo = Int(s, Prefix + "slowmo", v.FinisherSlowMo ? 1 : 0) != 0;
             string lang = s.Get(Prefix + "language");
             if (!string.IsNullOrEmpty(lang)) v.Language = lang;
             foreach (RingAction a in Enum.GetValues(typeof(RingAction)))
@@ -239,6 +278,56 @@ namespace Game.Gameplay.Ring.Models
             string raw = s.Get(key);
             int r;
             return raw != null && int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out r) ? r : fallback;
+        }
+    }
+
+    /// <summary>
+    /// Застосовані налаштування подачі матчу для решти гри — режисер бою, камера, FX (як <c>RingAccessibility</c> для
+    /// доступності). Ставить <c>RingSettingsRuntime.ApplyAll</c> на старті й після «Застосувати»; читати в момент події
+    /// (почався прийом, фінішер), не кешувати. Без запуску меню (тести, огляди) — заводські значення.
+    /// </summary>
+    public static class RingMatchPrefs
+    {
+        /// <summary>Показувати QTE-натиск у прийомі. Вимкнено — натиску немає й ажіотажу від нього теж (результату кидка він не змінює ніколи).</summary>
+        public static bool Qte { get; private set; } = true;
+        /// <summary>Рівень частоти екшн-кадрів.</summary>
+        public static RingActionShots ActionShots { get; private set; } = RingActionShots.Normal;
+        /// <summary>Сповільнення часу на фінішері.</summary>
+        public static bool FinisherSlowMo { get; private set; } = true;
+
+        /// <summary>
+        /// Хоч одне з трьох значень змінилось (гравець натиснув «Застосувати», пауза → налаштування посеред матчу). Нові значення
+        /// вже стоять, коли подія приходить; той самий набір удруге події не дає. Підписник читає <see cref="Qte"/> тощо сам і
+        /// відписується, коли зникає (статична подія тримає його живим). Лише головний потік.
+        /// </summary>
+        public static event Action Changed;
+
+        /// <summary>Частка накопичувача екшн-кадрів для поточного рівня (0 — кадрів немає).</summary>
+        public static float ActionShotChance { get { return RingSettingsValues.ActionShotChance(ActionShots); } }
+
+        /// <summary>Єдиний спосіб змінити значення (ставить <c>RingSettingsRuntime.ApplyAll</c>); <c>null</c> — нічого.</summary>
+        public static void SetFrom(RingSettingsValues v)
+        {
+            if (v == null) return;
+            Set(v.Qte, v.ActionShots, v.FinisherSlowMo);
+        }
+
+        /// <summary>Заводські значення (як без меню) — для тестів і оглядів; подія — як у <see cref="SetFrom"/>.</summary>
+        public static void ResetToDefaults()
+        {
+            var d = new RingSettingsValues();
+            Set(d.Qte, d.ActionShots, d.FinisherSlowMo);
+        }
+
+        private static void Set(bool qte, RingActionShots shots, bool slowMo)
+        {
+            if (!Enum.IsDefined(typeof(RingActionShots), shots)) shots = RingActionShots.Normal;
+            if (qte == Qte && shots == ActionShots && slowMo == FinisherSlowMo) return;
+            Qte = qte;
+            ActionShots = shots;
+            FinisherSlowMo = slowMo;
+            var h = Changed;
+            if (h != null) h();
         }
     }
 }

@@ -125,27 +125,63 @@ namespace Game.Core.Ring.Match
         /// <summary>Те саме з додатком до кидка від прийому (кар'єра: травма зони, бонус прийому) — шанси показують його.</summary>
         public ActionOption Describe(MatchActionId id, int extraRollMod)
         {
-            var o = new ActionOption { Id = id, Cost = MatchRules.Cost(id), IsBig = MatchRules.IsBig(id) };
-            if (Phase != MatchPhase.AwaitAction) { o.Reason = UnavailableReason.WrongPhase; return o; }
-            var me = _s.Actor; var opp = _s.Other;
+            if (Phase != MatchPhase.AwaitAction)
+                return new ActionOption { Id = id, Cost = MatchRules.Cost(id), IsBig = MatchRules.IsBig(id), Reason = UnavailableReason.WrongPhase };
+            var p = Preview(_s.CurrentActor, id, extraRollMod);
+            return new ActionOption
+            {
+                Id = p.Id, Cost = p.Cost, IsBig = p.IsBig, HasAttr = p.HasAttr, Attr = p.Attr, Available = p.Available,
+                Reason = p.Reason, HasRoll = p.HasRoll, RollIsOpponents = p.RollIsOpponents, Modifier = p.Modifier,
+                Winded = p.Winded, Chances = p.Chances36
+            };
+        }
+
+        /// <summary>
+        /// Чисте прев'ю дії для БУДЬ-ЯКОЇ сторони (без кубика, без мутацій): ті самі перевірки, модифікатор і шанси, що в Perform.
+        /// Не чий хід або фаза не «чекаю дію» — Available=false, Reason=WrongPhase, але Modifier і Chances36 пораховані
+        /// (показ «хід суперника як свій»).
+        /// </summary>
+        public ActionPreview Preview(MatchSide side, MatchActionId id, int extraRollMod = 0)
+        {
+            var me = _s.Get(side); var opp = _s.Get(Opp(side));
+            var p = new ActionPreview
+            {
+                Side = side, Id = id, Cost = MatchRules.Cost(id), IsBig = MatchRules.IsBig(id),
+                StaminaBefore = me.Stamina, MissPassesInitiative = id != MatchActionId.HopeSpot
+            };
+            p.StaminaAfter = id == MatchActionId.CatchBreath
+                ? Math.Min(MatchRules.MaxStamina, me.Stamina + MatchRules.CatchBreathStamina)
+                : Math.Max(0, me.Stamina - p.Cost);
             RingAttr attr;
-            if (AttrOf(id, me, out attr)) { o.HasAttr = true; o.Attr = attr; }
-            o.Reason = Check(id, me, opp);
-            o.Available = o.Reason == UnavailableReason.None;
+            if (AttrOf(id, me, out attr)) { p.HasAttr = true; p.Attr = attr; }
+            p.Reason = Check(id, me, opp);
+            if (p.Reason == UnavailableReason.None && (Phase != MatchPhase.AwaitAction || side != _s.CurrentActor))
+                p.Reason = UnavailableReason.WrongPhase;
+            p.Available = p.Reason == UnavailableReason.None;
             if (id == MatchActionId.Pin)
             {
-                o.HasRoll = true; o.RollIsOpponents = true;
-                o.Modifier = KickoutMod(opp, 0);
-                o.Chances = TwoD6.ChancesOf36(o.Modifier);
+                p.HasRoll = true; p.RollIsOpponents = true;
+                p.Modifier = KickoutMod(opp, 0);
+                p.Chances36 = TwoD6.ChancesOf36(p.Modifier);
             }
-            else if (o.HasAttr)
+            else if (p.HasAttr)
             {
-                o.HasRoll = true;
-                o.Winded = IsWinded(id, me);
-                o.Modifier = RollModifier(id, me) + extraRollMod;
-                o.Chances = TwoD6.ChancesOf36(o.Modifier);
+                p.HasRoll = true;
+                p.Winded = IsWinded(id, me);
+                p.Modifier = RollModifier(id, me) + extraRollMod;
+                p.Chances36 = TwoD6.ChancesOf36(p.Modifier);
             }
-            return o;
+            return p;
+        }
+
+        /// <summary>Прев'ю всіх дій сторони в порядку списку дій; «промінь надії» — в кінці, якщо правила його дозволяють.</summary>
+        public IReadOnlyList<ActionPreview> PreviewAll(MatchSide side)
+        {
+            var list = new List<ActionPreview>();
+            for (int i = 0; i < ActionOrder.Length; i++) list.Add(Preview(side, ActionOrder[i]));
+            var hope = Preview(side, MatchActionId.HopeSpot);
+            if (hope.Reason == UnavailableReason.None || hope.Reason == UnavailableReason.WrongPhase) list.Add(hope);
+            return list;
         }
 
         private UnavailableReason Check(MatchActionId id, Fighter me, Fighter opp)
@@ -195,7 +231,7 @@ namespace Game.Core.Ring.Match
                         case MatchActionId.Pin:
                             if (_s.Outside) r = UnavailableReason.NotInRing;
                             else if (opp.Posture != Posture.Down) r = UnavailableReason.TargetNotDown;
-                            else if (_s.HasLastAction && _s.LastAction == MatchActionId.Pin) r = UnavailableReason.JustPinned;
+                            else if (_s.HasLastAction && _s.LastAction == MatchActionId.Pin && me.Side == _s.CurrentActor) r = UnavailableReason.JustPinned;
                             else if (opp.Damage < MatchRules.PinMinDamage) r = UnavailableReason.TargetNotHurt;
                             break;
                         case MatchActionId.LeaveRing:
@@ -213,6 +249,7 @@ namespace Game.Core.Ring.Match
                             else if (me.Momentum < MatchRules.FinisherMomentum) r = UnavailableReason.NeedImpulse;
                             else if (_s.Hype < MatchRules.FinisherHype) r = UnavailableReason.NeedHype;
                             else if (opp.Damage < MatchRules.FinisherTargetDamage) r = UnavailableReason.TargetNotHurt;
+                            else if (_s.Round < MatchRules.FinisherMinRound && _setup.RoundLimit <= MatchRules.ActionLimit) r = UnavailableReason.TooEarly;
                             break;
                         case MatchActionId.Desperate:
                             if (me.DesperateUsed) r = UnavailableReason.AlreadyUsed;
@@ -274,7 +311,12 @@ namespace Game.Core.Ring.Match
             return 0;
         }
 
-        private int Late() { return _s.Round >= MatchRules.LateStageRound ? MatchRules.LateStagePenalty : 0; }
+        /// <summary>Пізня стадія (P2-1): з <see cref="MatchRules.LateStageRound"/>-ї дії штраф <see cref="MatchRules.LateStagePenalty"/>, далі +1 за кожні <see cref="MatchRules.LateStageStep"/> дій.</summary>
+        private int Late()
+        {
+            if (_s.Round < MatchRules.LateStageRound) return 0;
+            return MatchRules.LateStagePenalty + (_s.Round - MatchRules.LateStageRound) / MatchRules.LateStageStep;
+        }
 
         private static bool IsWinded(MatchActionId id, Fighter me) { return me.Stamina <= 0 && id != MatchActionId.HopeSpot; }
 
@@ -795,7 +837,8 @@ namespace Game.Core.Ring.Match
                 var def = _s.Get(Opp(_actionSide));
                 def.Stamina = Math.Min(MatchRules.MaxStamina, def.Stamina + MatchRules.DefenderStaminaRegen);
             }
-            _s.Round++;
+            // P2-1: підйом після нокдауну лишається дією (журнал, екран), але не рахується в довжину матчу.
+            if (_actionId != MatchActionId.GetUp) _s.Round++;
             if (_s.Round > _setup.RoundLimit) End(MatchWinner.Draw, MatchEndKind.TimeLimit);
         }
 

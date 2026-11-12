@@ -51,7 +51,7 @@
         /// за 15 дій і перемоги у ворожнечі нижче вилки, однакові +2 лишали ~6 % «розгромів».
         /// </summary>
         public const int FirstPinBonus = 2;
-        public const int FirstHoldBonus = 3;
+        public const int FirstHoldBonus = 4;
 
         public const int WarningsToDq = 3;
 
@@ -63,12 +63,21 @@
         public const int OutsideCountLimit = 10;
 
         /// <summary>
-        /// Ліміт матчу в діях (§4.11, ПЛЕЙСХОЛДЕР): далі нічия. Зріз 03.11.2026 мав 20 раундів по ~4 дії; ланцюг рахує кожну дію.
+        /// Ліміт матчу в діях (§4.11, ПЛЕЙСХОЛДЕР): далі нічия. Підйоми (GetUp) у лічильник не входять (P2-1). Зріз 03.11.2026 мав 20 раундів по ~4 дії; ланцюг рахує кожну дію.
         /// </summary>
         public const int ActionLimit = 40;
-        /// <summary>Пізня стадія з цієї дії: −1 до «Вирватися» й «Терпіти» (втома, матч іде до фіналу).</summary>
-        public const int LateStageRound = 24;
+        /// <summary>
+        /// Пізня стадія (P2-1, довжина матчу 8–15 дій, ПЛЕЙСХОЛДЕР): з цієї дії −<see cref="LateStagePenalty"/> до «Вирватися» й «Терпіти»,
+        /// далі штраф росте на 1 за кожні <see cref="LateStageStep"/> дій (втома, матч іде до фіналу). Було 24 плоским −1 — після p90 довжини.
+        /// </summary>
+        public const int LateStageRound = 11;
         public const int LateStagePenalty = 1;
+        public const int LateStageStep = 1;
+        /// <summary>
+        /// Фінішер недоступний, доки лічильник дій матчу (<c>State.Round</c>) менший за це (P2-1, ПЛЕЙСХОЛДЕР): без цього ~12 % матчів
+        /// закінчувались фінішером за 3–7 дій.
+        /// </summary>
+        public const int FinisherMinRound = 8;
 
         /// <summary>Реверс фінішера і штрафи «Вирватися» після фінішера (10+ / 7–9).</summary>
         public const int ReverseVsFinisherPenalty = -2;
@@ -79,7 +88,7 @@
 
         /// <summary>Пороги ШІ (gdd §2.8).</summary>
         public const int AiPinDamage = 8;
-        public const int AiSubmissionDamage = 6;
+        public const int AiSubmissionDamage = 7;
         public const int AiReverseDamage = 6;
 
         /// <summary>

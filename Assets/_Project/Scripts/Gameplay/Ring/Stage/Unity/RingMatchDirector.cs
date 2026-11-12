@@ -27,6 +27,91 @@ namespace Game.Gameplay.Ring.Stage
         // Ажіотаж на мить показаної події: рушій рахує наперед, а натовп має жити тим, що на екрані.
         private int _hype;
 
+        // ============================ QTE (Ф3: «лише видовище») ============================
+
+        private readonly MatchQteWindow _qte = new MatchQteWindow();
+        // Повтор журналу (BeginReplay) і демо без рушія: RegisterFlourish там мутував би чужий рушій — вікна немає.
+        private bool _noQte;
+        // Огляд (-ring-shots): бот сам тисне QTE посередині вікна — детермінований Hit для кадрів. Звичайна гра — лише людина.
+        private static readonly bool AutoQte = RingStage3D.ReadArg("-ring-shots") != null;
+        private float _qteOpenT, _qteCloseT;
+
+        /// <summary>QTE-вікно відкрите (для майбутнього вигляду: кільце чи смуга; тут нічого не малюється).</summary>
+        public bool QteOpen { get { return _qte.IsOpen; } }
+
+        /// <summary>Скільки вікна лишилось: 1 — щойно відкрилось, 0 — закрите.</summary>
+        public float QteRemaining01 { get { return _qte.Remaining01(Time.time); } }
+
+        /// <summary>Вікно відкрилось (мить qte_open, вже зі звуком Prompt).</summary>
+        public event Action QteOpened;
+
+        /// <summary>Вікно закрилось: true — натиск влучив (RegisterFlourish викликано), false — пропуск. Скасування (кінець матчу) не повідомляє.</summary>
+        public event Action<bool> QteClosed;
+
+        /// <summary>
+        /// Натиск гравця (клавіша Confirm чи кнопка геймпада): true — натиск з'їдено вікном (хост не має передавати його далі),
+        /// false — вікна немає чи натиск до відкриття. Влучний натиск — <see cref="MatchEngine.RegisterFlourish"/> (+1 ажіотажу,
+        /// подія Flourish сама піде в чергу показу й озвучення); кидків це не торкається.
+        /// </summary>
+        public bool QtePress()
+        {
+            if (_e == null || _noQte || !_qte.IsActive) return false;
+            int seq;
+            bool hit = _qte.Press(Time.time, out seq);
+            DeliverQte(_qte.Tick(Time.time));
+            if (!hit) return false;
+            _e.RegisterFlourish(seq);
+            var h = QteClosed;
+            if (h != null) h(true);
+            return true;
+        }
+
+        private void DeliverQte(QteTick tk)
+        {
+            if ((tk & QteTick.Opened) != 0)
+            {
+                if (_s.Sound != null) _s.Sound.Qte(RingQte.Prompt);
+                var o = QteOpened;
+                if (o != null) o();
+            }
+            if ((tk & QteTick.Missed) != 0)
+            {
+                if (_s.Sound != null) _s.Sound.Qte(RingQte.Miss);
+                var c = QteClosed;
+                if (c != null) c(false);
+            }
+        }
+
+        private void UpdateQte()
+        {
+            if (!_qte.IsActive) return;
+            float t = Time.time;
+            var tk = _qte.Tick(t);
+            DeliverQte(tk);
+            if (AutoQte && _qte.IsOpen && t >= (_qteOpenT + _qteCloseT) * 0.5f) QtePress();
+        }
+
+        /// <summary>
+        /// Завести вікно QTE на мітках кліпа кроку <c>qte_open</c>/<c>qte_close</c> (як <see cref="ArmFollowUp"/>: час кліпа ділиться на
+        /// <see cref="RingStage3D.PlaySpeed"/>). Умови: QTE ввімкнено (читається зараз, не кешується), є рушій, подія — прийом гравця, що
+        /// дає видовище (<see cref="MatchQteSource.SeqFor"/>), кліп має обидві мітки, а крок стартує не пізніше відкриття. Без міток —
+        /// нічого: вікно з'явиться, щойно «Кліпи» дадуть мітку.
+        /// </summary>
+        private void ArmQte(MatchEvent ev, string clip, float startAt)
+        {
+            if (_e == null || _noQte || ev == null || clip == null) return;
+            int seq = MatchQteSource.SeqFor(_e.State.Log, ev, clip);
+            if (seq < 0) return;
+            string mb = RingBeats.MarkBase(clip);
+            float open = _s.Events.Time(mb, "qte_open");
+            float close = _s.Events.Time(mb, "qte_close");
+            if (open < 0f || close <= open || open < startAt) return;
+            float now = Time.time;
+            _qteOpenT = now + (open - startAt) / RingStage3D.PlaySpeed;
+            _qteCloseT = now + (close - startAt) / RingStage3D.PlaySpeed;
+            _qte.Open(seq, _qteOpenT, _qteCloseT);
+        }
+
         private struct Mirror
         {
             /// <summary>Пара за рингом (склейка місця); на рингу — false.</summary>
@@ -58,6 +143,8 @@ namespace Game.Gameplay.Ring.Stage
         public void Begin(MatchEngine e)
         {
             StopAllCoroutines();
+            _qte.Cancel();
+            _noQte = false;
             _walkCo.Clear();
             _running = false;
             _ended = false;
@@ -107,6 +194,7 @@ namespace Game.Gameplay.Ring.Stage
             if (e == null) throw new ArgumentNullException("e");
             Begin(null);
             _e = e;
+            _noQte = true;   // повтор не чіпає рушія: RegisterFlourish там мутував би журнал, який уже зіграно
             var log = e.State.Log;
             _seen = Mathf.Clamp(fromSeq, 0, log.Count);
             _hype = Mathf.Clamp(e.Setup.StartHype, 0, MatchRules.MaxHype);
@@ -131,6 +219,7 @@ namespace Game.Gameplay.Ring.Stage
         public void EndMatch()
         {
             StopAllCoroutines();
+            _qte.Cancel();   // без звуку «пропуск»: матч закрито, вікно просто гасне
             _walkCo.Clear();
             _running = false;
             _q.Clear();
@@ -142,6 +231,7 @@ namespace Game.Gameplay.Ring.Stage
 
         private void Update()
         {
+            UpdateQte();
             if (_e != null)
             {
                 var log = _e.State.Log;
@@ -996,6 +1086,7 @@ namespace Game.Gameplay.Ring.Stage
             }
             ArmBeat(idx);
             if (st.Actor == _ev?.Actor) ArmFollowUp(_ev, st.Clip, 0f);
+            ArmQte(_ev, st.Clip, 0f);
             float len = clip.length / RingStage3D.PlaySpeed;
             if (st.Once) len = Mathf.Min(len, 1.7f);
             yield return new WaitForSeconds(len);
@@ -1285,6 +1376,7 @@ namespace Game.Gameplay.Ring.Stage
             ArmBeat(idx, tStart, st);
             if (ev != null && sa == ev.Actor) ArmFollowUp(ev, st.Clip, tStart);
             ArmTaps(ev, st.Clip, tStart);
+            ArmQte(ev, st.Clip, tStart);
             if (_pinSound != null && ev != null && ev.Kind == MatchEventKind.Kickout)
             {
                 // Звук накриття — на контакті Cover (груди на груди: мітка contact або виміряна мить кліпа).

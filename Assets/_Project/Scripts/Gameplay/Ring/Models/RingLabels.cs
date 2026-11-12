@@ -45,7 +45,11 @@ namespace Game.Gameplay.Ring.Models
 
         public static string PostureName(RingText t, Posture p) { return t.Get("posture." + (int)p); }
         public static string ActionName(RingText t, MatchActionId id) { return t.Get("action." + (int)id); }
-        public static string Unavailable(RingText t, UnavailableReason r) { return t.Get("unavail." + (int)r); }
+        public static string Unavailable(RingText t, UnavailableReason r)
+        {
+            if (r == UnavailableReason.TooEarly) return t.Format("match.unavail.too_early", MatchRules.FinisherMinRound);
+            return t.Get("unavail." + (int)r);
+        }
         public static string EndKind(RingText t, MatchEndKind k) { return t.Get("endkind." + (int)k); }
         public static string WinnerName(RingText t, MatchWinner w) { return t.Get("winner." + (int)w); }
         public static string EndingName(RingText t, FeudEnding e) { return t.Get(FeudEndings.TitleKey(e)); }

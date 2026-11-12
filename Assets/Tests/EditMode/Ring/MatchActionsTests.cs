@@ -116,6 +116,8 @@ namespace Game.Tests.EditMode
             e.State.Hype = 4;
             Assert.AreEqual(UnavailableReason.TargetNotHurt, Why(e, MatchActionId.Finisher));
             e.State.Rival.Damage = 6;
+            Assert.AreEqual(UnavailableReason.TooEarly, Why(e, MatchActionId.Finisher), "P2-1: фінішер — не раніше FinisherMinRound-ї дії");
+            e.State.Round = MatchRules.FinisherMinRound;
             Assert.IsTrue(e.Describe(MatchActionId.Finisher).Available);
             e.State.Player.Stamina = MatchRules.Cost(MatchActionId.Finisher) - 1;
             Assert.AreEqual(UnavailableReason.NotEnoughStamina, Why(e, MatchActionId.Finisher));
@@ -416,7 +418,7 @@ namespace Game.Tests.EditMode
             t.Perform(MatchActionId.TopRope);
             Assert.AreEqual(MatchPhase.AwaitReaction, t.Phase);
             var f = MatchKit.Engine(true);
-            f.State.Player.Momentum = 5; f.State.Hype = 4; f.State.Rival.Damage = 6;
+            f.State.Player.Momentum = 5; f.State.Hype = 4; f.State.Rival.Damage = 6; f.State.Round = MatchRules.FinisherMinRound;
             f.Perform(MatchActionId.Finisher);
             Assert.AreEqual(MatchPhase.AwaitReaction, f.Phase);
             Assert.AreEqual(-3, f.PendingReaction.ReverseModifier, "проти фінішера -2 і -1 за ушкодження 6");
@@ -616,7 +618,7 @@ namespace Game.Tests.EditMode
         public void Finisher_SpendsMomentumAndStamina_AutoPinsWithPenalty()
         {
             var e = MatchKit.Engine(true, new[] { 11, 12 });
-            e.State.Player.Momentum = MatchRules.FinisherMomentum; e.State.Hype = 4; e.State.Rival.Damage = 6;
+            e.State.Player.Momentum = MatchRules.FinisherMomentum; e.State.Hype = 4; e.State.Rival.Damage = 6; e.State.Round = MatchRules.FinisherMinRound;
             e.Perform(MatchActionId.Finisher);
             Assert.AreEqual(0, e.State.Player.Momentum);
             Assert.AreEqual(MatchRules.StartStamina - MatchRules.Cost(MatchActionId.Finisher), e.State.Player.Stamina);
