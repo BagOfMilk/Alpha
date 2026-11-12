@@ -56,6 +56,7 @@
 - `RingGameBootstrap.Career.cs` (Кар'єра; до її появи — «Изучение»): дані, сейв `ICareerHost`, `MigrateSave`, `Rebind`,
   `ViewKey` / `MakeView`, `BackstageCtx`, `StartShow`, бот тижня (`BotWeekStep`, `ReviewPerks`, `BotGrow`);
 - `RingGameBootstrap.Match.cs` (Бій): `BotMatchStep`, `ReviewRopes` (у бою — `ReviewMoves`), `BotTurn`, `BeatShots`;
+  у каркасі `HandleKeys` рядок QTE (`confirm && MatchQteInput.TryPress()`) — теж Бій (11.11.2026, «Изучение» передало);
 - `RingGameBootstrap.Menus.cs` («Меню») — без змін;
 - `Editor/RingSceneBuilder.cs` — сцена («Изучение»); `Editor/RingSceneBuilder.Player.cs` — збірка («Відео огляд»).
 

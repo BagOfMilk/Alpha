@@ -229,6 +229,11 @@ namespace Game.Gameplay.Ring.Stage
 
         public void Enqueue(MatchEvent ev) { _q.Enqueue(ev); }
 
+        // Хост тисне QTE через MatchQteInput (лінтований хост не бачить сцени); зв'язок живе, поки живий режисер.
+        private Func<bool> _qtePressFn;
+        private void OnEnable() { if (_qtePressFn == null) _qtePressFn = QtePress; MatchQteInput.Bind(_qtePressFn); }
+        private void OnDisable() { MatchQteInput.Unbind(_qtePressFn); }
+
         private void Update()
         {
             UpdateQte();

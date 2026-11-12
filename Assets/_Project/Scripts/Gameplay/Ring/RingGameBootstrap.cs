@@ -494,6 +494,9 @@ namespace Game.Gameplay.Ring
                 OpenPause();
                 return;
             }
+            bool confirm = Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || Input.GetKeyDown(KeyCode.Space)
+                || BoundDown(RingAction.Confirm);
+            if (confirm && MatchQteInput.TryPress()) return;   // відкрите вікно QTE у матчі з'їдає «Підтвердити» (Ф3, зона бою)
             for (int i = 1; i <= 9; i++)
             {
                 if (!Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha1 + i - 1))) continue;
@@ -502,8 +505,7 @@ namespace Game.Gameplay.Ring
             }
             // перепризначені в налаштуваннях «Журнал», «Підтвердити», «Назад» діють і на екранах кар'єри; заводські — запасні
             if (Input.GetKeyDown(KeyCode.L) || BoundDown(RingAction.Log)) _view.OnToggleLog();
-            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || Input.GetKeyDown(KeyCode.Space) || BoundDown(RingAction.Confirm))
-                _view.OnConfirm();
+            if (confirm) _view.OnConfirm();
         }
 
         private int _fxSeen;

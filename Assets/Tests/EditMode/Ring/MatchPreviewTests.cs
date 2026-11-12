@@ -337,6 +337,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(UnavailableReason.JustPinned, e.Preview(MatchSide.Rival, MatchActionId.Pin).Reason);
 
             // у гравця все для утримання є, крім ходу: причина — не його черга, а не JustPinned
+            e.State.Player.Posture = Posture.Standing;
             e.State.Rival.Posture = Posture.Down; e.State.Rival.Damage = Math.Max(e.State.Rival.Damage, MatchRules.PinMinDamage);
             var other = e.Preview(MatchSide.Player, MatchActionId.Pin);
             Assert.AreNotEqual(UnavailableReason.JustPinned, other.Reason);
