@@ -341,7 +341,8 @@ namespace Game.Gameplay.Ring
             grew = false;
             ReadCareerShotArgs();
             BotForceScenes();
-            if (BotLoadStep() || BotEndingStep() || BotDeclineTitleStep() || BotOfferStep()) { grew = true; return true; }
+            BotContract();
+            if (BotLoadStep() || BotEndingStep() || BotDeclineTitleStep() || BotContractReadStep() || BotOfferStep()) { grew = true; return true; }
             BotForceOpponent();
             bool week = !_onTitle && _career.Stage == CareerStage.Week && !_career.BackstageOpen;
             if (!week) return false;
@@ -377,6 +378,12 @@ namespace Game.Gameplay.Ring
         private Queue<string> _shotBackstageQueue;
         /// <summary><c>-ring-shot-heroine</c>: огляд героїні — перше жіноче тіло на екрані створення (<see cref="ApplyShotHeroine"/>).</summary>
         private bool _shotHeroine;
+        /// <summary><c>-ring-shot-contract exclusive|honest</c>: папір пропозиції огляду (§6.4) — пастка чи чесний; null — як вирішить зерно.</summary>
+        private bool? _shotContract;
+        /// <summary><c>-ring-shot-contract-read</c>: на кінці сезону з пропозицією — «Прочитати дрібний шрифт» (кидок Техніки).</summary>
+        private bool _shotContractRead;
+        /// <summary><c>-ring-shot-manager</c>: менеджерка найнята з першого тижня огляду (рядки контракту й гонорару з її часткою).</summary>
+        private bool _shotManager;
 
         /// <summary>Прапорці огляду кар'єри — лише разом з <c>-ring-shots</c> (сейв і гра гравця не чіпаються).</summary>
         private void ReadCareerShotArgs()
@@ -398,6 +405,16 @@ namespace Game.Gameplay.Ring
                 if (offer == "decline") _shotOfferDecline = true;
                 else if (offer != "accept") Debug.LogWarning("[Ринг] -ring-shot-offer: accept або decline, а не '" + offer + "' — як за замовчуванням (accept)");
             }
+            string contract = ReadArg("-ring-shot-contract");
+            if (contract != null)
+            {
+                if (contract == "exclusive") _shotContract = true;
+                else if (contract == "honest") _shotContract = false;
+                else Debug.LogWarning("[Ринг] -ring-shot-contract: exclusive або honest, а не '" + contract + "' — як вирішить зерно");
+                if (_shotContract.HasValue) ShotNote("папір пропозиції: " + (_shotContract.Value ? "пастка «виключне право»" : "чесний") + " (-ring-shot-contract)");
+            }
+            _shotContractRead = RingLaunchArgs.Has("-ring-shot-contract-read");
+            _shotManager = RingLaunchArgs.Has("-ring-shot-manager");
             string name = ReadArg("-ring-hero-name");
             if (name != null)
             {
@@ -641,6 +658,35 @@ namespace Game.Gameplay.Ring
             if (!_shotHeroine || _career == null || _career.Stage != CareerStage.Create) return;
             int fb = Array.FindIndex(CareerLooks.HeroBodies, CareerLooks.IsFemaleBody);
             if (fb >= 0 && HeroBody != fb) { HeroBody = fb; ShotNote("героїня: тіло " + CareerLooks.HeroBodies[fb]); }
+        }
+
+        /// <summary>
+        /// <c>-ring-shot-contract</c> і <c>-ring-shot-manager</c> (огляд екрана контракту, §6.4): примус паперу пропозиції — щокроку, бо
+        /// його немає в сейві (переживає «Нова гра» й «Продовжити»); менеджерка — раз, на першому тижні. Кроку бота не займає.
+        /// </summary>
+        private void BotContract()
+        {
+            if (_onTitle || _career == null) return;
+            if (_shotContract.HasValue) _career.ForcedOfferExclusive = _shotContract;
+            if (_shotManager && !_career.HasManager && _career.Stage == CareerStage.Week)
+            {
+                _career.State.Manager = true;
+                _shotManager = false;
+                ShotNote("менеджерка найнята (-ring-shot-manager)");
+            }
+        }
+
+        /// <summary><c>-ring-shot-contract-read</c>: на кінці сезону з пропозицією — «Прочитати дрібний шрифт» (той самий виклик, що й кнопка).</summary>
+        private bool BotContractReadStep()
+        {
+            if (!_shotContractRead || _onTitle || _career == null || _career.Stage != CareerStage.SeasonEnd) return false;
+            var c = _career.GetOfferContract();
+            if (c == null || !c.CanRead) return false;
+            var r = _career.ReadOfferContract();
+            ShotNote("дрібний шрифт: 2d6 " + r.Roll + " + Техніка " + r.Modifier + " = " + r.Total + " — " + r.Sight + " (-ring-shot-contract-read)");
+            Save();
+            _view.Refresh();
+            return true;
         }
     }
 }

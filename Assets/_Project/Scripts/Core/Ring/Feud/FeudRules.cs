@@ -73,17 +73,17 @@ namespace Game.Core.Ring
     {
         /// <summary>Умови: money(min), season(min), week(min), parity(min 0/1 — парність тижня), injured, champion, last_won,
         /// last_lost, last_draw, last_swerved, plan_set, title_eligible, actions(min), npc_feud(target, min), tier(min — рівень федерації),
-        /// female (героїня — жіночий дивізіон, P2-6).</summary>
+        /// female (героїня — жіночий дивізіон, P2-6), manager (менеджер найнятий, §6.4).</summary>
         public static readonly string[] Conditions =
         {
             "money", "season", "week", "parity", "injured", "champion", "last_won", "last_lost", "last_draw", "last_swerved",
-            "plan_set", "title_eligible", "actions", "npc_feud", "tier", "female"
+            "plan_set", "title_eligible", "actions", "npc_feud", "tier", "female", "manager"
         };
 
         /// <summary>Ефекти: money(add), injure(target зона head/body/legs/random, add — ушкодження), npc_feud(target NPC | opponent |
         /// last_opponent, add), hype(add — ажіотаж старту наступного матчу), boost(add — імпульс суперника), plan(target — план
-        /// наступного шоу), actions(add — дії тижня), dev(add — очки розвитку).</summary>
-        public static readonly string[] Effects = { "money", "injure", "npc_feud", "hype", "boost", "plan", "actions", "dev" };
+        /// наступного шоу), actions(add — дії тижня), dev(add — очки розвитку), manager(add 1 — найняти, −1 — звільнити, §6.4).</summary>
+        public static readonly string[] Effects = { "money", "injure", "npc_feud", "hype", "boost", "plan", "actions", "dev", "manager" };
 
         public static bool IsCondition(string n) { return Array.IndexOf(Conditions, n) >= 0; }
         public static bool IsEffect(string n) { return Array.IndexOf(Effects, n) >= 0; }

@@ -66,9 +66,10 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(1, fresh.State.Last.LossPopularityBlocked);
             Assert.AreEqual(blob, fresh.CaptureState());
 
-            // зліпок до 11.11.2026: без losspop і з 23 полями підсумку шоу
+            // зліпок до 11.11.2026: без losspop і з 23 полями підсумку шоу (24-те — LossPopularityBlocked, 25-те — ManagerCut, 12.11.2026)
             string last = s.State.Last.Capture();
             string oldLast = last.Substring(0, last.LastIndexOf(','));
+            oldLast = oldLast.Substring(0, oldLast.LastIndexOf(','));
             string old = Regex.Replace(blob, @"\|losspop=\d+", "").Replace(System.Uri.EscapeDataString(last), System.Uri.EscapeDataString(oldLast));
             Assert.AreNotEqual(blob, old);
             var legacy = CareerKit.Fresh(41, c);
