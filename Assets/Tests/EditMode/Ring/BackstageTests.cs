@@ -111,7 +111,9 @@ namespace Game.Tests.EditMode
             foreach (var kv in own)
             {
                 bool service = kv.Key.StartsWith("speaker.") || kv.Key.StartsWith("week.reason.") || kv.Key.StartsWith("bs.kind.") || kv.Key.StartsWith("bs.ui.");
-                if (!service) StringAssert.Contains("\"" + kv.Key + "\"", scenes, "невикористаний ключ " + kv.Key);
+                // жіноча форма «ключ.f» (HeroForms) у сценах не згадується — досить, щоб був базовий ключ
+                string used = kv.Key.EndsWith(HeroForms.FemaleSuffix) ? kv.Key.Substring(0, kv.Key.Length - HeroForms.FemaleSuffix.Length) : kv.Key;
+                if (!service) StringAssert.Contains("\"" + used + "\"", scenes, "невикористаний ключ " + kv.Key);
                 string v = (string)kv.Value;
                 Assert.IsFalse(string.IsNullOrWhiteSpace(v), kv.Key);
                 foreach (var bad in new[] { "ы", "э", "ё", "ъ" }) StringAssert.DoesNotContain(bad, v.ToLowerInvariant(), kv.Key);
@@ -521,6 +523,25 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(1, r.HypeBonusDelta);
             Assert.AreEqual(heel + 1, s.Feud.State.GetPath(RingPath.Heel));
             Assert.IsTrue(s.State.BackstageSeen.Contains("1:ev_parking"));
+        }
+
+        [Test]
+        public void Parking_NotForTheHeroine_TheFightWithTheBaronIsTheHerosScene()
+        {
+            // рішення ПМ 12.11.2026 (P2-6: суперник своєї статі): героїні не показувати; варіант із чемпіонкою — вміст на пізніше
+            var c = Shared();
+            var h = Heroine(71);
+            h.State.Week = 4;
+            foreach (var e in EventIds)
+            {
+                if (e == "ev_parking") break;
+                h.State.BackstageSeen.Add("1:" + e);
+            }
+            Assert.AreNotEqual("ev_parking", h.Backstage().SceneId, "героїні — наступна подія сезону, не парковка");
+            var s = HeroForEvent(c, "ev_parking", 71);
+            Assert.AreEqual("ev_parking", s.Backstage().SceneId, "герою — як і була");
+            var cond = c.Backstage.Find("ev_parking").Requires;
+            Assert.IsTrue(cond.Exists(x => x.Kind == ConditionKind.Career && x.Key == "female" && x.Negate));
         }
 
         [Test]
