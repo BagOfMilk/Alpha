@@ -419,9 +419,45 @@ namespace Game.Tests.EditMode
             { "ev_mixed", "перше шоу ворожнечі з Молотом — великий тиждень сезону 1, тобто завжди федерація Ліни" },
         };
 
+        /// <summary>
+        /// Вузли, до яких ведуть лише випадки гілок з умовою «букер федерації = X» (і всі — з тим самим X): вузол → X. Старт, перехід
+        /// рядка, варіант вибору, кидок і запасна гілка (next) — перехід без букера.
+        /// </summary>
+        private static Dictionary<string, string> BookerGuards(PromoDef p)
+        {
+            var into = new Dictionary<string, List<string>>();
+            Action<string, string> edge = (to, guard) =>
+            {
+                if (to == null) return;
+                List<string> l;
+                if (!into.TryGetValue(to, out l)) into[to] = l = new List<string>();
+                l.Add(guard);
+            };
+            edge(p.Start, null);
+            foreach (var n in p.Nodes)
+            {
+                if (n.Type != PromoNodeType.Branch) { foreach (var t in n.Targets()) edge(t, null); continue; }
+                foreach (var cs in n.Cases)
+                    edge(cs.Next, cs.Requires.Where(cd => cd.Kind == ConditionKind.Career && cd.Key == "booker" && !cd.Negate)
+                        .Select(cd => cd.Target).FirstOrDefault());
+                edge(n.Next, null);
+            }
+            var guards = new Dictionary<string, string>();
+            foreach (var kv in into)
+                if (kv.Value[0] != null && kv.Value.All(x => x == kv.Value[0])) guards[kv.Key] = kv.Value[0];
+            return guards;
+        }
+
         [Test]
         public void BookerNames_OnlyInTheirOwnFederationsScenes_AndTrustRewardsOfTheFeudNameNoBooker()
         {
+            // перевірка самого охоронця: гілка за букером федерації пускає до репліки лише свого букера
+            var turn = BookerGuards(Shared().Backstage.Find("ev_turn").Promo);
+            Assert.AreEqual("booker", turn["b1"]);
+            Assert.AreEqual("booker2", turn["b2"]);
+            Assert.IsFalse(turn.ContainsKey("b0"), "запасна гілка — без букера");
+            Assert.IsFalse(turn.ContainsKey("rb"), "спільний вузол після реплік — без букера");
+
             var c = Shared();
             var text = new Dictionary<string, string>();
             foreach (var f in new[] { "strings_uk.json", "backstage_uk.json" })
@@ -449,13 +485,16 @@ namespace Game.Tests.EditMode
                 var p = sc.Promo;
                 check(sc.Id, p.TitleKey, allowed);
                 check(sc.Id, p.PlaceKey, allowed);
+                var guards = BookerGuards(p);
                 foreach (var n in p.Nodes)
                 {
-                    check(sc.Id + "/" + n.Id, n.TextKey, allowed);
-                    foreach (var o in n.Options) check(sc.Id + "/" + n.Id, o.TextKey, allowed);
-                    foreach (var r in n.Rewards) check(sc.Id + "/" + n.Id, r.TextKey, allowed);
-                    if (allowed != "booker" && n.Type == PromoNodeType.Line && n.Speaker == "booker")
-                        bad.Add(sc.Id + "/" + n.Id + ": говорить Ліна, а сцена буває не лише в її федерації");
+                    // вузол, до якого ведуть лише випадки гілки «букер федерації = X», буває тільки у федерації X
+                    string g, here = guards.TryGetValue(n.Id, out g) ? g : allowed;
+                    check(sc.Id + "/" + n.Id, n.TextKey, here);
+                    foreach (var o in n.Options) check(sc.Id + "/" + n.Id, o.TextKey, here);
+                    foreach (var r in n.Rewards) check(sc.Id + "/" + n.Id, r.TextKey, here);
+                    if (n.Type == PromoNodeType.Line && c.IsFederationBooker(n.Speaker) && n.Speaker != here)
+                        bad.Add(sc.Id + "/" + n.Id + ": говорить " + n.Speaker + ", а вузол буває не лише в федерації цього букера");
                 }
             }
             // промо ворожнечі йдуть у будь-якій федерації: нагорода довірою — довіра букера цієї федерації, без імені
