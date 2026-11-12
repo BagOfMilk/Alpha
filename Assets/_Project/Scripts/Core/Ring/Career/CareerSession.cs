@@ -71,6 +71,21 @@ namespace Game.Core.Ring.Career
         /// <summary>Матч, що йде зараз: звичайний (окремий) або матч ворожнечі на великому шоу. null — матчу немає.</summary>
         public MatchEngine Engine { get { return State.Phase == ShowPhase.Feud ? Feud.CurrentMatch : _engine; } }
 
+        /// <summary>
+        /// План, яким іде поточний матч: ворожнечі — план кампанії (після підготовки матчу, з планом за замовчуванням), титульний —
+        /// без плану, щотижневий — план букера. Для бота кінцівок огляду (<see cref="FeudBot.GoalFor"/>).
+        /// </summary>
+        public BookerPlan CurrentMatchPlan
+        {
+            get { return State.Phase == ShowPhase.Feud ? Feud.State.Plan : State.IsTitle ? BookerPlan.None : State.Plan; }
+        }
+
+        /// <summary>Поточний матч — розв'язка ворожнечі з Молотом.</summary>
+        public bool CurrentMatchDecisive
+        {
+            get { return State.Phase == ShowPhase.Feud && Feud.Stage == RingStage.Match && Feud.CurrentMatchDef.Decisive; }
+        }
+
         public int FeudLevel(string npcId)
         {
             if (npcId == CareerContent.HammerId && !State.FeudResolved) return Feud.State.Heat;
@@ -548,9 +563,30 @@ namespace Game.Core.Ring.Career
             return true;
         }
 
+        /// <summary>
+        /// Сцена, яку відкриє наступне «Закулісся» замість звичайного вибору (огляд QA: <c>-ring-shot-event</c>,
+        /// <c>-ring-shot-backstage all</c>) — без умов, тижня й «раз за сезон». Одноразова: скидається, щойно сцену відкрито.
+        /// У сейв не входить.
+        /// </summary>
+        public string ForcedBackstageScene { get; private set; }
+
+        /// <summary>Примусити сцену наступного «Закулісся» (null — скасувати). Невідомий id — виняток.</summary>
+        public void ForceBackstage(string sceneId)
+        {
+            if (sceneId != null && (Content.Backstage == null || Content.Backstage.Find(sceneId) == null))
+                throw new ArgumentException("немає закулісної сцени '" + sceneId + "'");
+            ForcedBackstageScene = sceneId;
+        }
+
         private BackstageScene PickBackstageScene()
         {
             var all = Content.Backstage.Scenes;
+            if (ForcedBackstageScene != null)
+            {
+                var forced = Content.Backstage.Find(ForcedBackstageScene);
+                ForcedBackstageScene = null;
+                if (forced != null) return forced;
+            }
             foreach (var sc in all)
             {
                 if (sc.Kind != BackstageKind.Event) continue;
@@ -986,6 +1022,15 @@ namespace Game.Core.Ring.Career
             if (res.FinalHype >= CareerRules.HypeBonusAt) r.FeeHypeBonus = CareerRules.HypeBonus;
             State.Money += r.TotalFee;
 
+            // P1-6: поразка чи нічия дає популярність лише з ажіотажем ≥ 9 і раз за сезон. Приріст від поразки в стані ворожнечі —
+            // лише правило ажіотажу (≥ 7) і «звернув і зал за тебе»: якщо їх не можна — популярність лишається, як до матчу.
+            if (res.Winner != MatchWinner.Player && Popularity > popBefore)
+            {
+                if (res.FinalHype < CareerRules.LossPopularityHype) { Feud.State.Audience = popBefore; r.LossPopularityBlocked = 1; }
+                else if (State.LossPopularitySeason == State.Season) { Feud.State.Audience = popBefore; r.LossPopularityBlocked = 2; }
+                else State.LossPopularitySeason = State.Season;
+            }
+
             // «Злам плану» (Бунтар): звернутий план букера — зал це любить і букер запам'ятовує.
             if (outcome == FeudPlanOutcome.Swerved && Feud.State.Perks.Contains(PerkCatalog.PlanBreaker))
             {
@@ -1105,6 +1150,7 @@ namespace Game.Core.Ring.Career
                 State.Report.TitleDone = true;
                 State.Report.TitleWon = State.Last != null && State.Last.TitleWon;
                 State.Report.BeltIsPlayers = IsChampion;
+                RefreshSeasonReport();
                 State.IsTitle = false;
                 State.IsBig = false;
                 Stage = CareerStage.SeasonEnd;
@@ -1153,6 +1199,26 @@ namespace Game.Core.Ring.Career
 
         public SeasonReport GetSeasonReport() { Require(CareerStage.SeasonEnd); return State.Report; }
 
+        /// <summary>
+        /// Підсумок сезону остаточний: титульний матч зіграно, від нього відмовились або його не було (3-P2-6, плейтест 08.11.2026:
+        /// титульний матч дописувався в уже показаний підсумок, і кінець сезону показувався двічі). Поки титульний шанс відкритий,
+        /// екран кінця сезону показує лише його, підсумок — після.
+        /// </summary>
+        public bool SeasonSummaryFinal { get { return Stage == CareerStage.SeasonEnd && !CanStartTitleMatch; } }
+
+        /// <summary>
+        /// Шкали підсумку — після титульного матчу чи відмови: популярність, довіра, гроші й звільнення такими, якими сезон
+        /// закрився (знімок кінця тижня 4 їх не знав: гонорар титулу, ажіотаж, довіра за відмову чемпіона).
+        /// </summary>
+        private void RefreshSeasonReport()
+        {
+            var rep = State.Report;
+            if (rep == null) return;
+            rep.Popularity = Popularity; rep.Trust = Trust; rep.Money = State.Money;
+            rep.Fired = Popularity <= 0;
+            rep.BeltIsPlayers = IsChampion;
+        }
+
         public bool CanStartTitleMatch { get { return Stage == CareerStage.SeasonEnd && State.Report != null && State.Report.TitleEligible && !State.Report.TitleDone; } }
 
         /// <summary>Титульний матч сезону (§6.4): шанс — або захист пояса. Іде як велике шоу зі своєю карткою.</summary>
@@ -1179,6 +1245,7 @@ namespace Game.Core.Ring.Career
             if (State.Report.TitleDone) return;
             if (State.Report.TitleEligible && IsChampion) Feud.State.Trust -= 1;
             State.Report.TitleDone = true;
+            RefreshSeasonReport();
         }
 
         public bool CanStartNextSeason
