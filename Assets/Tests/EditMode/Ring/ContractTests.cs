@@ -544,6 +544,40 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void ManagerScene_AfterFiring_SheComesBackNextSeason_RemembersIt_AndCanBeHiredAgain()
+        {
+            var s = PlayManagerScene(24, "hire");
+            Assert.IsTrue(s.FireManager());
+            var t = CareerKit.Fresh(24, C);
+            t.RestoreState(s.CaptureState());
+            Assert.IsFalse(t.HasManager);
+            ToNextSeasonBeforeManagerScene(t);
+            Assert.AreEqual("ev_manager", t.Backstage().SceneId, "звільнена — приходить знову наступного сезону");
+            var run = t.CurrentBackstage;
+            Assert.AreEqual("n1f", run.Current.Id, "і пам'ятає звільнення — навіть після сейву");
+            run.Advance();
+            Assert.AreEqual("n2f", run.Current.Id);
+            run.Advance();
+            Assert.AreEqual("n3", run.Current.Id, "умови ті самі");
+            run.Advance();
+            run.Choose("hire");
+            while (!run.IsFinished) run.Advance();
+            t.FinishBackstage();
+            Assert.IsTrue(t.HasManager, "найняти знову можна");
+
+            // візитка, потім найнято й звільнено — пам'ятає звільнення, а не візитку
+            var u = PlayManagerScene(25, "later");
+            ToNextSeasonBeforeManagerScene(u);
+            Assert.AreEqual("ev_manager", u.Backstage().SceneId);
+            CareerKit.PlayScene(u, 0);
+            Assert.IsTrue(u.HasManager, "перший варіант — найняти");
+            Assert.IsTrue(u.FireManager());
+            ToNextSeasonBeforeManagerScene(u);
+            Assert.AreEqual("ev_manager", u.Backstage().SceneId);
+            Assert.AreEqual("n1f", u.CurrentBackstage.Current.Id);
+        }
+
+        [Test]
         public void ChampionFarewell_FiringTheManagerAfterSigning_KeepsTheSignedAdvance()
         {
             var s = AtSeasonEnd(6, 1, 3, CareerRules.OfferTrust - CareerRules.OfferChampionTrustBonus, champion: true);

@@ -1641,11 +1641,18 @@ namespace Game.Core.Ring.Career
         /// <summary>Менеджер найнятий (§6.4): 15 % кожного гонорару; пастку бачить без кидка; аванс переходу +25 %.</summary>
         public bool HasManager { get { return State.Manager; } }
 
-        /// <summary>Звільнити менеджера — будь-коли, без штрафу (наймає сцена закулісся ev_manager).</summary>
+        /// <summary>Прапор кар'єри «менеджерку звільнено»: сцена ev_manager читає його й вітається інакше (знову найняти можна).</summary>
+        public const string ManagerFiredFlag = "manager_fired";
+
+        /// <summary>
+        /// Звільнити менеджера — будь-коли, без штрафу (наймає сцена закулісся ev_manager). Наступного сезону Марта приходить знову
+        /// і пам'ятає звільнення (гілка сцени за прапором <see cref="ManagerFiredFlag"/>); відмова в сцені закриває її назавжди.
+        /// </summary>
         public bool FireManager()
         {
             if (!State.Manager || Stage == CareerStage.Title || Stage == CareerStage.Create) return false;
             State.Manager = false;
+            Feud.State.Flags.Add(ManagerFiredFlag);
             return true;
         }
 

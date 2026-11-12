@@ -1204,6 +1204,14 @@
       {
        "requires": [
         {
+         "flag": "manager_fired"
+        }
+       ],
+       "next": "n1f"
+      },
+      {
+       "requires": [
+        {
          "flag": "manager_card"
         }
        ],
@@ -1238,6 +1246,20 @@
      "type": "line",
      "speaker": "manager",
      "text": "bs.ev_manager.n2c",
+     "next": "n3"
+    },
+    {
+     "id": "n1f",
+     "type": "line",
+     "speaker": "narrator",
+     "text": "bs.ev_manager.n1f",
+     "next": "n2f"
+    },
+    {
+     "id": "n2f",
+     "type": "line",
+     "speaker": "manager",
+     "text": "bs.ev_manager.n2f",
      "next": "n3"
     },
     {
