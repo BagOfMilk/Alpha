@@ -1179,7 +1179,7 @@
    "kind": "event",
    "title": "bs.ev_manager.title",
    "place": "bs.ev_manager.place",
-   "start": "n1",
+   "start": "nb",
    "fromWeek": 2,
    "spread": 2,
    "requires": [
@@ -1190,9 +1190,28 @@
     {
      "career": "manager",
      "not": true
+    },
+    {
+     "flag": "manager_refused",
+     "not": true
     }
    ],
    "nodes": [
+    {
+     "id": "nb",
+     "type": "branch",
+     "cases": [
+      {
+       "requires": [
+        {
+         "flag": "manager_card"
+        }
+       ],
+       "next": "n1c"
+      }
+     ],
+     "next": "n1"
+    },
     {
      "id": "n1",
      "type": "line",
@@ -1205,6 +1224,20 @@
      "type": "line",
      "speaker": "manager",
      "text": "bs.ev_manager.n2",
+     "next": "n3"
+    },
+    {
+     "id": "n1c",
+     "type": "line",
+     "speaker": "narrator",
+     "text": "bs.ev_manager.n1c",
+     "next": "n2c"
+    },
+    {
+     "id": "n2c",
+     "type": "line",
+     "speaker": "manager",
+     "text": "bs.ev_manager.n2c",
      "next": "n3"
     },
     {

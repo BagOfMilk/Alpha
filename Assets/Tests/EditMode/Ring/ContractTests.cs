@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
 using Game.Core.Ring;
 using Game.Core.Ring.Career;
 using Game.Core.Ring.Match;
@@ -16,6 +18,12 @@ namespace Game.Tests.EditMode
     public class ContractTests
     {
         private static CareerContent C { get { return CareerKit.Content(); } }
+
+        /// <summary>Регіональна федерація — куди веде пропозиція з місцевої. Числа тестів — з CareerRules, а не вшиті: аванси й відсотки — плейсхолдери.</summary>
+        private static FederationDef Regional { get { return C.Federation(2); } }
+        private static int HonestAdvance { get { return CareerRules.Advance(Regional, false, false); } }
+        private static int TrapAdvance { get { return CareerRules.Advance(Regional, true, false); } }
+        private static int Penalty { get { return CareerRules.ExitPenalty(Regional); } }
 
         // ---------------- помічники ----------------
 
@@ -44,7 +52,7 @@ namespace Game.Tests.EditMode
             return s;
         }
 
-        /// <summary>Пропозиція з місцевої в регіональну (аванс 40).</summary>
+        /// <summary>Пропозиція з місцевої в регіональну (аванс <see cref="HonestAdvance"/>, у пастці — <see cref="TrapAdvance"/>).</summary>
         private static CareerSession Offer(ulong seed, bool? exclusive)
         {
             var s = AtSeasonEnd(seed, 1, 3, CareerRules.OfferTrust);
@@ -78,6 +86,36 @@ namespace Game.Tests.EditMode
             return s;
         }
 
+        /// <summary>Пройти сцену менеджерки з вибором <paramref name="choice"/> (hire / later / refuse).</summary>
+        private static CareerSession PlayManagerScene(ulong seed, string choice)
+        {
+            var s = BeforeManagerScene(seed);
+            s.Feud.State.Audience = CareerRules.ManagerPopularity;
+            var r = s.Backstage();
+            Assert.IsTrue(r.NeedsScene);
+            Assert.AreEqual("ev_manager", r.SceneId);
+            var run = s.CurrentBackstage;
+            for (int guard = 0; !run.IsFinished; guard++)
+            {
+                Assert.Less(guard, 50);
+                if (run.Current.Type == PromoNodeType.Choice) run.Choose(choice); else run.Advance();
+            }
+            s.FinishBackstage();
+            return s;
+        }
+
+        /// <summary>Наступний сезон, тиждень 4: події до ev_manager уже були, популярність — досить для менеджерки.</summary>
+        private static void ToNextSeasonBeforeManagerScene(CareerSession s)
+        {
+            s.State.Season++; s.State.Week = 4; s.State.ActionsLeft = 3;
+            foreach (var sc in s.Content.Backstage.Scenes)
+            {
+                if (sc.Id == "ev_manager") break;
+                if (sc.Kind == BackstageKind.Event) s.State.BackstageSeen.Add(s.State.Season + ":" + sc.Id);
+            }
+            s.Feud.State.Audience = CareerRules.ManagerPopularity;
+        }
+
         private static RingText Text()
         {
             return RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json"), CareerKit.Read("backstage_uk.json"));
@@ -88,13 +126,18 @@ namespace Game.Tests.EditMode
         [Test]
         public void Advance_IsTheFederations_DoubledByTheTrap_PlusAQuarterWithTheManager()
         {
-            CollectionAssert.AreEqual(new[] { 0, 40, 80, 150 }, new[] { C.Federation(1).Advance, C.Federation(2).Advance, C.Federation(3).Advance, C.Federation(4).Advance });
+            Assert.AreEqual(0, C.Federation(1).Advance, "у місцеву не переходять — авансу немає");
+            for (int t = 2; t <= C.Federations.Count; t++)
+                Assert.Greater(C.Federation(t).Advance, C.Federation(t - 1).Advance, "вища федерація — більший аванс");
             var f = C.Federation(3);
-            Assert.AreEqual(80, CareerRules.Advance(f, false, false));
-            Assert.AreEqual(160, CareerRules.Advance(f, true, false), "пастка — аванс ×2");
-            Assert.AreEqual(100, CareerRules.Advance(f, false, true), "менеджерка — +25 %");
-            Assert.AreEqual(200, CareerRules.Advance(f, true, true));
-            Assert.AreEqual(160, CareerRules.ExitPenalty(f), "штраф — аванс пастки, без надбавки менеджерки");
+            int honest = CareerRules.Advance(f, false, false), trap = CareerRules.Advance(f, true, false);
+            Assert.AreEqual(f.Advance, honest);
+            Assert.AreEqual(f.Advance * CareerRules.ExclusiveAdvancePercent / 100, trap, "пастка — аванс ×2");
+            Assert.Greater(trap, honest);
+            Assert.AreEqual(honest * CareerRules.ManagerAdvancePercent / 100, CareerRules.Advance(f, false, true), "менеджерка — +25 %");
+            Assert.Greater(CareerRules.Advance(f, false, true), honest);
+            Assert.AreEqual(trap * CareerRules.ManagerAdvancePercent / 100, CareerRules.Advance(f, true, true));
+            Assert.AreEqual(trap, CareerRules.ExitPenalty(f), "штраф — аванс пастки, без надбавки менеджерки");
         }
 
         [Test]
@@ -103,7 +146,7 @@ namespace Game.Tests.EditMode
             var s = Offer(1, false);
             var c = s.GetOfferContract();
             Assert.AreEqual(2, c.ToTier);
-            Assert.AreEqual(40, c.Advance);
+            Assert.AreEqual(HonestAdvance, c.Advance);
             Assert.AreEqual(ContractSight.Unread, c.Sight);
             Assert.IsTrue(c.CanRead);
             Assert.IsFalse(c.ExclusiveSeen || c.HintSomething);
@@ -111,7 +154,7 @@ namespace Game.Tests.EditMode
             int money = s.State.Money;
             s.AcceptOffer();
             Assert.AreEqual(2, s.FederationTier);
-            Assert.AreEqual(money + 40, s.State.Money, "аванс — при переході");
+            Assert.AreEqual(money + HonestAdvance, s.State.Money, "аванс — при переході");
             Assert.IsFalse(s.State.ContractExclusive);
             Assert.IsNull(s.GetOfferContract(), "рішення ухвалено — контракту на екрані немає");
             s.StartNextSeason();
@@ -126,13 +169,13 @@ namespace Game.Tests.EditMode
         public void Trap_DoubleAdvance_ThenFeeSeventyPercent_NoAwayShowsNoSideJob_ForTwoSeasons()
         {
             var s = Offer(2, true);
-            Assert.AreEqual(80, s.GetOfferContract().Advance, "приманка — аванс ×2");
+            Assert.AreEqual(TrapAdvance, s.GetOfferContract().Advance, "приманка — аванс ×2");
             int money = s.State.Money, season = s.State.Season;
             s.AcceptOffer();
-            Assert.AreEqual(money + 80, s.State.Money);
+            Assert.AreEqual(money + TrapAdvance, s.State.Money);
             Assert.IsTrue(s.State.ContractExclusive);
             Assert.AreEqual(season + CareerRules.ExclusiveSeasons, s.State.ContractEndSeason, "строк — два сезони нової федерації");
-            Assert.AreEqual(80, s.State.ContractPenalty);
+            Assert.AreEqual(Penalty, s.State.ContractPenalty);
 
             s.StartNextSeason();
             Assert.IsTrue(s.ExclusiveActive);
@@ -167,10 +210,10 @@ namespace Game.Tests.EditMode
             s.ForcedOfferExclusive = false;
             s.State.ContractExclusive = true;
             s.State.ContractEndSeason = s.State.Season + 1;   // строк ще сезон — вихід ранній
-            s.State.ContractPenalty = 80;
+            s.State.ContractPenalty = Penalty;
 
-            s.State.Money = 50;
-            Assert.AreEqual(80, s.ExitPenaltyDue);
+            s.State.Money = Penalty / 2;
+            Assert.AreEqual(Penalty, s.ExitPenaltyDue);
             Assert.IsTrue(s.ExitLocked);
             Assert.IsFalse(s.OfferAvailable, "пастка тримає: грошей на штраф немає");
             Assert.Throws<InvalidOperationException>(() => s.DeclineOffer(), "і відмови немає — рішення не ухвалюється");
@@ -179,21 +222,21 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(c.ExitLocked);
             var m = new SeasonOfferModel(s, Text());
             Assert.IsFalse(m.CanDecide);
-            StringAssert.Contains("80", m.PenaltyText);
-            StringAssert.Contains("50", m.PenaltyText);
+            StringAssert.Contains(Penalty.ToString(), m.PenaltyText);
+            StringAssert.Contains((Penalty / 2).ToString(), m.PenaltyText);
 
-            s.State.Money = 200;
+            s.State.Money = Penalty + 120;
             Assert.IsTrue(s.OfferAvailable);
-            StringAssert.Contains("80", new SeasonOfferModel(s, Text()).PenaltyText);
+            StringAssert.Contains(Penalty.ToString(), new SeasonOfferModel(s, Text()).PenaltyText);
             s.AcceptOffer();
             Assert.AreEqual(3, s.FederationTier);
-            Assert.AreEqual(200 - 80 + C.Federation(3).Advance, s.State.Money, "штраф знято, аванс нової федерації заплачено");
+            Assert.AreEqual(120 + CareerRules.Advance(C.Federation(3), false, false), s.State.Money, "штраф знято, аванс нової федерації заплачено");
             Assert.IsFalse(s.State.ContractExclusive, "стара пастка скінчилась із переходом");
 
             var t = AtSeasonEnd(4, 2, 5, CareerRules.OfferTrust);
             t.State.ContractExclusive = true;
             t.State.ContractEndSeason = t.State.Season;   // останній сезон строку — вихід уже вчасно
-            t.State.ContractPenalty = 80;
+            t.State.ContractPenalty = Penalty;
             t.State.Money = 0;
             Assert.AreEqual(0, t.ExitPenaltyDue);
             Assert.IsTrue(t.OfferAvailable);
@@ -205,7 +248,7 @@ namespace Game.Tests.EditMode
             var s = AtSeasonEnd(5, 2, 0, 1);
             s.State.ContractExclusive = true;
             s.State.ContractEndSeason = s.State.Season + 1;
-            s.State.ContractPenalty = 80;
+            s.State.ContractPenalty = Penalty;
             Assert.IsTrue(s.State.Report.Fired);
             s.StartNextSeason();
             Assert.AreEqual(1, s.FederationTier);
@@ -219,7 +262,7 @@ namespace Game.Tests.EditMode
             var s = AtSeasonEnd(14, 2, 5, CareerRules.OfferTrust - 1);
             s.State.ContractExclusive = true;
             s.State.ContractEndSeason = s.State.Season + 1;
-            s.State.ContractPenalty = 80;
+            s.State.ContractPenalty = Penalty;
             Assert.IsFalse(s.State.Report.Fired);
             s.StartNextSeason();
             Assert.IsTrue(s.ExclusiveActive, "останній сезон строку");
@@ -228,7 +271,7 @@ namespace Game.Tests.EditMode
             var t = AtSeasonEnd(15, 2, 5, CareerRules.OfferTrust - 1);
             t.State.ContractExclusive = true;
             t.State.ContractEndSeason = t.State.Season;
-            t.State.ContractPenalty = 80;
+            t.State.ContractPenalty = Penalty;
             t.StartNextSeason();
             Assert.IsFalse(t.State.ContractExclusive, "строк скінчився — контракт чесний");
             Assert.AreEqual(0, t.State.ContractPenalty);
@@ -245,13 +288,13 @@ namespace Game.Tests.EditMode
             s.AcceptOffer();
             Assert.IsTrue(s.State.Farewell);
             Assert.IsTrue(s.State.PendingExclusive);
-            Assert.AreEqual(80, s.State.PendingAdvance);
+            Assert.AreEqual(TrapAdvance, s.State.PendingAdvance);
             Assert.AreEqual(money, s.State.Money, "до прощального матчу аванс не платять");
             // сейв посеред прощання — підписане не губиться
             var t = CareerKit.Fresh(6, C);
             t.RestoreState(s.CaptureState());
             Assert.IsTrue(t.State.PendingExclusive);
-            Assert.AreEqual(80, t.State.PendingAdvance);
+            Assert.AreEqual(TrapAdvance, t.State.PendingAdvance);
 
             s.StartShow();
             FeudBotDriver.PlayMatch(s.Engine, new MatchGoal { Aim = MatchAim.Lose, Style = MatchStyle.Clean });
@@ -259,7 +302,7 @@ namespace Game.Tests.EditMode
             int afterShow = s.State.Money;
             s.ContinueFromShow();
             Assert.AreEqual(2, s.FederationTier);
-            Assert.AreEqual(afterShow + 80, s.State.Money, "аванс — коли перехід стався");
+            Assert.AreEqual(afterShow + TrapAdvance, s.State.Money, "аванс — коли перехід стався");
             Assert.IsTrue(s.State.ContractExclusive);
             Assert.IsFalse(s.State.PendingExclusive);
             Assert.AreEqual(0, s.State.PendingAdvance);
@@ -293,7 +336,7 @@ namespace Game.Tests.EditMode
                             {
                                 Assert.AreEqual(CareerRules.ExclusiveFeePercent, c.ExclusiveFeePercent);
                                 Assert.AreEqual(CareerRules.ExclusiveSeasons, c.ExclusiveSeasons);
-                                Assert.AreEqual(80, c.ExclusivePenalty);
+                                Assert.AreEqual(Penalty, c.ExclusivePenalty);
                                 StringAssert.Contains("виключне право", m.FinePrintText);
                             }
                             else StringAssert.Contains("чесний", m.FinePrintText);
@@ -326,7 +369,7 @@ namespace Game.Tests.EditMode
             var s = Offer(7, true);
             var m = new SeasonOfferModel(s, Text());
             Assert.IsTrue(m.ShowContract);
-            StringAssert.Contains("80", m.AdvanceText);
+            StringAssert.Contains(TrapAdvance.ToString(), m.AdvanceText);
             Assert.AreEqual(Text().Get("c.offer.fine.unread"), m.FinePrintText, "до читання пастки не видно");
             Assert.IsFalse(m.FinePrintWarns);
             Assert.IsTrue(m.CanRead);
@@ -387,14 +430,15 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(c.ExclusiveSeen);
             Assert.IsFalse(c.CanRead);
             Assert.AreEqual("manager", s.ReadOfferContract().Reason);
-            Assert.AreEqual(100, c.Advance, "40 × 2 × 1,25");
+            Assert.AreEqual(CareerRules.Advance(Regional, true, true), c.Advance, "аванс пастки × 1,25");
+            Assert.Greater(c.Advance, TrapAdvance);
             var m = new SeasonOfferModel(s, Text());
             Assert.IsNotNull(m.ManagerNote);
-            StringAssert.Contains("+25", m.AdvanceText);
+            StringAssert.Contains("+" + (CareerRules.ManagerAdvancePercent - 100) + " %", m.AdvanceText);
             int money = s.State.Money;
             s.AcceptOffer();
-            Assert.AreEqual(money + 100, s.State.Money);
-            Assert.AreEqual(80, s.State.ContractPenalty, "штраф — без надбавки менеджерки");
+            Assert.AreEqual(money + CareerRules.Advance(Regional, true, true), s.State.Money);
+            Assert.AreEqual(Penalty, s.State.ContractPenalty, "штраф — без надбавки менеджерки");
         }
 
         [Test]
@@ -452,23 +496,168 @@ namespace Game.Tests.EditMode
             hired.State.Manager = true;
             Assert.AreNotEqual("ev_manager", hired.Backstage().SceneId, "менеджерка вже працює — сцени немає");
 
-            var s = BeforeManagerScene(12);
-            s.Feud.State.Audience = CareerRules.ManagerPopularity;
-            var r = s.Backstage();
-            Assert.IsTrue(r.NeedsScene);
-            Assert.AreEqual("ev_manager", r.SceneId);
-            var run = s.CurrentBackstage;
-            for (int guard = 0; !run.IsFinished; guard++)
-            {
-                Assert.Less(guard, 50);
-                if (run.Current.Type == PromoNodeType.Choice) run.Choose("hire"); else run.Advance();
-            }
-            s.FinishBackstage();
+            var s = PlayManagerScene(12, "hire");
             Assert.IsTrue(s.HasManager, "найнято сценою");
             var t = CareerKit.Fresh(12, C);
             t.RestoreState(s.CaptureState());
             Assert.IsTrue(t.HasManager, "менеджерка — у сейві");
+            ToNextSeasonBeforeManagerScene(t);
+            Assert.AreNotEqual("ev_manager", t.Backstage().SceneId, "і наступного сезону — працює, сцени немає");
+        }
 
+        [Test]
+        public void ManagerScene_AfterRefusal_SheNeverComesBack_TheCardBringsHerBackNextSeason()
+        {
+            var refused = PlayManagerScene(21, "refuse");
+            Assert.IsFalse(refused.HasManager);
+            var restored = CareerKit.Fresh(21, C);
+            restored.RestoreState(refused.CaptureState());
+            foreach (var s in new[] { refused, restored })
+                for (int season = 0; season < 2; season++)
+                {
+                    ToNextSeasonBeforeManagerScene(s);
+                    Assert.AreNotEqual("ev_manager", s.Backstage().SceneId, "після «Відмовити» Марта не повертається — і після сейву");
+                    CareerKit.PlayScene(s, 0);
+                }
+
+            var card = PlayManagerScene(22, "later");
+            Assert.IsFalse(card.HasManager, "візитка — ще не найнято");
+            var first = BeforeManagerScene(23);
+            first.Feud.State.Audience = CareerRules.ManagerPopularity;
+            Assert.AreEqual("ev_manager", first.Backstage().SceneId);
+            Assert.AreEqual("n1", first.CurrentBackstage.Current.Id, "перша зустріч — незнайомка з записником");
+            var t = CareerKit.Fresh(22, C);
+            t.RestoreState(card.CaptureState());
+            ToNextSeasonBeforeManagerScene(t);
+            Assert.AreEqual("ev_manager", t.Backstage().SceneId, "з візиткою Марта приходить знову наступного сезону");
+            var run = t.CurrentBackstage;
+            Assert.AreEqual("n1c", run.Current.Id, "і вітається як знайома — візитка ще в кишені");
+            run.Advance();
+            Assert.AreEqual("n2c", run.Current.Id);
+            run.Advance();
+            Assert.AreEqual("n3", run.Current.Id, "умови — ті самі");
+            run.Advance();
+            run.Choose("hire");
+            while (!run.IsFinished) run.Advance();
+            t.FinishBackstage();
+            Assert.IsTrue(t.HasManager, "з другої зустрічі — найнято");
+        }
+
+        [Test]
+        public void ChampionFarewell_FiringTheManagerAfterSigning_KeepsTheSignedAdvance()
+        {
+            var s = AtSeasonEnd(6, 1, 3, CareerRules.OfferTrust - CareerRules.OfferChampionTrustBonus, champion: true);
+            s.ForcedOfferExclusive = false;
+            s.State.Manager = true;
+            s.AcceptOffer();
+            int signed = CareerRules.Advance(Regional, false, true);
+            Assert.Greater(signed, HonestAdvance);
+            Assert.AreEqual(signed, s.State.PendingAdvance, "умови з менеджеркою підписано при «Перейти»");
+            Assert.IsTrue(s.FireManager());
+            s.StartShow();
+            FeudBotDriver.PlayMatch(s.Engine, new MatchGoal { Aim = MatchAim.Lose, Style = MatchStyle.Clean });
+            s.FinishMatch();
+            Assert.AreEqual(0, s.State.Last.ManagerCut, "звільнена до матчу — частки з прощального гонорару не бере");
+            int afterShow = s.State.Money;
+            s.ContinueFromShow();
+            Assert.AreEqual(2, s.FederationTier);
+            Assert.AreEqual(afterShow + signed, s.State.Money, "звільнення після підпису підписаного авансу не зменшує");
+        }
+
+        // ---------------- сумісність сейву (відновлення у СВІЖУ сесію) ----------------
+
+        [Test]
+        public void SaveWithoutContractFields_RestoresHonest_NoManager_NothingPending()
+        {
+            var s = Offer(31, true);
+            s.State.Manager = true;
+            s.AcceptOffer();
+            s.State.OfferRead = 3; s.State.PendingExclusive = true; s.State.PendingAdvance = 55;
+            Assert.IsTrue(s.State.ContractExclusive);
+            string blob = s.CaptureState();
+            foreach (var k in new[] { "excl", "exend", "expen", "offread", "pendex", "pendadv", "manager" })
+            {
+                Assert.AreEqual(1, Regex.Matches(blob, "\\|" + k + "=").Count, k + " — поле зліпка");
+                blob = Regex.Replace(blob, "\\|" + k + "=[^|]*", "");
+            }
+            var t = CareerKit.Fresh(31, C);
+            t.RestoreState(blob);
+            Assert.IsFalse(t.State.Manager);
+            Assert.IsFalse(t.HasManager);
+            Assert.IsFalse(t.State.ContractExclusive);
+            Assert.IsFalse(t.ExclusiveActive);
+            Assert.AreEqual(0, t.State.ContractEndSeason);
+            Assert.AreEqual(0, t.State.ContractPenalty);
+            Assert.AreEqual(0, t.State.OfferRead);
+            Assert.IsFalse(t.State.PendingExclusive);
+            Assert.AreEqual(0, t.State.PendingAdvance);
+            Assert.AreEqual(s.FederationTier, t.FederationTier, "решта сейву — як була");
+            Assert.AreEqual(s.State.Money, t.State.Money);
+            t.StartNextSeason();
+            Assert.AreEqual(ShowBooker.Fee(t.State.Position, t.State.IsBig, t.Federation.FeePercent), t.GetShowCard().Fee, "чесний гонорар");
+        }
+
+        [Test]
+        public void OldShowResult_With23Or24Fields_HasNoManagerCut_AlsoInAFreshSession()
+        {
+            var r = new ShowResult { OpponentId = "dzhura", Fee = 30, FeeWinBonus = 5, FeeHypeBonus = 2, LossPopularityBlocked = 1, ManagerCut = 7 };
+            var fields = r.Capture().Split(',');
+            Assert.AreEqual(25, fields.Length);
+            Assert.AreEqual(7, ShowResult.Parse(r.Capture()).ManagerCut);
+            var p24 = ShowResult.Parse(string.Join(",", fields.Take(24)));
+            Assert.AreEqual(0, p24.ManagerCut);
+            Assert.AreEqual(1, p24.LossPopularityBlocked);
+            Assert.AreEqual(37, p24.TotalFee);
+            var p23 = ShowResult.Parse(string.Join(",", fields.Take(23)));
+            Assert.AreEqual(0, p23.ManagerCut);
+            Assert.AreEqual(0, p23.LossPopularityBlocked);
+            Assert.AreEqual("dzhura", p23.OpponentId);
+            Assert.AreEqual(37, p23.TotalFee);
+            Assert.Throws<FormatException>(() => ShowResult.Parse(string.Join(",", fields.Take(22))));
+
+            // той самий підсумок у сейві кар'єри: 23 і 24 поля — частки немає, гонорар той самий
+            var s = CareerKit.NewHero(33);
+            s.State.Manager = true;
+            var last = PlayFirstShow(s);
+            Assert.Greater(last.ManagerCut, 0);
+            string blob = s.CaptureState();
+            var m = Regex.Match(blob, "\\|last=([^|]*)");
+            Assert.IsTrue(m.Success);
+            var lf = Uri.UnescapeDataString(m.Groups[1].Value).Split(',');
+            foreach (int n in new[] { 23, 24 })
+            {
+                string old = blob.Substring(0, m.Groups[1].Index) + Uri.EscapeDataString(string.Join(",", lf.Take(n))) + blob.Substring(m.Groups[1].Index + m.Groups[1].Length);
+                var t = CareerKit.Fresh(33, C);
+                t.RestoreState(old);
+                Assert.AreEqual(0, t.State.Last.ManagerCut, n + " полів");
+                Assert.AreEqual(last.Fee, t.State.Last.Fee);
+                Assert.AreEqual(last.Winner, t.State.Last.Winner);
+            }
+        }
+
+        [Test]
+        public void FreshRestore_MidTrap_KeepsTheTrap_TheExitPenaltyAndTheFeeShare()
+        {
+            var s = Offer(32, true);
+            s.AcceptOffer();
+            s.StartNextSeason();
+            Assert.IsTrue(s.ExclusiveActive);
+            var t = CareerKit.Fresh(32, C);
+            t.RestoreState(s.CaptureState());
+            Assert.IsTrue(t.ExclusiveActive);
+            Assert.AreEqual(s.State.ContractEndSeason, t.State.ContractEndSeason);
+            Assert.AreEqual(Penalty, t.ExitPenaltyDue, "вийти раніше — штраф");
+            Assert.AreEqual(s.GetShowCard().Fee, t.GetShowCard().Fee);
+            Assert.AreEqual(ShowBooker.Fee(t.State.Position, t.State.IsBig, t.Federation.FeePercent) * CareerRules.ExclusiveFeePercent / 100,
+                t.GetShowCard().Fee, "гонорар ×0,7 — і після сейву");
+            var u = CareerKit.Fresh(32, C);
+            u.RestoreState(s.CaptureState());
+            u.State.Money = 500;
+            Assert.IsFalse(u.CanGoAway, "без виїзних шоу — і після сейву");
+            Assert.AreEqual("exclusive", u.SideJob().Reason, "без підробітку — і після сейву");
+            var a = PlayFirstShow(s);
+            var b = PlayFirstShow(t);
+            Assert.AreEqual(a.Fee, b.Fee, "той самий гонорар у свіжій сесії");
         }
     }
 }
