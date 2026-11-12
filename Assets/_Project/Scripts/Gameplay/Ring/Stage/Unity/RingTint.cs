@@ -37,6 +37,9 @@ namespace Game.Gameplay.Ring.Stage
                 }
                 Color mean = mn > 0 ? new Color(mr / mn / 255f, mg / mn / 255f, mb / mn / 255f) : new Color(0.9f, 0.78f, 0.68f);
                 float meanL = mean.r * 0.3f + mean.g * 0.59f + mean.b * 0.11f;
+                // Діагностика огляду облич (-ring-diag-nograde, лише кадри): латки не зливаються з середньою — видно, чи плоска
+                // заливка світлої шкіри робить обличчя «черепом» (огляд «щелепи», 09.11.2026). У грі прапорця немає.
+                bool flatten = !RingLaunchArgs.Has("-ring-diag-nograde");
                 for (int i = 0; i < ca.Length; i++)
                 {
                     float h, s, v;
@@ -53,7 +56,7 @@ namespace Game.Gameplay.Ring.Stage
                     float l = c.r * 0.3f + c.g * 0.59f + c.b * 0.11f;
                     // Латки текстури шкіри (MakeHuman) світліші за середню на 5–15 %; під світлом рингу вони ставали білими плямами.
                     float k = Mathf.Clamp01((l - meanL * 0.98f) / (meanL * 0.06f));
-                    if (k > 0f && s < 0.45f) c = Color.Lerp(c, mean, k);
+                    if (flatten && k > 0f && s < 0.45f) c = Color.Lerp(c, mean, k);
                     c = new Color(c.r * skin.r, c.g * skin.g, c.b * skin.b, 1f);
                     ca[i] = c;
                 }

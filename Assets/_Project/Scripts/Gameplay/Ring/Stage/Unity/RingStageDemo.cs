@@ -129,6 +129,7 @@ namespace Game.Gameplay.Ring.Stage
             Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] огляд за рингом: {0}; бік {1}, центр ({2:0.00}; {3:0.00}), смуга ±{4:0.0} м, вільна: {5}",
                 RingStage3D.Venue, o.Side, o.X, o.Z, o.HalfLength, o.Ok ? "так" : "НІ"));
             RingActor pl = stage.Actor(MatchSide.Player), rv = stage.Actor(MatchSide.Rival), rf = stage.Referee;
+            _outYaw = null;
             // Рефері — на своєму місці, поки пара за рингом (RingStage3D.OutsideRefPos — його має взяти й режисер замість свого
             // OutsideRefPos, запит п. 4а): на фартуху навпроти пари, обличчям до неї, рахує відлік (Ref_Count_Outside_Loop).
             Vector3 refAt = RingStage3D.OutsideRefPos;
@@ -154,14 +155,17 @@ namespace Game.Gameplay.Ring.Stage
             // 2) Кидок і ларіат пари за рингом (кліпи ядра для Throw і Weapon): кадри на третині й двох третинах кліпа.
             foreach (string clip in new[] { "Bodyslam", "Center_Lariat_Heavy" })
             {
-                if (!PairOutside(stage, clip)) continue;
-                var ca = stage.Clip(clip + "_A");
-                float len = ca != null ? ca.length / RingStage3D.PlaySpeed : 2f;
-                yield return OutsideFrame(stage, folder, v + "_outside_" + clip + "_a", len * 0.33f);
+                AnimationClip ca, cb;
+                if (!PairOutside(stage, clip, out ca, out cb)) continue;
+                float len = ca.length / RingStage3D.PlaySpeed;
+                yield return OutsideFrame(stage, folder, v + "_outside_" + clip + "_a", len * 0.33f, ca, cb);
                 yield return new WaitForSeconds(len * 0.3f);
                 Capture(folder, v + "_outside_" + clip + "_b");
                 yield return new WaitForSeconds(len * 0.45f);
                 Capture(folder, v + "_outside_" + clip + "_end");
+                // Знімок пишеться наприкінці кадру: без паузи в ньому вже наступна розстановка (наступний кліп пари чи ринг), і
+                // здавалося, що рефері зсувається з фартуха між _b і _end (огляди 8c/8e; стеження 8f — стоїть на місці).
+                yield return new WaitForSeconds(0.2f);
                 Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] огляд за рингом: {0} — таз A ({1:0.00}; {2:0.00}), B ({3:0.00}; {4:0.00}); у смузі: {5}",
                     clip, pl.PosePos.x, pl.PosePos.z, rv.PosePos.x, rv.PosePos.z, InBand(pl.PosePos) && InBand(rv.PosePos) ? "так" : "НІ"));
             }
@@ -239,14 +243,14 @@ namespace Game.Gameplay.Ring.Stage
         /// Пару за рингом — у кліп пари: A дивиться вздовж боку, зсув B (бічний і вперед) розкладено навпіл довкола центру
         /// смуги, тож обидва в смузі; слоти — на підлозі (мати).
         /// </summary>
-        private static bool PairOutside(RingStage3D stage, string clip)
+        private static bool PairOutside(RingStage3D stage, string clip, out AnimationClip ca, out AnimationClip cb)
         {
             RingActor a = stage.Actor(MatchSide.Player), b = stage.Actor(MatchSide.Rival);
             // Стать — за постаттю (жіночі кліпи й рядок жіночого маніфесту, якщо є; як у режисера).
             bool fa = stage.IsFemale(a), fb = stage.IsFemale(b);
             var ia = stage.Info(clip + "_A", fa);
-            var ca = stage.Clip(clip + "_A", fa);
-            var cb = stage.Clip(clip + "_B", fb);
+            ca = stage.Clip(clip + "_A", fa);
+            cb = stage.Clip(clip + "_B", fb);
             if (ia == null || ca == null || cb == null) { Debug.LogWarning("[Ринг] огляд: немає пари " + clip); return false; }
             Vector3 along = RingStage3D.OutsideAlong, c = RingStage3D.OutsideAnchor;
             float ya = RingStage3D.YawTo(Vector3.zero, along), yb = ya - ia.Rotation;
@@ -264,8 +268,16 @@ namespace Game.Gameplay.Ring.Stage
             return true;
         }
 
-        /// <summary>Кадр «за рингом»: обидва борці, край фартуха біля пари; камера — планом <see cref="RingCine.OutsideShot"/>.</summary>
-        private static IEnumerator OutsideFrame(RingStage3D stage, string folder, string tag, float wait)
+        /// <summary>Курс попереднього кадру огляду «за рингом» — новий план тримається того самого боку, як у режисера.</summary>
+        private static float? _outYaw;
+
+        /// <summary>
+        /// Кадр «за рингом»: обидва борці, край фартуха біля пари; камера — планом <see cref="RingCine.OutsideShot"/>. Якщо пара
+        /// грає кліпи <paramref name="ca"/> / <paramref name="cb"/> — у кадр ідуть і тіла на третині, двох третинах і в кінці
+        /// кліпа (ларіат зсуває пару на ~2 м: огляд 8e/8f — на _b і _end пара виходила з кадру).
+        /// </summary>
+        private static IEnumerator OutsideFrame(RingStage3D stage, string folder, string tag, float wait,
+            AnimationClip ca = null, AnimationClip cb = null)
         {
             yield return null;
             RingActor a = stage.Actor(MatchSide.Player), b = stage.Actor(MatchSide.Rival);
@@ -274,17 +286,36 @@ namespace Game.Gameplay.Ring.Stage
             ga.y = a.Slot.position.y; gb.y = b.Slot.position.y;
             RingCine.Body(pts, ga, stage.BodyScale(a));
             RingCine.Body(pts, gb, stage.BodyScale(b));
+            ClipBodies(stage, pts, a, ca);
+            ClipBodies(stage, pts, b, cb);
             // Край фартуха навпроти пари — у кадрі: видно, що пара за рингом.
             Vector3 apron = RingStage3D.OutsideAnchor - RingStage3D.OutsideOut * RingVenue.PairOut;
             apron.y = RingStage3D.MatY;
             pts.Add(apron);
-            var shot = RingCine.OutsideShot(pts, RingStage3D.OutsideAnchor, RingStage3D.OutsideOut, stage.CamAspect);
-            if (shot.Ok) stage.Cine(shot.Pos, shot.Look, shot.Fov, true);
+            var shot = RingCine.OutsideShot(pts, RingStage3D.OutsideAnchor, RingStage3D.OutsideOut, stage.CamAspect, preferYaw: _outYaw);
+            if (shot.Ok) { stage.Cine(shot.Pos, shot.Look, shot.Fov, true); _outYaw = RingCine.YawOf(shot); }
             else { Debug.LogWarning("[Ринг] огляд: план «за рингом» не вмістився — " + tag); stage.SetShot(StageCam.Big); }
             Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] план за рингом {0}: камера ({1:0.00}; {2:0.00}; {3:0.00}) → ({4:0.00}; {5:0.00}; {6:0.00}), кут {7:0}°, {8}",
                 tag, shot.Pos.x, shot.Pos.y, shot.Pos.z, shot.Look.x, shot.Look.y, shot.Look.z, shot.Fov,
                 !shot.Ok ? "НЕ вмістився" : shot.Compromise != null ? "вмістився з поступкою: " + shot.Compromise : "вмістився"));
             yield return Shot(folder, tag, wait);
+        }
+
+        /// <summary>Тіла постаті <paramref name="a"/> на третині, двох третинах і в кінці кліпа <paramref name="c"/> (таз зі
+        /// слота кліпа, на висоті слота) — у кадр «за рингом».</summary>
+        private static void ClipBodies(RingStage3D stage, List<Vector3> pts, RingActor a, AnimationClip c)
+        {
+            if (c == null) return;
+            float scale = stage.BodyScale(a);
+            for (int k = 1; k <= 3; k++)
+            {
+                Vector3 h;
+                float hy;
+                a.SampleLocal(c, Mathf.Min(c.length * k / 3f, c.length - 0.02f), out h, out hy);
+                Vector3 w = a.Slot.position + a.Slot.rotation * new Vector3(h.x, 0f, h.z);
+                w.y = a.Slot.position.y;
+                RingCine.Body(pts, w, scale);
+            }
         }
 
         public static IEnumerator Run(RingStage3D stage, RingMatchDirector dir, string folder)
@@ -296,6 +327,7 @@ namespace Game.Gameplay.Ring.Stage
             if (RingStage3D.ReadArg("-ring-entrances") != null) { yield return Entrances(stage, folder); yield break; }
             ApplySex(stage);
             if (RingStage3D.ReadArg("-ring-outside") != null) { yield return OutsideReview(stage, folder); yield break; }
+            if (RingStage3D.ReadArg("-ring-faces") != null) { yield return FacesReview(stage, folder); yield break; }
 
             // ---- промо ----
             bool probe = RingStage3D.ReadArg("-ring-probe") != null;
@@ -534,6 +566,105 @@ namespace Game.Gameplay.Ring.Stage
                 }
             Debug.Log("[Ринг] зонд " + tag + ": білих клітинок " + found);
             Object.Destroy(tex);
+        }
+
+        // ============================ крупні плани облич ============================
+
+        /// <summary>
+        /// Крупні плани облич (<c>-ring-demo &lt;тека&gt; -ring-faces 1 [-ring-demo-sex m|f] [-ring-venue hall|arena]</c>): огляд
+        /// «щелепа як у скелета» (власник, 09.11.2026). Гравець у центрі рингу: стоячи, на спині (кінець Bump_Back), на животі
+        /// (кінець Bump_Front), притиснутий (Cover_Hold_Loop_B) і на руках суперника в боді-слемі (Bodyslam_B на 0,35 / 0,5 /
+        /// 0,62 кліпа; пара заморожена, як у кліпі); наостанок рефері стоячи. Камера — довкола голови: чотири сторони світу
+        /// низько (15°) і згори, 0,8 м, кут 24°; світло — залу, як у матчі. У журнал — розгин шиї кожної пози.
+        /// </summary>
+        private static IEnumerator FacesReview(RingStage3D stage, string folder)
+        {
+            stage.BeginDemoMatch();
+            RingActor pl = stage.Actor(MatchSide.Player), rv = stage.Actor(MatchSide.Rival), rf = stage.Referee;
+            string tag = RingStage3D.Venue.Id + "_" + (stage.IsFemale(pl) ? "f" : "m");
+            Vector3 c = new Vector3(0f, RingStage3D.MatY, 0f);
+            // Решта — у кутах, щоб не тінили обличчя й не лізли в кадр.
+            Vector3 rvAway = new Vector3(1.9f, RingStage3D.MatY, -1.9f), rfAway = new Vector3(-1.9f, RingStage3D.MatY, -1.9f);
+            stage.Place(rv, rvAway, -45f, "Ring_Stance_Loop");
+            stage.Place(rf, rfAway, 45f, "Ref_Idle_Loop");
+
+            stage.Place(pl, c, 180f, "Ring_Stance_Loop");
+            Forget(stage);
+            yield return Faces(stage, folder, tag + "_stand", pl);
+
+            foreach (var pose in new[] { new[] { "Bump_Back", "back" }, new[] { "Bump_Front", "belly" } })
+            {
+                stage.Place(pl, c, 180f, "Ring_Stance_Loop");
+                Freeze(stage, pl, pose[0], 1f, c, 180f);
+                Forget(stage);
+                yield return Faces(stage, folder, tag + "_" + pose[1], pl);
+            }
+
+            stage.Place(pl, c, 180f, "Cover_Hold_Loop_B");
+            Forget(stage);
+            yield return Faces(stage, folder, tag + "_pinned", pl);
+
+            // Боді-слем: суперник кидає (A), гравець у повітрі (B) — зсув і поворот пари з маніфесту статі.
+            var ia = stage.Info("Bodyslam_A", stage.IsFemale(rv));
+            if (ia != null)
+            {
+                float ya = 90f, yb = ya - ia.Rotation;
+                Vector3 off = Quaternion.Euler(0f, ya, 0f) * new Vector3(ia.Offset.x, 0f, ia.Offset.z);
+                Vector3 pa = c - off * 0.5f, pb = c + off * 0.5f;
+                foreach (float frac in new[] { 0.35f, 0.5f, 0.62f })
+                {
+                    stage.Place(rv, pa, ya, "Ring_Stance_Loop");
+                    stage.Place(pl, pb, yb, "Ring_Stance_Loop");
+                    Freeze(stage, rv, "Bodyslam_A", frac, pa, ya);
+                    Freeze(stage, pl, "Bodyslam_B", frac, pb, yb);
+                    Forget(stage);
+                    yield return Faces(stage, folder, tag + string.Format(CultureInfo.InvariantCulture, "_bodyslam{0:00}", frac * 100f), pl);
+                }
+            }
+            else Debug.LogWarning("[Ринг] обличчя: немає рядка Bodyslam_A у маніфесті");
+
+            stage.Place(rv, rvAway, -45f, "Ring_Stance_Loop");
+            stage.Place(pl, new Vector3(1.9f, RingStage3D.MatY, 1.9f), -135f, "Ring_Stance_Loop");
+            stage.Place(rf, c, 180f, "Ref_Idle_Loop");
+            Forget(stage);
+            yield return Faces(stage, folder, RingStage3D.Venue.Id + "_ref_stand", rf);
+            Debug.Log("[Ринг] обличчя: огляд скінчено");
+            HardExit.Now(0);
+        }
+
+        /// <summary>Кліп постаті, заморожений на частці <paramref name="frac"/> довжини (швидкість 0), таз — у точці з курсом.</summary>
+        private static void Freeze(RingStage3D stage, RingActor a, string clip, float frac, Vector3 pos, float yaw)
+        {
+            var c = stage.Clip(clip, stage.IsFemale(a));
+            if (c == null) { Debug.LogWarning("[Ринг] обличчя: немає кліпа " + clip); return; }
+            a.PlayAtTime(c, c.length * Mathf.Clamp01(frac), false, pos, yaw, 0f);
+        }
+
+        private static readonly string[] FaceViewNames = { "n", "e", "s", "w", "top" };
+        private static readonly Vector2[] FaceViews = { new Vector2(0f, 15f), new Vector2(90f, 15f), new Vector2(180f, 15f), new Vector2(270f, 15f), new Vector2(0f, 80f) };
+
+        /// <summary>
+        /// Крупні плани голови постаті з п'яти боків. Ціль — 9 см від кістки голови вздовж шиї (середина обличчя); у журнал —
+        /// кут між шиєю (шия → голова) і грудьми (верх грудей → шия): 0° — голова на продовженні тулуба, більше — нахил.
+        /// </summary>
+        private static IEnumerator Faces(RingStage3D stage, string folder, string tag, RingActor a)
+        {
+            yield return null;
+            yield return null;
+            Transform head = a.Head, neck = a.GetBone(HumanBodyBones.Neck), chest = a.GetBone(HumanBodyBones.UpperChest);
+            if (chest == null) chest = a.GetBone(HumanBodyBones.Chest);
+            Vector3 h = head != null ? head.position : a.HeadPos;
+            Vector3 up = head != null && neck != null ? (head.position - neck.position).normalized : Vector3.up;
+            Vector3 target = h + up * 0.09f;
+            float bend = head != null && neck != null && chest != null ? Vector3.Angle(neck.position - chest.position, head.position - neck.position) : -1f;
+            Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] обличчя {0}: голова ({1:0.00}; {2:0.00}; {3:0.00}), шия до грудей {4:0}°, кліп {5}",
+                tag, h.x, h.y, h.z, bend, a.CurrentClip != null ? a.CurrentClip.name : "—"));
+            for (int i = 0; i < FaceViews.Length; i++)
+            {
+                Vector3 d = Quaternion.Euler(-FaceViews[i].y, FaceViews[i].x, 0f) * Vector3.forward;
+                stage.Cine(target + d * 0.8f, target, 24f, true);
+                yield return Shot(folder, "face_" + tag + "_" + FaceViewNames[i], 0.25f);
+            }
         }
 
         private static IEnumerator Shot(string folder, string tag, float wait)
