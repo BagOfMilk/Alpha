@@ -513,5 +513,35 @@ namespace Game.Tests.EditMode
                 bad.Add("ShowResult.Fit: межа плити не йде за її верхом");
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
+
+        /// <summary>
+        /// Рід назви шляху (запит «Кар'єри» через ПМ, 12.11.2026, P2-6): героїня бачить «Героїня / Лиходійка / Бунтарка», суперниця на
+        /// картці — у своєму роді. HeroForms назв шляхів не підміняє (їх видно в обох борців), тож кожен виклик <c>PathName</c> в
+        /// екранах кар'єри передає стать борця третім аргументом: героя — <c>HeroForms.ShowsHeroine</c> (на створенні — за тілом на
+        /// екрані), суперника — <c>npc.Female</c>. Виклик із двома аргументами — назва завжди в чоловічому роді.
+        /// </summary>
+        [Test]
+        public void Sources_CareerScreens_PathNameTakesTheWrestlersSex()
+        {
+            string ui = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI");
+            var files = new List<string>(Directory.GetFiles(Path.Combine(ui, "Career"), "*.cs")) { Path.Combine(ui, "CareerScreens.cs") };
+            var bad = new List<string>();
+            int calls = 0;
+            var two = new Regex(@"RingLabels\.PathName\(\s*\w+\s*,\s*[\w.]+\s*\)");
+            foreach (var f in files)
+            {
+                string src = File.ReadAllText(f);
+                calls += Regex.Matches(src, @"RingLabels\.PathName\(").Count;
+                foreach (System.Text.RegularExpressions.Match m in two.Matches(src)) bad.Add(Path.GetFileName(f) + ": " + m.Value + " — без статі борця");
+            }
+            string show = File.ReadAllText(Path.Combine(ui, "Career", "ShowScreens.cs"));
+            string create = File.ReadAllText(Path.Combine(ui, "Career", "CreateScreenView.cs"));
+            if (!show.Contains("RingLabels.PathName(t, v.Role, HeroForms.ShowsHeroine(t))")) bad.Add("ShowScreens: шлях героя не за статтю героя");
+            if (!show.Contains("RingLabels.PathName(t, npc.Path, npc.Female)")) bad.Add("ShowScreens: шлях суперника не за статтю суперника");
+            if (Regex.Matches(create, Regex.Escape("RingLabels.PathName(T, path, HeroForms.ShowsHeroine(T))")).Count != 2)
+                bad.Add("CreateScreenView: стрічка й плашка ролі — не обидві за тілом на екрані");
+            Assert.GreaterOrEqual(calls, 4, "викликів PathName в екранах кар'єри менше, ніж стрічки героя й суперника та дві на створенні");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
     }
 }

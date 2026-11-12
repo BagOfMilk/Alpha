@@ -227,7 +227,7 @@ namespace Game.Gameplay.Ring.UI
             ArenaKit.Place(tag, null, 10f, 34f, null);
             // пробіл після «·» — на початку наступного напису: кінцевий пробіл напис не малює (кадри слоту 27, 09.11.2026)
             tag.Add(ArenaKit.Tag(T.Get("gimmick." + C.Content.GimmickOf(_d.Gimmick).Key) + " ·", RingTheme.TextDim));
-            tag.Add(ArenaKit.Tag(" " + RingLabels.PathName(T, path), ArenaKit.RoleText(path)));
+            tag.Add(ArenaKit.Tag(" " + RingLabels.PathName(T, path, HeroForms.ShowsHeroine(T)), ArenaKit.RoleText(path)));   // рід — за тілом на екрані
             box.Add(tag);
 
             var well = ArenaKit.Abs(24f, 36f, 38f, null, null, 58f);
@@ -458,7 +458,7 @@ namespace Game.Gameplay.Ring.UI
             plate.style.justifyContent = Justify.Center;
             plate.pickingMode = PickingMode.Ignore;
             plate.Add(new ArenaPlate { Fill = roleColor, Shadow = false, Mirror = true });
-            var l = MenuKit.Display(RingLabels.PathName(T, path), 26f, RingTheme.Text, RingFontRole.Display900, 0.04f);
+            var l = MenuKit.Display(RingLabels.PathName(T, path, HeroForms.ShowsHeroine(T)), 26f, RingTheme.Text, RingFontRole.Display900, 0.04f);
             l.style.marginLeft = 24f; l.style.marginRight = 22f;
             plate.Add(l);
             return plate;

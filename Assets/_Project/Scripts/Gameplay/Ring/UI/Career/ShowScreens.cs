@@ -30,7 +30,7 @@ namespace Game.Gameplay.Ring.UI
             // суперника — кадри слоту 27, 09.11.2026)
             var gimmick = ArenaKit.Tag(t.Get("gimmick." + c.Content.GimmickOf(v.Gimmick).Key) + " ·", RingTheme.TextDim);
             tag.Add(gimmick);
-            tag.Add(ArenaKit.Tag(" " + RingLabels.PathName(t, v.Role), ArenaKit.RoleText(v.Role)));
+            tag.Add(ArenaKit.Tag(" " + RingLabels.PathName(t, v.Role, HeroForms.ShowsHeroine(t)), ArenaKit.RoleText(v.Role)));
             if (v.IsChampion) tag.Add(ArenaKit.Tag(" · " + t.Get("c.champion"), RingTheme.Gold));
             box.Add(tag);
             ArenaKit.FitNameAndTag(box, name, tag, gimmick, true, 40f, 26f);
@@ -112,7 +112,7 @@ namespace Game.Gameplay.Ring.UI
             box.Add(nl);
             var tag = ArenaKit.Row();
             ArenaKit.Place(tag, 40f, 12f, null, null);
-            tag.Add(ArenaKit.Tag(RingLabels.PathName(t, npc.Path), ArenaKit.RoleText(npc.Path)));
+            tag.Add(ArenaKit.Tag(RingLabels.PathName(t, npc.Path, npc.Female), ArenaKit.RoleText(npc.Path)));   // рід суперника — свій (P2-6)
             var rg = ArenaKit.Tag(" · " + t.Get("gimmick." + c.Content.GimmickOf(npc.Gimmick).Key), RingTheme.TextDim);
             tag.Add(rg);
             box.Add(tag);
