@@ -60,7 +60,7 @@ namespace Game.Tests.EditMode
             foreach (var a in adv)
             {
                 var m = MoveOf(s, a);
-                if (m != null && m.Action == MatchActionId.Dirty) { dirty = true; Assert.AreEqual(DevelopmentAdvice.RoleKey(RingPath.Heel), a.WhyKey); }
+                if (m != null && m.Action == MatchActionId.Dirty) { dirty = true; Assert.AreEqual(DevelopmentAdvice.RoleMoveKey(RingPath.Heel), a.WhyKey); }
                 if (a.Kind == AdviceKind.Perk) { var p = PerkCatalog.Find(a.Id); heelPerk |= p.Path == RingPath.Heel; Assert.AreNotEqual(RingPath.Face, p.Path); }
             }
             Assert.IsTrue(dirty, "лиходієві-шоумену — брудний прийом");
@@ -93,21 +93,69 @@ namespace Game.Tests.EditMode
 
             s.State.Last = new ShowResult { Played = true, Winner = MatchWinner.Rival, EndKind = MatchEndKind.Pin, Hype = 9 };
             var pin = DevelopmentAdvice.For(s, 3);
-            Assert.AreEqual("c.dev.why.lost_pin", pin[0].WhyKey, "поразка утриманням — найперша порада про це");
+            Assert.AreEqual(DevelopmentAdvice.WhyFor("lost_pin", pin[0].Kind), pin[0].WhyKey, "поразка утриманням — найперша порада про це");
             Assert.IsTrue(pin.Exists(a => a.Kind == AdviceKind.Attr && a.Attr == RingAttr.Stamina), "Витривалість — вирватися з утримання");
 
             s.State.Last = new ShowResult { Played = true, Winner = MatchWinner.Rival, EndKind = MatchEndKind.Submission, Hype = 9 };
-            Assert.IsTrue(DevelopmentAdvice.For(s, 3).Exists(a => a.WhyKey == "c.dev.why.lost_sub"));
+            Assert.IsTrue(DevelopmentAdvice.For(s, 3).Exists(a => a.WhyKey == DevelopmentAdvice.WhyFor("lost_sub", a.Kind)));
 
             s.State.Last = new ShowResult { Played = true, Winner = MatchWinner.Player, EndKind = MatchEndKind.Pin, Hype = 4 };
             var low = DevelopmentAdvice.For(s, 3);
-            Assert.IsTrue(low.Exists(a => a.WhyKey == "c.dev.why.low_hype" && (a.Kind == AdviceKind.Attr ? a.Attr == RingAttr.Charisma : a.Id == PerkCatalog.CrowdFavorite)));
+            Assert.IsTrue(low.Exists(a => a.WhyKey == DevelopmentAdvice.WhyFor("low_hype", a.Kind) && (a.Kind == AdviceKind.Attr ? a.Attr == RingAttr.Charisma : a.Id == PerkCatalog.CrowdFavorite)));
 
             s.State.Last = null;
             s.State.Injury[1] = 2;
             var hurt = DevelopmentAdvice.For(s, 3);
             Assert.AreEqual(PerkCatalog.IronJaw, hurt[0].Id, "травма — спершу «Залізна щелепа»");
             Assert.AreEqual("c.dev.why.injured", hurt[0].WhyKey);
+        }
+
+        /// <summary>
+        /// Кадри «Меню» (слот 28, рев'ю ПМ 12.11.2026): «Друге дихання» і «Витривалість 0 → +1» поруч з одним поясненням «вчися
+        /// вириватися». У видачі двох порад з однаковим поясненням немає — у жодній ситуації.
+        /// </summary>
+        [Test]
+        public void NoTwoAdvice_ShareAnExplanation()
+        {
+            // сама скарга: поразка утриманням, герой з очками — і перк, і Витривалість у видачі, пояснення різні
+            var s = With(Gimmick.Monster, CareerRole.Hero, 40, 2, 0, 0);
+            s.Player.Set(RingAttr.Stamina, 0);
+            s.State.Last = new ShowResult { Played = true, Winner = MatchWinner.Rival, EndKind = MatchEndKind.Pin, Hype = 9 };
+            var pin = DevelopmentAdvice.For(s, 3);
+            var perk = pin.Find(a => a.Kind == AdviceKind.Perk && a.Id == PerkCatalog.SecondWind);
+            var sta = pin.Find(a => a.Kind == AdviceKind.Attr && a.Attr == RingAttr.Stamina);
+            Assert.IsNotNull(perk, "«Друге дихання» у видачі");
+            Assert.IsNotNull(sta, "Витривалість у видачі");
+            Assert.AreEqual("c.dev.why.lost_pin.perk", perk.WhyKey);
+            Assert.AreEqual("c.dev.why.lost_pin", sta.WhyKey);
+
+            int checkedLists = 0, withWhy = 0;
+            var ends = new[] { MatchEndKind.Pin, MatchEndKind.Submission };
+            for (int g = 0; g < 4; g++)
+                for (int r = 0; r < 2; r++)
+                    foreach (int points in new[] { 2, 4, 8, 40 })
+                        for (int last = 0; last < 6; last++)
+                            for (int hurt = 0; hurt < 2; hurt++)
+                            {
+                                var t = With((Gimmick)g, (CareerRole)r, points, r == 0 ? 6 : 0, r == 1 ? 6 : 0, last % 3 == 2 ? 6 : 0);
+                                t.State.Last = last == 5 ? null : new ShowResult
+                                {
+                                    Played = true, Winner = last < 2 ? MatchWinner.Rival : MatchWinner.Player, EndKind = ends[last % 2],
+                                    Hype = last >= 3 ? 3 : 9
+                                };
+                                if (hurt == 1) t.State.Injury[1] = 2;
+                                // ґімік-прийом невивчений — два прийоми ґіміка в одній видачі (одне пояснення «прийом твого ґіміка»)
+                                if (g % 2 == 0) t.State.Moves.RemoveAll(id => t.Content.Moves.Get(id).GimmickId != null);
+                                var said = new HashSet<string>();
+                                foreach (var a in DevelopmentAdvice.For(t, 3))
+                                {
+                                    if (a.WhyKey == null) continue;
+                                    withWhy++;
+                                    Assert.IsTrue(said.Add(a.WhyKey), "двічі «" + a.WhyKey + "»: ґімік " + g + ", роль " + r + ", очок " + points + ", матч " + last);
+                                }
+                                checkedLists++;
+                            }
+            Assert.Greater(withWhy, checkedLists, "пояснень вистачає — перевірка не порожня");
         }
 
         [Test]
@@ -128,7 +176,14 @@ namespace Game.Tests.EditMode
         public void Advice_IsReadOnly_AndEveryWhyKeyIsTranslated()
         {
             var keys = MiniJson.ParseObject(CareerKit.Read("ui_uk.json"));
-            var why = new HashSet<string> { "c.dev.why.gimmick", "c.dev.why.lost_pin", "c.dev.why.lost_sub", "c.dev.why.low_hype", "c.dev.why.injured" };
+            var why = new HashSet<string> { "c.dev.why.gimmick", "c.dev.why.injured" };
+            foreach (var r in new[] { "lost_pin", "lost_sub", "low_hype" })
+            {
+                why.Add(DevelopmentAdvice.WhyFor(r, AdviceKind.Perk));
+                why.Add(DevelopmentAdvice.WhyFor(r, AdviceKind.Attr));
+            }
+            why.Add(DevelopmentAdvice.WhyFor("lost_sub", AdviceKind.Move));
+            why.Add(DevelopmentAdvice.RoleMoveKey(RingPath.Heel));
             for (int i = 0; i < 3; i++) why.Add(DevelopmentAdvice.RoleKey((RingPath)i));
             for (int g = 0; g < 4; g++)
                 for (int r = 0; r < 2; r++)

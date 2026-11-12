@@ -208,6 +208,9 @@ namespace Game.Gameplay.Ring
                 AfterDevelopment = () => { _career.FinishBigShow(); Save(); }
             };
             if (!string.IsNullOrEmpty(_career.State.RingName)) _text.Add("w.player.name", _career.State.RingName);
+            // -ring-hero-name: ім'я, яке екран створення підставляє в поле (той самий ключ, що й «Новачок» за замовчуванням)
+            ReadCareerShotArgs();
+            if (_shotHeroName != null) _text.Add("c.create.default_name", _shotHeroName);
             _view = null;
             _viewKey = null;
             _stageKey = null;
@@ -327,7 +330,8 @@ namespace Game.Gameplay.Ring
             grew = false;
             ReadCareerShotArgs();
             BotForceScenes();
-            if (BotLoadStep() || BotEndingStep() || BotDeclineTitleStep()) { grew = true; return true; }
+            if (BotLoadStep() || BotEndingStep() || BotDeclineTitleStep() || BotOfferStep()) { grew = true; return true; }
+            BotForceOpponent();
             bool week = !_onTitle && _career.Stage == CareerStage.Week && !_career.BackstageOpen;
             if (!week) return false;
             if (_shotGrow && BotGrow()) { _view.Refresh(); grew = true; return true; }
@@ -350,6 +354,12 @@ namespace Game.Gameplay.Ring
         private string _botRewardsNode;
         private readonly HashSet<string> _botRewardsPressed = new HashSet<string>();
         private bool _shotDeclineTitle;
+        /// <summary><c>-ring-shot-offer decline</c>: на кінці сезону з ключами — «Лишитися»; accept (за замовчуванням) — як каркас (Enter).</summary>
+        private bool _shotOfferDecline;
+        /// <summary><c>-ring-hero-name &lt;ім'я&gt;</c>: ім'я героя огляду (обрізане за MaxNameLength, як поле вводу); null — «Новачок».</summary>
+        private string _shotHeroName;
+        /// <summary><c>-ring-shot-opponent &lt;id&gt;</c>: суперник першого звичайного тижня огляду; null — уже підмінено або не задано.</summary>
+        private string _shotOpponent;
         /// <summary><c>-ring-shot-event &lt;id&gt;</c>: сцена, яку відкриє перше «Закулісся» огляду (поки не примушено — не null).</summary>
         private string _shotEvent;
         private bool _shotBackstageAll;
@@ -369,6 +379,24 @@ namespace Game.Gameplay.Ring
                 else _shotLoad = System.IO.Path.Combine(Application.persistentDataPath, load);
             }
             _shotDeclineTitle = RingLaunchArgs.Has("-ring-shot-decline-title");
+            string offer = ReadArg("-ring-shot-offer");
+            if (offer != null)
+            {
+                if (offer == "decline") _shotOfferDecline = true;
+                else if (offer != "accept") Debug.LogWarning("[Ринг] -ring-shot-offer: accept або decline, а не '" + offer + "' — як за замовчуванням (accept)");
+            }
+            string name = ReadArg("-ring-hero-name");
+            if (name != null)
+            {
+                if (name.Length > CareerSession.MaxNameLength) name = name.Substring(0, CareerSession.MaxNameLength);
+                if (name.Trim().Length == 0) Debug.LogWarning("[Ринг] -ring-hero-name: порожнє ім'я — лишається «Новачок»");
+                else
+                {
+                    _shotHeroName = name;
+                    ShotNote("ім'я героя: «" + name + "» (" + name.Length + " знаків, межа " + CareerSession.MaxNameLength + ")");
+                }
+            }
+            _shotOpponent = ReadArg("-ring-shot-opponent");
             _shotEvent = ReadArg("-ring-shot-event");
             string bs = ReadArg("-ring-shot-backstage");
             if (bs != null)
@@ -526,6 +554,42 @@ namespace Game.Gameplay.Ring
                 Debug.LogWarning("[Ринг] немає закулісної сцени '" + id + "'");
                 ShotNote("немає закулісної сцени " + id);
             }
+        }
+
+        /// <summary>
+        /// <c>-ring-shot-offer decline</c>: на кінці сезону з ключами — «Лишитися» (той самий виклик, що й кнопка). Наступного сезону
+        /// пропозиція повториться — і друга відмова поспіль покаже «букер ображений». accept — нічого: «Перейти» тисне каркас.
+        /// </summary>
+        private bool BotOfferStep()
+        {
+            if (!_shotOfferDecline || _onTitle || _career == null || _career.Stage != CareerStage.SeasonEnd || !_career.OfferAvailable) return false;
+            ShotNote("пропозиція " + _career.OfferFederation.Tier + "-го рівня: «Лишитися» (-ring-shot-offer decline), відмова поспіль № " + (_career.State.OfferDeclines + 1));
+            _career.DeclineOffer();
+            Save();
+            _view.Refresh();
+            return true;
+        }
+
+        /// <summary>
+        /// <c>-ring-shot-opponent &lt;id&gt;</c>: на першому звичайному тижні огляду (до першої дії) — суперник за id
+        /// (<see cref="CareerSession.ForceOpponent"/>). Не вийшло (велике шоу, чужий дивізіон, немає такого) — пробує на наступному тижні.
+        /// Кроку бота не займає.
+        /// </summary>
+        private void BotForceOpponent()
+        {
+            if (_shotOpponent == null || _onTitle || _career == null || _career.Stage != CareerStage.Week || _career.State.ActionsDone.Count > 0) return;
+            if (_career.Content.FindNpc(_shotOpponent) == null)
+            {
+                Debug.LogWarning("[Ринг] -ring-shot-opponent: немає борця '" + _shotOpponent + "'");
+                ShotNote("немає борця " + _shotOpponent);
+                _shotOpponent = null;
+                return;
+            }
+            if (!_career.ForceOpponent(_shotOpponent)) return;
+            ShotNote("суперник тижня " + _career.State.Week + ": " + _shotOpponent + " (-ring-shot-opponent)");
+            _shotOpponent = null;
+            Save();
+            _view.Refresh();
         }
 
         /// <summary><c>-ring-shot-decline-title</c>: на кінці сезону з титульним шансом — «Відмовитись» (той самий виклик, що й кнопка).</summary>

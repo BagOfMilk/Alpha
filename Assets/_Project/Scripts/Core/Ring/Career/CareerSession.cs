@@ -700,6 +700,25 @@ namespace Game.Core.Ring.Career
             ForcedBackstageScene = sceneId;
         }
 
+        /// <summary>
+        /// Огляд QA (<c>-ring-shot-opponent</c>, рев'ю ПМ 12.11.2026 — найдовше ім'я на табло): суперник цього тижня замість обраного
+        /// букером. Лише на початку звичайного тижня (жодної дії, сцени, не велике шоу й не титул) і лише з пулу букера (дивізіон
+        /// героя; Молот — лише після розв'язки ворожнечі). План і умови — ті, що склав би букер для цього суперника. false — підмінити
+        /// не можна, картка не змінюється. Сама картка йде в сейв як звичайна.
+        /// </summary>
+        public bool ForceOpponent(string npcId)
+        {
+            if (Stage != CareerStage.Week || State.ActionsDone.Count > 0 || _bs != null || State.IsBig || State.IsTitle || State.IsFeudShow) return false;
+            NpcDef npc = null;
+            foreach (var n in BookingPool()) if (n.Id == npcId) npc = n;
+            if (npc == null || (npc.Id == CareerContent.HammerId && !HammerAvailable)) return false;
+            Func<string, int> lv = FeudLevel;
+            State.Opponent = npc.Id;
+            State.Plan = ShowBooker.PlanFor(npc, Popularity, Trust, PopularityFloor, PopularityCeiling);
+            State.Stip = ShowBooker.StipulationsFor(lv(npc.Id));
+            return true;
+        }
+
         private BackstageScene PickBackstageScene()
         {
             var all = Content.Backstage.Scenes;

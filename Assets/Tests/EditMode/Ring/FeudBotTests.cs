@@ -120,6 +120,8 @@ namespace Game.Tests.EditMode
                 {
                     var s = CareerKit.NewAtTitle((ulong)(700 + v));
                     var e = FeudBotDriver.PlayCareer(s, v, target);
+                    // критерій М1 №3: кожна кінцівка — за три сезони (огляд -ring-shot-seasons 3); бот приймає пропозиції федерацій
+                    if (e.HasValue) Assert.LessOrEqual(s.State.Season, 3, "розв'язка ворожнечі — у межах трьох сезонів");
                     string k = e.HasValue ? e.Value.ToString() : "немає";
                     got[k] = got.TryGetValue(k, out var n) ? n + 1 : 1;
                     if (e == target) hit++;
@@ -148,6 +150,7 @@ namespace Game.Tests.EditMode
                     var s = CareerKit.NewAtTitle((ulong)(700 + v));
                     var e = FeudBotDriver.PlayCareer(s, v, target, atSeasonEnd: MoveUpAfterSeasonOne);
                     Assert.GreaterOrEqual(s.FederationTier, 2, "перехід відбувся");
+                    if (e.HasValue) Assert.LessOrEqual(s.State.Season, 3, "після переходу розв'язка — теж у межах трьох сезонів");
                     if (e == target) hit++;
                 }
                 sb.AppendLine(target + ": " + hit + "/" + v);
