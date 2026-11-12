@@ -279,6 +279,31 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void HubLine_WhileTheTrapHolds_NamesItsLastSeason_GoneOnceTheContractIsHonest()
+        {
+            var honest = Offer(16, false);
+            honest.AcceptOffer();
+            honest.StartNextSeason();
+            Assert.IsNull(new SeasonOfferModel(honest, Text()).ExclusiveText, "чесний контракт — рядка немає");
+
+            var s = Offer(17, true);
+            int signed = s.State.Season;
+            s.AcceptOffer();
+            s.StartNextSeason();
+            int last = signed + CareerRules.ExclusiveSeasons;
+            Assert.AreEqual(Text().Format("c.offer.exclusive_until", last), new SeasonOfferModel(s, Text()).ExclusiveText,
+                "перший сезон строку — до кінця останнього");
+            StringAssert.Contains(last.ToString(), new SeasonOfferModel(s, Text()).ExclusiveText);
+
+            s.State.Season = last;
+            Assert.AreEqual(0, s.ExitPenaltyDue, "останній сезон: піти на його кінці вже не рано");
+            Assert.IsNotNull(new SeasonOfferModel(s, Text()).ExclusiveText, "але пастка ще тримає — рядок є");
+
+            s.State.Season = last + 1;
+            Assert.IsNull(new SeasonOfferModel(s, Text()).ExclusiveText, "строк скінчився — рядка немає");
+        }
+
+        [Test]
         public void ChampionFarewell_TermsAreSignedAtAccept_AdvanceIsPaidWhenTheMoveHappens()
         {
             var s = AtSeasonEnd(6, 1, 3, CareerRules.OfferTrust - CareerRules.OfferChampionTrustBonus, champion: true);

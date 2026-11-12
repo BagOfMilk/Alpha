@@ -116,6 +116,16 @@ namespace Game.Gameplay.Ring.Models
             }
         }
 
+        /// <summary>
+        /// Рядок хабу, поки тримає пастка (§6.4): «Виключне право: до кінця сезону N». N — останній сезон строку, той самий номер,
+        /// що на екрані «Кінець сезону N»: у ньому гонорар ще урізаний, а піти на його кінці вже не рано (без штрафу). Null — контракт
+        /// чесний або строк скінчився. Показ не прив'язаний до кінця сезону — це рядок тижня.
+        /// </summary>
+        public string ExclusiveText
+        {
+            get { return _s.ExclusiveActive ? _t.Format("c.offer.exclusive_until", _s.State.ContractEndSeason) : null; }
+        }
+
         public string AcceptText { get { return _t.Get("c.offer.accept"); } }
         public string DeclineText { get { return _t.Get("c.offer.decline"); } }
 
