@@ -639,6 +639,8 @@ namespace Game.Gameplay.Ring.UI
         {
             string reason;
             if (!C.CanCreate(_d, out reason)) return;
+            // дивізіон (P2-6) — зі статі обраного тіла: суперники й пояс своєї статі (ПМ 12.11.2026)
+            CareerScreenLines.SetDivision(_d, CareerLooks.HeroBodies[Host.HeroBody]);
             C.CreateHero(_d);
             Host.Save();
         }

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Game.Core.Ring;
 using Game.Core.Ring.Career;
@@ -86,5 +87,92 @@ namespace Game.Gameplay.Ring.Models
             }
             return res;
         }
+
+        // ---------------- федерації (П5 «Кар'єри», запит ПМ 12.11.2026) ----------------
+
+        /// <summary>
+        /// Кінець сезону, нижній ряд: спершу титульний шанс («Титульний матч» / «Пропустити»), потім пропозиція вищої федерації
+        /// («Прийняти контракт» / «Лишитися» — без них гравець застрягав на місцевій під стелею популярності), і лише після рішення —
+        /// «Новий сезон». Перша дія — золота плита (Enter), решта — плитки ліворуч. Порожньо — дій немає (іде прощальний матч).
+        /// </summary>
+        public static List<SeasonEndAction> SeasonEndActions(CareerSession c)
+        {
+            var l = new List<SeasonEndAction>();
+            if (c.CanStartTitleMatch) { l.Add(SeasonEndAction.TitleMatch); l.Add(SeasonEndAction.SkipTitle); }
+            else if (c.OfferAvailable) { l.Add(SeasonEndAction.AcceptOffer); l.Add(SeasonEndAction.DeclineOffer); }
+            else if (c.CanStartNextSeason) l.Add(SeasonEndAction.NextSeason);
+            return l;
+        }
+
+        /// <summary>
+        /// Рядок звільнення в підсумку сезону (null — контракт продовжено): на місцевій — «на нулі, назад на мінімум»
+        /// (<c>season.fired</c>), у вищій федерації — пониження (<c>c.season.demoted</c> через <see cref="SeasonOfferModel.StatusText"/>).
+        /// </summary>
+        public static string FiredLine(RingText t, CareerSession c, SeasonOfferModel offer)
+        {
+            var rep = c.State.Report;
+            if (rep == null || !rep.Fired) return null;
+            return c.FederationTier > 1 ? offer.StatusText : t.Get("season.fired");
+        }
+
+        /// <summary>Блок пропозиції на папері підсумку: підсумок остаточний і контракт продовжено (звільненому — рядок звільнення).</summary>
+        public static bool OfferShown(CareerSession c, SeasonOfferModel offer)
+        {
+            var rep = c.State.Report;
+            return offer.Visible && rep != null && !rep.Fired;
+        }
+
+        /// <summary>
+        /// Ця відмова — друга чи далі поспіль: букер ображається, довіра −1 (<see cref="CareerSession.DeclineOffer"/>; серію обриває лише
+        /// сезон без явної відмови, тож третя поспіль теж коштує довіри — у тексті ризику немає «друга»).
+        /// </summary>
+        public static bool DeclineOffends(CareerSession c) { return c.State.OfferDeclines + 1 >= CareerRules.DeclinesToOffend; }
+
+        /// <summary>Плитка «Лишитися», опис: пропозиція повториться (одним рядком — під ним може стати ризик).</summary>
+        public static string DeclineEffect(RingText t) { return t.Get("c.offer.decline.again"); }
+
+        /// <summary>Плитка «Лишитися», ризик (сигнальним): відмова поспіль — довіра −1; null — перша.</summary>
+        public static string DeclineRisk(RingText t, CareerSession c) { return DeclineOffends(c) ? t.Get("c.offer.decline.offend") : null; }
+
+        /// <summary>Кнопка костюма у «Витратах»: ціна — рівня федерації (<see cref="CareerSession.CostumePrice"/>), а не стала 60.</summary>
+        public static string CostumeButton(RingText t, CareerSession c)
+        {
+            return c.State.CostumeBought ? t.Get("c.shop.costume.owned") : t.Format("c.shop.costume", c.CostumePrice);
+        }
+
+        /// <summary>Рядок «Витрат»: життя й дорога цієї федерації за тиждень (<see cref="CareerSession.WeeklyCost"/>, наприкінці тижня).</summary>
+        public static string LivingLine(RingText t, CareerSession c) { return t.Format("c.shop.living", c.WeeklyCost); }
+
+        /// <summary>
+        /// Шкала популярності в ресурсах: до стелі федерації (<see cref="CareerSession.PopularityCeiling"/>) — повна шкала означає «час
+        /// вище». Якщо популярність вища за стелю (старий сейв), шкала не обрізає її.
+        /// </summary>
+        public static int PopularityMax(CareerSession c) { return Math.Max(c.PopularityCeiling, c.Popularity); }
+
+        /// <summary>
+        /// Заголовок картки вечора: прощальний матч чемпіона (<see cref="ShowCardView.IsFarewell"/>, після «Прийняти контракт») —
+        /// своїм рядком, бо це не титул і не звичайне велике шоу (ПМ 12.11.2026); далі — титул, велике шоу, тижневе.
+        /// </summary>
+        public static string CardHeading(RingText t, ShowCardView c)
+        {
+            return t.Get(c.IsFarewell ? "c.card.farewell" : c.IsTitle ? "c.card.title_match" : c.IsBig ? "c.card.big" : "c.card.weekly");
+        }
+
+        /// <summary>
+        /// Рядок картки прощального матчу: віддати пояс чисто — і вища федерація зустріне з довірою <see cref="CareerRules.FarewellTrust"/>
+        /// (null — не прощальний матч).
+        /// </summary>
+        public static string FarewellNote(RingText t, CareerSession s, ShowCardView c)
+        {
+            if (!c.IsFarewell) return null;
+            var to = s.FederationTier < s.Content.Federations.Count ? s.Content.Federation(s.FederationTier + 1) : null;
+            return t.Format("c.card.farewell.note", to == null ? "" : t.Get(to.NameKey), CareerRules.FarewellTrust);
+        }
+
+        /// <summary>Чернетка героя перед створенням: дивізіон (P2-6) — зі статі тіла (body_f_* — жіночий), суперники своєї статі.</summary>
+        public static void SetDivision(CharacterDraft d, string body) { d.Female = CareerLooks.IsFemaleBody(body); }
     }
+
+    /// <summary>Дія нижнього ряду кінця сезону (<see cref="CareerScreenLines.SeasonEndActions"/>).</summary>
+    public enum SeasonEndAction { TitleMatch = 0, SkipTitle = 1, AcceptOffer = 2, DeclineOffer = 3, NextSeason = 4 }
 }

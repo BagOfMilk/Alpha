@@ -540,7 +540,8 @@ namespace Game.Gameplay.Ring.UI
             _titleProbe.RegisterCallback<GeometryChangedEvent>(e => FitTitle());
             _check = new CheckMark();   // галочка малюється: у display-шрифті немає U+2713 (перевірено fontTools 08.11.2026)
             _check.style.position = Position.Absolute;
-            _check.style.right = 50f; _check.style.top = 14f;   // ліворуч від ключа: унизу лягала на рядок ефекту (кадр 4:3)
+            // ліворуч від ключа з просвітом KeyGap (модель — CareerTileLayout.CheckRight; з 50 лягала на ключ — кадр 21:9 слоту 28)
+            _check.style.right = CareerTileLayout.CheckRight(false); _check.style.top = CareerTileLayout.CheckTop;
             _check.style.display = DisplayStyle.None;
             _face.Add(_check);
             PadFocus.Hover(this, () => { if (OnHover != null) OnHover(); }, () => { if (OnUnhover != null) OnUnhover(); });
@@ -593,7 +594,7 @@ namespace Game.Gameplay.Ring.UI
             if (on)
             {
                 _keyBox.style.position = Position.Absolute;
-                _keyBox.style.top = -11f; _keyBox.style.right = 14f;
+                _keyBox.style.top = CareerTileLayout.CompactKeyTop; _keyBox.style.right = CareerTileLayout.CompactKeyRight;
                 _keyBox.style.width = CareerTileLayout.CompactKeyBox; _keyBox.style.height = CareerTileLayout.CompactKeyBox;
                 _keyBox.style.marginLeft = 0f;
                 _key.style.fontSize = 17f;
@@ -607,6 +608,7 @@ namespace Game.Gameplay.Ring.UI
                 _key.style.fontSize = 21f;
                 _head.Add(_keyBox);
             }
+            _check.style.right = CareerTileLayout.CheckRight(on);
             FitSlant();
             return true;
         }
@@ -769,7 +771,7 @@ namespace Game.Gameplay.Ring.UI
 
         public CheckMark()
         {
-            style.width = 24f; style.height = 20f;
+            style.width = CareerTileLayout.CheckW; style.height = CareerTileLayout.CheckH;
             pickingMode = PickingMode.Ignore;
             generateVisualContent = Draw;
         }

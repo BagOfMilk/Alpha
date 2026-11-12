@@ -47,6 +47,19 @@ namespace Game.Gameplay.Ring.Models
         public const float BodyLeft = 18f, BodyRight = 22f, BodyTop = 10f, BodyBottom = 8f;
         public const float CompactBodyLeft = 12f, CompactBodyRight = 14f, CompactBodyTop = 14f;
         public const float KeyBox = 30f, KeyGap = 6f, CompactKeyBox = 24f;
+        /// <summary>Квадрат ключа компактної плитки — на верхньому краї, а не в рядку назви (ActionTile.SetCompact).</summary>
+        public const float CompactKeyTop = -11f, CompactKeyRight = 14f;
+        /// <summary>
+        /// Галочка вибраної плитки (створення): розмір і верх. Стоїть у рядку назви ліворуч від ключа — унизу лягала на рядок ефекту
+        /// (кадр 4:3).
+        /// </summary>
+        public const float CheckW = 24f, CheckH = 20f, CheckTop = 14f, CompactCheckRight = 50f;
+
+        /// <summary>
+        /// Правий відступ галочки. У некомпактній плитці ключ — у рядку назви (праворуч BodyRight, ширина KeyBox): галочка стоїть
+        /// за ним із тим самим просвітом KeyGap. Було 50 — на 2 одиниці на квадраті ключа (кадр слоту 28, 21:9, «Герой»).
+        /// </summary>
+        public static float CheckRight(bool compact) { return compact ? CompactCheckRight : BodyRight + KeyBox + KeyGap; }
         public const float TitleSize = 21f, CompactTitleSize = 17f, TitleTrack = 0.03f;
         /// <summary>Назва плитки — завжди один рядок: кегль меншає до цього, не нижче (Статут: кегль ≥ 15).</summary>
         public const float TitleMinSize = BrandTokens.TypeMinInfo;

@@ -64,7 +64,7 @@ namespace Game.Gameplay.Ring.UI
                 _shop = ExpandForShots && !_dev;
             }
             Root.Add(ShowKit.PlayerStrip(C, T, v));
-            Root.Add(ShowKit.Resources(T, v));
+            Root.Add(ShowKit.Resources(T, v, CareerScreenLines.PopularityMax(C)));
             _weekPlate = WeekPlate(v);
             Root.Add(_weekPlate);
             Root.Add(ShowKit.RivalStrip(C, T, w.Card.Opponent, w.Card.OpponentFeudLevel, true));
@@ -444,7 +444,8 @@ namespace Game.Gameplay.Ring.UI
             var row = RingUi.Row();
             row.style.flexWrap = Wrap.Wrap;
             var st = C.State;
-            row.Add(ShopBtn("costume", st.CostumeBought ? T.Get("c.shop.costume.owned") : T.Format("c.shop.costume", CareerRules.CostumeCost),
+            // ціна — рівня федерації (C.CostumePrice), а не стала 60 з правил: з регіональної напис був меншим за списане (ПМ 12.11.2026)
+            row.Add(ShopBtn("costume", CareerScreenLines.CostumeButton(T, C),
                 () => C.BuyCostume(), C.CanBuyCostume, T.Get("c.shop.costume.desc")));
             for (int i = 0; i < CareerRules.Coaches.Length; i++)
             {
@@ -462,6 +463,10 @@ namespace Game.Gameplay.Ring.UI
             row.Add(ShopBtn("away", st.AwayShow ? T.Get("c.shop.away.on") : T.Format("c.shop.away", CareerRules.AwayTravelCost), () => C.GoAway(), C.CanGoAway,
                 T.Get("c.shop.away.desc")));
             card.Add(row);
+            // житло й дорога цієї федерації — списуються наприкінці тижня; у вищій федерації дорожче (C.WeeklyCost)
+            var living = MenuKit.Body(CareerScreenLines.LivingLine(T, C), BrandTokens.TypeMinInfo, RingTheme.TextDim);
+            living.style.marginTop = 6f;
+            card.Add(living);
             return card;
         }
 

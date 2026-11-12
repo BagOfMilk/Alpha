@@ -61,7 +61,11 @@ namespace Game.Gameplay.Ring.UI
             return box;
         }
 
-        public static VisualElement Resources(RingText t, CareerView v)
+        /// <summary>
+        /// Гроші, популярність і довіра. <paramref name="popMax"/> — шкала популярності до стелі федерації
+        /// (<see cref="CareerScreenLines.PopularityMax"/>, ПМ 12.11.2026): на місцевій 4, а не 10 — повна шкала означає «час вище».
+        /// </summary>
+        public static VisualElement Resources(RingText t, CareerView v, int popMax)
         {
             var box = ArenaKit.Abs(ArenaKit.Edge, ArenaKit.SecondY, null, null, ArenaKit.StripW, 104f);
             box.style.overflow = Overflow.Visible;
@@ -74,7 +78,7 @@ namespace Game.Gameplay.Ring.UI
             ml.style.marginLeft = 10f; ml.style.marginBottom = 6f;
             money.Add(ml);
             box.Add(money);
-            box.Add(MeterLine(t.Get("c.hub.pop"), v.Popularity, CareerRules.MaxPopularity, 56f));
+            box.Add(MeterLine(t.Get("c.hub.pop"), v.Popularity, popMax, 56f));
             box.Add(MeterLine(t.Get("c.hub.trust"), v.Trust, CareerRules.MaxTrust, 78f));
             return box;
         }
@@ -257,7 +261,7 @@ namespace Game.Gameplay.Ring.UI
             var c = C.GetShowCard();
             var v = C.GetCareerView();
             Root.Add(ShowKit.PlayerStrip(C, T, v));
-            Root.Add(ShowKit.Resources(T, v));
+            Root.Add(ShowKit.Resources(T, v, CareerScreenLines.PopularityMax(C)));
             Root.Add(ShowKit.RivalStrip(C, T, c.Opponent, c.OpponentFeudLevel, true));
             Root.Add(Poster(c));
 
@@ -292,7 +296,7 @@ namespace Game.Gameplay.Ring.UI
             var left = new VisualElement();
             left.pickingMode = PickingMode.Ignore;
             left.style.flexShrink = 1f;
-            left.Add(MenuKit.Display(T.Get(c.IsTitle ? "c.card.title_match" : c.IsBig ? "c.card.big" : "c.card.weekly"), 25f, RingTheme.Bg, RingFontRole.Display800, 0.02f));
+            left.Add(MenuKit.Display(CareerScreenLines.CardHeading(T, c), 25f, RingTheme.Bg, RingFontRole.Display800, 0.02f));
             var pos = MenuKit.Display(T.Get("card.pos." + (int)c.Position), BrandTokens.TypeLabel, RingTheme.Ash, RingFontRole.Display700, 0.1f);
             pos.style.marginTop = 4f;
             left.Add(pos);
@@ -313,6 +317,9 @@ namespace Game.Gameplay.Ring.UI
                 col.Add(vs);
             }
             col.Add(MenuKit.Body(T.Format("c.card.fee", c.Fee, c.WinBonus, c.HypeBonus), BrandTokens.TypeMinInfo, RingTheme.Bg, true));
+            // прощальний матч чемпіона: віддай пояс — і вища федерація зустріне краще (ПМ 12.11.2026)
+            string farewell = CareerScreenLines.FarewellNote(T, C, c);
+            if (farewell != null) col.Add(ShowKit.Bullet(farewell));
             if (!c.IsFeud) col.Add(ShowKit.Bullet(T.Get("c.card.plan") + ": " + PlanText(c.Plan)));
             col.Add(ShowKit.Bullet(T.Get("c.card.stip") + ": " + StipText(c.Stipulations)));
             if (c.PromoHypeBonus != 0) col.Add(ShowKit.Bullet(T.Format("c.card.promo_bonus", Signed(c.PromoHypeBonus))));
@@ -685,6 +692,7 @@ namespace Game.Gameplay.Ring.UI
     public sealed class SeasonEndScreenView : CareerScreenView
     {
         private ShowBottomRow _bar = new ShowBottomRow();
+        private SeasonOfferModel _offer;
 
         public SeasonEndScreenView(RingUiContext ctx) : base(ctx)
         {
@@ -696,10 +704,11 @@ namespace Game.Gameplay.Ring.UI
             Root.Clear();
             Root.style.paddingLeft = 0f; Root.style.paddingRight = 0f; Root.style.paddingTop = 0f; Root.style.paddingBottom = 0f;
             _bar = new ShowBottomRow();
+            _offer = new SeasonOfferModel(C, T);
             var rep = C.GetSeasonReport();
             var v = C.GetCareerView();
             Root.Add(ShowKit.PlayerStrip(C, T, v));
-            Root.Add(ShowKit.Resources(T, v));
+            Root.Add(ShowKit.Resources(T, v, CareerScreenLines.PopularityMax(C)));
             Root.Add(Report(rep));
             Root.Add(DevPlate());
 
@@ -707,20 +716,60 @@ namespace Game.Gameplay.Ring.UI
             ArenaKit.Place(ropes, ArenaKit.Edge, null, ArenaKit.Edge, ArenaKit.RopesBottom, null, 22f);
             Root.Add(ropes);
 
-            if (C.CanStartTitleMatch)
-            {
-                _bar.Add(Root, new GoldPlate(T.Get("c.season.title_go"), ArenaKit.ConfirmHint(T), () => { C.StartTitleMatch(); Host.Save(); }, true),
-                    ArenaKit.GoldW, ArenaKit.GoldWNarrow);
-                var skip = new ActionTile(0, T.Get("c.season.title_skip"), "", null, true);
-                skip.Accent = RingTheme.TextDim;
-                skip.PadRankValue = 6;
-                skip.OnClick = () => { C.SkipTitle(); Host.Save(); Refresh(); };
-                _bar.Add(Root, skip, CareerTileLayout.TitleSkipTileW, CareerTileLayout.TitleSkipTileWNarrow);
-            }
-            if (C.CanStartNextSeason)
-                _bar.Add(Root, new GoldPlate(T.Get("season.next"), C.CanStartTitleMatch ? "" : ArenaKit.ConfirmHint(T), OnConfirm, true),
-                    ArenaKit.GoldW, ArenaKit.GoldWNarrow);
+            // Нижній ряд — одна послідовність рішень (CareerScreenLines.SeasonEndActions): титульний шанс → пропозиція вищої
+            // федерації («Прийняти контракт» / «Лишитися», ПМ 12.11.2026: без них гравець застрягав на місцевій) → новий сезон.
+            // Перша дія — золота плита (Enter), решта — плитки ліворуч.
+            var actions = CareerScreenLines.SeasonEndActions(C);
+            for (int i = 0; i < actions.Count; i++) AddAction(actions[i], i == 0);
             _bar.Fit(Root.layout.width);
+        }
+
+        private void AddAction(SeasonEndAction a, bool first)
+        {
+            switch (a)
+            {
+                case SeasonEndAction.TitleMatch: Gold(T.Get("c.season.title_go"), first); break;
+                case SeasonEndAction.AcceptOffer: Gold(_offer.AcceptText, first); break;
+                case SeasonEndAction.NextSeason: Gold(T.Get("season.next"), first); break;
+                case SeasonEndAction.SkipTitle: Tile(a, T.Get("c.season.title_skip"), "", null); break;
+                case SeasonEndAction.DeclineOffer:
+                    // що буде — «повториться»; друга відмова поспіль коштує довіри — ризиком (сигнальним) під ним
+                    Tile(a, _offer.DeclineText, CareerScreenLines.DeclineEffect(T), CareerScreenLines.DeclineRisk(T, C));
+                    break;
+            }
+        }
+
+        private void Gold(string word, bool first)
+        {
+            _bar.Add(Root, new GoldPlate(word, first ? ArenaKit.ConfirmHint(T) : "", OnConfirm, true), ArenaKit.GoldW, ArenaKit.GoldWNarrow);
+        }
+
+        private void Tile(SeasonEndAction a, string title, string effect, string risk)
+        {
+            var t = new ActionTile(0, title, effect, risk, true);
+            t.Accent = RingTheme.TextDim;
+            t.PadRankValue = 6;
+            t.OnClick = () => Run(a);
+            _bar.Add(Root, t, CareerTileLayout.TitleSkipTileW, CareerTileLayout.TitleSkipTileWNarrow);
+        }
+
+        /// <summary>
+        /// Дія ряду. Титульний матч і прощальний матч чемпіона (AcceptOffer чемпіона) переводять кар'єру в шоу — екран міняє хост за
+        /// стадією; решта лишає кінець сезону — перемалювати тут. Після переходу не-чемпіона стадія та сама (SeasonEnd), а
+        /// GetSeasonReport на шоу кинув би виняток — тому Refresh лише на кінці сезону.
+        /// </summary>
+        private void Run(SeasonEndAction a)
+        {
+            switch (a)
+            {
+                case SeasonEndAction.TitleMatch: C.StartTitleMatch(); break;
+                case SeasonEndAction.SkipTitle: C.SkipTitle(); break;
+                case SeasonEndAction.AcceptOffer: C.AcceptOffer(); break;
+                case SeasonEndAction.DeclineOffer: C.DeclineOffer(); break;
+                case SeasonEndAction.NextSeason: C.StartNextSeason(); break;
+            }
+            Host.Save();
+            if (a != SeasonEndAction.NextSeason && C.Stage == CareerStage.SeasonEnd) Refresh();
         }
 
         private VisualElement Report(SeasonReport rep)
@@ -734,6 +783,11 @@ namespace Game.Gameplay.Ring.UI
             var title = MenuKit.Display(T.Format("c.season.title", rep.Season), 32f, RingTheme.Bg, RingFontRole.Display900, 0.02f);
             title.style.whiteSpace = WhiteSpace.Normal;
             col.Add(title);
+            // федерація й рівень: «Залізна лава · рівень 1 з 4» (П5, ПМ 12.11.2026)
+            var fed = MenuKit.Body(_offer.FederationText, BrandTokens.TypeMinInfo, RingTheme.Bg, true);
+            fed.style.whiteSpace = WhiteSpace.Normal;
+            fed.style.marginTop = 2f;
+            col.Add(fed);
             col.Add(ShowKit.Rule());
             // Поки титульний шанс відкритий — лише він (3-P2-6, 11.11.2026): шкали ще зміняться після матчу чи відмови, а
             // підсумок показувався б двічі — до і після.
@@ -762,9 +816,11 @@ namespace Game.Gameplay.Ring.UI
                 col.Add(ShowKit.Bullet(C.State.FeudResolved ? T.Format("c.season.feud_done", hn)
                     : T.Format("c.season.feud", hn, C.FeudLevel(CareerContent.HammerId), CareerRules.MaxFeud)));
             }
-            if (rep.Fired)
+            // звільнення: на місцевій — назад на мінімум, у вищій — пониження «куди» (c.season.demoted, через модель; ПМ 12.11.2026)
+            string fired = CareerScreenLines.FiredLine(T, C, _offer);
+            if (fired != null)
             {
-                var f = MenuKit.Body(T.Get("season.fired"), BrandTokens.TypeBody, RingTheme.Crimson, true);
+                var f = MenuKit.Body(fired, BrandTokens.TypeBody, RingTheme.Crimson, true);
                 f.style.whiteSpace = WhiteSpace.Normal;
                 f.style.marginTop = 10f;
                 col.Add(f);
@@ -777,7 +833,67 @@ namespace Game.Gameplay.Ring.UI
                 col.Add(ShowKit.Bullet(T.Get(rep.IsDefense ? "season.defense" : "season.title_shot")));
             else if (!rep.Fired)
                 col.Add(ShowKit.Bullet(T.Format("c.season.goal", CareerRules.TitleShotTrust, CareerRules.MaxFeud)));
+            if (CareerScreenLines.OfferShown(C, _offer)) OfferBlock(col, _offer);
             box.Add(col);
+            return box;
+        }
+
+        /// <summary>
+        /// Пропозиція вищої федерації (П5, правило А2 «два ключі»): до рішення — заголовок і два ключі з галочкою, коли виконано, і
+        /// карміновим «чого бракує» під ним; «+ пояс» біля букера; після рішення ключів немає — лише рядок стану
+        /// (<see cref="SeasonOfferModel.StatusText"/>: кличуть, прощальний матч, відмова, новий контракт).
+        /// </summary>
+        private static void OfferBlock(VisualElement col, SeasonOfferModel o)
+        {
+            col.Add(ShowKit.Rule());
+            if (o.ShowKeys)
+            {
+                var head = MenuKit.Body(o.TitleText, BrandTokens.TypeBody, RingTheme.Bg, true);
+                head.style.whiteSpace = WhiteSpace.Normal;
+                col.Add(head);
+                if (!o.IsTop)
+                {
+                    col.Add(KeyLine(o.AudienceText, null, o.AudienceOk, o.AudienceHint));
+                    col.Add(KeyLine(o.BookerText, o.BeltMark, o.BookerOk, o.BookerHint));
+                }
+            }
+            string status = o.StatusText;
+            if (string.IsNullOrEmpty(status)) return;
+            var s = MenuKit.Body(status, BrandTokens.TypeMinInfo, RingTheme.Bg, true);
+            s.style.whiteSpace = WhiteSpace.Normal;
+            s.style.marginTop = 8f;
+            col.Add(s);
+        }
+
+        private static VisualElement KeyLine(string text, string mark, bool ok, string hint)
+        {
+            var box = new VisualElement();
+            box.pickingMode = PickingMode.Ignore;
+            box.style.marginTop = 6f;
+            var row = ArenaKit.Row();
+            row.style.alignItems = Align.Center;
+            // місце галочки — завжди (рядки рівні); сама галочка — лише коли ключ виконано
+            var slot = new VisualElement();
+            slot.pickingMode = PickingMode.Ignore;
+            slot.style.width = CareerTileLayout.CheckW; slot.style.height = CareerTileLayout.CheckH;
+            slot.style.marginRight = 8f; slot.style.flexShrink = 0f;
+            if (ok) slot.Add(new CheckMark { Ink = RingTheme.Bg });
+            row.Add(slot);
+            row.Add(MenuKit.Body(text, BrandTokens.TypeBody, RingTheme.Bg, true));
+            if (!string.IsNullOrEmpty(mark))
+            {
+                var m = ArenaKit.Tag(mark, RingTheme.Bg);
+                m.style.marginLeft = 10f;
+                row.Add(m);
+            }
+            box.Add(row);
+            if (!string.IsNullOrEmpty(hint))
+            {
+                var h = MenuKit.Body(hint, BrandTokens.TypeMinInfo, RingTheme.Crimson, true);
+                h.style.whiteSpace = WhiteSpace.Normal;
+                h.style.marginLeft = CareerTileLayout.CheckW + 8f;
+                box.Add(h);
+            }
             return box;
         }
 
@@ -805,12 +921,11 @@ namespace Game.Gameplay.Ring.UI
             return box;
         }
 
+        /// <summary>Enter / A — перша дія ряду (золота плита).</summary>
         public override void OnConfirm()
         {
-            if (C.CanStartTitleMatch) { C.StartTitleMatch(); Host.Save(); return; }
-            if (!C.CanStartNextSeason) return;
-            C.StartNextSeason();
-            Host.Save();
+            var actions = CareerScreenLines.SeasonEndActions(C);
+            if (actions.Count > 0) Run(actions[0]);
         }
     }
 }

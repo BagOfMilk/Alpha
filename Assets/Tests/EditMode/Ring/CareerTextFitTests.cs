@@ -311,6 +311,133 @@ namespace Game.Tests.EditMode
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
 
+        /// <summary>
+        /// Галочка вибраної плитки створення (кадр слоту 28, 21:9: на «Герой» галочка лягала на квадрат ключа на 2 одиниці): на
+        /// кожній панелі, у компактній і некомпактній плитці, галочка не торкається ні квадрата ключа, ні назви на її кеглі (назва
+        /// вужчає до 15, як у ActionTile.FitTitle). Просвіт — <see cref="CheckClear"/>, число тесту.
+        /// </summary>
+        [Test]
+        public void Create_SelectedCheck_ClearsTheKeyBox_AndTheTitle_OnEveryPanel()
+        {
+            var bad = new List<string>();
+            var tiles = CreateTiles();
+            var widths = new List<KeyValuePair<string, float>>();
+            foreach (var p in Panels) widths.Add(new KeyValuePair<string, float>(p.Key, CareerTileLayout.CreateTileWidth(p.Value, tiles.Count)));
+            // обидва стани розкладки, навіть якщо жодна панель зі списку не дає компактної плитки
+            widths.Add(new KeyValuePair<string, float>("компактна", CareerTileLayout.CompactTileW - 1f));
+            widths.Add(new KeyValuePair<string, float>("некомпактна", CareerTileLayout.CompactTileW));
+            foreach (var p in widths)
+            {
+                float w = p.Value;
+                bool compact = CareerTileLayout.Compact(w);
+                float checkR = w - CareerTileLayout.CheckRight(compact), checkL = checkR - CareerTileLayout.CheckW;
+                float checkT = CareerTileLayout.CheckTop, checkB = checkT + CareerTileLayout.CheckH;
+                float keyR, keyL, keyT, keyB;
+                if (compact)
+                {
+                    keyR = w - CareerTileLayout.CompactKeyRight; keyL = keyR - CareerTileLayout.CompactKeyBox;
+                    keyT = CareerTileLayout.CompactKeyTop; keyB = keyT + CareerTileLayout.CompactKeyBox;
+                }
+                else
+                {
+                    keyR = w - CareerTileLayout.BodyRight; keyL = keyR - CareerTileLayout.KeyBox;
+                    keyT = CareerTileLayout.BodyTop; keyB = keyT + CareerTileLayout.KeyBox;
+                }
+                bool rowsMeet = checkT < keyB + CheckClear && keyT < checkB + CheckClear;
+                bool colsMeet = checkL < keyR + CheckClear && keyL < checkR + CheckClear;
+                if (rowsMeet && colsMeet)
+                    bad.Add(string.Format("{0} (плитка {1:0}): галочка {2:0}–{3:0} × {4:0}–{5:0} ближче {6:0} до ключа {7:0}–{8:0} × {9:0}–{10:0}",
+                        p.Key, w, checkL, checkR, checkT, checkB, CheckClear, keyL, keyR, keyT, keyB));
+                float left = compact ? CareerTileLayout.CompactBodyLeft : CareerTileLayout.BodyLeft;
+                float baseSize = CareerTileLayout.TitleBaseSize(w), avail = CareerTileLayout.TitleWidth(w, true);
+                foreach (var t in tiles)
+                {
+                    string title = Caps(t.Title);
+                    float size = CareerTileLayout.FitTitle(baseSize, TitleFont.Width(title, baseSize, CareerTileLayout.TitleTrack), avail);
+                    float right = left + TitleFont.Width(title, size, CareerTileLayout.TitleTrack) + RenderSlack;
+                    if (right > checkL - CheckClear)
+                        bad.Add(string.Format("{0} (плитка {1:0}): назва «{2}» на кеглі {3:0} сягає {4:0}, галочка — від {5:0}", p.Key, w, title, size, right, checkL));
+                }
+            }
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>Найменший просвіт галочки до ключа й до назви — число тесту, не моделі.</summary>
+        private const float CheckClear = 4f;
+
+        // ---------------- папір кінця сезону ----------------
+
+        private static TtfMetrics _semi;
+        /// <summary>Текст жирним (MenuKit.Body bold → RingFontRole.TextBold → FixelText-SemiBold, RingFontAssets).</summary>
+        private static TtfMetrics SemiFont { get { return _semi ?? (_semi = TtfMetrics.Load("ThirdParty", "Fonts", "Fixel", "FixelText-SemiBold.ttf")); } }
+
+        /// <summary>Розміри паперу кінця сезону — як у SeasonEndScreenView.Report (ширина 520, відступи 30/26, 16/24).</summary>
+        private const float PaperW = 520f, PaperPadL = 30f, PaperPadR = 26f, PaperPadT = 16f, PaperPadB = 24f;
+        /// <summary>Між низом паперу й канатами — не менше (число тесту).</summary>
+        private const float PaperClear = 10f;
+
+        private static float Para(string s, float size, float width, out int lines)
+        {
+            float widest;
+            lines = Math.Max(1, SemiFont.Lines(s, size, width, 0f, out widest));
+            return lines * SemiFont.LineHeight(size);
+        }
+
+        private static float Para(string s, float size, float width) { int n; return Para(s, size, width, out n); }
+
+        /// <summary>Пункт ShowKit.Bullet: відступ 4, квадрат 11 + 8 ліворуч, текст 15 жирним.</summary>
+        private static float BulletH(string s, float col) { return 4f + Math.Max(4f + 11f, Para(s, BrandTokens.TypeMinInfo, col - 19f)); }
+
+        private static string Longest(params string[] ss)
+        {
+            string best = "";
+            foreach (var s in ss) if (SemiFont.Width(s, BrandTokens.TypeMinInfo) > SemiFont.Width(best, BrandTokens.TypeMinInfo)) best = s;
+            return best;
+        }
+
+        /// <summary>
+        /// Папір кінця сезону з блоком пропозиції (ПМ 12.11.2026) не сягає канатів (верх канатів <c>ArenaKit.RopesY</c> 668) — ряд кнопок
+        /// під ним не перекривається. Найгірший набір: найдовші рядки підсумку, обидва ключі з підказками «чого бракує» і найдовший
+        /// рядок стану разом (у грі підказки й «кличе» разом не бувають — запас). Висоти рядків — шрифтом жирного тексту.
+        /// </summary>
+        [Test]
+        public void SeasonEnd_Paper_WithTheOffer_StaysAboveTheRopes()
+        {
+            const float ropesY = 668f, top = 45f;   // ArenaKit.RopesY, ArenaKit.Top (Gameplay-UI тест не бачить)
+            float col = PaperW - PaperPadL - PaperPadR;
+            var content = CareerKit.Content();
+            string fed = "";
+            foreach (var f in content.Federations) { string n = Ui(f.NameKey); if (n.Length > fed.Length) fed = n; }
+            // імена борців — у strings_uk.json (екран бере їх через T.Get так само)
+            string hammer = RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json")).Get(content.FindNpc(CareerContent.HammerId).NameKey);
+            float h = PaperPadT;
+            h += WordFont.LineHeight(32f);                                                                 // «Кінець сезону N»
+            h += 2f + Para(string.Format(Ui("c.fed.line"), fed, 4, 4), BrandTokens.TypeMinInfo, col);
+            h += 18f;                                                                                      // ShowKit.Rule
+            h += Para(string.Format(Ui("c.season.record"), 99, 99, 99), 19f, col);
+            h += BulletH(string.Format(Ui("c.season.pop"), 10, 10), col);
+            h += 6f + Para(string.Format(Ui("c.season.line"), 10, 5, 99999), BrandTokens.TypeMinInfo, col);
+            h += BulletH(Longest(string.Format(Ui("c.season.feud"), hammer, 4, 4), string.Format(Ui("c.season.feud_done"), hammer)), col);
+            h += BulletH(Longest(Ui("c.season.belt_yes"), Ui("c.season.belt_no"), Ui("season.title_shot"), Ui("season.defense"),
+                string.Format(Ui("c.season.goal"), 4, 4)), col);
+            // блок пропозиції
+            h += 18f;
+            h += Para(Longest(string.Format(Ui("c.offer.title"), fed), string.Format(Ui("c.offer.progress"), fed), string.Format(Ui("c.offer.top"), fed)),
+                BrandTokens.TypeBody, col);
+            float keyText = col - CareerTileLayout.CheckW - 8f;
+            string hint = Longest(string.Format(Ui("c.offer.need_audience"), 10), string.Format(Ui("c.offer.need_booker"), 5));
+            for (int i = 0; i < 2; i++)
+                h += 6f + Math.Max(CareerTileLayout.CheckH, SemiFont.LineHeight(BrandTokens.TypeBody)) + Para(hint, BrandTokens.TypeMinInfo, keyText);
+            string status = Longest(Ui("c.offer.ready"), Ui("c.offer.farewell"), Ui("c.offer.declined"), Ui("c.offer.offended"),
+                string.Format(Ui("c.offer.moved"), fed), string.Format(Ui("c.offer.farewell.ok"), fed), string.Format(Ui("c.offer.farewell.bad"), fed, fed),
+                string.Format(Ui("c.season.demoted"), fed, fed));
+            int statusLines;
+            h += 8f + Para(status, BrandTokens.TypeMinInfo, col, out statusLines);
+            h += PaperPadB;
+            Assert.LessOrEqual(top + h, ropesY - PaperClear,
+                string.Format("папір кінця сезону: {0:0} + {1:0} = {2:0} > канати {3:0} − {4:0} (рядок стану — {5} рядки)", top, h, top + h, ropesY, PaperClear, statusLines));
+        }
+
         // ---------------- ряд показу ----------------
 
         [Test]
@@ -325,6 +452,14 @@ namespace Game.Tests.EditMode
                 if (CareerTileLayout.Compact(wd) || CareerTileLayout.Compact(sk)) bad.Add(p.Key + ": плитка показу вужча за CompactTileW");
                 CheckTitle(bad, "картка вечора " + p.Key, Ui("c.card.withdraw"), wd, false);
                 CheckTitle(bad, "кінець сезону " + p.Key, Ui("c.season.title_skip"), sk, false);
+                // «Лишитися» — та сама плитка ряду кінця сезону (ПМ 12.11.2026): опис — що буде, друга відмова поспіль — ризиком під
+                // ним; ряд не росте, тож обидва разом — у TileH
+                CheckTitle(bad, "кінець сезону " + p.Key, Ui("c.offer.decline"), sk, false);
+                var decline = new TileText(Ui("c.offer.decline"), new[] { Ui("c.offer.decline.again") }, new[] { Ui("c.offer.decline.offend") });
+                CheckBody(bad, "кінець сезону " + p.Key, decline, sk);
+                foreach (var t in new[] { decline })
+                    if (NeededHeight(t, sk) > CareerTileLayout.TileH)
+                        bad.Add(string.Format("кінець сезону {0}: «Лишитися» потребує {1:0} > {2:0}", p.Key, NeededHeight(t, sk), CareerTileLayout.TileH));
             }
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
@@ -332,7 +467,7 @@ namespace Game.Tests.EditMode
         // ---------------- золота плита ----------------
 
         private static readonly string[] GoldKeys =
-            { "week.end", "c.create.start", "c.card.go", "c.hub.card.go_feud", "ui.next", "c.season.title_go", "season.next" };
+            { "week.end", "c.create.start", "c.card.go", "c.hub.card.go_feud", "ui.next", "c.season.title_go", "season.next", "c.offer.accept" };
 
         [Test]
         public void GoldPlates_TwoLinesAtMost_NoWordBreak_AtFittedSize()
@@ -527,6 +662,10 @@ namespace Game.Tests.EditMode
                 "NoPad(l);",
                 "hint.style.right = CareerTileLayout.GoldHintRight; hint.style.bottom = CareerTileLayout.GoldHintBottom;",
                 "if (WordTop + wh > hintTop && WordLeft + LastLineWidth(availW) > hintLeft) availH = Math.Min(availH, hintTop - WordTop);",
+                "_check.style.right = CareerTileLayout.CheckRight(false); _check.style.top = CareerTileLayout.CheckTop;",
+                "_check.style.right = CareerTileLayout.CheckRight(on);",
+                "_keyBox.style.top = CareerTileLayout.CompactKeyTop; _keyBox.style.right = CareerTileLayout.CompactKeyRight;",
+                "style.width = CareerTileLayout.CheckW; style.height = CareerTileLayout.CheckH;",
             };
             foreach (var n in need) if (!CodeLine(src, n)) bad.Add("ArenaKit.cs: немає «" + n + "»");
             Assert.IsEmpty(bad, string.Join("\n", bad));

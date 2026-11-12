@@ -149,6 +149,190 @@ namespace Game.Tests.EditMode
             foreach (var k in keys) NoMissingKey(T.Get(k), k);
         }
 
+        // ---------------- федерації (П5, запит ПМ 12.11.2026) ----------------
+
+        /// <summary>Як CareerTransitionTests.CloseSeason: кінець сезону у федерації з популярністю, довірою й поясом; титул розіграно.</summary>
+        private static CareerSession AtSeasonEnd(ulong seed, int tier, int pop, int trust, bool champion = false)
+        {
+            var s = CareerKit.NewHero(seed);
+            var run = new CareerRunReport();
+            int guard = 0;
+            while (!(s.Stage == CareerStage.Show && s.State.Phase == ShowPhase.Result && s.State.Week == CareerRules.WeeksInSeason(s.State.Season)))
+            {
+                Assert.Less(++guard, 3000);
+                CareerBot.Step(s, 0, run);
+            }
+            if (tier != s.FederationTier) s.EnterFederation(tier, pop, trust);
+            s.Feud.State.Audience = pop; s.Feud.State.Trust = trust;
+            s.State.BeltHolder = champion ? CareerState.PlayerHolder : s.Federation.BeltOf(s.State.Female);
+            s.ContinueFromShow();
+            Assert.AreEqual(CareerStage.SeasonEnd, s.Stage);
+            s.Feud.State.Audience = pop; s.Feud.State.Trust = trust;
+            s.State.Report.TitleDone = true;
+            return s;
+        }
+
+        private static string Fed(CareerSession s, int tier) { return T.Get(s.Content.Federation(tier).NameKey); }
+
+        /// <summary>
+        /// Нижній ряд кінця сезону — одна послідовність рішень: титульний шанс → пропозиція («Прийняти контракт» / «Лишитися») →
+        /// «Новий сезон». Без кнопок пропозиції гравець застрягав на місцевій під стелею 4 (ПМ 12.11.2026).
+        /// </summary>
+        [Test]
+        public void SeasonEndActions_TitleThenOffer_ThenNextSeason()
+        {
+            var s = AtSeasonEnd(3, 1, 3, CareerRules.OfferTrust);
+            s.State.Report.TitleEligible = true; s.State.Report.TitleDone = false;
+            CollectionAssert.AreEqual(new[] { SeasonEndAction.TitleMatch, SeasonEndAction.SkipTitle }, CareerScreenLines.SeasonEndActions(s),
+                "титульний шанс — першим, пропозиція чекає");
+            Assert.IsFalse(CareerScreenLines.OfferShown(s, new SeasonOfferModel(s, T)), "до кінця титульного шансу пропозиції на папері немає");
+            s.SkipTitle();
+            CollectionAssert.AreEqual(new[] { SeasonEndAction.AcceptOffer, SeasonEndAction.DeclineOffer }, CareerScreenLines.SeasonEndActions(s),
+                "обидва ключі — рішення, «Новий сезон» лише після нього");
+            var o = new SeasonOfferModel(s, T);
+            Assert.IsTrue(CareerScreenLines.OfferShown(s, o));
+            Assert.IsTrue(o.ShowKeys);
+
+            // «Прийняти контракт» не-чемпіона: перехід одразу, лишається кінець сезону — далі лише «Новий сезон», ключів немає
+            s.AcceptOffer();
+            Assert.AreEqual(CareerStage.SeasonEnd, s.Stage);
+            Assert.AreEqual(2, s.FederationTier);
+            CollectionAssert.AreEqual(new[] { SeasonEndAction.NextSeason }, CareerScreenLines.SeasonEndActions(s));
+            o = new SeasonOfferModel(s, T);
+            Assert.IsTrue(CareerScreenLines.OfferShown(s, o), "після рішення — рядок стану");
+            Assert.IsFalse(o.ShowKeys, "ключі нової федерації не показуються одразу після переходу");
+            Assert.AreEqual(T.Format("c.offer.moved", Fed(s, 2)), o.StatusText);
+            Assert.AreEqual(s.PopularityCeiling, CareerScreenLines.PopularityMax(s), "шкала популярності — до стелі нової федерації");
+
+            // «Лишитися»: перша відмова — «повториться», друга поспіль — ризик, довіра −1
+            var d = AtSeasonEnd(4, 1, 3, CareerRules.OfferTrust);
+            Assert.IsFalse(CareerScreenLines.DeclineOffends(d));
+            Assert.AreEqual(T.Get("c.offer.decline.again"), CareerScreenLines.DeclineEffect(T));
+            Assert.IsNull(CareerScreenLines.DeclineRisk(T, d), "перша відмова — без ризику");
+            d.DeclineOffer();
+            CollectionAssert.AreEqual(new[] { SeasonEndAction.NextSeason }, CareerScreenLines.SeasonEndActions(d));
+            Assert.AreEqual(T.Get("c.offer.declined"), new SeasonOfferModel(d, T).StatusText);
+            d.State.OfferDecision = 0;   // наступний сезон з тими самими ключами — друга відмова поспіль
+            Assert.IsTrue(CareerScreenLines.DeclineOffends(d));
+            Assert.AreEqual(T.Get("c.offer.decline.offend"), CareerScreenLines.DeclineRisk(T, d));
+            int trust = d.Trust;
+            d.DeclineOffer();
+            Assert.AreEqual(trust - 1, d.Trust, "ризик плитки — те, що робить ядро");
+            // і третя поспіль — теж ризик (серію обриває лише сезон без явної відмови): довіру знову піднято до ключа
+            d.State.OfferDecision = 0; d.Feud.State.Trust = CareerRules.OfferTrust;
+            Assert.IsTrue(d.OfferAvailable);
+            Assert.AreEqual(T.Get("c.offer.decline.offend"), CareerScreenLines.DeclineRisk(T, d));
+            d.DeclineOffer();
+            Assert.AreEqual(CareerRules.OfferTrust - 1, d.Trust, "третя поспіль теж коштує довіри");
+
+            // без ключів — одразу «Новий сезон»
+            var n = AtSeasonEnd(5, 1, 1, 1);
+            CollectionAssert.AreEqual(new[] { SeasonEndAction.NextSeason }, CareerScreenLines.SeasonEndActions(n));
+            Assert.IsTrue(CareerScreenLines.OfferShown(n, new SeasonOfferModel(n, T)), "ключі видно й без пропозиції: чого бракує");
+
+            foreach (var k in new[] { "c.offer.decline.again", "c.offer.decline.offend", "c.offer.accept", "c.offer.decline" }) NoMissingKey(T.Get(k), k);
+        }
+
+        /// <summary>
+        /// Прощальний матч чемпіона: «Прийняти контракт» веде на картку шоу (ряду кінця сезону немає), картка — «Прощальний матч» з
+        /// рядком про вищу федерацію й довіру <see cref="CareerRules.FarewellTrust"/>; звичайна картка — без нього.
+        /// </summary>
+        [Test]
+        public void Farewell_Card_HasItsHeading_AndTheNote()
+        {
+            var s = AtSeasonEnd(7, 1, 3, CareerRules.OfferTrust - CareerRules.OfferChampionTrustBonus, champion: true);
+            CollectionAssert.AreEqual(new[] { SeasonEndAction.AcceptOffer, SeasonEndAction.DeclineOffer }, CareerScreenLines.SeasonEndActions(s));
+            Assert.AreEqual(T.Get("c.offer.farewell"), new SeasonOfferModel(s, T).StatusText, "чемпіона попереджено про прощальний матч");
+            s.AcceptOffer();
+            Assert.AreEqual(CareerStage.Show, s.Stage);
+            Assert.IsEmpty(CareerScreenLines.SeasonEndActions(s), "на картці шоу ряду кінця сезону немає");
+            var card = s.GetShowCard();
+            Assert.IsTrue(card.IsFarewell);
+            Assert.AreEqual(T.Get("c.card.farewell"), CareerScreenLines.CardHeading(T, card));
+            string note = CareerScreenLines.FarewellNote(T, s, card);
+            NoMissingKey(note, "рядок прощального матчу");
+            Assert.AreEqual(T.Format("c.card.farewell.note", Fed(s, 2), CareerRules.FarewellTrust), note);
+
+            var w = CareerKit.NewHero(8);
+            int guard = 0;
+            while (w.Stage != CareerStage.Show || w.State.Phase != ShowPhase.Card) { Assert.Less(++guard, 500); CareerBot.Step(w, 0, new CareerRunReport()); }
+            var weekly = w.GetShowCard();
+            Assert.IsFalse(weekly.IsFarewell);
+            Assert.IsNull(CareerScreenLines.FarewellNote(T, w, weekly));
+            Assert.AreEqual(T.Get(weekly.IsTitle ? "c.card.title_match" : weekly.IsBig ? "c.card.big" : "c.card.weekly"), CareerScreenLines.CardHeading(T, weekly));
+        }
+
+        /// <summary>Звільнення: на місцевій — «назад на мінімум», у вищій — пониження «куди» (c.season.demoted через модель); без нього — нічого.</summary>
+        [Test]
+        public void FiredLine_LocalReturnsToMinimum_HigherSaysWhere()
+        {
+            var up = AtSeasonEnd(5, 3, 3, 3);
+            Assert.IsTrue(up.State.Report.Fired);
+            var o = new SeasonOfferModel(up, T);
+            Assert.AreEqual(T.Format("c.season.demoted", Fed(up, 3), Fed(up, 2)), CareerScreenLines.FiredLine(T, up, o));
+            Assert.IsFalse(CareerScreenLines.OfferShown(up, o), "звільненому — рядок звільнення, а не пропозиція");
+            CollectionAssert.AreEqual(new[] { SeasonEndAction.NextSeason }, CareerScreenLines.SeasonEndActions(up));
+
+            var local = AtSeasonEnd(6, 1, 0, 1);
+            Assert.IsTrue(local.State.Report.Fired, "на місцевій звільняють на нулі");
+            Assert.AreEqual(T.Get("season.fired"), CareerScreenLines.FiredLine(T, local, new SeasonOfferModel(local, T)));
+
+            var ok = AtSeasonEnd(7, 1, 2, 2);
+            Assert.IsNull(CareerScreenLines.FiredLine(T, ok, new SeasonOfferModel(ok, T)));
+        }
+
+        /// <summary>
+        /// Ціни з федерації (ПМ 12.11.2026, вада: на кнопці костюма стояла стала 60, а списувалась ціна федерації): кнопка костюма —
+        /// <see cref="CareerSession.CostumePrice"/>, рядок житла й дороги — <see cref="CareerSession.WeeklyCost"/>; шкала популярності
+        /// — до стелі федерації, не обрізаючи старої вищої популярності.
+        /// </summary>
+        [Test]
+        public void Prices_AndPopularityScale_FollowTheFederation()
+        {
+            var s = CareerKit.NewHero(11);
+            Assert.AreEqual(CareerStage.Week, s.Stage);
+            Assert.AreEqual(T.Format("c.shop.costume", s.CostumePrice), CareerScreenLines.CostumeButton(T, s));
+            Assert.AreEqual(T.Format("c.shop.living", s.WeeklyCost), CareerScreenLines.LivingLine(T, s));
+            Assert.AreEqual(s.PopularityCeiling, CareerScreenLines.PopularityMax(s));
+            Assert.Less(s.PopularityCeiling, CareerRules.MaxPopularity, "місцева — стеля нижче 10");
+
+            s.EnterFederation(2, 3, 2);
+            Assert.AreNotEqual(CareerRules.CostumeCost, s.CostumePrice, "регіональний костюм дорожчий за сталу");
+            StringAssert.Contains(s.CostumePrice.ToString(), CareerScreenLines.CostumeButton(T, s));
+            StringAssert.DoesNotContain(CareerRules.CostumeCost.ToString(), CareerScreenLines.CostumeButton(T, s));
+            StringAssert.Contains(s.WeeklyCost.ToString(), CareerScreenLines.LivingLine(T, s));
+            Assert.AreEqual(s.Content.Federation(2).Ceiling, CareerScreenLines.PopularityMax(s));
+
+            s.State.Money = s.CostumePrice;
+            Assert.IsTrue(s.BuyCostume());
+            Assert.AreEqual(T.Get("c.shop.costume.owned"), CareerScreenLines.CostumeButton(T, s));
+
+            s.Feud.State.Audience = s.PopularityCeiling + 2;   // старий сейв: популярність вища за стелю — шкала її не обрізає
+            Assert.AreEqual(s.Popularity, CareerScreenLines.PopularityMax(s));
+            foreach (var k in new[] { "c.shop.costume", "c.shop.living", "c.shop.costume.owned" }) NoMissingKey(T.Get(k), k);
+        }
+
+        /// <summary>Створення: дивізіон зі статі тіла — body_f_* жіночий, решта чоловічий (P2-6, ПМ 12.11.2026).</summary>
+        [Test]
+        public void SetDivision_FromTheBody()
+        {
+            int f = 0, m = 0;
+            foreach (var body in Game.Gameplay.Ring.CareerLooks.HeroBodies)
+            {
+                var d = CareerKit.Draft();
+                Assert.IsNull(d.Female);
+                CareerScreenLines.SetDivision(d, body);
+                Assert.AreEqual(body.StartsWith("body_f_"), d.Female.Value, body);
+                if (d.Female.Value) f++; else m++;
+            }
+            Assert.Greater(f, 0, "жіночі тіла є"); Assert.Greater(m, 0, "чоловічі тіла є");
+            var s = CareerKit.NewAtCreate(12);
+            var dr = CareerKit.Draft();
+            CareerScreenLines.SetDivision(dr, "body_f_latin");
+            s.CreateHero(dr);
+            Assert.IsTrue(s.State.Female); Assert.IsTrue(s.State.FemaleKnown, "екран створення знав стать — без пізнього SetFemale");
+        }
+
         /// <summary>Рядок коду (не коментар), що починається з <paramref name="code"/>.</summary>
         private static bool CodeLine(string src, string code)
         {
@@ -174,6 +358,29 @@ namespace Game.Tests.EditMode
             if (career.Contains("bestAttr") || career.Contains("perkCost") || career.Contains("bestMove")) bad.Add("CareerScreens: лишився старий вибір порад");
             if (!promo.Contains("_m.ActText")) bad.Add("PromoScreenView: шапка не з ActText");
             if (promo.Contains("\"promo.act\"")) bad.Add("PromoScreenView: «Акт N» збирається повз модель");
+            // федерації (ПМ 12.11.2026): ряд кінця сезону, звільнення, пропозиція, картка прощання, шкала популярності, ціни, дивізіон
+            string week = File.ReadAllText(Path.Combine(ui, "Career", "WeekScreenView.cs"));
+            string create = File.ReadAllText(Path.Combine(ui, "Career", "CreateScreenView.cs"));
+            // ряд будує саме Refresh (той самий виклик моделі є й в OnConfirm — сам по собі він ряду не доводить; рев'ю 12.11.2026)
+            int seasonEnd = show.IndexOf("class SeasonEndScreenView"), refresh = show.IndexOf("public override void Refresh()", seasonEnd < 0 ? 0 : seasonEnd);
+            int rowLoop = show.IndexOf("for (int i = 0; i < actions.Count; i++) AddAction(actions[i], i == 0);", refresh < 0 ? 0 : refresh);
+            int report = show.IndexOf("private VisualElement Report(SeasonReport rep)", refresh < 0 ? 0 : refresh);
+            if (seasonEnd < 0 || refresh < 0 || rowLoop < 0 || report < 0 || rowLoop > report)
+                bad.Add("ShowScreens: ряд кінця сезону (Refresh) не з SeasonEndActions");
+            if (show.IndexOf("if (C.CanStartNextSeason)", seasonEnd < 0 ? 0 : seasonEnd) >= 0) bad.Add("ShowScreens: «Новий сезон» повз послідовність рішень");
+            if (!show.Contains("if (actions.Count > 0) Run(actions[0]);")) bad.Add("ShowScreens: Enter кінця сезону — не перша дія ряду");
+            if (!CodeLine(show, "string fired = CareerScreenLines.FiredLine(T, C, _offer);") || show.Contains("T.Get(\"season.fired\")"))
+                bad.Add("ShowScreens: звільнення не через FiredLine (пониження губиться)");
+            if (!CodeLine(show, "if (CareerScreenLines.OfferShown(C, _offer)) OfferBlock(col, _offer);")) bad.Add("ShowScreens: пропозиції на папері немає");
+            if (!show.Contains("CareerScreenLines.CardHeading(T, c)") || !CodeLine(show, "string farewell = CareerScreenLines.FarewellNote(T, C, c);"))
+                bad.Add("ShowScreens: картка прощального матчу не з моделі");
+            if (!CodeLine(show, "box.Add(MeterLine(t.Get(\"c.hub.pop\"), v.Popularity, popMax, 56f));")) bad.Add("ShowKit.Resources: шкала популярності не до стелі");
+            const string res = "Root.Add(ShowKit.Resources(T, v, CareerScreenLines.PopularityMax(C)));";
+            if (Regex.Matches(show, Regex.Escape(res)).Count != 2 || !CodeLine(week, res)) bad.Add("ресурси: не всі три екрани беруть стелю популярності");
+            if (!week.Contains("CareerScreenLines.CostumeButton(T, C)") || week.Contains("CareerRules.CostumeCost")) bad.Add("WeekScreenView: ціна костюма не з федерації");
+            if (!week.Contains("CareerScreenLines.LivingLine(T, C)")) bad.Add("WeekScreenView: немає рядка житла й дороги");
+            int div = create.IndexOf("CareerScreenLines.SetDivision(_d, CareerLooks.HeroBodies[Host.HeroBody]);"), hero = create.IndexOf("C.CreateHero(_d);");
+            if (div < 0 || hero < 0 || div > hero) bad.Add("CreateScreenView: дивізіон не ставиться перед створенням героя");
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
     }
