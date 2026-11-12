@@ -108,6 +108,7 @@ namespace Game.Tests.EditMode
         public readonly HashSet<ShowPhase> Phases = new HashSet<ShowPhase>();
         public readonly int[] Actions = new int[5];
         public int Shows, Wins, Losses, Withdrawals, Titles, Fired, Injuries, HopeSpots, TitleMatches, Strained;
+        public int Offers;
         public int MinMoney = int.MaxValue, MinPopularity = 99, MaxPopularity = -1, MaxMoney;
         public int Steps;
         /// <summary>Закулісні сцени, що трапились (id).</summary>
@@ -262,6 +263,13 @@ namespace Game.Tests.EditMode
             if (s.CanStartTitleMatch)
             {
                 if (variant % 3 != 0) s.StartTitleMatch(); else s.SkipTitle();
+                return;
+            }
+            // перехід А2: бот приймає пропозицію вищої федерації; кожен четвертий варіант першу відхиляє (повториться наступного сезону)
+            if (s.OfferAvailable)
+            {
+                if (variant % 4 == 3 && s.State.OfferDeclines == 0) s.DeclineOffer(); else s.AcceptOffer();
+                rep.Offers++;
                 return;
             }
             s.StartNextSeason();

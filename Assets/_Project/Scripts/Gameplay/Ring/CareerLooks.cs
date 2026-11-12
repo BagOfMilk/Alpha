@@ -40,7 +40,40 @@ namespace Game.Gameplay.Ring
             { "vdova", new Look("body_f_east_asian", 0x30202E, "hair_ponytail01", 0.98f) },
             { "baron", new Look("body_m_mediterranean", 0x8E2E8E, "hair_short01", 1.02f) },
             { "komet", new Look("body_f_west_african", 0xD4A429, "hair_afro01", 1.02f) },
+            // П5 (11.11.2026): 19 нових — культури різні, українців 4 з 19, росіян немає. Кольори — лише вже наявні (палітра костюма
+            // героя й кольори перших шести): нових кольорів не вигадуємо (Статут вигляду).
+            { "inti", new Look("body_f_latin", Costume[2], "hair_ponytail01", 1.04f) },
+            // Ліга Семи Міст
+            { "sirena", new Look("body_f_latin", Costume[0], "hair_ponytail01", 0.96f) },
+            { "buivol", new Look("body_m_west_african", Costume[7], "", 1.12f) },
+            { "hadiuka", new Look("body_f_ukrainian", Costume[2], "hair_ponytail01", 0.98f) },
+            { "husar", new Look("body_m_nordic", Costume[1], "hair_short01", 1.04f) },
+            { "skorpion", new Look("body_f_middle_eastern", Costume[3], "hair_ponytail01", 1f) },
+            { "ronin", new Look("body_m_east_asian", Costume[6], "hair_short03", 1f) },
+            // Національний ефір
+            { "maharadzha", new Look("body_m_south_asian", Costume[4], "hair_short01", 1.06f) },
+            { "blyskavka", new Look("body_f_west_african", Costume[5], "hair_afro01", 0.98f) },
+            { "kharakternyk", new Look("body_m_ukrainian", Costume[1], "hair_short04", 1.04f) },
+            { "troianda", new Look("body_f_latin", Costume[6], "hair_ponytail01", 1f) },
+            { "toa", new Look("body_m_latin", Costume[7], "hair_afro01", 1.14f) },
+            { "valkiriia", new Look("body_f_nordic", 0x5A6A78, "hair_ponytail01", 1.08f) },
+            // Корона Світу
+            { "khvylia", new Look("body_f_latin", 0x1FA3A0, "hair_ponytail01", 0.96f) },
+            { "burevii", new Look("body_m_ukrainian", Costume[0], "hair_short02", 0.98f) },
+            { "berehynia", new Look("body_f_ukrainian", Costume[3], "hair_ponytail01", 1.1f) },
+            { "korason", new Look("body_m_east_asian", Costume[1], "hair_short01", 1f) },
+            { "feniks", new Look("body_f_east_asian", Costume[7], "hair_ponytail01", 1f) },
+            { "atlant", new Look("body_m_mediterranean", Costume[6], "", 1.16f) },
         };
+
+        /// <summary>Тіло жіноче (body_f_*): стать героя для дивізіону (P2-6), поки екран створення не передає її в CharacterDraft.</summary>
+        public static bool IsFemaleBody(string body)
+        {
+            return body != null && body.StartsWith("body_f_", System.StringComparison.Ordinal);
+        }
+
+        /// <summary>Ключі вигляду, що є в словнику (для охоронця «у кожного NPC ростеру — свій вигляд»).</summary>
+        public static IEnumerable<string> NpcIds { get { return Npc.Keys; } }
 
         public static Look ForNpc(string id)
         {

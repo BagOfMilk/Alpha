@@ -17,7 +17,8 @@ namespace Game.Tests.EditMode
     /// </summary>
     public class BackstageTests
     {
-        private static readonly string[] EventIds = { "ev_parking", "ev_interview", "ev_contract", "ev_friend" };
+        /// <summary>Події в порядку файлу (перша дозріла — перша): скаут (П5) — з сезону 2, решта — з першого.</summary>
+        private static readonly string[] EventIds = { "ev_scout", "ev_parking", "ev_interview", "ev_contract", "ev_friend" };
 
         private static CareerContent Shared() { return CareerKit.Content(); }
 
@@ -33,11 +34,12 @@ namespace Game.Tests.EditMode
         /// <summary>Сесія, де першою відкриється подія id: попередні події цього сезону вже були, тиждень — останній (усе дозріло).</summary>
         private static CareerSession HeroForEvent(CareerContent c, string id, ulong seed = 1)
         {
-            var s = Hero(c, seed, 4);
+            int season = Math.Max(1, c.Backstage.Find(id).MinSeason);
+            var s = Hero(c, seed, 4, season);
             foreach (var e in EventIds)
             {
                 if (e == id) break;
-                s.State.BackstageSeen.Add("1:" + e);
+                s.State.BackstageSeen.Add(season + ":" + e);
             }
             return s;
         }
@@ -392,7 +394,7 @@ namespace Game.Tests.EditMode
         {
             var c = Shared();
             var s = HeroForEvent(c, "ev_interview");
-            s.Feud.State.Audience = 1;   // інтерв'ю потребує популярності ≥ 2
+            s.Feud.State.Audience = 0;   // інтерв'ю потребує популярності ≥ 1 (П5: місцева шкала 0–4, старт 1)
             Assert.AreNotEqual("ev_interview", s.Backstage().SceneId);
         }
 
@@ -801,7 +803,7 @@ namespace Game.Tests.EditMode
         {
             var c = Shared();
             var s = Hero(c, 3, 1);
-            s.Feud.State.Audience = 0;   // ev_contract вимагає популярності ≥ 2 і доступний з тижня 2
+            s.Feud.State.Audience = 0;   // ev_contract вимагає популярності ≥ 1 і доступний з тижня 2
             s.ForceBackstage("ev_contract");
             Assert.AreEqual("ev_contract", s.ForcedBackstageScene);
             var fresh = CareerKit.Fresh(3, c);

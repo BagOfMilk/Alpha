@@ -92,6 +92,7 @@ namespace Game.Gameplay.Ring
                     if (p.Length > 1 && int.TryParse(p[0], out b) && int.TryParse(p[1], out h)) { HeroBody = Math.Max(0, Math.Min(b, CareerLooks.HeroBodies.Length - 1)); HeroHair = Math.Max(0, Math.Min(h, CareerLooks.HeroHair.Length - 1)); }
                 }
                 _career = c;
+                SyncHeroSex();
                 _onTitle = false;
                 LastWeekResult = null;
                 Rebind();
@@ -102,9 +103,22 @@ namespace Game.Gameplay.Ring
             }
         }
 
+        /// <summary>
+        /// Дивізіон героя (P2-6, П5): поки екран створення не передає стать у <see cref="CharacterDraft.Female"/>, вона береться з тіла
+        /// (body_f_* — жінки). Один раз: після CreateHero (екран одразу кличе Save) і для старих сейвів на «Продовжити». Тиждень 1 букер
+        /// перескладає з суперниками свого дивізіону.
+        /// </summary>
+        private void SyncHeroSex()
+        {
+            if (_career == null || _career.State.FemaleKnown || _career.Stage == CareerStage.Title || _career.Stage == CareerStage.Create) return;
+            int b = Math.Max(0, Math.Min(HeroBody, CareerLooks.HeroBodies.Length - 1));
+            _career.SetFemale(CareerLooks.IsFemaleBody(CareerLooks.HeroBodies[b]));
+        }
+
         public void Save()
         {
             if (_career == null || _career.Stage == CareerStage.Title || _career.Stage == CareerStage.Create) return;
+            SyncHeroSex();
             try
             {
                 RingSaveFile.Write(SavePath, new[] { _career.CaptureState(), HeroBody + "|" + HeroHair });
