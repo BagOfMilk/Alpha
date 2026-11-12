@@ -83,5 +83,36 @@ namespace Game.Gameplay.Ring.Stage
             }
             return best;
         }
+
+        /// <summary>
+        /// Найменший зсув пари, яку не повернути, — суперник лежить, де впав, або ланцюг кліпів одного запису йде далі з тих самих
+        /// коренів: точки шляху (<paramref name="u"/> уздовж боку, <paramref name="v"/> назовні) — уже від центру смуги. Шлях у смузі
+        /// (±<paramref name="halfLength"/>, ±<paramref name="halfWidth"/> мінус <see cref="BodyMargin"/>) — зсув нуль; виходить за край —
+        /// рівно на перевищення, до краю (лежачого переставляють на мінімум, як у рингу). Коробка шляху довша чи ширша за смугу —
+        /// по цій осі центрується, <see cref="Course.Fits"/> = false (режисер склеює на загальний план).
+        /// </summary>
+        public static Course Nudge(float[] u, float[] v, float halfLength, float halfWidth, float margin = BodyMargin)
+        {
+            float lu = Math.Max(MinHalf, halfLength - margin), lv = Math.Max(MinHalf, halfWidth - margin);
+            float u0 = 0f, u1 = 0f, v0 = 0f, v1 = 0f;
+            int n = Math.Min(u.Length, v.Length);
+            for (int i = 0; i < n; i++)
+            {
+                if (i == 0) { u0 = u1 = u[0]; v0 = v1 = v[0]; continue; }
+                u0 = Math.Min(u0, u[i]); u1 = Math.Max(u1, u[i]);
+                v0 = Math.Min(v0, v[i]); v1 = Math.Max(v1, v[i]);
+            }
+            float over = Math.Max(0f, (u1 - u0) - 2f * lu) + Math.Max(0f, (v1 - v0) - 2f * lv);
+            return new Course { Candidate = 0, ShiftAlong = ToEdge(u0, u1, lu), ShiftOut = ToEdge(v0, v1, lv), Overflow = over, Fits = over <= 0f };
+        }
+
+        // Зсув відрізка [a0, a1] у межі ±l: нуль, якщо вже там; до краю, якщо виходить; центр, якщо довший за 2l.
+        private static float ToEdge(float a0, float a1, float l)
+        {
+            if (a1 - a0 > 2f * l) return -(a0 + a1) * 0.5f;
+            if (a0 < -l) return -l - a0;
+            if (a1 > l) return l - a1;
+            return 0f;
+        }
     }
 }

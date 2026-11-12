@@ -1274,6 +1274,7 @@ namespace Game.Gameplay.Ring.Stage
             Vector3 hub = outside ? RingStage3D.OutsideAnchor : new Vector3(0f, RingStage3D.MatY, 0f);   // центр пари: центр рингу чи точка за рингом
             pA.y = pB.y = hub.y;
             bool laneFits = true;   // шлях пари вміщається в смугу за рингом (інакше — склейка на загальний план)
+            bool laneCut = false;   // лежачого за рингом зсунуто в смугу — склейкою кадру, а не ковзанням тіла
 
             // Де A насправді стартує: з розбігом — посеред бігу (за кривою тазу кліпа на цьому тілі), інакше — на старті пари.
             float yawAStart = yawA + relYawA;
@@ -1316,6 +1317,24 @@ namespace Game.Gameplay.Ring.Stage
                 if (!laneFits)
                     Debug.LogWarning(string.Format(CultureInfo.InvariantCulture, "[Ринг] 3D: шлях {0} за рингом не вміщається в смугу (перевищення {1:0.00} м) — склейка на загальний план", st.Clip, course.Overflow));
             }
+            else
+            {
+                // Лежачий за рингом лишається, де впав (як у рингу), — курс не обрати: пара зсувається лише на мінімум, щоб увесь
+                // шлях обох ліг у смугу (A підходить до лежачого, тіло не котиться на фартух чи за огорожу). Помітний зсув (> 5 см) —
+                // склейкою кадру, а не ковзанням лежачого; менший смуга з запасом BodyMargin і так вміщає. Шлях більший за смугу —
+                // склейка на загальний план.
+                var path0 = new List<Vector3> { pAStart, pB };
+                PairPathWorld(path0, A, ca, B, cb, pB, yawA, yawB, ia, tStart);
+                Vector3 sh;
+                laneFits = LaneNudge(path0, st.Clip, out sh).Fits;
+                if (laneFits && sh.sqrMagnitude > 0.0025f)
+                {
+                    pA += sh;
+                    pB += sh;
+                    pAStart += sh;
+                    laneCut = true;
+                }
+            }
             Vector3 mid = (pAStart + pB) * 0.5f;
             // Рефері збоку від пари (~1,2 м), у бік центру рингу й трохи за борцями: не перекриває ані їх, ані камеру. Якщо
             // він уже стоїть так, що не заважає, — лишається (менше перестановок).
@@ -1342,7 +1361,7 @@ namespace Game.Gameplay.Ring.Stage
             var refActor = _s.Referee;
             // Утримання: рефері йде до плечей захисника й стає на коліно сам (RefCount) — паралельно з підходом нападника.
             if (st.Count) StartCoroutine(RefCount(ev, A, B, pA, st.RefClip));
-            bool hard = fromCut || st.CutIn || !laneFits;
+            bool hard = fromCut || st.CutIn || !laneFits || laneCut;
             if (hard)
             {
                 // Склейка: нападник стає в точку старту разом із PlayAtTime нижче, решта — жорстко в цей самий кадр.
@@ -1351,6 +1370,8 @@ namespace Game.Gameplay.Ring.Stage
                 // Висота слота склейки (верх кута — з підйомом) не лишається на приземленні: PlayAtTime висоти не міняє.
                 A.SetHeight(pAStart.y);
                 if (!bDown && (B.PosePos - pB).sqrMagnitude > 0.0025f) _s.Place(B, pB, yawB, IdleName(sb) ?? "Ring_Stance_Loop");
+                // Лежачого зсунуто в смугу за рингом: обоє стають стрибком, а не поправкою (інакше тіло їде по підлозі 0,35 с).
+                if (laneCut) { Snap(A); Snap(B); }
                 if (!st.Count && (refActor.PosePos - pRef).sqrMagnitude > 0.0025f) _s.Place(refActor, pRef, yawRef, RefIdle(outside));
                 _s.Watch.Forget(A); _s.Watch.Forget(B); _s.Watch.Forget(refActor);
             }
@@ -1420,6 +1441,126 @@ namespace Game.Gameplay.Ring.Stage
             yawA = yaws[c.Candidate];
             pB = hub + RingStage3D.OutsideAlong * c.ShiftAlong + RingStage3D.OutsideOut * c.ShiftOut;
             return c;
+        }
+
+        /// <summary>
+        /// Курс пари за коренями за рингом, коли обоє стоять (<see cref="RunPairRoots"/>): ті самі три кандидати, що й у
+        /// <see cref="OutsideCourse"/> (уздовж проходу вперед і назад, спиною до рингу), шлях обох — від коренів, як у
+        /// <see cref="PathInsideSlots"/>. Повертає вибір і корені обох; пара за коренями завжди стає склейкою, тож поворот не видно.
+        /// </summary>
+        private RingOutsideCourse.Course RootsCourse(RingActor A, AnimationClip ca, RingActor B, AnimationClip cb, RingClipInfo ia,
+            float rotA0, Vector3 hub, out float rotA, out Vector3 slotA, out Vector3 slotB)
+        {
+            Vector3 off = new Vector3(ia.Offset.x, 0f, ia.Offset.z);
+            float[] yaws = { rotA0, rotA0 + 180f, YawOf(RingStage3D.OutsideOut) };
+            var us = new float[yaws.Length][];
+            var vs = new float[yaws.Length][];
+            var path = new List<Vector3>();
+            for (int k = 0; k < yaws.Length; k++)
+            {
+                path.Clear();
+                Vector3 sB = hub, sA = hub - Rot(yaws[k], off);
+                SlotPathWorld(path, A, ca, sA, yaws[k], B, cb, sB, yaws[k] - ia.Rotation);
+                ToLaneWorld(path, out us[k], out vs[k]);
+            }
+            var c = RingOutsideCourse.Choose(us, vs, RingStage3D.OutsideHalfLength, RingStage3D.OutsideHalfWidth);
+            rotA = yaws[c.Candidate];
+            slotB = hub + RingStage3D.OutsideAlong * c.ShiftAlong + RingStage3D.OutsideOut * c.ShiftOut;
+            slotB.y = hub.y;
+            slotA = slotB - Rot(rotA, off);
+            slotA.y = hub.y;
+            if (!c.Fits)
+                Debug.LogWarning(string.Format(CultureInfo.InvariantCulture, "[Ринг] 3D: шлях пари за коренями за рингом не вміщається в смугу (перевищення {0:0.00} м) — склейка на загальний план", c.Overflow));
+            return c;
+        }
+
+        /// <summary>
+        /// Наступний старт кліпа цього борця — стрибком, склейкою кадру, а не поправкою: <see cref="RingActor.PlayAtTime"/> гасить
+        /// різницю до 0,45 м за 0,35 с, лише коли пам'ятає таз минулого кадру, і сам цю пам'ять скидає. Тож перед склейкою —
+        /// порожній старт поточного кліпа на місці, у тому самому кадрі (не малюється) — так само, як <c>_s.Place</c> перед
+        /// <c>PlayAtTime</c> у склейці пари. Рев'ю 12.11.2026: зсув лежачого в смугу за рингом їхав по підлозі 0,35 с.
+        /// </summary>
+        private static void Snap(RingActor a)
+        {
+            if (a != null && a.CurrentClip != null) a.PlayHere(a.CurrentClip, false);
+        }
+
+        /// <summary>Точки світу в осях смуги за рингом від її центру (<see cref="RingStage3D.OutsideAnchor"/>): u — уздовж боку, v — назовні.</summary>
+        private static void ToLaneWorld(List<Vector3> w, out float[] u, out float[] v)
+        {
+            Vector3 h = RingStage3D.OutsideAnchor, al = RingStage3D.OutsideAlong, ou = RingStage3D.OutsideOut;
+            u = new float[w.Count];
+            v = new float[w.Count];
+            for (int i = 0; i < w.Count; i++)
+            {
+                float dx = w[i].x - h.x, dz = w[i].z - h.z;
+                u[i] = dx * al.x + dz * al.z;
+                v[i] = dx * ou.x + dz * ou.z;
+            }
+        }
+
+        /// <summary>
+        /// Пара за рингом, яку не повернути (лежачий суперник, ланцюг одного запису, корені лежачого): найменший зсув у смугу
+        /// (<see cref="RingOutsideCourse.Nudge"/>) у світі. <c>Fits = false</c> — шлях більший за смугу: склейка на загальний план.
+        /// </summary>
+        private static RingOutsideCourse.Course LaneNudge(List<Vector3> path, string what, out Vector3 shift)
+        {
+            float[] u, v;
+            ToLaneWorld(path, out u, out v);
+            var c = RingOutsideCourse.Nudge(u, v, RingStage3D.OutsideHalfLength, RingStage3D.OutsideHalfWidth);
+            shift = RingStage3D.OutsideAlong * c.ShiftAlong + RingStage3D.OutsideOut * c.ShiftOut;
+            shift.y = 0f;
+            if (!c.Fits)
+                Debug.LogWarning(string.Format(CultureInfo.InvariantCulture, "[Ринг] 3D: шлях {0} за рингом не вміщається в смугу (перевищення {1:0.00} м) — склейка на загальний план", what, c.Overflow));
+            else if (Trace && shift.sqrMagnitude > 1e-6f)
+                Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] за рингом: {0} — зсув у смугу на {1:0.00} м", what, shift.magnitude));
+            return c;
+        }
+
+        /// <summary>
+        /// Тази обох на всьому ходу пари від <paramref name="tStart"/> у світі — тими самими формулами, що й <see cref="PathInside"/>:
+        /// B — від <paramref name="pB"/> з курсом <paramref name="yawB"/>, A — від нього за зсувом маніфесту з курсом <paramref name="yawA"/>.
+        /// </summary>
+        private static void PairPathWorld(List<Vector3> into, RingActor A, AnimationClip ca, RingActor B, AnimationClip cb, Vector3 pB,
+            float yawA, float yawB, RingClipInfo ia, float tStart)
+        {
+            Vector3 off = new Vector3(ia.Offset.x, 0f, ia.Offset.z);
+            float[] t; Vector3[] p; float[] y;
+            Path(A, ca, ca.length - 0.02f, out t, out p, out y);
+            for (int i = 0; i < t.Length; i++)
+                if (t[i] >= tStart) into.Add(pB + Rot(yawA, new Vector3(p[i].x, 0f, p[i].z) - off));
+            if (cb == null) return;
+            Path(B, cb, cb.length - 0.02f, out t, out p, out y);
+            for (int i = 0; i < t.Length; i++)
+                if (t[i] >= tStart) into.Add(pB + Rot(yawB, new Vector3(p[i].x, 0f, p[i].z)));
+        }
+
+        /// <summary>Тази обох на всьому ходу кліпів від їхніх коренів (слотів) у світі — тими самими формулами, що й <see cref="PathInsideSlots"/>.</summary>
+        private static void SlotPathWorld(List<Vector3> into, RingActor A, AnimationClip ca, Vector3 slotA, float rotA,
+            RingActor B, AnimationClip cb, Vector3 slotB, float rotB)
+        {
+            float[] t; Vector3[] p; float[] y;
+            for (int k = 0; k < 2; k++)
+            {
+                var who = k == 0 ? A : B;
+                var c = k == 0 ? ca : cb;
+                if (c == null) continue;
+                Vector3 slot = k == 0 ? slotA : slotB;
+                float rot = k == 0 ? rotA : rotB;
+                Path(who, c, c.length - 0.02f, out t, out p, out y, true);
+                for (int i = 0; i < t.Length; i++) into.Add(slot + Rot(rot, new Vector3(p[i].x, 0f, p[i].z)));
+            }
+        }
+
+        /// <summary>Тіла обох на третині, двох третинах і в кінці кліпів від коренів — для кадру «за рингом» (увесь хід пари в кадрі).</summary>
+        private void SlotBodies(List<Vector3> into, RingActor A, AnimationClip ca, Vector3 slotA, float rotA,
+            RingActor B, AnimationClip cb, Vector3 slotB, float rotB)
+        {
+            foreach (float f in new[] { 0.33f, 0.66f, 1f })
+            {
+                RingCine.Body(into, SlotPoint(A, ca, Mathf.Min(ca.length * f, ca.length - 0.02f), slotA, rotA), _s.BodyScale(A));
+                RingCine.Body(into, SlotPoint(B, cb, Mathf.Min(cb.length * f, cb.length - 0.02f), slotB, rotB), _s.BodyScale(B));
+            }
         }
 
         /// <summary>
@@ -1519,10 +1660,35 @@ namespace Game.Gameplay.Ring.Stage
             // його «думає» (Cover_Release_A: 0,83 м стрибком). Зсув — по кожному борцеві окремо, лише коли він живий у слоті.
             if (liveA) slotA += ChainFix(A, ca, slotA, rotA, "A " + st.Clip);
             if (liveB) slotB += ChainFix(B, cb, slotB, rotB, "B " + st.Clip);
+            // За рингом ланцюг іде з тих самих коренів, і шлях наступного кліпа може винести тіло на фартух чи за огорожу. Зсув у
+            // смугу ламає безшовність — лише склейкою кадру (помітний, > 5 см); шлях більший за смугу — склейка на загальний план.
+            bool laneShot = false, laneBig = false;
+            if (_m[I(sb)].Outside)
+            {
+                var path0 = new List<Vector3>();
+                SlotPathWorld(path0, A, ca, slotA, rotA, B, cb, slotB, rotB);
+                Vector3 sh;
+                if (!LaneNudge(path0, "ланцюг " + st.Clip, out sh).Fits) laneBig = true;
+                else if (sh.sqrMagnitude > 0.0025f)
+                {
+                    slotA += sh;
+                    slotB += sh;
+                    laneShot = true;
+                }
+            }
             StopWalk(A);
             StopWalk(B);
+            if (laneShot) { Snap(A); Snap(B); _s.Watch.Forget(A); _s.Watch.Forget(B); }
             PlayInSlot(A, ca, 0f, slotA, rotA, ia.Loop);
             PlayInSlot(B, cb, 0f, slotB, rotB, ib != null && ib.Loop);
+            if (laneBig) HardCut(StageCam.Big);
+            else if (laneShot)
+            {
+                var bodies = new List<Vector3>();
+                SlotBodies(bodies, A, ca, slotA, rotA, B, cb, slotB, rotB);
+                OutsidePairShot(A, B, SlotPoint(A, ca, 0f, slotA, rotA), SlotPoint(B, cb, 0f, slotB, rotB),
+                    SlotPoint(A, ca, Mathf.Min(ca.length * 0.5f, ca.length - 0.02f), slotA, rotA), bodies, true);
+            }
             if (Trace)
                 Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] ланцюг: {0} (A {1}, B {2})", st.Clip, liveA ? "у слоті" : "від B", liveB ? "у слоті" : "від A"));
             if (st.Count) StartCoroutine(RefCount(ev, A, B, A.PosePos, st.RefClip));
@@ -1575,11 +1741,31 @@ namespace Game.Gameplay.Ring.Stage
                 slotB += d;
             }
             slotA.y = slotB.y = hub.y;
+            bool laneFits = true;   // за рингом: шлях обох — у смузі проходу (інакше — склейка на загальний план)
             if (!outside)
             {
                 Vector3 sh = PathInsideSlots(A, ca, slotA, rotA, B, cb, slotB, rotB);
                 slotA += sh;
                 slotB += sh;
+            }
+            else if (!bDown)
+            {
+                // Обоє стоять: курс — як у звичайної пари за рингом (уздовж проходу, назад, спиною до рингу), шлях центрується.
+                laneFits = RootsCourse(A, ca, B, cb, ia, rotA, hub, out rotA, out slotA, out slotB).Fits;
+                rotB = rotA - ia.Rotation;
+            }
+            else
+            {
+                // Лежачий — за тазом, де впав: лише найменший зсув у смугу (пара за коренями й так стає склейкою).
+                var path0 = new List<Vector3>();
+                SlotPathWorld(path0, A, ca, slotA, rotA, B, cb, slotB, rotB);
+                Vector3 sh;
+                laneFits = LaneNudge(path0, st.Clip, out sh).Fits;
+                if (laneFits)
+                {
+                    slotA += sh;
+                    slotB += sh;
+                }
             }
             float tc;
             BeatSource src;
@@ -1609,16 +1795,15 @@ namespace Game.Gameplay.Ring.Stage
                 if ((R.PosePos - pRef).sqrMagnitude > 0.0025f) _s.Place(R, pRef, RingStage3D.YawTo(pRef, outside ? RingStage3D.OutsideAnchor : mid), RefIdle(outside));
             }
             _s.Watch.Forget(A); _s.Watch.Forget(B); _s.Watch.Forget(R);
+            // За рингом пара за коренями стає на нові місця (курс у смузі, зсув лежачого) — стрибком, як і має склейка.
+            if (outside) { Snap(A); Snap(B); }
             if (finisherShot) FinisherFrame(A, B, pAc, pBc);
+            else if (outside && !laneFits) HardCut(StageCam.Big);
             else if (outside)
             {
                 // Пара за коренями стає на місця жорстко — і кадр «за рингом» склейкою; у кадрі — увесь хід обох.
                 var path = new List<Vector3>();
-                foreach (float f in new[] { 0.33f, 0.66f, 1f })
-                {
-                    RingCine.Body(path, SlotPoint(A, ca, Mathf.Min(ca.length * f, ca.length - 0.02f), slotA, rotA), _s.BodyScale(A));
-                    RingCine.Body(path, SlotPoint(B, cb, Mathf.Min(cb.length * f, cb.length - 0.02f), slotB, rotB), _s.BodyScale(B));
-                }
+                SlotBodies(path, A, ca, slotA, rotA, B, cb, slotB, rotB);
                 OutsidePairShot(A, B, pA0, pB0, pAc, path, true);
             }
             PlayInSlot(A, ca, 0f, slotA, rotA, ia.Loop);

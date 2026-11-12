@@ -124,6 +124,90 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(c.Fits);
         }
 
+        // ---------------- найменший зсув пари, яку не повернути (лежачий, ланцюг) ----------------
+
+        private static float Lu { get { return HalfLength - RingOutsideCourse.BodyMargin; } }
+        private static float Lv { get { return HalfWidth - RingOutsideCourse.BodyMargin; } }
+
+        [Test]
+        public void Nudge_PathAlreadyInLane_DoesNotMoveThePair()
+        {
+            var c = RingOutsideCourse.Nudge(new[] { -0.5f, 0.3f, 1.0f }, new[] { -0.2f, 0.1f, 0.4f }, HalfLength, HalfWidth);
+            Assert.IsTrue(c.Fits);
+            Assert.AreEqual(0f, c.ShiftAlong, 1e-6f, "лежачого не переставляють, якщо й так у смузі");
+            Assert.AreEqual(0f, c.ShiftOut, 1e-6f);
+        }
+
+        [Test]
+        public void Nudge_OverhangAlong_ShiftsExactlyToTheEdge()
+        {
+            // Шлях 1,2…2,4 м уздовж (за межею 1,8): зсув рівно на вихід — назад на 0,6, а не центрування (−1,8).
+            var u = new[] { 1.2f, 1.8f, 2.4f };
+            var v = new[] { 0f, 0.1f, 0.2f };
+            var c = RingOutsideCourse.Nudge(u, v, HalfLength, HalfWidth);
+            Assert.IsTrue(c.Fits);
+            Assert.AreEqual(Lu - 2.4f, c.ShiftAlong, 1e-4f, "найменший зсув — до краю смуги");
+            Assert.AreEqual(0f, c.ShiftOut, 1e-6f, "по осі, що вміщається, не рухає");
+            for (int i = 0; i < u.Length; i++) Assert.LessOrEqual(System.Math.Abs(u[i] + c.ShiftAlong), Lu + 1e-4f, "точка " + i);
+        }
+
+        [Test]
+        public void Nudge_BodyOverTheApron_IsPushedOutwards()
+        {
+            // Тіло лягає на фартух (v < −межі): зсув назовні, від рингу, на перевищення.
+            var u = new[] { 0f, 0.5f };
+            var v = new[] { -0.9f, 0.1f };
+            var c = RingOutsideCourse.Nudge(u, v, HalfLength, HalfWidth);
+            Assert.IsTrue(c.Fits);
+            Assert.AreEqual(-Lv + 0.9f, c.ShiftOut, 1e-4f);
+            Assert.Greater(c.ShiftOut, 0f, "назовні — від фартуха");
+            Assert.AreEqual(0f, c.ShiftAlong, 1e-6f);
+        }
+
+        [Test]
+        public void Nudge_PathWiderThanTheLane_IsCentred_AndSaysItDoesNotFit()
+        {
+            // Поперек смуги 2,4 м (півширина 0,85): зсув не допоможе — центр і склейка на загальний план.
+            var u = new[] { 0f, 0.2f };
+            var v = new[] { -0.4f, 2.0f };
+            var c = RingOutsideCourse.Nudge(u, v, HalfLength, HalfWidth);
+            Assert.IsFalse(c.Fits);
+            Assert.AreEqual(-0.8f, c.ShiftOut, 1e-4f, "по осі, що не вміщається, — центр коробки");
+            Assert.AreEqual(2.4f - 2f * Lv, c.Overflow, 1e-4f);
+        }
+
+        [Test]
+        public void Nudge_NarrowPathFarFromCentre_FitsAfterShift()
+        {
+            // Вузький шлях далеко назовні (1,5…1,6 м, не перетинає нуль): коробка — від самих точок, а не від центру смуги;
+            // вміщається після зсуву на 0,95 м до рингу, склейки на загальний план не треба (рев'ю 12.11.2026).
+            var c = RingOutsideCourse.Nudge(new[] { 0f, 0.1f }, new[] { 1.5f, 1.6f }, HalfLength, HalfWidth);
+            Assert.IsTrue(c.Fits);
+            Assert.AreEqual(Lv - 1.6f, c.ShiftOut, 1e-4f);
+            Assert.AreEqual(0f, c.Overflow, 1e-6f);
+        }
+
+        [Test]
+        public void Nudge_NarrowGym_KeepsAMinimalLane_AndHonoursMargin()
+        {
+            // Півширина 0,15 мінус запас 0,2 — від'ємна: смуга не стає нулем, лишається 0,1 (MinHalf).
+            var c = RingOutsideCourse.Nudge(new[] { 0f }, new[] { 0.3f }, HalfLength, 0.15f);
+            Assert.IsTrue(c.Fits);
+            Assert.AreEqual(0.1f - 0.3f, c.ShiftOut, 1e-4f);
+            // Свій запас: 0,5 замість 0,2 — межа 0,35, точка 0,5 зсувається на 0,15.
+            var m = RingOutsideCourse.Nudge(new[] { 0f }, new[] { 0.5f }, HalfLength, HalfWidth, 0.5f);
+            Assert.AreEqual(0.35f - 0.5f, m.ShiftOut, 1e-4f);
+        }
+
+        [Test]
+        public void Nudge_NoPoints_IsAZeroFit()
+        {
+            var c = RingOutsideCourse.Nudge(new float[0], new float[0], HalfLength, HalfWidth);
+            Assert.IsTrue(c.Fits);
+            Assert.AreEqual(0f, c.ShiftAlong);
+            Assert.AreEqual(0f, c.ShiftOut);
+        }
+
         [Test]
         public void ChooseProp_AlternatesDeterministically_BySeq()
         {
