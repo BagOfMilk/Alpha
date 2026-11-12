@@ -94,6 +94,8 @@
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Models/*.cs" />
     <!-- Ринг: таблиця «подія → кліпи» і такт режисера (мітки кліпів) — чистий C#, охоронці RingBeatTests. -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingClipTable.cs" />
+    <!-- Ринг, кар'єра (П5): вигляд NPC — чистий C#, охоронець CareerTransitionTests (у кожного NPC ростеру свій вигляд і стать тіла). -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/CareerLooks.cs" />
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingBeats.cs" />
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingOutsideCourse.cs" />
     <!-- Ринг: сценарії демо під нове ядро (Ф2, крок 9) — справжній рушій і кубик за сценарієм, охоронці RingDemoScriptTests. -->

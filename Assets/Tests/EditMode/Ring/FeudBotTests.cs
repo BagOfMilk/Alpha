@@ -123,6 +123,41 @@ namespace Game.Tests.EditMode
             Assert.IsEmpty(missed, "бот не дійшов до: " + string.Join(", ", missed) + "\n" + sb);
         }
 
+        /// <summary>
+        /// П5 (власник 11.11.2026, варіант А): Молот, сюжет Ліни й шість кінцівок їдуть разом із гравцем у вищу федерацію. Наприкінці
+        /// першого сезону гравця переводять на рівень вище (ключі виставлено, чемпіон — через прощальний матч); розв'язка — уже там.
+        /// </summary>
+        [Test]
+        public void Career_EveryEnding_ReachedByTheBot_AfterAMoveUp()
+        {
+            var sb = new StringBuilder();
+            var missed = new List<FeudEnding>();
+            foreach (var target in FeudEndings.All)
+            {
+                int hit = 0;
+                for (int v = 0; v < Seeds; v++)
+                {
+                    var s = CareerKit.NewAtTitle((ulong)(700 + v));
+                    var e = FeudBotDriver.PlayCareer(s, v, target, atSeasonEnd: MoveUpAfterSeasonOne);
+                    Assert.GreaterOrEqual(s.FederationTier, 2, "перехід відбувся");
+                    if (e == target) hit++;
+                }
+                sb.AppendLine(target + ": " + hit + "/" + Seeds);
+                if (hit == 0) missed.Add(target);
+            }
+            TestContext.Out.WriteLine(sb.ToString());
+            Assert.IsEmpty(missed, "після переходу бот не дійшов до: " + string.Join(", ", missed) + "\n" + sb);
+        }
+
+        private static void MoveUpAfterSeasonOne(CareerSession s)
+        {
+            if (s.State.Season != 1 || s.FederationTier != 1 || !s.SeasonSummaryFinal || s.State.OfferDecision != 0 || s.State.Farewell) return;
+            s.Feud.State.Audience = s.PopularityCeiling;
+            s.Feud.State.Trust = Math.Max(s.Trust, CareerRules.OfferTrust);
+            Assert.IsTrue(s.OfferAvailable);
+            s.AcceptOffer();
+        }
+
         private static string Describe<T>(Dictionary<T, int> d)
         {
             var parts = new List<string>();
@@ -175,7 +210,7 @@ namespace Game.Tests.EditMode
         /// <param name="onResult">Після кожного зіграного матчу — його підсумок.</param>
         /// <param name="untilSeason">Грати до кінця цього сезону навіть після розв'язки ворожнечі; 0 — до розв'язки.</param>
         public static FeudEnding? PlayCareer(CareerSession s, int variant, FeudEnding target, Func<CareerSession, MatchGoal?> goal = null,
-                                             Action<ShowResult> onResult = null, int untilSeason = 0)
+                                             Action<ShowResult> onResult = null, int untilSeason = 0, Action<CareerSession> atSeasonEnd = null)
         {
             var rep = new CareerRunReport();
             for (int guard = 0; guard < 8000; guard++)
@@ -186,7 +221,14 @@ namespace Game.Tests.EditMode
                 {
                     case CareerStage.Week: DoWeek(s, variant, target); break;
                     case CareerStage.Show: DoShow(s, target, goal, onResult); break;
-                    default: CareerBot.Step(s, variant, rep); break;
+                    default:
+                        if (s.Stage == CareerStage.SeasonEnd && atSeasonEnd != null)
+                        {
+                            atSeasonEnd(s);
+                            if (s.Stage != CareerStage.SeasonEnd) break;   // прощальний матч чемпіона — далі як шоу
+                        }
+                        CareerBot.Step(s, variant, rep);
+                        break;
                 }
             }
             return s.Feud.HasEnding ? s.Feud.Ending : (FeudEnding?)null;
