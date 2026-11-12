@@ -101,6 +101,8 @@ namespace Game.Core.Ring.Career
         public bool CanRecover;
         /// <summary>Іде закулісна сцена: інші дії тижня й кінець тижня недоступні, доки її не закінчено (<see cref="CareerSession.FinishBackstage"/>).</summary>
         public bool BackstageOpen;
+        /// <summary>Зірка поза рингом уже тренувалась цього тижня (§5.3): «Тренування» недоступне, причина — week.reason.star_training.</summary>
+        public bool StarTrainingUsed;
     }
 
     /// <summary>Результат дії тижня: кидок (якщо був), ступінь, зміни шкал, ключ чутки.</summary>
@@ -160,6 +162,8 @@ namespace Game.Core.Ring.Career
         public int Costume;
         public Gimmick Gimmick;
         public RingPath Role;
+        /// <summary>Пізня роль (§5.3).</summary>
+        public LateRole LateRole;
         public int[] Attr = new int[5];
         public int Money;
         public int Popularity;

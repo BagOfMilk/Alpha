@@ -265,6 +265,8 @@ namespace Game.Core.Ring.Career
         public bool PendingExclusive;
         public int PendingAdvance;
         public bool Manager;
+        /// <summary>Пізня роль (§5.3): з кінця першого сезону, одна на раз.</summary>
+        public LateRole LateRole;
         public int TitlesWon;
         public bool FeudResolved;
         /// <summary>Очки розвитку на початок поточного матчу (для підсумку).</summary>
@@ -344,7 +346,7 @@ namespace Game.Core.Ring.Career
               .Append("|fwres=").Append(FarewellResult).Append("|closed=").Append(Ints(ct));
             sb.Append("|excl=").Append(b(ContractExclusive)).Append("|exend=").Append(ContractEndSeason).Append("|expen=").Append(ContractPenalty)
               .Append("|offread=").Append(OfferRead).Append("|pendex=").Append(b(PendingExclusive)).Append("|pendadv=").Append(PendingAdvance)
-              .Append("|manager=").Append(b(Manager));
+              .Append("|manager=").Append(b(Manager)).Append("|late=").Append((int)LateRole);
         }
 
         internal void Restore(Dictionary<string, string> kv)
@@ -439,6 +441,8 @@ namespace Game.Core.Ring.Career
             PendingExclusive = kv.TryGetValue("pendex", out v) && v == "1";
             PendingAdvance = kv.TryGetValue("pendadv", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
             Manager = kv.TryGetValue("manager", out v) && v == "1";
+            // пізні ролі додано 12.11.2026: старі зліпки — ролі немає
+            LateRole = kv.TryGetValue("late", out v) ? (LateRole)int.Parse(v, CultureInfo.InvariantCulture) : LateRole.None;
         }
 
         /// <summary>Пояс зі зліпка до 11.11.2026 (один на федерацію): сесія розкладе його по дивізіонах. Не зберігається.</summary>

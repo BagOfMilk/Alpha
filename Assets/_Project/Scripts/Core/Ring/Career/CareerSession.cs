@@ -156,6 +156,31 @@ namespace Game.Core.Ring.Career
         {
             Feud.State.AudienceCap = Federation.Ceiling;
             Feud.State.AudienceHypeAt = Federation.PopularityHype;
+            Feud.State.LateRole = State.LateRole;
+        }
+
+        /// <summary>Обрати пізню роль (§5.3) — на екрані кінця сезону, з першого: одна на раз, змінити можна в кінці кожного сезону.</summary>
+        public bool CanChooseLateRole { get { return Stage == CareerStage.SeasonEnd; } }
+
+        /// <summary>Пізня роль (або <see cref="LateRole.None"/> — без неї). false — не кінець сезону.</summary>
+        public bool ChooseLateRole(LateRole role)
+        {
+            if (!CanChooseLateRole) return false;
+            State.LateRole = role;
+            Feud.State.LateRole = role;
+            return true;
+        }
+
+        /// <summary>Зірка поза рингом: тренувань цього тижня вже стільки, скільки дозволено (§5.3 «менше часу на тренування»).</summary>
+        public bool StarTrainingUsed
+        {
+            get
+            {
+                if (State.LateRole != LateRole.OffRingStar) return false;
+                int n = 0;
+                foreach (var k in State.ActionsDone) if (k == (int)WeekActionKind.Training) n++;
+                return n >= LateRoles.StarTrainingsPerWeek;
+            }
         }
 
         /// <summary>Роль зараз — домінантний шлях (поворот герой ↔ лиходій — подія кар'єри ev_turn, §5.3; <see cref="Turn"/>).</summary>
@@ -355,7 +380,7 @@ namespace Game.Core.Ring.Career
                 ActionsLeft = State.ActionsLeft, ActionsTotal = State.Strained ? CareerRules.StrainedActions : CareerRules.ActionsPerWeek,
                 Strained = State.Strained, PromoChoicePending = State.PromoChoicePending, Money = State.Money, Popularity = Popularity,
                 Trust = Trust, DevPoints = DevPoints, IsBigShowWeek = State.IsBigWeek(State.Week), Card = GetShowCard(),
-                CanRecover = HasSomethingToRecover(), BackstageOpen = _bs != null
+                CanRecover = HasSomethingToRecover(), BackstageOpen = _bs != null, StarTrainingUsed = StarTrainingUsed
             };
             foreach (var k in State.ActionsDone) v.ActionsDone.Add((WeekActionKind)k);
             v.Injuries = InjuryViews();
@@ -545,6 +570,7 @@ namespace Game.Core.Ring.Career
         public WeekActionResult Train(bool withTrainer)
         {
             var r = Begin(WeekActionKind.Training);
+            if (r.Ok && StarTrainingUsed) { r.Ok = false; r.Reason = "star_training"; }
             if (r.Ok && withTrainer && State.Money < CareerRules.TrainerCost) { r.Ok = false; r.Reason = "money"; }
             if (!r.Ok) return r;
             int pts = CareerRules.TrainingPoints;
@@ -590,6 +616,12 @@ namespace Game.Core.Ring.Career
             var r = Begin(WeekActionKind.Promo);
             if (!r.Ok) return r;
             Roll(r, RingAttr.Charisma, BodyZone.Head, "career:promo");
+            if (State.LateRole == LateRole.OffRingStar && r.Tier != RollTier.Miss)
+            {
+                // Зірка поза рингом: промо — ще й заробіток
+                int pay = r.Tier == RollTier.Strong ? LateRoles.StarPromoMoneyStrong : LateRoles.StarPromoMoneyPartial;
+                State.Money += pay; r.MoneyDelta += pay;
+            }
             switch (r.Tier)
             {
                 case RollTier.Strong:
@@ -1057,7 +1089,8 @@ namespace Game.Core.Ring.Career
             {
                 RingName = State.RingName, Costume = State.Costume, Gimmick = State.Gimmick, Role = CurrentRole, Money = State.Money,
                 Popularity = Popularity, Trust = Trust, DevPoints = DevPoints, IsChampion = IsChampion, Season = State.Season,
-                Week = State.Week, TitlesWon = State.TitlesWon, FiredCount = State.FiredCount, FeudResolved = State.FeudResolved
+                Week = State.Week, TitlesWon = State.TitlesWon, FiredCount = State.FiredCount, FeudResolved = State.FeudResolved,
+                LateRole = State.LateRole
             };
             for (int i = 0; i < 5; i++) v.Attr[i] = Player.Get((RingAttr)i);
             foreach (var id in State.Moves) v.Moves.Add(Content.Moves.Get(id));
@@ -1093,6 +1126,7 @@ namespace Game.Core.Ring.Career
             }
             var npc = Content.FindNpc(State.Opponent);
             var mods = Development.ToModifiers(Feud.State.Perks);
+            LateRoles.ApplyTo(mods, State.LateRole);
             var rivalMods = new MatchModifiers();
             int hype = 1 + FeudLevel(npc.Id) + mods.StartHypeBonus + State.NextHypeBonus + (State.CostumeBought ? CareerRules.CostumeHype : 0)
                        + (State.IsInjured ? CareerRules.InjuredShowHype : 0);
