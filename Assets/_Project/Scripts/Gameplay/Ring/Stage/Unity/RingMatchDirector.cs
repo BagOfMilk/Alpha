@@ -455,7 +455,9 @@ namespace Game.Gameplay.Ring.Stage
                 // Утримання (дія Pin) кроків не має: накриття показує наступна подія — Kickout, кліп Cover. Звук накриття чекає
                 // контакту Cover (звірка зі звуком, п. 2), а не звучить до кліпа.
                 if (ev.Action == MatchActionId.Pin && _plan.Step < 0) _pinSound = ev;
-                else _s.Sound.OnEvent(ev, 0f, false);
+                // Реквізит предмета (стілець чи стіл — режисер чергує) і кліп такту: звук розрізняє удар стільцем і кидок на стіл,
+                // перехоплення стрибка. Без кроків кліпа немає (null) — звук як раніше.
+                else _s.Sound.OnEvent(ev, 0f, false, RingOutsideCourse.ChooseProp(ev), _plan.Clip);
             }
             if (_s.Fx != null && ev.Action == MatchActionId.Finisher && (ev.Kind == MatchEventKind.Action || ev.Kind == MatchEventKind.Sell) && ev.Tier != RollTier.Miss)
                 _s.Fx.Finisher();
@@ -1271,6 +1273,7 @@ namespace Game.Gameplay.Ring.Stage
             bool outside = _m[I(sb)].Outside;
             Vector3 hub = outside ? RingStage3D.OutsideAnchor : new Vector3(0f, RingStage3D.MatY, 0f);   // центр пари: центр рингу чи точка за рингом
             pA.y = pB.y = hub.y;
+            bool laneFits = true;   // шлях пари вміщається в смугу за рингом (інакше — склейка на загальний план)
 
             // Де A насправді стартує: з розбігом — посеред бігу (за кривою тазу кліпа на цьому тілі), інакше — на старті пари.
             float yawAStart = yawA + relYawA;
@@ -1298,6 +1301,21 @@ namespace Game.Gameplay.Ring.Stage
                 pB += sh;
                 pAStart += sh;
             }
+            else if (!bDown)
+            {
+                // За рингом — смуга проходу ±HalfLength уздовж боку і ±HalfWidth назовні: увесь шлях обох (кінець шляху — таз і голова,
+                // ларіат ~2,8 м уперед, боді-слем — поперек) мусить лежати в ній, не заходити на фартух і за OuterEdge (кадр 07 звіту 8f).
+                // Кандидати — уздовж проходу в обидва боки, потім спиною до рингу; старт зсувається проти руху (шлях центрується).
+                var course = OutsideCourse(A, ca, B, cb, ia, aStartRel, tStart, yawA, hub, out yawA, out pB);
+                yawB = yawA - ia.Rotation;
+                pA = pB - Rot(yawA, new Vector3(ia.Offset.x, 0f, ia.Offset.z));
+                pAStart = pB + Rot(yawA, new Vector3(aStartRel.x, 0f, aStartRel.z));
+                pA.y = pAStart.y = pB.y = hub.y;
+                yawAStart = yawA + relYawA;
+                laneFits = course.Fits;
+                if (!laneFits)
+                    Debug.LogWarning(string.Format(CultureInfo.InvariantCulture, "[Ринг] 3D: шлях {0} за рингом не вміщається в смугу (перевищення {1:0.00} м) — склейка на загальний план", st.Clip, course.Overflow));
+            }
             Vector3 mid = (pAStart + pB) * 0.5f;
             // Рефері збоку від пари (~1,2 м), у бік центру рингу й трохи за борцями: не перекриває ані їх, ані камеру. Якщо
             // він уже стоїть так, що не заважає, — лишається (менше перестановок).
@@ -1324,7 +1342,7 @@ namespace Game.Gameplay.Ring.Stage
             var refActor = _s.Referee;
             // Утримання: рефері йде до плечей захисника й стає на коліно сам (RefCount) — паралельно з підходом нападника.
             if (st.Count) StartCoroutine(RefCount(ev, A, B, pA, st.RefClip));
-            bool hard = fromCut || st.CutIn;
+            bool hard = fromCut || st.CutIn || !laneFits;
             if (hard)
             {
                 // Склейка: нападник стає в точку старту разом із PlayAtTime нижче, решта — жорстко в цей самий кадр.
@@ -1347,6 +1365,7 @@ namespace Game.Gameplay.Ring.Stage
             // Фінішер — склейкою в кіноплан до старту кліпа: обидва в кадрі від колін, контакт у кадрі (огляд 07.11.2026:
             // такт приходив, поки камера ще летіла з загального плану).
             if (finisherShot) FinisherShot(A, B, ca, pB, yawA, ia);
+            else if (outside && !laneFits) HardCut(StageCam.Big);
             else if (outside)
             {
                 var path = new List<Vector3>();
@@ -1359,6 +1378,48 @@ namespace Game.Gameplay.Ring.Stage
             A.PlayAtTime(ca, tStart, ia.Loop, pAStart, yawAStart, RingStage3D.PlaySpeed);
             B.PlayAtTime(cb, tStart, ib != null && ib.Loop, pB, yawB, RingStage3D.PlaySpeed);
             yield return PairTail(st, ev, idx, ca, cb, ia, tStart);
+        }
+
+        /// <summary>
+        /// Курс пари за рингом (<see cref="RingOutsideCourse.Choose"/>): точки шляху обох у кліпах, у локальній системі A від
+        /// <paramref name="pB"/>, проти трьох курсів — уздовж проходу вперед і назад, спиною до рингу. Повертає вибір, курс нападника
+        /// і початок пари (B) у світі.
+        /// </summary>
+        private RingOutsideCourse.Course OutsideCourse(RingActor A, AnimationClip ca, RingActor B, AnimationClip cb, RingClipInfo ia,
+            Vector3 aStartRel, float tStart, float yawA0, Vector3 hub, out float yawA, out Vector3 pB)
+        {
+            var lx = new List<float>();
+            var lz = new List<float>();
+            lx.Add(aStartRel.x); lz.Add(aStartRel.z); lx.Add(0f); lz.Add(0f);
+            float[] t; Vector3[] p; float[] y;
+            Path(A, ca, ca.length - 0.02f, out t, out p, out y);
+            for (int i = 0; i < t.Length; i++)
+            {
+                if (t[i] < tStart) continue;
+                lx.Add(p[i].x - ia.Offset.x); lz.Add(p[i].z - ia.Offset.z);
+            }
+            Path(B, cb, cb.length - 0.02f, out t, out p, out y);
+            for (int i = 0; i < t.Length; i++)
+            {
+                if (t[i] < tStart) continue;
+                Vector3 r = Rot(-ia.Rotation, new Vector3(p[i].x, 0f, p[i].z));
+                lx.Add(r.x); lz.Add(r.z);
+            }
+            var o = RingStage3D.Outside;
+            float[] yaws = { yawA0, yawA0 + 180f, YawOf(RingStage3D.OutsideOut) };
+            var us = new float[yaws.Length][];
+            var vs = new float[yaws.Length][];
+            for (int k = 0; k < yaws.Length; k++)
+            {
+                us[k] = new float[lx.Count];
+                vs[k] = new float[lx.Count];
+                for (int i = 0; i < lx.Count; i++)
+                    RingOutsideCourse.ToLane(lx[i], lz[i], yaws[k], o.AlongX, o.AlongZ, o.OutX, o.OutZ, out us[k][i], out vs[k][i]);
+            }
+            var c = RingOutsideCourse.Choose(us, vs, o.HalfLength, o.HalfWidth);
+            yawA = yaws[c.Candidate];
+            pB = hub + RingStage3D.OutsideAlong * c.ShiftAlong + RingStage3D.OutsideOut * c.ShiftOut;
+            return c;
         }
 
         /// <summary>
@@ -1746,10 +1807,10 @@ namespace Game.Gameplay.Ring.Stage
 
         /// <summary>
         /// Другий дотик тієї самої дії (звірка зі звуком, п. 5; <c>EVENT_SOUND.md</c>): який звук і чи він є — вирішує зона звуку
-        /// (<see cref="RingSoundMap.FollowUpOf(MatchEvent)"/>; зараз — предмет 7–9 і ≤ 6). Режисер дає лише мить: мітку
-        /// <see cref="FollowUpMark"/> кліпа кроку нападника. Без мітки — тиша, а не звук не в такт (підстановки «за рингом» міток
-        /// не мають). Так другий дотик стрибка з каната (падіння в Springboard_Land_Catch / _Counter, знахідка звуку 1) озветься,
-        /// щойно звук дасть йому звук, а «Кліпи» — мітку, без правки тут.
+        /// (<see cref="RingSoundMap.FollowUpOf(MatchEvent)"/>): предмет 7–9 (самоудар), стрибок із каната (падіння після перехоплення чи
+        /// кидок на мат), таран відчайдушного й променя надії, фінішер-удар; предмет ≤ 6 — None, падіння там сам такт. Режисер дає
+        /// лише мить: мітку <see cref="FollowUpMark"/> кліпа кроку нападника. Без мітки — тиша, а не звук не в такт (підстановки
+        /// «за рингом» міток не мають); нові кліпи з міткою озвуться без правки тут.
         /// </summary>
         private void ArmFollowUp(MatchEvent ev, string clip, float startAt)
         {
