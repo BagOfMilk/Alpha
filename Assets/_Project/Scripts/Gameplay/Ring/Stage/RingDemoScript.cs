@@ -126,7 +126,9 @@ namespace Game.Gameplay.Ring.Stage
                 RivalRole = RingPath.Heel,
                 Stipulations = noDq ? MatchStipulations.NoDq : MatchStipulations.None,
                 // демо довше за матч: ліміт дій не має обривати показ нічиєю
-                RoundLimit = 400
+                RoundLimit = 400,
+                // сценарії демо ставлять фінішер раніше за 8-му дію (P2-1)
+                NoFinisherMinimum = true
             };
         }
 

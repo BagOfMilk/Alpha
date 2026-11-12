@@ -321,5 +321,26 @@ namespace Game.Tests.EditMode
             }
             Assert.IsTrue(seen, "ШІ жодного разу не обрав фінішер на 250 сідах");
         }
+
+        /// <summary>
+        /// «Накрити знову — після іншого прийому» стосується лише того, хто щойно накривав і далі ходить. Сторона без ініціативи
+        /// не бачить у прев'ю JustPinned (рев'ю D 11.11.2026: без цієї умови тести не червоніли).
+        /// </summary>
+        [Test]
+        public void JustPinned_OnlyForTheSideThatPinned_NotInTheOtherSidesPreview()
+        {
+            var e = MatchKit.Engine(false, new[] { 4, 7, 7, 4 }, s => s.PlayerHasAlly = true);
+            e.State.Player.Posture = Posture.Down; e.State.Player.Damage = Math.Max(e.State.Player.Damage, MatchRules.PinMinDamage); MatchKit.NotFresh(e.State.Player);
+            e.Perform(MatchActionId.Pin);
+            Assert.IsFalse(e.IsOver, "напарник розірвав утримання");
+            Assert.AreEqual(MatchSide.Rival, e.CurrentActor, "накривав суперник — він і ходить");
+            Assert.AreEqual(UnavailableReason.JustPinned, e.Preview(MatchSide.Rival, MatchActionId.Pin).Reason);
+
+            // у гравця все для утримання є, крім ходу: причина — не його черга, а не JustPinned
+            e.State.Rival.Posture = Posture.Down; e.State.Rival.Damage = Math.Max(e.State.Rival.Damage, MatchRules.PinMinDamage);
+            var other = e.Preview(MatchSide.Player, MatchActionId.Pin);
+            Assert.AreNotEqual(UnavailableReason.JustPinned, other.Reason);
+            Assert.AreEqual(UnavailableReason.WrongPhase, other.Reason);
+        }
     }
 }

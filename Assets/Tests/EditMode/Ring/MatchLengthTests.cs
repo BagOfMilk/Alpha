@@ -48,6 +48,23 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(e.Describe(MatchActionId.Finisher).Available);
         }
 
+        /// <summary>
+        /// Мінімум дії вимикає лише явне поле показу (демо), а не довгий ліміт дій. Раніше вимикав неявний прапорець
+        /// «ліміт понад матч»; рев'ю D 11.11.2026.
+        /// </summary>
+        [Test]
+        public void FinisherMinimum_OffOnlyByTheExplicitDemoFlag_NotByALongRoundLimit()
+        {
+            var longLimit = MatchKit.Engine(true, null, s => s.RoundLimit = 400);
+            longLimit.State.Player.Momentum = 5; longLimit.State.Hype = 4; longLimit.State.Rival.Damage = 6;
+            Assert.AreEqual(UnavailableReason.TooEarly, longLimit.Describe(MatchActionId.Finisher).Reason, "довгий ліміт — правило те саме");
+
+            var demo = MatchKit.Engine(true, null, s => s.NoFinisherMinimum = true);
+            demo.State.Player.Momentum = 5; demo.State.Hype = 4; demo.State.Rival.Damage = 6;
+            Assert.IsTrue(demo.Describe(MatchActionId.Finisher).Available, "демо — фінішер з першої дії");
+            Assert.IsTrue(Game.Gameplay.Ring.Stage.RingDemoScript.Setup(false).NoFinisherMinimum, "демо ставить прапорець саме");
+        }
+
         [Test]
         public void TooEarly_HasAReadableText_WithTheNumber()
         {
