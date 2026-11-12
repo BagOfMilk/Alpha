@@ -26,6 +26,7 @@ namespace Game.Core.Ring.Career
         /// </summary>
         public static int Strengthen(WrestlerStats s, int steps, MatchModifiers mods)
         {
+            if (steps < 0) return -Weaken(s, -steps);
             // Лише атрибути, що б'ють у кожному матчі; Спритність і Харизма (політ, дражнити) майже не додають сили — замір 06.11.2026:
             // пізні щаблі туди не робили суперника сильнішим. Далі — витримка й імпульс (mods).
             var order = new[] { s.FinisherAttr, RingAttr.Stamina, RingAttr.Technique, RingAttr.Strength };
@@ -53,6 +54,31 @@ namespace Game.Core.Ring.Career
                 applied++;
             }
             return applied;
+        }
+
+        /// <summary>
+        /// Від'ємні щаблі (пік сили — реванш, «переріс щабель», CareerRules «Піки сили»): суперник слабший за базу ростеру — по
+        /// атрибуту з кінця черги посилення (Сила → Техніка → Витривалість), не нижче 0; атрибут фінішера не чіпаємо — це його прийом.
+        /// Повертає, скільки атрибутів опущено.
+        /// </summary>
+        public static int Weaken(WrestlerStats s, int steps)
+        {
+            var order = new[] { RingAttr.Strength, RingAttr.Technique, RingAttr.Stamina };
+            int lowered = 0;
+            for (int i = 0; i < steps; i++)
+            {
+                bool done = false;
+                foreach (var a in order)
+                {
+                    if (a == s.FinisherAttr || s.Get(a) <= 0) continue;
+                    s.Set(a, s.Get(a) - 1);
+                    done = true;
+                    break;
+                }
+                if (!done) break;
+                lowered++;
+            }
+            return lowered;
         }
 
         /// <summary>Хеш (splitmix) — замість System.Random: те саме зерно й аргументи дають те саме число.</summary>

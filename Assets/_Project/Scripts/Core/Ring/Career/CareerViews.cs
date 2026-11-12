@@ -68,10 +68,15 @@ namespace Game.Core.Ring.Career
         /// <summary>Ажіотаж-бонус промо, що чекає на матч.</summary>
         public int PromoHypeBonus;
         public bool CanWithdraw;
-        /// <summary>Щаблів сили суперника цього вечора (за місцем у картці, ворожнечею, титулом).</summary>
+        /// <summary>
+        /// Щаблів сили суперника цього вечора (за місцем у картці, ворожнечею, титулом). Від'ємні (до
+        /// <see cref="CareerRules.RivalStepsFloor"/>) — суперник слабший за базу ростеру (реванш, «переріс щабель»).
+        /// </summary>
         public int RivalSteps;
         /// <summary>Реванш із тим, хто переміг гравця: суперник слабший (ти знаєш його слабкість).</summary>
         public bool IsRematch;
+        /// <summary>Гравець переріс свій щабель картки (CareerSession.IsOutgrown): суперник слабший — пік сили.</summary>
+        public bool IsOutgrown;
         public List<InjuryView> Injuries = new List<InjuryView>();
     }
 

@@ -336,7 +336,7 @@ namespace Game.Core.Ring.Career
                 OpponentFeudLevel = opp == null ? 0 : FeudLevel(opp.Id), Position = State.Position, Plan = State.Plan,
                 Stipulations = State.Stip, Fee = ShowBooker.Fee(State.Position, State.IsBig, Federation.FeePercent),
                 WinBonus = CareerRules.WinBonus, HypeBonus = CareerRules.HypeBonus, PromoHypeBonus = State.NextHypeBonus,
-                CanWithdraw = State.IsInjured && !State.IsBig, RivalSteps = RivalStepsNow(), IsRematch = IsRematch, IsFarewell = State.Farewell
+                CanWithdraw = State.IsInjured && !State.IsBig, RivalSteps = RivalStepsNow(), IsRematch = IsRematch, IsOutgrown = !IsRematch && IsOutgrown, IsFarewell = State.Farewell
             };
             c.Injuries = InjuryViews();
             return c;
@@ -376,15 +376,29 @@ namespace Game.Core.Ring.Career
             // Кульмінації — на поточному рості: ворожнеча й титул лишаються важкими.
             if (State.IsFeudShow) return CareerRules.HammerSteps(Feud.Records.Count) + CareerRules.FeudTierSteps * (State.Federation - 1) + growth;
             if (State.IsTitle) return CareerRules.TitleSteps(State.Federation) + growth;
-            // Щотижневі — на знімку росту, знятому на вході в щабель картки: виріс між підвищеннями — виграєш частіше (пік);
-            // підвищили — суперники знову твого рівня. Реванш — суперник слабший.
-            int steps = CareerRules.RivalSteps(State.Position, State.TierPos < 0 ? growth : State.TierGrowth);
-            if (IsRematch) steps -= CareerRules.RematchSteps;
-            return Math.Max(0, steps);
+            // Щотижневі — на знімку росту, знятому на вході в щабель картки: виріс між підвищеннями — виграєш частіше; підвищили —
+            // суперники знову твого рівня. Піки (CareerRules, «Піки сили»): реванш, а без нього — «переріс щабель картки».
+            int steps = CareerRules.RivalSteps(State.Position, State.TierPos < 0 ? growth : State.TierGrowth, State.Federation);
+            if (IsRematch) steps -= CareerRules.RematchSteps(State.Federation);
+            else if (IsOutgrown) steps -= CareerRules.PeakSteps(State.Federation);
+            return Math.Max(CareerRules.RivalStepsFloor, steps);
         }
 
         /// <summary>Цього вечора — реванш із тим, хто переміг гравця останнього разу.</summary>
         public bool IsRematch { get { return !State.IsFeudShow && !State.IsTitle && State.Grudges.Contains(State.Opponent); } }
+
+        /// <summary>
+        /// Гравець переріс свій щабель картки: після знімка щабля виріс щонайменше на <see cref="CareerRules.PeakLag"/> щаблі, а
+        /// підвищення ще не було. Лише щотижневе шоу (велике, титул і ворожнеча — кульмінації, лишаються важкими).
+        /// </summary>
+        public bool IsOutgrown
+        {
+            get
+            {
+                return !State.IsFeudShow && !State.IsTitle && !State.IsBig && State.TierPos >= 0
+                       && PlayerGrowth() - State.TierGrowth >= CareerRules.PeakLag;
+            }
+        }
 
         /// <summary>Сходинка: на новому (вищому) щаблі картки — знімок поточного росту; на нижчому — щабель знижено, знімок той самий.</summary>
         private void UpdateTier()
