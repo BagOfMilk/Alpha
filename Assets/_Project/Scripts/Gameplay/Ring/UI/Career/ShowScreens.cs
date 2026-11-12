@@ -788,7 +788,9 @@ namespace Game.Gameplay.Ring.UI
             box.pickingMode = PickingMode.Position;
             box.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, 0.96f), Stripe = RingTheme.Gold });
             var scroll = new ScrollView(ScrollViewMode.Vertical);
-            scroll.style.maxHeight = 270f;
+            // до канатів (верх 900 − RopesBottom − 22 = 668) з просвітом: 370 — три поради «Радимо зараз» (≥ 6 очок) видно цілком;
+            // з 270 третю різала прокрутка (кадр слоту 28, кінець сезону 2 на 1080)
+            scroll.style.maxHeight = 370f;
             ArenaKit.ThinScroller(scroll);   // системна сіра смуга зі стрілками випадала зі стилю (кадри слоту 27)
             scroll.style.paddingLeft = 20f; scroll.style.paddingRight = 14f; scroll.style.paddingTop = 8f; scroll.style.paddingBottom = 10f;
             var head = MenuKit.Display(T.Get("dev.title"), 25f, RingTheme.Text, RingFontRole.Display900, 0.02f);

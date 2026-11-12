@@ -372,6 +372,7 @@ namespace UnityEngine.UIElements
 
     public class VisualElement : Focusable
     {
+        public enum MeasureMode { Undefined = 0, Exactly = 1, AtMost = 2 }
         private readonly IStyle _style = new InlineStyleStub();
 
         public string name { get; set; }
@@ -401,6 +402,7 @@ namespace UnityEngine.UIElements
     public class TextElement : VisualElement
     {
         public virtual string text { get; set; }
+        public Vector2 MeasureTextSize(string textToMeasure, float width, MeasureMode widthMode, float height, MeasureMode heightMode) { return default(Vector2); }
     }
 
     public class Label : TextElement

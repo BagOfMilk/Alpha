@@ -141,7 +141,7 @@ namespace Game.Gameplay.Ring.UI
             float width = Root.layout.width;
             if (float.IsNaN(width) || width <= 0f) return;
             bool narrow = width < ArenaKit.NarrowWidth;
-            float gw = CareerTileLayout.CreateGoldWidth(width);   // повна плита лише на 21:9 — інакше плитки ґіміків завузькі
+            float gw = CareerTileLayout.GoldWidth(width);   // повна плита лише на 21:9 — інакше плитки ґіміків завузькі
             _gold.style.width = gw;
             float right = ArenaKit.Edge + gw + CareerTileLayout.GoldGap;
             _row.style.right = right;

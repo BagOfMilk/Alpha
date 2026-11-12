@@ -28,6 +28,14 @@ namespace Game.Tests.EditMode
         };
 
         private const float Body = BrandTokens.TypeMinInfo;
+        /// <summary>
+        /// Запас на рендер тексту (растр гліфів, округлення до пікселя): сума ширин гліфів шрифту — не точно те, що ставить
+        /// TextCore, тож рядок, що в моделі влазить «впритул», у грі може перенестись.
+        /// </summary>
+        private const float RenderSlack = 2f;
+
+        /// <summary>Ширина тексту плитки з запасом на рендер.</summary>
+        private static float TextWidth(float tileW) { return CareerTileLayout.BodyWidth(tileW) - RenderSlack; }
 
         private static TtfMetrics _title, _legend, _word, _text;
         private static Dictionary<string, object> _ui;
@@ -122,11 +130,84 @@ namespace Game.Tests.EditMode
                 float w = LegendFont.Width(a, Body) + LegendFont.Width(b, Body) + LegendFont.Width(d, Body) + gap;
                 foreach (var p in Panels)
                 {
-                    float body = CareerTileLayout.BodyWidth(CareerTileLayout.WeekTileWidth(p.Value, 6));
-                    if (w > body) bad.Add(string.Format("{0}: легенда «{1} · {2} · {3}» {4:0} > {5:0}", p.Key, a, b, d, w, body));
+                    // легенда — від лівого краю тексту до скосу правого краю на висоті її низу (ActionTile.FitSlant), кожна
+                    // плитка зі смугою — своїм відступом; підписи без переносу, тож і тут запас на рендер
+                    float tileW = CareerTileLayout.WeekTileWidth(p.Value, 6);
+                    foreach (var t in WeekTiles())
+                    {
+                        if (!t.Chances) continue;
+                        float body = CareerTileLayout.BodyWidth(tileW) - LegendInset(t, tileW) - RenderSlack;
+                        if (w > body) bad.Add(string.Format("{0}, «{1}»: легенда «{2} · {3} · {4}» {5:0} > {6:0}", p.Key, t.Title, a, b, d, w, body));
+                    }
                 }
                 foreach (var s in new[] { a, b, d })
                     if (LegendFont.Missing(s).Count > 0) bad.Add("у шрифті легенди немає «" + new string(LegendFont.Missing(s).ToArray()) + "»");
+            }
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>Низ легенди шансів від верху плитки: смуга з легендою є лише в увімкненої плитки — рядка причини тоді немає.</summary>
+        private static float LegendBottom(TileText t, float tileW)
+        {
+            return Height(t, tileW, true, false) - CareerTileLayout.BodyBottom;
+        }
+
+        /// <summary>Правий відступ смуги шансів і легенди плитки (як ActionTile.FitSlant).</summary>
+        private static float LegendInset(TileText t, float tileW)
+        {
+            return CareerTileLayout.SlantInset(LegendBottom(t, tileW), CareerTileLayout.Compact(tileW));
+        }
+
+        /// <summary>
+        /// Найменший видимий просвіт між правим кінцем легенди і скошеним краєм плитки на висоті низу легенди (кадри слоту 28:
+        /// «%» за краєм фокусованої плитки). Число тесту, а не моделі: модель (<see cref="CareerTileLayout.SlantClear"/>,
+        /// <see cref="CareerTileLayout.SlantInset"/>) може змінитись, просвіт — ні.
+        /// </summary>
+        private const float MinGapToSlant = 4f;
+
+        [Test]
+        public void Week_ChanceLegend_StaysOffTheSlantedEdge()
+        {
+            var bad = new List<string>();
+            foreach (var p in Panels)
+            {
+                float tileW = CareerTileLayout.WeekTileWidth(p.Value, 6);
+                bool compact = CareerTileLayout.Compact(tileW);
+                float right = compact ? CareerTileLayout.CompactBodyRight : CareerTileLayout.BodyRight;
+                foreach (var t in WeekTiles())
+                {
+                    if (!t.Chances) continue;
+                    float y = LegendBottom(t, tileW);
+                    float end = tileW - right - LegendInset(t, tileW);   // SpaceBetween: останній підпис кінчається на краю ряду
+                    float edge = tileW - (float)Math.Tan(BrandTokens.SpaceSlantDeg * Math.PI / 180.0) * y;
+                    if (edge - end < MinGapToSlant - 0.01f)
+                        bad.Add(string.Format("{0}: «{1}» — легенда до {2:0.0}, скіс на {3:0.0}: просвіт {4:0.0} < {5}", p.Key, t.Title, end, edge, edge - end, MinGapToSlant));
+                }
+            }
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Ряд створення на вузькій панелі: чотири плитки в ряд і після округлення до пікселя. Розкладка округлює ширину кожної
+        /// плитки й відступу вгору — на 4:3 (1024×768) з запасом в одну одиницю крок був 175 px, і четверта з 696 px ряду
+        /// переносилась до ролей (кадр слоту 28). Масштаби — вузькі панелі: 4:3 від 800×600 до 1600×1200, 16:10 від 1280×800.
+        /// </summary>
+        [Test]
+        public void Create_NarrowRow_FourTilesFit_AfterPixelRounding()
+        {
+            var bad = new List<string>();
+            var screens = new[] { new[] { 800, 600 }, new[] { 1024, 768 }, new[] { 1280, 960 }, new[] { 1600, 1200 },
+                new[] { 1280, 800 }, new[] { 1440, 900 }, new[] { 1680, 1050 }, new[] { 1920, 1200 } };
+            int tiles = CreateTiles().Count;
+            foreach (var s in screens)
+            {
+                float scale = s[1] / 900f, panel = s[0] / scale;
+                if (!CareerTileLayout.Narrow(panel)) continue;
+                float row = CareerTileLayout.CreateRowWidth(panel), tileW = CareerTileLayout.CreateTileWidth(panel, tiles);
+                int rowPx = (int)Math.Floor(row * scale);
+                int stepPx = (int)Math.Ceiling(tileW * scale - 0.001f) + (int)Math.Ceiling(CareerTileLayout.TileGap * scale - 0.001f);
+                if (stepPx * CareerTileLayout.CreatePerRowNarrow > rowPx)
+                    bad.Add(string.Format("{0}×{1}: {2} плитки по {3} px > ряд {4} px", s[0], s[1], CareerTileLayout.CreatePerRowNarrow, stepPx, rowPx));
             }
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
@@ -270,13 +351,59 @@ namespace Game.Tests.EditMode
                     if (widest > availW) bad.Add(string.Format("{0} ({1:0}): слово ширше плити на кеглі {2} — {3:0} > {4:0}", key, plateW, s, widest, availW));
                     if (lines > CareerTileLayout.WordMaxLines) bad.Add(string.Format("{0} ({1:0}): {2} рядки на кеглі {3}", key, plateW, lines, s));
                     if (h > availH + 0.5f) bad.Add(string.Format("{0} ({1:0}): висота {2:0} > {3:0} на кеглі {4}", key, plateW, h, availH, s));
+                    if (HintClash(text, s, plateW, MinGapToHint)) bad.Add(string.Format("{0} ({1:0}): останній рядок на кеглі {2} лягає на «{3}»", key, plateW, s, GoldHintWorst()));
                     if (WordFont.Missing(text).Count > 0) bad.Add(key + ": у шрифті немає «" + new string(WordFont.Missing(text).ToArray()) + "»");
                 }
             }
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
 
-        /// <summary>Той самий підбір, що GoldPlate.FitWord: за шириною найдовшого слова — пропорційно; зайві рядки — мінус 2; не нижче WordMin.</summary>
+        /// <summary>Найширша підказка клавіші золотої плити (клавіатура й геймпад) — display 800, кегль 15, розрядка 0,12.</summary>
+        private static string GoldHintWorst()
+        {
+            string a = Caps(Ui("m.hint.enter")), b = Caps(Ui("m.hint.pad_a"));
+            return TitleFont.Width(a, BrandTokens.TypeLabel, GoldHintTrack) >= TitleFont.Width(b, BrandTokens.TypeLabel, GoldHintTrack) ? a : b;
+        }
+
+        private const float GoldHintTrack = 0.12f;
+
+        /// <summary>
+        /// Останній рядок слова заходить на підказку клавіші і по висоті, і по ширині (як GoldPlate.FitWord): низ слова нижче
+        /// верху підказки, а правий кінець останнього рядка — правіше за її лівий край.
+        /// </summary>
+        /// <summary>
+        /// Найменший просвіт між словом золотої плити і підказкою клавіші, яким міряє тест (не число моделі: модель
+        /// <see cref="CareerTileLayout.GoldHintGap"/> може змінитись, а слово на «ENTER» — ні).
+        /// </summary>
+        private const float MinGapToHint = 2f;
+
+        private static bool HintClash(string text, float s, float plateW, float gap)
+        {
+            string hint = GoldHintWorst();
+            float hw = TitleFont.Width(hint, BrandTokens.TypeLabel, GoldHintTrack), hh = TitleFont.LineHeight(BrandTokens.TypeLabel);
+            float availW = CareerTileLayout.WordWidth(plateW);
+            float widest;
+            int lines = WordFont.Lines(text, s, availW, CareerTileLayout.WordTrack, out widest);
+            float hintTop = CareerTileLayout.TileH - CareerTileLayout.GoldHintBottom - hh - gap;
+            float hintLeft = plateW - CareerTileLayout.GoldHintRight - hw - gap - RenderSlack;   // підпис без переносу — запас на рендер
+            return CareerTileLayout.WordTop + lines * WordFont.LineHeight(s) > hintTop
+                && CareerTileLayout.WordLeft + LastLineWidth(text, s, availW) > hintLeft;
+        }
+
+        /// <summary>Жадібні переноси між словами (як мітка) — ширина останнього рядка.</summary>
+        private static float LastLineWidth(string text, float s, float availW)
+        {
+            string line = "";
+            foreach (var w in text.Split(' '))
+            {
+                if (w.Length == 0) continue;
+                string next = line.Length == 0 ? w : line + " " + w;
+                line = line.Length == 0 || WordFont.Width(next, s, CareerTileLayout.WordTrack) <= availW + 0.5f ? next : w;
+            }
+            return WordFont.Width(line, s, CareerTileLayout.WordTrack);
+        }
+
+        /// <summary>Той самий підбір, що GoldPlate.FitWord: за шириною найдовшого слова — пропорційно; зайві рядки чи рядок на підказці — мінус 2; не нижче WordMin.</summary>
         private static float FitWord(string text, float availW, float availH)
         {
             float s = CareerTileLayout.WordSize;
@@ -288,7 +415,8 @@ namespace Game.Tests.EditMode
             {
                 float widest;
                 int lines = WordFont.Lines(text, s, availW, CareerTileLayout.WordTrack, out widest);
-                if (lines * WordFont.LineHeight(s) <= availH + 0.5f || s <= CareerTileLayout.WordMin) break;
+                float plateW = availW + CareerTileLayout.WordLeft + CareerTileLayout.WordRight;
+                if ((lines * WordFont.LineHeight(s) <= availH + 0.5f && !HintClash(text, s, plateW, CareerTileLayout.GoldHintGap)) || s <= CareerTileLayout.WordMin) break;
                 s = Math.Max(CareerTileLayout.WordMin, s - 2f);
             }
             return s;
@@ -317,7 +445,7 @@ namespace Game.Tests.EditMode
 
         private static void CheckBody(List<string> bad, string where, TileText t, float tileW)
         {
-            float width = CareerTileLayout.BodyWidth(tileW);
+            float width = TextWidth(tileW);
             if (t.Parts != null)
             {
                 float wp;
@@ -340,10 +468,20 @@ namespace Game.Tests.EditMode
             }
         }
 
-        /// <summary>Висота, якої плитці треба (як ActionTile.NeededHeight): відступ, назва, найдовший ефект, найдовший ризик, смуга з легендою.</summary>
+        /// <summary>
+        /// Висота, якої плитці треба (як ActionTile.NeededHeight) — найбільша з її станів: увімкнена плитка зі смугою шансів
+        /// (рядка причини тоді немає) чи вимкнена з причиною (без смуги — WeekScreenView ставить шанси лише увімкненим).
+        /// </summary>
         private static float NeededHeight(TileText t, float tileW)
         {
-            float width = CareerTileLayout.BodyWidth(tileW);
+            float h = Height(t, tileW, false, true);
+            return t.Chances ? Math.Max(h, Height(t, tileW, true, false)) : h;
+        }
+
+        /// <summary>Висота плитки: відступ, назва, найдовший ефект, найдовший ризик (якщо <paramref name="risks"/>), смуга з легендою (якщо <paramref name="chances"/>).</summary>
+        private static float Height(TileText t, float tileW, bool chances, bool risks)
+        {
+            float width = TextWidth(tileW);
             bool compact = CareerTileLayout.Compact(tileW);
             float top = compact ? CareerTileLayout.CompactBodyTop : CareerTileLayout.BodyTop;
             float head = Math.Max(TitleFont.LineHeight(CareerTileLayout.TitleBaseSize(tileW)), compact ? 0f : CareerTileLayout.KeyBox);
@@ -352,12 +490,46 @@ namespace Game.Tests.EditMode
             float widest;
             foreach (var s in t.Effects) effect = Math.Max(effect, Math.Max(1, TextFont.Lines(s, Body, width, 0f, out widest)));
             if (t.Parts != null) effect = Math.Max(effect, TextFont.PartLines(t.Parts, Body, width, CareerTileLayout.EffectPartGap, out widest));
-            foreach (var s in t.Risks) risk = Math.Max(risk, TextFont.Lines(s, Body, width, 0f, out widest));
+            if (risks) foreach (var s in t.Risks) risk = Math.Max(risk, TextFont.Lines(s, Body, width, 0f, out widest));
             float h = top + head + CareerTileLayout.LineGap + effect * lh + risk * lh;
-            if (t.Chances) h += CareerTileLayout.ChancesGap + CareerTileLayout.ChancesH + CareerTileLayout.LegendGap + LegendFont.LineHeight(Body);
+            if (chances) h += CareerTileLayout.ChancesGap + CareerTileLayout.ChancesH + CareerTileLayout.LegendGap + LegendFont.LineHeight(Body);
             return h + CareerTileLayout.BodyBottom;
         }
 
         private static int Pct(int of36) { return (int)Math.Round(of36 * 100.0 / 36.0); }
+
+        /// <summary>Рядок коду (без коментаря), що починається з <paramref name="code"/>.</summary>
+        private static bool CodeLine(string src, string code)
+        {
+            foreach (var l in src.Split('\n')) if (l.Trim().StartsWith(code)) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Плитка й золота плита беруть числа з моделі, яку міряють тести вище (кадри слоту 28): відступ смуги й легенди від скосу,
+        /// темний золотий сегмент на золотій заливці, текст без внутрішніх відступів мітки, слово над підказкою клавіші.
+        /// </summary>
+        [Test]
+        public void Sources_TileAndGoldPlate_FollowTheModel()
+        {
+            string src = System.IO.File.ReadAllText(System.IO.Path.Combine(UnityEngine.Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI", "Career", "ArenaKit.cs"));
+            var bad = new List<string>();
+            var need = new[]
+            {
+                "_legendRow.RegisterCallback<GeometryChangedEvent>(e => FitSlant());",
+                "float m = CareerTileLayout.SlantInset(_bodyTop + bottom, _compact);",
+                "_chances.style.marginRight = m;",
+                "_legendRow.style.marginRight = m;",
+                "_strongSeg = Add3(strong36, total, RingTheme.Gold);",
+                "if (_strongSeg != null) _strongSeg.style.backgroundColor = darkText ? RingTheme.Bg : RingTheme.Gold;",
+                "NoPad(_effect);",
+                "NoPad(_risk);",
+                "NoPad(l);",
+                "hint.style.right = CareerTileLayout.GoldHintRight; hint.style.bottom = CareerTileLayout.GoldHintBottom;",
+                "if (WordTop + wh > hintTop && WordLeft + LastLineWidth(availW) > hintLeft) availH = Math.Min(availH, hintTop - WordTop);",
+            };
+            foreach (var n in need) if (!CodeLine(src, n)) bad.Add("ArenaKit.cs: немає «" + n + "»");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
     }
 }

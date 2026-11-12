@@ -419,6 +419,9 @@ namespace Game.Gameplay.Ring.UI
         private readonly List<Label> _partLabels = new List<Label>();
         private readonly bool _enabled;
         private bool _compact;
+        /// <summary>Золотий сегмент смуги шансів: на золотій заливці (фокус) — темний, інакше зникав би (кадри слоту 28).</summary>
+        private VisualElement _strongSeg;
+        private float _slantInset = -1f;
         private float _bodyTop = CareerTileLayout.BodyTop, _titleSize = CareerTileLayout.TitleSize;
         private bool _focus, _selected;
         public Action OnClick;
@@ -485,6 +488,7 @@ namespace Game.Gameplay.Ring.UI
             if (key > 0) head.Add(_keyBox);
             body.Add(head);
             _effect = MenuKit.Body(effect ?? "", BrandTokens.TypeMinInfo, RingTheme.TextDim);
+            NoPad(_effect);
             _effect.style.marginTop = CareerTileLayout.LineGap;
             body.Add(_effect);
             // ефект частинами (SetEffectParts): рядок із переносом лише між частинами, кожна — без переносу всередині
@@ -500,6 +504,7 @@ namespace Game.Gameplay.Ring.UI
             _parts.pickingMode = PickingMode.Ignore;
             body.Add(_parts);
             _risk = MenuKit.Body(!enabled && !string.IsNullOrEmpty(reason) ? reason : risk ?? "", BrandTokens.TypeMinInfo, RingTheme.Signal);
+            NoPad(_risk);
             _risk.style.display = string.IsNullOrEmpty(_risk.text) ? DisplayStyle.None : DisplayStyle.Flex;
             body.Add(_risk);
             // рядки тримають свою висоту: стиснуті flex-ом, вони малювали текст поза собою — назва вилазила над плиткою, рядок
@@ -529,6 +534,7 @@ namespace Game.Gameplay.Ring.UI
             _face.Add(_titleProbe);
             EventCallback<GeometryChangedEvent> changed = e => { if (OnContentChanged != null) OnContentChanged(); };
             head.RegisterCallback(changed); _effect.RegisterCallback(changed); _risk.RegisterCallback(changed); _legendRow.RegisterCallback(changed);
+            _legendRow.RegisterCallback<GeometryChangedEvent>(e => FitSlant());
             _parts.RegisterCallback(changed);
             _title.RegisterCallback<GeometryChangedEvent>(e => FitTitle());
             _titleProbe.RegisterCallback<GeometryChangedEvent>(e => FitTitle());
@@ -601,7 +607,35 @@ namespace Game.Gameplay.Ring.UI
                 _key.style.fontSize = 21f;
                 _head.Add(_keyBox);
             }
+            FitSlant();
             return true;
+        }
+
+        /// <summary>
+        /// Текст плитки без відступів усередині мітки: тема рантайму дає мітці внутрішні відступи (по 2 з боків), і модель
+        /// переносів (CareerTextFitTests) рахувала на 8 одиниць більше місця, ніж мали частини бонусів — «Сила +2 · Спритність −1»
+        /// ставало в рядок у моделі й не ставало в грі (кадри слоту 28). Назва (display) відступів і так не має — тепер увесь текст
+        /// плитки стоїть від одного краю.
+        /// </summary>
+        private static void NoPad(Label l)
+        {
+            l.style.paddingLeft = 0f; l.style.paddingRight = 0f; l.style.paddingTop = 0f; l.style.paddingBottom = 0f;
+        }
+
+        /// <summary>
+        /// Смуга шансів і легенда — від лівого краю тексту до скосу: правий відступ за висотою низу легенди
+        /// (<see cref="CareerTileLayout.SlantInset"/>); ряд, що виріс, — більший скіс і відступ.
+        /// </summary>
+        private void FitSlant()
+        {
+            if (_legendRow.style.display.value == DisplayStyle.None) return;
+            float bottom = _legendRow.layout.yMax;
+            if (float.IsNaN(bottom)) return;
+            float m = CareerTileLayout.SlantInset(_bodyTop + bottom, _compact);
+            if (Math.Abs(m - _slantInset) < 0.5f) return;
+            _slantInset = m;
+            _chances.style.marginRight = m;
+            _legendRow.style.marginRight = m;
         }
 
         /// <summary>
@@ -630,6 +664,7 @@ namespace Game.Gameplay.Ring.UI
                 foreach (var p in parts)
                 {
                     var l = MenuKit.Body(p ?? "", BrandTokens.TypeMinInfo, RingTheme.TextDim);
+                    NoPad(l);
                     l.style.whiteSpace = WhiteSpace.NoWrap;
                     l.style.flexShrink = 0f;
                     l.style.marginLeft = CareerTileLayout.EffectPartGap;
@@ -676,7 +711,7 @@ namespace Game.Gameplay.Ring.UI
             int total = Math.Max(1, miss36 + partial36 + strong36);
             Add3(miss36, total, RingTheme.Signal);
             Add3(partial36, total, RingTheme.Paper);
-            Add3(strong36, total, RingTheme.Gold);
+            _strongSeg = Add3(strong36, total, RingTheme.Gold);
             _chances.style.display = DisplayStyle.Flex;
             _legend[0].text = RingTheme.Caps(missText ?? "");
             _legend[1].text = RingTheme.Caps(partialText ?? "");
@@ -685,15 +720,16 @@ namespace Game.Gameplay.Ring.UI
             Sync();
         }
 
-        private void Add3(int part, int total, Color c)
+        private VisualElement Add3(int part, int total, Color c)
         {
-            if (part <= 0) return;
+            if (part <= 0) return null;
             var s = new VisualElement();
             s.style.width = Length.Percent(part * 100f / total);
             s.style.backgroundColor = c;
             s.style.marginRight = 2f;
             s.pickingMode = PickingMode.Ignore;
             _chances.Add(s);
+            return s;
         }
 
         public bool Focused { get { return _focus; } set { if (_focus == value) return; _focus = value; Sync(); } }
@@ -719,6 +755,7 @@ namespace Game.Gameplay.Ring.UI
             _legend[0].style.color = darkText ? RingTheme.Bg : RingTheme.Signal;
             _legend[1].style.color = darkText ? RingTheme.Bg : RingTheme.Paper;
             _legend[2].style.color = darkText ? RingTheme.Bg : RingTheme.Gold;
+            if (_strongSeg != null) _strongSeg.style.backgroundColor = darkText ? RingTheme.Bg : RingTheme.Gold;
             _check.style.display = _selected ? DisplayStyle.Flex : DisplayStyle.None;
             _check.Ink = darkText ? RingTheme.Bg : RingTheme.Text;
             _face.style.translate = new Translate(new Length(0f), new Length(_focus && _enabled && !MenuAnimator.Reduced ? -7f : 0f));
@@ -756,7 +793,7 @@ namespace Game.Gameplay.Ring.UI
         private const float WordTop = CareerTileLayout.WordTop, WordBottom = CareerTileLayout.WordBottom;
         private readonly bool _enabled;
         private readonly ArenaPlate _plate;
-        private readonly Label _word, _probe;
+        private readonly Label _word, _probe, _hint;
         private readonly Action _onClick;
         private readonly string _text;
         private float _size = WordSize, _fitW = -1f;
@@ -787,8 +824,10 @@ namespace Game.Gameplay.Ring.UI
             _probe.RegisterCallback<GeometryChangedEvent>(e => FitWord());
             var hint = MenuKit.Display(keyHint ?? "", BrandTokens.TypeLabel, enabled ? RingTheme.Bg : RingTheme.Disabled, RingFontRole.Display800, 0.12f);
             hint.style.position = Position.Absolute;
-            hint.style.right = 18f; hint.style.bottom = 10f;
+            hint.style.right = CareerTileLayout.GoldHintRight; hint.style.bottom = CareerTileLayout.GoldHintBottom;
             Add(hint);
+            _hint = hint;
+            hint.RegisterCallback<GeometryChangedEvent>(e => FitWord());
             RegisterCallback<PointerDownEvent>(e => { if (_enabled && e.button == 0 && onClick != null) onClick(); });
             PadFocus.Hover(this, () => { if (_enabled) { _plate.Outline = RingTheme.Text; _plate.Redraw(); } },
                 () => { _plate.Outline = null; _plate.Redraw(); });
@@ -822,6 +861,14 @@ namespace Game.Gameplay.Ring.UI
                 if (_size < WordSize) { SetWordSize(WordSize); return; }
             }
             float availW = w - WordLeft - WordRight, availH = h - WordTop - WordBottom;
+            // останній рядок слова, що заходить на «ENTER» і по висоті, і по ширині, — місця під слово лише до підказки
+            float hw = _hint.layout.width, hh = _hint.layout.height;
+            if (!string.IsNullOrEmpty(_hint.text) && !float.IsNaN(hw) && !float.IsNaN(hh))
+            {
+                float hintTop = h - CareerTileLayout.GoldHintBottom - hh - CareerTileLayout.GoldHintGap;
+                float hintLeft = w - CareerTileLayout.GoldHintRight - hw - CareerTileLayout.GoldHintGap;
+                if (WordTop + wh > hintTop && WordLeft + LastLineWidth(availW) > hintLeft) availH = Math.Min(availH, hintTop - WordTop);
+            }
             float s = _size;
             if (pw > availW + 0.5f) s = (float)Math.Floor(_size * availW / pw);
             else if (wh > availH + 0.5f) s = _size - 2f;
@@ -837,6 +884,27 @@ namespace Game.Gameplay.Ring.UI
                 l.style.fontSize = s;
                 l.style.letterSpacing = new Length(s * WordTrack);
             }
+        }
+
+        /// <summary>
+        /// Ширина останнього рядка слова: ті самі переноси між словами, що в мітці, — жадібно, шириною рядка
+        /// <paramref name="availW"/>, мірою самої мітки (кегль, розрядка).
+        /// </summary>
+        private float LastLineWidth(float availW)
+        {
+            string line = "";
+            foreach (var part in (_word.text ?? "").Split(' '))
+            {
+                if (part.Length == 0) continue;
+                string next = line.Length == 0 ? part : line + " " + part;
+                line = line.Length == 0 || Measure(next) <= availW + 0.5f ? next : part;
+            }
+            return Measure(line);
+        }
+
+        private float Measure(string s)
+        {
+            return _word.MeasureTextSize(s, 0f, MeasureMode.Undefined, 0f, MeasureMode.Undefined).x;
         }
 
         private static string LongestWord(string text)

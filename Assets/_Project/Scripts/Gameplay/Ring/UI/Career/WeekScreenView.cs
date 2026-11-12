@@ -137,7 +137,8 @@ namespace Game.Gameplay.Ring.UI
             float width = Root.layout.width;
             if (float.IsNaN(width) || width <= 0f) return;
             bool narrow = width < ArenaKit.NarrowWidth;
-            float gw = narrow ? ArenaKit.GoldWNarrow : ArenaKit.GoldW;
+            // повна плита лише на 21:9: на 16:9 з нею шість плиток по 183 — легенда шансів лягала на скіс (CareerTileLayout.FullGoldFrom)
+            float gw = CareerTileLayout.GoldWidth(width);
             _gold.style.width = gw;
             _row.style.right = ArenaKit.Edge + gw + 14f;
             bool twoRows = CareerTileLayout.WeekTwoRows(width, _tiles.Count);
