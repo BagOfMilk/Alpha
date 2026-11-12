@@ -469,6 +469,81 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(s.State.Female);
         }
 
+        /// <summary>Довести кар'єру до початку тижня (етап тижня, жодної дії, сцени немає).</summary>
+        private static void PlayToWeekStart(CareerSession s, int season, int week)
+        {
+            var rep = new CareerRunReport();
+            int guard = 0;
+            while (!(s.Stage == CareerStage.Week && s.State.Season == season && s.State.Week == week && s.State.ActionsDone.Count == 0 && !s.BackstageOpen))
+            {
+                Assert.Less(++guard, 3000);
+                CareerBot.Step(s, 0, rep);
+            }
+        }
+
+        [Test]
+        public void SetFemale_OldSave_MidCareer_CardStaysPlayable_BeltsStayPut()
+        {
+            // Старий сейв посеред кар'єри (п'ятий тиждень: сезон 2, тиждень 1), дивізіон невідомий (FemaleKnown = false); хост
+            // проставляє «жінка» з тіла (рев'ю ПМ, 12.11.2026: поведінка навмисна, бракувало тесту).
+            var src = CareerKit.NewHero(18);
+            PlayToWeekStart(src, 2, 1);
+            int fed = src.State.Federation;
+            var federation = C.Federation(fed);
+            string maleChamp = federation.BeltOf(false), femaleChamp = federation.BeltOf(true);
+            // пояс старої кар'єри — у чоловіка, що не стартовий чемпіон (виграв його в старій кар'єрі)
+            string oldHolder = federation.Roster.First(n => !n.Female && n.Id != maleChamp && n.Id != CareerContent.HammerId).Id;
+
+            foreach (string oldBelt in new[] { oldHolder, CareerState.PlayerHolder })
+                foreach (bool midWeek in new[] { false, true })
+                {
+                    string at = "«" + oldBelt + "», " + (midWeek ? "посеред тижня" : "початок тижня") + ": ";
+                    var s = CareerKit.Fresh(18, C);
+                    s.RestoreState(OldSave(src.CaptureState(), oldBelt));
+                    Assert.IsFalse(s.State.FemaleKnown, at + "дивізіон невідомий");
+                    Assert.AreEqual(CareerStage.Week, s.Stage);
+                    if (midWeek) { s.Train(false); Assert.AreEqual(1, s.State.ActionsDone.Count, at + "тиждень почато"); }
+                    string bookedOpp = s.State.Opponent;
+                    Assert.IsFalse(C.FindNpc(bookedOpp).Female, at + "картку склали для чоловічого дивізіону (дефолт старого сейву)");
+
+                    s.SetFemale(true);
+                    Assert.IsTrue(s.State.Female && s.State.FemaleKnown);
+
+                    // картка не ламається: до першої дії тижня букер складає її наново для дивізіону героїні, посеред тижня — лишає
+                    // оголошену (тиждень уже почато)
+                    var card = s.GetShowCard();
+                    Assert.IsNotNull(card.Opponent, at + "суперник є");
+                    Assert.GreaterOrEqual(card.RivalSteps, 0, at);
+                    if (midWeek) Assert.AreEqual(bookedOpp, card.Opponent.Id, at + "оголошену картку не міняють");
+                    else Assert.IsTrue(card.Opponent.Female, at + "суперниця свого дивізіону");
+                    var week = s.GetWeekView();
+                    Assert.IsNotNull(week.Card);
+
+                    // пояси на місці
+                    if (oldBelt == CareerState.PlayerHolder)
+                    {
+                        Assert.IsTrue(s.IsChampion, at + "чемпіонка свого дивізіону");
+                        Assert.AreEqual(CareerState.PlayerHolder, s.State.Belt(fed, true));
+                        Assert.AreEqual(maleChamp, s.State.Belt(fed, false), at + "чоловічий пояс — стартовому чемпіону");
+                    }
+                    else
+                    {
+                        Assert.IsFalse(s.IsChampion);
+                        Assert.AreEqual(oldHolder, s.State.Belt(fed, false), at + "чоловічий пояс лишається в того, хто його виграв");
+                        Assert.AreEqual(femaleChamp, s.State.Belt(fed, true), at + "жіночий — стартовій чемпіонці");
+                    }
+
+                    // другої зміни немає: дивізіон уже відомий, кар'єра почата
+                    Assert.Throws<InvalidOperationException>(() => s.SetFemale(false), at + "лише один раз");
+
+                    // тиждень і шоу граються далі
+                    s.EndWeek();
+                    var e = s.StartShow();
+                    Assert.IsNotNull(e, at + "шоу почалося");
+                    Assert.AreEqual(s.State.Opponent, card.Opponent.Id);
+                }
+        }
+
         // ---------------- вигляд NPC ----------------
 
         [Test]
