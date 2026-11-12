@@ -469,6 +469,81 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(s.State.Female);
         }
 
+        /// <summary>Довести кар'єру до початку тижня (етап тижня, жодної дії, сцени немає).</summary>
+        private static void PlayToWeekStart(CareerSession s, int season, int week)
+        {
+            var rep = new CareerRunReport();
+            int guard = 0;
+            while (!(s.Stage == CareerStage.Week && s.State.Season == season && s.State.Week == week && s.State.ActionsDone.Count == 0 && !s.BackstageOpen))
+            {
+                Assert.Less(++guard, 3000);
+                CareerBot.Step(s, 0, rep);
+            }
+        }
+
+        [Test]
+        public void SetFemale_OldSave_MidCareer_CardStaysPlayable_BeltsStayPut()
+        {
+            // Старий сейв посеред кар'єри (п'ятий тиждень: сезон 2, тиждень 1), дивізіон невідомий (FemaleKnown = false); хост
+            // проставляє «жінка» з тіла (рев'ю ПМ, 12.11.2026: поведінка навмисна, бракувало тесту).
+            var src = CareerKit.NewHero(18);
+            PlayToWeekStart(src, 2, 1);
+            int fed = src.State.Federation;
+            var federation = C.Federation(fed);
+            string maleChamp = federation.BeltOf(false), femaleChamp = federation.BeltOf(true);
+            // пояс старої кар'єри — у чоловіка, що не стартовий чемпіон (виграв його в старій кар'єрі)
+            string oldHolder = federation.Roster.First(n => !n.Female && n.Id != maleChamp && n.Id != CareerContent.HammerId).Id;
+
+            foreach (string oldBelt in new[] { oldHolder, CareerState.PlayerHolder })
+                foreach (bool midWeek in new[] { false, true })
+                {
+                    string at = "«" + oldBelt + "», " + (midWeek ? "посеред тижня" : "початок тижня") + ": ";
+                    var s = CareerKit.Fresh(18, C);
+                    s.RestoreState(OldSave(src.CaptureState(), oldBelt));
+                    Assert.IsFalse(s.State.FemaleKnown, at + "дивізіон невідомий");
+                    Assert.AreEqual(CareerStage.Week, s.Stage);
+                    if (midWeek) { s.Train(false); Assert.AreEqual(1, s.State.ActionsDone.Count, at + "тиждень почато"); }
+                    string bookedOpp = s.State.Opponent;
+                    Assert.IsFalse(C.FindNpc(bookedOpp).Female, at + "картку склали для чоловічого дивізіону (дефолт старого сейву)");
+
+                    s.SetFemale(true);
+                    Assert.IsTrue(s.State.Female && s.State.FemaleKnown);
+
+                    // картка не ламається: до першої дії тижня букер складає її наново для дивізіону героїні, посеред тижня — лишає
+                    // оголошену (тиждень уже почато)
+                    var card = s.GetShowCard();
+                    Assert.IsNotNull(card.Opponent, at + "суперник є");
+                    Assert.GreaterOrEqual(card.RivalSteps, 0, at);
+                    if (midWeek) Assert.AreEqual(bookedOpp, card.Opponent.Id, at + "оголошену картку не міняють");
+                    else Assert.IsTrue(card.Opponent.Female, at + "суперниця свого дивізіону");
+                    var week = s.GetWeekView();
+                    Assert.IsNotNull(week.Card);
+
+                    // пояси на місці
+                    if (oldBelt == CareerState.PlayerHolder)
+                    {
+                        Assert.IsTrue(s.IsChampion, at + "чемпіонка свого дивізіону");
+                        Assert.AreEqual(CareerState.PlayerHolder, s.State.Belt(fed, true));
+                        Assert.AreEqual(maleChamp, s.State.Belt(fed, false), at + "чоловічий пояс — стартовому чемпіону");
+                    }
+                    else
+                    {
+                        Assert.IsFalse(s.IsChampion);
+                        Assert.AreEqual(oldHolder, s.State.Belt(fed, false), at + "чоловічий пояс лишається в того, хто його виграв");
+                        Assert.AreEqual(femaleChamp, s.State.Belt(fed, true), at + "жіночий — стартовій чемпіонці");
+                    }
+
+                    // другої зміни немає: дивізіон уже відомий, кар'єра почата
+                    Assert.Throws<InvalidOperationException>(() => s.SetFemale(false), at + "лише один раз");
+
+                    // тиждень і шоу граються далі
+                    s.EndWeek();
+                    var e = s.StartShow();
+                    Assert.IsNotNull(e, at + "шоу почалося");
+                    Assert.AreEqual(s.State.Opponent, card.Opponent.Id);
+                }
+        }
+
         // ---------------- вигляд NPC ----------------
 
         [Test]
@@ -498,7 +573,7 @@ namespace Game.Tests.EditMode
     /// <summary>
     /// Темп і вікна перемог на кожному рівні (П5; рекомендація ПМ, TRPG_DECISIONS П5: «місцева S1–S2, регіональна S2–S3,
     /// національна S3–S5, світова S5+»; «щотижневі 55–65 %, ворожнеча ~50 %, титул 35–45 %»; піки сили 70–80 % — рішення власника
-    /// 06.11.2026). Бот кар'єри приймає кожну пропозицію; матчі — однаковий ШІ за обидві сторони (як MatchFeelTests); половина героїв —
+    /// 06.11.2026, на кожному рівні — рев'ю ПМ 12.11.2026). Бот кар'єри приймає кожну пропозицію; матчі — однаковий ШІ за обидві сторони (як MatchFeelTests); половина героїв —
     /// жінки, вікна тижневих — і окремо за статтю (на місцевій у жінок ранги 3/5/6, у чоловіків 1/2/4). Межі — із запасом на шум.
     /// </summary>
     public class CareerTempoTests
@@ -572,7 +647,7 @@ namespace Game.Tests.EditMode
                             if (!s.State.IsTitle && !s.State.IsFeudShow && !s.State.IsBig && !s.State.Farewell)
                             {
                                 if (s.IsRematch) peak = "реванш";
-                                else if (CareerRules.RivalSteps(s.State.Position, s.PlayerGrowth()) - s.RivalStepsNow() >= 2) peak = "пік 2+";
+                                else if (CareerRules.RivalSteps(s.State.Position, s.PlayerGrowth(), s.FederationTier) - s.RivalStepsNow() >= 2) peak = "пік 2+";
                             }
                             s.StartShow();
                             break;
@@ -626,20 +701,36 @@ namespace Game.Tests.EditMode
             var r = Measure(200, 8);
             TestContext.WriteLine(Report(r));
             System.Console.WriteLine("[tempo] " + Report(r));
-            // Замір 12.11.2026 на рушії P2-1 (матч 8–15 дій; ключ букера 4, титул {4, 6, 7, 9}, Молот +3 на рівень), три набори сідів
-            // (9000 / 30000 / 55000): регіональна з S2 у 76–79 %, з S3 у 17–20 %, з S4 у 4–6 %; національна з S3 у 20–23 %, з S4 у 67–72 %;
-            // світова з S4 у 15–16 %, з S5 у 36–43 %, з S6 у 22–27 %, далі — решта. Перемоги за рівнями 1–4: тижневі 58 / 57–61 / 63–65 /
-            // 65–67 %, ворожнеча 47–51 / 47–48 % (вище — менше 60 матчів), титул 36–39 / 35–36 / 44–50 / 46–47 %; тижневі за статтю —
-            // жінки 55–68 %, чоловіки 55–67 %. Межі — із запасом на шум 200 кар'єр.
+            // Замір 12.11.2026 на рушії P2-1 (матч 8–15 дій; ключ букера 4, титул {4, 6, 7, 9}, Молот +3 на рівень; піки — CareerRules
+            // «Піки сили»), три набори сідів (9000 / 30000 / 55000): регіональна з S2 у 76–79 %, з S3 у 18 %, з S4 у 4–7 %; національна з S3
+            // у 21–25 %, з S4 у 65–69 %; світова з S4 у 15–19 %, з S5 у 36–42 %, з S6 у 22–23 %, далі — решта. Перемоги за рівнями 1–4:
+            // тижневі 59–60 / 60–62 / 61–64 / 62–65 %, ворожнеча 47–50 / 46–50 % (вище — менше 60 матчів), титул 37–40 / 37–42 / 43–47 /
+            // 44–50 %; тижневі за статтю — жінки 56–65 %, чоловіки 59–65 % (піки розвели регіональну: жінки 64–67 % проти 55–59 %; Сирені
+            // +1 Витривалості, Гадюці Спритність → Витривалість — 61–65 / 59–60 %, ростер регіональної лишився слабшим за національний).
+            // Піки: реванш 70–76 / 73–78 / 72–78 / 76–78 %, «пік 2+» на регіональній і національній 74–75 / 76–81 %; разом — реванш
+            // 74–77 %, «пік 2+» 75–76 %. Межі — із запасом на шум 200 кар'єр.
             Assert.GreaterOrEqual(r.Reached(2), r.Careers * 98 / 100, "з місцевої виходять майже всі");
             Assert.GreaterOrEqual(r.FirstSeason[2, 2] + r.FirstSeason[2, 3], r.Careers * 90 / 100, "місцева — S1–S2");
             Assert.That(r.MedianFirstSeason(2), Is.InRange(2, 3), "регіональна — з S2–S3");
             Assert.That(r.MedianFirstSeason(3), Is.InRange(3, 4), "національна — з S3–S4");
             Assert.That(r.MedianFirstSeason(4), Is.InRange(5, 6), "світова — з S5+");
             for (int se = 1; se <= 3; se++) Assert.AreEqual(0, r.FirstSeason[4, se], "у світову раніше S4 не потрапляють");
-            // Піки сили (власник 06.11.2026: «Піки 70–80%») тут лише міряються (рядки «реванш» / «пік 2+», і за рівнями): на місцевій
-            // їх тримає MatchFeelTests (72 / 73 %), а на повній кар'єрі вони 56–71 % за рівнями — на регіональній і вище атрибути
-            // суперника вже в межі 3, і два щаблі різниці лягають у витримку, що важить мало. Відкрите питання до ПМ (П5, 11.11.2026).
+            // Піки сили (власник 06.11.2026: «Піки 70–80%») — на кожному рівні, де їх досить для заміру (≥ 60 матчів): «пік 2+» на
+            // місцевій і світовій трапляється 5–17 разів на 200 кар'єр (на місцевій його тримає MatchFeelTests).
+            foreach (var key in new[] { "реванш", "пік 2+" })
+            {
+                Assert.That(r.Rate(key), Is.InRange(0.70, 0.82), key + ", усі рівні");
+                for (int t = 1; t <= CareerContent.MaxTier; t++)
+                {
+                    string k = key + " t" + t;
+                    if (r.Wins.ContainsKey(k) && r.Wins[k][0] + r.Wins[k][1] + r.Wins[k][2] >= 60)
+                        Assert.That(r.Rate(k), Is.InRange(0.66, 0.86), key + ", рівень " + t);
+                }
+            }
+            foreach (int t in new[] { 1, 2, 3, 4 })
+                Assert.GreaterOrEqual(r.Wins["реванш t" + t][0] + r.Wins["реванш t" + t][1] + r.Wins["реванш t" + t][2], 60, "реваншів досить для заміру, рівень " + t);
+            foreach (int t in new[] { 2, 3 })
+                Assert.GreaterOrEqual(r.Wins["пік 2+ t" + t][0] + r.Wins["пік 2+ t" + t][1] + r.Wins["пік 2+ t" + t][2], 60, "«пік 2+» досить для заміру, рівень " + t);
             for (int t = 1; t <= CareerContent.MaxTier; t++)
             {
                 Assert.That(r.Rate("t" + t + " тижневі"), Is.InRange(0.48, 0.70), "тижневі, рівень " + t);
