@@ -24,7 +24,12 @@ namespace Game.Gameplay.Ring.UI
         private readonly List<ActionTile> _tiles = new List<ActionTile>();
         private Label _hint;
         private VisualElement _row, _head, _gold, _reasonBox, _ropes, _roleHead, _roleTag, _movesBox, _rightCol;
-        private ArenaPlate _movesPlate;
+        /// <summary>
+        /// Опис ролі на афіші, прийоми на папері (вузька панель) і темна картка прийомів (широка). На вузькій панелі (4:3) картка, що
+        /// росла вгору над канатами, лягала на рядки ТЕХНІКА / ВИТРИВАЛІСТЬ / ХАРИЗМА — рядок вільного бала не видно (огляд слоту 30,
+        /// ПМ). Тепер там відкриті «Прийоми» стають на папір замість опису ролі, а характеристики лишаються видимі (<see cref="Fit"/>).
+        /// </summary>
+        private VisualElement _desc, _paperMoves, _movesCard;
         private string _hintDefault = "";
         private TextField _nameField;
         private int _focusNameAfter = -1;
@@ -50,6 +55,14 @@ namespace Game.Gameplay.Ring.UI
         private GimmickView Current { get { foreach (var g in _v.Gimmicks) if (g.Def.Id == _d.Gimmick) return g; return _v.Gimmicks[0]; } }
 
         private int MoveCount() { int n = 0; foreach (var m in Current.StartMoves) n++; return n; }
+
+        /// <summary>Стартові прийоми ґіміка одним рядком через « · » (MenuKit.Body тримає «·» при слові перед ним — TextBreak).</summary>
+        private string MovesLine()
+        {
+            var names = new List<string>();
+            foreach (var m in Current.StartMoves) names.Add(T.Get(m.NameKey));
+            return string.Join(" · ", names);
+        }
 
         private static RingPath PathOf(CareerRole r) { return r == CareerRole.Hero ? RingPath.Face : RingPath.Heel; }
 
@@ -168,8 +181,8 @@ namespace Game.Gameplay.Ring.UI
             if (_ropes != null) _ropes.style.bottom = ArenaKit.RopesBottom + lift;
             if (_head != null) _head.style.bottom = ArenaKit.HeaderBottom + lift;
             
-            // «Прийоми» на вузькій панелі: під афішею місця до піднятих канатів немає — блок стоїть над канатами праворуч і
-            // росте вгору поверх низу афіші (картка над вкладкою), як шухляда тижня (кадр 4:3, 08.11.2026)
+            // «Прийоми» на вузькій панелі: під афішею місця до піднятих канатів немає — вкладка стоїть над канатами праворуч
+            // (кадр 4:3, 08.11.2026), а відкритий список — на папері замість опису ролі (нижче; огляд слоту 30)
             if (_movesBox != null && _rightCol != null && _movesBox.parent != (narrow ? Root : _rightCol))
             {
                 _movesBox.RemoveFromHierarchy();
@@ -189,13 +202,12 @@ namespace Game.Gameplay.Ring.UI
                     _rightCol.Add(_movesBox);
                 }
             }
-            // на вузькій панелі картка лежить поверх рядків характеристик: напівпрозора — крізь неї видно «+3», «Харизма»
-            // (кадр 4:3, 08.11.2026); непрозора там, де під нею афіша, напівпрозора — над 3D
-            if (_movesPlate != null)
-            {
-                _movesPlate.Fill = narrow ? RingTheme.Panel : RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaPlate);
-                _movesPlate.Redraw();
-            }
+            // на вузькій панелі відкриті «Прийоми» — на папері замість опису ролі, темна картка не показується: поверх афіші вона
+            // закривала рядки характеристик (огляд слоту 30, 4:3); вкладка лишається над канатами
+            bool paper = narrow && _paperMoves != null;
+            if (_desc != null) _desc.style.display = paper ? DisplayStyle.None : DisplayStyle.Flex;
+            if (_paperMoves != null) _paperMoves.style.display = paper ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_movesCard != null) _movesCard.style.display = paper ? DisplayStyle.None : DisplayStyle.Flex;
         }
 
         private ActionTile AddTile(int key, string title, string effect, Action act, string desc)
@@ -380,7 +392,7 @@ namespace Game.Gameplay.Ring.UI
             _movesBox.style.overflow = Overflow.Visible;
             _movesBox.pickingMode = PickingMode.Ignore;
             col.Add(_movesBox);
-            _movesPlate = null;
+            _movesCard = null;
             var tab = new TabPlate(T.Get("c.hub.create.moves"), MoveCount(), _moves, () => { _moves = !_moves; Refresh(); }, false);
             tab.style.alignSelf = Align.FlexStart;
             tab.style.marginTop = 24f;
@@ -390,19 +402,17 @@ namespace Game.Gameplay.Ring.UI
                 var card = new VisualElement();
                 card.style.marginTop = 8f;
                 card.style.overflow = Overflow.Visible;
-                _movesPlate = new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaPlate), Stripe = RingTheme.Gold, StripeW = 5f };
-                card.Add(_movesPlate);
+                card.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaPlate), Stripe = RingTheme.Gold, StripeW = 5f });
                 var wrap = new VisualElement();
                 wrap.style.paddingLeft = 20f; wrap.style.paddingRight = 26f; wrap.style.paddingTop = 8f; wrap.style.paddingBottom = 10f;
                 wrap.pickingMode = PickingMode.Ignore;
                 // одним рядком з переносом, як було: 10 прийомів стовпчиком заходили на канати й ряд плиток (рев'ю 08.11.2026)
-                var names = new List<string>();
-                foreach (var m in Current.StartMoves) names.Add(T.Get(m.NameKey));
-                var l = MenuKit.Body(string.Join(" · ", names), BrandTokens.TypeMinInfo, RingTheme.Text);
+                var l = MenuKit.Body(MovesLine(), BrandTokens.TypeMinInfo, RingTheme.Text);
                 l.style.whiteSpace = WhiteSpace.Normal;
                 wrap.Add(l);
                 card.Add(wrap);
                 _movesBox.Add(card);
+                _movesCard = card;
             }
             return col;
         }
@@ -431,6 +441,17 @@ namespace Game.Gameplay.Ring.UI
             var desc = MenuKit.Body(T.Get(roleKey), BrandTokens.TypeBody, RingTheme.Bg);
             desc.style.marginTop = 10f;
             col.Add(desc);
+            _desc = desc;
+            _paperMoves = null;
+            if (_moves)
+            {
+                var pm = MenuKit.Body(MovesLine(), BrandTokens.TypeMinInfo, RingTheme.Bg);
+                pm.style.whiteSpace = WhiteSpace.Normal;
+                pm.style.marginTop = 10f;
+                pm.style.display = DisplayStyle.None;   // показує Fit лише на вузькій панелі
+                col.Add(pm);
+                _paperMoves = pm;
+            }
 
             var line = new VisualElement();
             line.style.height = 2f; line.style.backgroundColor = RingTheme.Bg; line.style.marginTop = 10f; line.style.marginBottom = 8f;

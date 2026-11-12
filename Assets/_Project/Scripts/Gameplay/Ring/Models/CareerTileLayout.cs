@@ -123,6 +123,15 @@ namespace Game.Gameplay.Ring.Models
             if (float.IsNaN(panelH) || panelH <= 0f) panelH = PanelH;   // до першої розкладки — еталон
             return Math.Max(0f, RopesTop(panelH) - DevRopeClear - top);
         }
+        // ---- шухляда тижня («Розвиток», «Витрати») ----
+        /// <summary>
+        /// Низ шухляди — над канатами (відлік знизу, як канати): була на 164 + 50 = 214 при канатах 210–232, і на 4:3 канат різав її
+        /// низ разом із «▸ Усе (N)» (огляд слоту 30, ПМ). Ряд дій піднімає і канати, і шухляду на той самий lift.
+        /// </summary>
+        public const float DrawerBottom = RopesBottom + RopeH + DevRopeClear;
+        /// <summary>Шухляда: відступи прокрутки (лівий — від смужки 6), рядок «Розвиток» і підказка — у шапці над прокруткою.</summary>
+        public const float DrawerPadLeft = 18f, DrawerPadRight = 24f, DrawerScrollPadBottom = 4f;
+
         /// <summary>Кінець сезону: відступи шапки, прокрутки й підвалу (лівий — від смужки плити).</summary>
         public const float DevPadLeft = 20f, DevPadRight = 14f, DevHeadPadTop = 8f, DevHeadGap = 2f, DevScrollPadBottom = 4f;
         /// <summary>Підвал: перемикач «Усе (N)» і рядок-підказка — від прокрутки й до низу плити.</summary>
@@ -160,6 +169,36 @@ namespace Game.Gameplay.Ring.Models
         /// по висоті, і по ширині, — кегль меншає, доки рядок не стане над підказкою (кадри слоту 28: «КАР'ЄРУ» на «ENTER»).
         /// </summary>
         public const float GoldHintRight = 18f, GoldHintBottom = 10f, GoldHintGap = 4f;
+
+        // ---- клин тла титулу (MenuBackdrop, B01 §2) ----
+        /// <summary>
+        /// Клин звужується донизу: правий край на висоті y — <c>ww · (1 − WedgeTaper · y / H)</c>, ww = ширина панелі × частка клина.
+        /// </summary>
+        public const float WedgeTaper = 0.38f;
+        /// <summary>Частка клина титулу (права третина — рингу) і найбільша, до якої його розширює підпис на вузькій панелі.</summary>
+        public const float TitleWedge = 0.46f, TitleWedgeMax = 0.62f;
+        /// <summary>Від кінця підпису титулу до краю клина — не менше (на 4:3 підпис виходив за клин, кадр m4x3\053 слоту 30).</summary>
+        public const float TitleTagClear = 40f;
+
+        /// <summary>x правого краю клина на висоті y.</summary>
+        public static float WedgeEdge(float panelW, float panelH, float wedgeWidth, float y)
+        {
+            if (panelH <= 0f) return panelW * wedgeWidth;
+            return panelW * wedgeWidth * (1f - WedgeTaper * Math.Min(1f, Math.Max(0f, y / panelH)));
+        }
+
+        /// <summary>
+        /// Частка клина титулу, за якої підпис (правий край <paramref name="textRight"/>, низ <paramref name="textBottom"/>) лежить на
+        /// клині з запасом <see cref="TitleTagClear"/>: не менше <see cref="TitleWedge"/> (широкі панелі — без змін), не більше
+        /// <see cref="TitleWedgeMax"/>.
+        /// </summary>
+        public static float FitTitleWedge(float panelW, float panelH, float textRight, float textBottom)
+        {
+            if (panelW <= 0f || panelH <= 0f || textRight <= 0f) return TitleWedge;
+            float k = 1f - WedgeTaper * Math.Min(1f, Math.Max(0f, textBottom / panelH));
+            float need = (textRight + TitleTagClear) / (k * panelW);
+            return Math.Min(TitleWedgeMax, Math.Max(TitleWedge, need));
+        }
 
         /// <summary>Панель вузька: золота плита вужча, плитки (тиждень, створення) — двома рядами.</summary>
         public static bool Narrow(float panelWidth) { return panelWidth < NarrowWidth; }

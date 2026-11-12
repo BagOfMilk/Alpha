@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using Game.Core.Ring.Career;
 using Game.Gameplay.Ring.Models;
@@ -25,10 +26,15 @@ namespace Game.Tests.EditMode
         /// <summary>Пункт на папері підсумку (ShowKit.Bullet): папір 410 − відступи 26 і 24 − квадрат 11 і просвіт 8.</summary>
         private const float ResultBulletW = 410f - 26f - 24f - 11f - 8f;
 
+        /// <summary>Рядок сповіщення тижня (WeekScreenView.LastResult): смуга 410 − відступи 20 і 26.</summary>
+        private const float WeekNoteW = CareerTileLayout.StripW - 20f - 26f;
+
         private static bool StartsWithDash(string line)
         {
             return line.StartsWith("—", StringComparison.Ordinal) || line.StartsWith("–", StringComparison.Ordinal);
         }
+
+        private static bool StartsWithSeparator(string line) { return line.StartsWith("·", StringComparison.Ordinal); }
 
         [Test]
         public void GlueDashes_KeepsTheWordBeforeTheDash_WithIt()
@@ -48,6 +54,53 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(g, TextBreak.GlueDashes(g), "повторний виклик нічого не міняє");
             Assert.AreEqual(s, TextBreak.Strip(g), "без тегів — той самий текст, що бачить гравець");
             Assert.AreEqual(s.Split(' ').Length - 2, TtfMetrics.Units(g).Count, "слово з тире — одна одиниця переносу (два тире — дві склейки)");
+        }
+
+        /// <summary>Роздільник частин « · » тримається зі словом перед ним (огляд слоту 30, ПМ: «·» на початку рядка сповіщення).</summary>
+        [Test]
+        public void GlueDashes_KeepsTheWordBeforeTheSeparator_WithIt()
+        {
+            Assert.AreEqual("<nobr>+3 ·</nobr> ажіотаж +2", TextBreak.GlueDashes("+3 · ажіотаж +2"));
+            Assert.AreEqual("<nobr>Промо ·</nobr> кидок 11, Успіх <nobr>(10+) ·</nobr> ворожнеча <nobr>+1 ·</nobr> ажіотаж",
+                TextBreak.GlueDashes("Промо · кидок 11, Успіх (10+) · ворожнеча +1 · ажіотаж"), "кожен роздільник");
+            Assert.AreEqual("<nobr>Рух ·</nobr> <nobr>Удар —</nobr> так", TextBreak.GlueDashes("Рух · Удар — так"), "тире й роздільник в одному рядку");
+            Assert.AreEqual("а·б і 7·9", TextBreak.GlueDashes("а·б і 7·9"), "без пробілів довкола — не роздільник-слово");
+            Assert.AreEqual("· так", TextBreak.GlueDashes("· так"), "роздільник на самому початку тексту нема до чого клеїти");
+            Assert.IsTrue(TextBreak.IsSeparator("·"));
+            Assert.IsFalse(TextBreak.IsSeparator("а·б"));
+
+            string s = "Сезон 2 · тиждень 3 з 10 · ворожнеча +1";
+            string g = TextBreak.GlueDashes(s);
+            Assert.AreEqual(g, TextBreak.GlueDashes(g), "повторний виклик нічого не міняє");
+            Assert.AreEqual(s, TextBreak.Strip(g), "без тегів — той самий текст");
+            Assert.AreEqual(s.Split(' ').Length - 2, TtfMetrics.Units(g).Count, "слово з роздільником — одна одиниця переносу");
+        }
+
+        /// <summary>
+        /// Рядок сповіщення тижня з кадру слоту 30 (w_t2_a1080\016: «· ажіотаж на старті +2» з нового рядка), зібраний із тих самих
+        /// ключів, що WeekScreenView.ResultText: без правила модель відтворює ваду, з правилом — ні.
+        /// </summary>
+        [Test]
+        public void WeekNote_FromTheSlot30Frame_NeverStartsALineWithTheSeparator()
+        {
+            var t = RingText.FromJson(CareerKit.Read("ui_uk.json"));
+            string s = string.Join(" · ", new[]
+            {
+                t.Get("week.action.2"), t.Format("c.roll", 11, "+ 0", 11, "Успіх (10+)"),
+                t.Format("c.delta.feud", "+1"), t.Format("c.delta.hype", "+2"),
+            });
+            float widest;
+            bool reproduced = false;
+            var bad = new List<string>();
+            foreach (var font in new[] { Regular, Semi })
+                for (float w = WeekNoteW - 60f; w <= WeekNoteW + 60f; w += 2f)
+                {
+                    if (font.Wrap(s, BrandTokens.TypeMinInfo, w, 0f, out widest).Skip(1).Any(StartsWithSeparator)) reproduced = true;
+                    var glued = font.Wrap(TextBreak.GlueDashes(s), BrandTokens.TypeMinInfo, w, 0f, out widest);
+                    if (glued.Skip(1).Any(StartsWithSeparator)) bad.Add(w + ": " + string.Join(" / ", glued));
+                }
+            Assert.IsTrue(reproduced, "без правила модель має відтворити ваду кадру хоч на одній ширині: " + s);
+            Assert.IsEmpty(bad, string.Join("\n", bad));
         }
 
         /// <summary>
@@ -96,6 +149,36 @@ namespace Game.Tests.EditMode
                             }
                 }
             Assert.Greater(checkedTexts, 20, "текстів із тире-словом — десятки; менше — розбір JSON зламався");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Усі рядки текстів із роздільником « · » (ui_uk.json, strings_uk.json) — так само: жоден рядок, крім першого, не починається з «·».
+        /// </summary>
+        [Test]
+        public void EveryText_WithASpacedSeparator_NeverStartsALineWithIt()
+        {
+            var bad = new List<string>();
+            int checkedTexts = 0;
+            foreach (var file in new[] { "ui_uk.json", "strings_uk.json" })
+                foreach (var v in Values(CareerKit.Read(file)))
+                {
+                    if (v.IndexOf(" · ", StringComparison.Ordinal) < 0) continue;
+                    checkedTexts++;
+                    string s = Regex.Replace(v, @"\{\d+(:[^}]*)?\}", "10");
+                    string g = TextBreak.GlueDashes(s);
+                    foreach (var font in new[] { Regular, Semi })
+                        foreach (var size in new[] { BrandTokens.TypeMinInfo, 17f })
+                            for (float w = 120f; w <= 720f; w += 3f)
+                            {
+                                float widest;
+                                var lines = font.Wrap(g, size, w, 0f, out widest);
+                                for (int i = 1; i < lines.Count; i++)
+                                    if (StartsWithSeparator(lines[i]) && bad.Count < 20)
+                                        bad.Add(string.Format(CultureInfo.InvariantCulture, "{0}: «{1}» — рядок {2} з «·» ({3}, {4:0})", file, v, i + 1, size, w));
+                            }
+                }
+            Assert.Greater(checkedTexts, 20, "текстів із роздільником — десятки; менше — розбір JSON зламався");
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
 

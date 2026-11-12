@@ -63,6 +63,67 @@ namespace Game.Tests.EditMode
 
         private static string Caps(string s) { return s.ToUpperInvariant(); }
 
+        // ---------------- огляд слоту 30 ----------------
+
+        /// <summary>Шухляда тижня — над канатами (була на 214 при канатах 210–232: канат різав «▸ Усе (N)» на 4:3, огляд слоту 30).</summary>
+        [Test]
+        public void WeekDrawer_SitsAboveTheRopes()
+        {
+            Assert.GreaterOrEqual(CareerTileLayout.DrawerBottom, CareerTileLayout.RopesBottom + CareerTileLayout.RopeH);
+            Assert.GreaterOrEqual(CareerTileLayout.DrawerScrollPadBottom, 0f);
+        }
+
+        /// <summary>
+        /// Клин тла титулу: на 16:9 — без змін (0,46), на 4:3 підпис «МІСЦЕВА ФЕДЕРАЦІЯ · …» лежить на клині з запасом
+        /// (кадр m4x3\053 слоту 30: виходив за край). Підпис — Display700 18 з розрядкою 0,14, великими; лівий край 95, верх 240.
+        /// </summary>
+        [Test]
+        public void TitleWedge_CoversTheTagline_OnEveryPanel()
+        {
+            string sub = Caps(Ui("m.title.sub"));
+            // Ширина підпису між двома межами моделі: без розрядки (401) і з повною розрядкою 0,14 × кегль (525); у кадрі 16:9 слоту 30 —
+            // 427 (рушій ставить розрядку вужчою). Гра міряє сам підпис (layout.xMax), тож тут — обидві межі.
+            float bottom = 240f + LegendFont.LineHeight(18f);
+            float low = 95f + LegendFont.Width(sub, 18f, 0f), right = 95f + LegendFont.Width(sub, 18f, 0.14f) + RenderSlack;
+            Assert.AreEqual(CareerTileLayout.TitleWedge, CareerTileLayout.FitTitleWedge(1600f, 900f, low, bottom), 1e-4f, "16:9 — без змін");
+            Assert.AreEqual(CareerTileLayout.TitleWedge, CareerTileLayout.FitTitleWedge(1600f, 900f, 95f + 427f, bottom), 1e-4f, "16:9, ширина з кадру — без змін");
+            foreach (var p in Panels)
+            {
+                float w = CareerTileLayout.FitTitleWedge(p.Value, 900f, right, bottom);
+                Assert.That(w, Is.InRange(CareerTileLayout.TitleWedge, CareerTileLayout.TitleWedgeMax), p.Key);
+                Assert.GreaterOrEqual(CareerTileLayout.WedgeEdge(p.Value, 900f, w, bottom) + 0.01f, right + CareerTileLayout.TitleTagClear,
+                    p.Key + ": кінець підпису з запасом на клині (" + right.ToString("0", CultureInfo.InvariantCulture) + ")");
+            }
+            Assert.Greater(CareerTileLayout.FitTitleWedge(1200f, 900f, 95f + 427f, bottom), CareerTileLayout.TitleWedge, "4:3, ширина з кадру — клин ширший (вада кадру m4x3\\053)");
+        }
+
+        /// <summary>
+        /// Створення на вузькій панелі: відкриті «Прийоми» стають на папір афіші замість опису ролі (огляд слоту 30: темна картка
+        /// лягала на рядки характеристик). Папір не росте більше ніж на рядок понад опис — для кожного ґіміка й обох ролей.
+        /// Ширина тексту афіші — смуга 410 − відступи 26 і 22.
+        /// </summary>
+        [Test]
+        public void CreatePaperMoves_AreNoTallerThanTheRoleDescription_PlusOneLine()
+        {
+            const float paperW = CareerTileLayout.StripW - 26f - 22f - RenderSlack;
+            var rt = RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json"));
+            var view = CareerKit.NewAtCreate(1).GetCreationView();
+            float widest;
+            float descH = float.MaxValue;
+            foreach (var key in new[] { "role.hero.desc", "role.villain.desc" })
+                descH = Math.Min(descH, TextFont.Lines(TextBreak.GlueDashes(Ui(key)), BrandTokens.TypeBody, paperW, 0f, out widest) * TextFont.LineHeight(BrandTokens.TypeBody));
+            Assert.Greater(view.Gimmicks.Count, 0);
+            foreach (var g in view.Gimmicks)
+            {
+                var names = new List<string>();
+                foreach (var m in g.StartMoves) names.Add(rt.Get(m.NameKey));
+                string line = string.Join(" · ", names);
+                int n = TextFont.Lines(TextBreak.GlueDashes(line), Body, paperW, 0f, out widest);
+                Assert.LessOrEqual(widest, paperW, g.Def.Key + ": рядок прийомів ширший за папір");
+                Assert.LessOrEqual(n * TextFont.LineHeight(Body), descH + TextFont.LineHeight(Body), g.Def.Key + ": прийомів " + n + " рядків — «" + line + "»");
+            }
+        }
+
         // ---------------- тиждень ----------------
 
         /// <summary>Шість дій тижня (як у WeekScreenView) — назва і всі можливі тексти ефекту, ризику й причини, найгіршими числами.</summary>

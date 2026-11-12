@@ -9,6 +9,10 @@ namespace Game.Gameplay.Ring.Models
     /// у Fixel немає, тож разом їх тримає тег UI Toolkit <c>&lt;nobr&gt;</c> («Keep a segment of text together», підтримувані теги
     /// rich text Unity 6). Розрив лишається після тире. Кличуть <c>MenuKit.Body</c> і всі, хто ставить текст підказки; ту саму
     /// функцію міряє модель переносів у тестах (<c>TtfMetrics.Lines</c> розуміє <c>&lt;nobr&gt;</c>).
+    /// <para>
+    /// Те саме для роздільника частин « · » (огляд слоту 30, ПМ: рядок-сповіщення тижня переносився на «· ажіотаж на старті +2»):
+    /// крапка-роздільник рядка не починає, розрив — після неї.
+    /// </para>
     /// </summary>
     public static class TextBreak
     {
@@ -17,6 +21,12 @@ namespace Game.Gameplay.Ring.Models
         /// <summary>Тире, що стоїть окремим словом (з пробілами з обох боків): «—» і «–». Діапазон «7–9» — без пробілів, не чіпаємо.</summary>
         public static bool IsDash(string token) { return token == "—" || token == "–"; }
 
+        /// <summary>Роздільник частин «·», що стоїть окремим словом. «а·б» без пробілів — не роздільник-слово.</summary>
+        public static bool IsSeparator(string token) { return token == "·"; }
+
+        /// <summary>Знак, що рядка не починає: тире або роздільник.</summary>
+        private static bool IsGlueMark(string token) { return IsDash(token) || IsSeparator(token); }
+
         /// <summary>
         /// «… популярність — удруге …» → «… &lt;nobr&gt;популярність —&lt;/nobr&gt; удруге …». Текст, що вже має теги
         /// <c>&lt;nobr&gt;</c>, і текст без окремого тире повертається як є (повторний виклик нічого не міняє).
@@ -24,13 +34,14 @@ namespace Game.Gameplay.Ring.Models
         public static string GlueDashes(string s)
         {
             if (string.IsNullOrEmpty(s) || s.IndexOf(Open, StringComparison.Ordinal) >= 0) return s;
-            if (s.IndexOf(" —", StringComparison.Ordinal) < 0 && s.IndexOf(" –", StringComparison.Ordinal) < 0) return s;
+            if (s.IndexOf(" —", StringComparison.Ordinal) < 0 && s.IndexOf(" –", StringComparison.Ordinal) < 0
+                && s.IndexOf(" ·", StringComparison.Ordinal) < 0) return s;
             var t = s.Split(' ');
             var sb = new StringBuilder(s.Length + 16);
             for (int i = 0; i < t.Length; i++)
             {
                 if (i > 0) sb.Append(' ');
-                if (t[i].Length > 0 && i + 1 < t.Length && IsDash(t[i + 1]) && !IsDash(t[i]))
+                if (t[i].Length > 0 && i + 1 < t.Length && IsGlueMark(t[i + 1]) && !IsGlueMark(t[i]))
                 {
                     sb.Append(Open).Append(t[i]).Append(' ').Append(t[i + 1]).Append(Close);
                     i++;

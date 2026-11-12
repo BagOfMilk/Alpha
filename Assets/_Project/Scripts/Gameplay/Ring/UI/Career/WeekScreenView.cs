@@ -167,12 +167,12 @@ namespace Game.Gameplay.Ring.UI
             if (_header != null) _header.style.bottom = ArenaKit.HeaderBottom + lift;
             if (_drawer != null)
             {
-                _drawer.style.bottom = ArenaKit.HeaderBottom + 50f + lift;
+                _drawer.style.bottom = CareerTileLayout.DrawerBottom + lift;
                 // шухляда не закриває афішу (гонорар, план, суперник), доки під нею лишається >= DrawerMinRoom — далі список
                 // прокручується; менше — лише до стрічки суперника (рев'ю 08.11.2026; поріг 260 при 4:3 клав шухляду на план букера
                 // і суперника — кадри слоту 27, 09.11.2026)
                 float height = Root.layout.height;
-                float bottomY = height - (ArenaKit.HeaderBottom + 50f + lift);
+                float bottomY = height - (CareerTileLayout.DrawerBottom + lift);
                 bool posterReady = _poster != null && !float.IsNaN(_poster.layout.height) && _poster.layout.height > 0f;
                 if (posterReady && !float.IsNaN(height))
                 {
@@ -387,7 +387,7 @@ namespace Game.Gameplay.Ring.UI
         /// <summary>Шухляда «Розвиток»/«Витрати» (B03 §3): виростає вгору над шапкою ряду, ряд дій не рухається; закривають вкладка й Esc (<see cref="OnBack"/>).</summary>
         private VisualElement Drawer()
         {
-            var box = ArenaKit.Abs(null, null, ArenaKit.Edge, ArenaKit.HeaderBottom + 50f, 560f, null);
+            var box = ArenaKit.Abs(null, null, ArenaKit.Edge, CareerTileLayout.DrawerBottom, 560f, null);   // над канатами (огляд слоту 30)
             box.style.maxHeight = 430f;   // уточнює Fit: не вище афіші, якщо під нею є місце
             box.style.overflow = Overflow.Visible;
             box.style.flexDirection = FlexDirection.Column;
@@ -413,13 +413,19 @@ namespace Game.Gameplay.Ring.UI
             box.Add(top);
             var scroll = new ScrollView(ScrollViewMode.Vertical);
             ArenaKit.ThinScroller(scroll);
-            scroll.style.flexShrink = 1f; scroll.style.minHeight = 60f;
-            scroll.style.paddingLeft = 18f; scroll.style.paddingRight = 24f; scroll.style.paddingBottom = 10f;
-            var content = _dev ? DevelopmentPanel(Refresh, 2) : ShopPanel();
+            scroll.style.flexShrink = 1f; scroll.style.minHeight = CareerTileLayout.DevScrollMinH;
+            scroll.style.paddingLeft = CareerTileLayout.DrawerPadLeft; scroll.style.paddingRight = CareerTileLayout.DrawerPadRight;
+            scroll.style.paddingBottom = _dev ? CareerTileLayout.DrawerScrollPadBottom : 10f;
+            // «▸ Усе (N)» — у підвалі під прокруткою, як на плитах розвитку: край прокрутки і канат різали його (огляд слоту 30, 4:3);
+            // рядок-підказка шухляди — у шапці, тож підвал лише з перемикачем
+            var foot = _dev ? DevFooter(CareerTileLayout.DrawerPadLeft + CareerTileLayout.DevCardPad, CareerTileLayout.DrawerPadRight + CareerTileLayout.DevCardPad,
+                CareerTileLayout.DevFootPadBottom) : null;
+            var content = _dev ? DevelopmentPanel(Refresh, 2, moreTo: foot) : ShopPanel();
             content.style.backgroundColor = Color.clear;
             content.style.borderTopWidth = 0f; content.style.borderBottomWidth = 0f; content.style.borderLeftWidth = 0f; content.style.borderRightWidth = 0f;
             scroll.Add(content);
             box.Add(scroll);
+            if (foot != null) { box.Add(foot); ScrollToDevAll(scroll); }   // щойно розгорнутий «Усе» — до початку повного списку
             _drawerScroll = scroll;
             var restore = _drawerOffset;
             bool restored = restore.x == 0f && restore.y == 0f;

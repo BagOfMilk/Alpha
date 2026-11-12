@@ -227,7 +227,8 @@ namespace Game.Gameplay.Ring.UI.Menus
                 RingTheme.WithAlpha(RingTheme.Bg, Scrim));
             float ww = W * WedgeWidth;
             // клин: широкий угорі, звужується донизу — діагональ «удару»
-            var wedge = new[] { new Vector2(0, 0), new Vector2(ww, 0), new Vector2(ww * 0.62f, H), new Vector2(0, H) };
+            float wb = ww * (1f - CareerTileLayout.WedgeTaper);   // низ клина (той самий край, що CareerTileLayout.WedgeEdge)
+            var wedge = new[] { new Vector2(0, 0), new Vector2(ww, 0), new Vector2(wb, H), new Vector2(0, H) };
             MenuShapes.Polygon(p, wedge, RingTheme.WithAlpha(MenuPalette.Wedge, WedgeAlpha));
             // темна смуга вздовж краю клина — читабельність тексту на ньому (ACC-03)
             var inner = new[] { new Vector2(0, 0), new Vector2(ww * 0.86f, 0), new Vector2(ww * 0.50f, H), new Vector2(0, H) };
@@ -240,7 +241,7 @@ namespace Game.Gameplay.Ring.UI.Menus
                 for (int j = 0; j < rows; j++)
                 {
                     float y = j * step;
-                    float edge = ww + (ww * 0.62f - ww) * (y / H);   // x краю клина на висоті y
+                    float edge = ww + (wb - ww) * (y / H);   // x краю клина на висоті y
                     float x0 = edge - step * 4f, x1 = edge + step * 7f;
                     int i = 0;
                     for (float x = x0 + (j % 2 == 0 ? 0f : step * 0.5f); x < x1; x += step, i++)

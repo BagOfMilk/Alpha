@@ -543,5 +543,74 @@ namespace Game.Tests.EditMode
             Assert.GreaterOrEqual(calls, 4, "викликів PathName в екранах кар'єри менше, ніж стрічки героя й суперника та дві на створенні");
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
+
+        /// <summary>
+        /// Правки огляду слоту 30 (ПМ, 12.11.2026) стоять в екранах: шухляда — над
+        /// канатами з «Усе (N)» у підвалі, «Прийоми» створення на папері на вузькій панелі, тост налаштувань гасне при зміні
+        /// вкладки, клин титулу підганяється під підпис.
+        /// </summary>
+        [Test]
+        public void Sources_Slot30Review_FixesAreWiredIntoTheScreens()
+        {
+            string ui = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI");
+            string show = File.ReadAllText(Path.Combine(ui, "Career", "ShowScreens.cs"));
+            string week = File.ReadAllText(Path.Combine(ui, "Career", "WeekScreenView.cs"));
+            string create = File.ReadAllText(Path.Combine(ui, "Career", "CreateScreenView.cs"));
+            string settings = File.ReadAllText(Path.Combine(ui, "Menus", "SettingsPanel.cs"));
+            string title = File.ReadAllText(Path.Combine(ui, "Menus", "TitleMenuView.cs"));
+            string shapes = File.ReadAllText(Path.Combine(ui, "Menus", "MenuShapes.cs"));
+            var bad = new List<string>();
+            if (week.Contains("HeaderBottom + 50f")) bad.Add("WeekScreenView: шухляда знову на старому низу (214, у канатах)");
+            if (Regex.Matches(week, Regex.Escape("CareerTileLayout.DrawerBottom")).Count < 3) bad.Add("WeekScreenView: низ шухляди (створення й Fit) — не DrawerBottom");
+            if (!week.Contains("DevelopmentPanel(Refresh, 2, moreTo: foot)")) bad.Add("WeekScreenView: «Усе (N)» шухляди не в підвалі");
+            if (!Regex.IsMatch(create, @"bool paper = narrow && _paperMoves != null;")) bad.Add("CreateScreenView: прийоми на папері не залежать від вузької панелі");
+            if (!create.Contains("_desc.style.display = paper ? DisplayStyle.None : DisplayStyle.Flex")) bad.Add("CreateScreenView: опис ролі не ховається під прийоми");
+            if (!create.Contains("_movesCard.style.display = paper ? DisplayStyle.None : DisplayStyle.Flex")) bad.Add("CreateScreenView: темна картка прийомів лишається на вузькій панелі");
+            var swap = Regex.Match(settings, @"void SwitchTab\([^)]*\)\s*\{(?<body>[\s\S]*?)\n        \}");
+            if (!swap.Success || !swap.Groups["body"].Value.Contains("ClearToast();")) bad.Add("SettingsPanel: SwitchTab не гасить тост попередньої вкладки");
+            if (!title.Contains("CareerTileLayout.FitTitleWedge(")) bad.Add("TitleMenuView: клин не підганяється під підпис");
+            if (Regex.Matches(title, @"RegisterCallback<GeometryChangedEvent>\(e => FitWedge\(\)\)").Count < 2) bad.Add("TitleMenuView: FitWedge не на зміні геометрії підпису й панелі");
+            if (!shapes.Contains("CareerTileLayout.WedgeTaper") || shapes.Contains("ww * 0.62f")) bad.Add("MenuBackdrop: звуження клина — не з CareerTileLayout.WedgeTaper");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>Титри — без шляхів до файлів репозиторію (огляд слоту 30, ПМ: «Assets/ThirdParty/…», «tools/ring_audio» у титрах).</summary>
+        [Test]
+        public void Credits_ShowNoRepositoryPaths()
+        {
+            var t = MiniJson.ParseObject(CareerKit.Read("ui_uk.json"));
+            var bad = new List<string>();
+            int n = 0;
+            foreach (var kv in t)
+            {
+                if (!kv.Key.StartsWith("m.credits.", System.StringComparison.Ordinal)) continue;
+                n++;
+                string v = kv.Value as string ?? "";
+                if (Regex.IsMatch(v, @"[\w.-]+/[\w./-]+|\\|\.(md|cs|json|txt)\b")) bad.Add(kv.Key + ": " + v);
+            }
+            Assert.Greater(n, 6, "ключів титрів — понад шість; менше — розбір зламався");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Тексти кар'єри й меню (c.*, week.*, m.*) звертаються на «ти»: «обери рядок», не «оберіть» (огляд слоту 30). Мітки бою
+        /// («unavail.*: Ви в різних зонах») — зона бою, тут не перевіряються.
+        /// </summary>
+        [Test]
+        public void CareerAndMenuTexts_SpeakInTheSecondPersonSingular()
+        {
+            StringAssert.StartsWith("обери", T.Get("c.hub.create.pick"));
+            var t = MiniJson.ParseObject(CareerKit.Read("ui_uk.json"));
+            var plural = new Regex(@"(?i)\b(оберіть|виберіть|натисніть|спробуйте|ви|вас|вам|ваш\w*)\b");
+            var bad = new List<string>();
+            foreach (var kv in t)
+            {
+                if (!(kv.Key.StartsWith("c.", System.StringComparison.Ordinal) || kv.Key.StartsWith("week.", System.StringComparison.Ordinal)
+                      || kv.Key.StartsWith("m.", System.StringComparison.Ordinal))) continue;
+                string v = kv.Value as string ?? "";
+                if (plural.IsMatch(v)) bad.Add(kv.Key + ": " + v);
+            }
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
     }
 }
