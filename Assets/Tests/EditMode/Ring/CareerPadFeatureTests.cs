@@ -95,5 +95,39 @@ namespace Game.Tests.EditMode
             if (padPolls != 1) bad.Add("PollCareerPad: викликів " + padPolls + ", має бути рівно один — у гілці CareerInputRoute.Pad");
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
+
+        /// <summary>
+        /// Наведення мишею на цілі кар'єри — лише через <c>PadFocus.Hover</c> (аудит P3, 11.11.2026): інакше, коли гравець знову
+        /// бере мишу, елемент під нерухомим курсором лишався б без підсвіту; а екран без фокуса без миші знімає режим
+        /// (<c>PadFocus.Release</c>), щоб наведення там діяло.
+        /// </summary>
+        [Test]
+        public void Sources_MouseHover_GoesThroughPadFocus()
+        {
+            string ring = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring");
+            var bad = new List<string>();
+            bool released = false;
+            // екрани з цілями фокусу (PadTargets) і їхні складники: кнопки RingUi, CareerScreenView, плитки й плити «Арени»
+            var career = new HashSet<string> { "RingUi.cs", "CareerScreens.cs", "EndingScreenView.cs", "FeudScreenView.cs", "PromoScreenView.cs" };
+            foreach (var file in Directory.GetFiles(ring, "*.cs", SearchOption.AllDirectories))
+            {
+                string name = Path.GetFileName(file);
+                bool careerUi = career.Contains(name) || (file.Replace('\\', '/').Contains("/UI/Career/") && name != "PadFocus.cs");
+                string[] lines = File.ReadAllLines(file);
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    string code = lines[i].Trim();
+                    if (code.StartsWith("//")) continue;
+                    if (name == "RingGameBootstrap.Menus.cs" && code.StartsWith("if (route == CareerInputRoute.Menu || route == CareerInputRoute.Legacy) PadFocus.Release();"))
+                        released = true;
+                    if (name != "PadFocus.cs" && code.Contains("MouseMayHover"))
+                        bad.Add(name + ":" + (i + 1) + " — наведення повз PadFocus.Hover");
+                    if (careerUi && (code.Contains("PointerEnterEvent") || code.Contains("PointerLeaveEvent")))
+                        bad.Add(name + ":" + (i + 1) + " — сире наведення на екрані кар'єри (лише PadFocus.Hover)");
+                }
+            }
+            if (!released) bad.Add("RingGameBootstrap.Menus.cs: маршрути «меню» й «старі клавіші» не знімають режим (PadFocus.Release)");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
     }
 }

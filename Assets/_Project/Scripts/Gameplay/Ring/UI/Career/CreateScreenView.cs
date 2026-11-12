@@ -26,6 +26,17 @@ namespace Game.Gameplay.Ring.UI
         private VisualElement _row, _head, _gold, _reasonBox, _ropes, _roleHead, _roleTag, _movesBox, _rightCol;
         private ArenaPlate _movesPlate;
         private string _hintDefault = "";
+        private TextField _nameField;
+        private int _focusNameAfter = -1;
+
+        /// <summary>Курсор у поле імені — кадром пізніше за натискання, що його попросило (ціль фокусу «name»).</summary>
+        public override void Tick(float unscaledDeltaTime)
+        {
+            base.Tick(unscaledDeltaTime);
+            if (_focusNameAfter < 0 || Time.frameCount <= _focusNameAfter) return;
+            _focusNameAfter = -1;
+            if (_nameField != null && _nameField.panel != null) _nameField.Focus();
+        }
 
         public CreateScreenView(RingUiContext ctx) : base(ctx)
         {
@@ -245,8 +256,10 @@ namespace Game.Gameplay.Ring.UI
                 input.style.paddingLeft = 6f;
             }
             well.Add(field);
-            // ціль фокусу без миші: A / Enter ставить курсор у поле (друкувати — з клавіатури); ранг 5 — першою стає плитка ґіміка
-            PadMark.Mark(well, () => field.Focus(), "name", 5);
+            // ціль фокусу без миші: A / Enter ставить курсор у поле (друкувати — з клавіатури); ранг 5 — першою стає плитка ґіміка.
+            // Курсор — наступного кадру: інакше той самий Enter доходив би вже до поля (аудит P3, 11.11.2026)
+            PadMark.Mark(well, () => _focusNameAfter = Time.frameCount, "name", 5);
+            _nameField = field;
             var under = ArenaKit.Abs(0f, null, 0f, 0f, null, 3f);
             under.style.backgroundColor = RingTheme.Gold;
             well.Add(under);

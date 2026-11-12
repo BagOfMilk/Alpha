@@ -368,6 +368,8 @@ namespace UnityEngine.UIElements
 
     // ---------------- елементи ----------------
 
+    public interface IPanel { }
+
     public class VisualElement : Focusable
     {
         private readonly IStyle _style = new InlineStyleStub();
@@ -388,6 +390,7 @@ namespace UnityEngine.UIElements
         public UnityEngine.Rect contentRect { get { return default(UnityEngine.Rect); } }
         public UnityEngine.Rect layout { get { return default(UnityEngine.Rect); } }
         public VisualElement parent { get { return null; } }
+        public IPanel panel { get { return null; } }
         public int childCount { get { return 0; } }
         public VisualElement this[int index] { get { return null; } }
         public void Remove(VisualElement element) { }

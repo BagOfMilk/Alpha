@@ -112,6 +112,27 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void Restore_KeyGone_NearestToWhereFocusWas_ElseWaitsForLayout()
+        {
+            // шухляда «Розвиток»: куплену перевагу (рядок 3) прибрано зі списку — фокус на сусіда, а не на першу плитку тижня
+            var s = Week();
+            for (int i = 0; i < 7; i++) s.Add(S("dev:perk:" + (i < 3 ? i : i + 1), 900f, 200f + i * 44f, 420f, 40f));
+            float cx = 900f + 210f, cy = 200f + 3 * 44f + 20f;     // центр рядка 3 до покупки
+            Assert.AreEqual("dev:perk:4", s[PadNavMath.Restore(s, "dev:perk:3", cx, cy)].Key, "ключа немає — найближча до місця фокусу");
+            Assert.AreEqual(0, PadNavMath.Restore(s, "dev:perk:3", float.NaN, float.NaN), "місце невідоме — за замовчуванням");
+            Assert.AreEqual(0, PadNavMath.Restore(s, "dev:perk:3"), "старий виклик — як був");
+
+            var off = new List<PadSlot> { S("x", 0, 0, 10, 10, false), S("y", 100, 0, 10, 10) };
+            Assert.AreEqual(1, PadNavMath.Restore(off, "gone", 5f, 5f), "недоступна найближча пропускається");
+
+            // щойно перебудовані цілі ще без розкладки — чекати кадр, а не стрибати на першу плитку
+            var fresh = new List<PadSlot> { S("a", float.NaN, float.NaN), S("b", float.NaN, float.NaN) };
+            Assert.AreEqual(PadNavMath.WaitLayout, PadNavMath.Restore(fresh, "gone", 10f, 10f));
+            Assert.AreEqual(1, PadNavMath.Restore(fresh, "b", 10f, 10f), "ключ є — розкладка не потрібна");
+            Assert.AreEqual(-1, PadNavMath.Restore(new List<PadSlot>(), "gone", 10f, 10f), "порожній екран — нікуди, не чекати");
+        }
+
+        [Test]
         public void ScrollToShow_BringsTheItemIntoTheDrawer()
         {
             // вікно шухляди 300 заввишки з 100; рядок 40

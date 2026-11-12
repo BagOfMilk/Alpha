@@ -273,7 +273,10 @@ namespace Game.Gameplay.Ring
             var nav = _view as IMenuNavigable;
             if (nav == null && _view == null) return false;
             // кому ввід кадру — чиста модель (тест CareerPadFeatureTests): у М1 фокус без миші вимкнений, поле імені — завжди друк
-            switch (CareerPadFeature.Route(nav != null, nav == null && Typing, nav == null && _view.PadEnabled))
+            var route = CareerPadFeature.Route(nav != null, nav == null && Typing, nav == null && _view.PadEnabled);
+            // екран без фокуса без миші — режим знімається, інакше наведення мишею там не діяло б (аудит P3, 11.11.2026)
+            if (route == CareerInputRoute.Menu || route == CareerInputRoute.Legacy) PadFocus.Release();
+            switch (route)
             {
                 case CareerInputRoute.Menu:
                     _menuInput.Poll(nav, Time.unscaledDeltaTime);
@@ -373,6 +376,8 @@ namespace Game.Gameplay.Ring
                     case RingAction.Right: pad.Move(PadDir.Right); Consumed = true; return;
                     case RingAction.Confirm:
                         if (RingMenuInput.StartDown()) return;     // Start — пауза (старий шлях)
+                        // A в полі імені — лише вийти з поля, фокус на ньому ж: Activate поставив би курсор назад (аудит P3, 11.11.2026)
+                        if (_typing) { pad.Show(); Consumed = true; return; }
                         if (pad.Activate()) { Consumed = true; return; }
                         if (device == MenuDevice.Gamepad) { pad.Show(); Consumed = true; }  // перше A лише показує фокус
                         return;

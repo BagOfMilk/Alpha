@@ -67,8 +67,8 @@ namespace Game.Gameplay.Ring.UI
             b.style.borderLeftWidth = 3f;
             if (!string.IsNullOrEmpty(hint))
             {
-                b.RegisterCallback<PointerEnterEvent>(e => { if (HintLine != null && PadFocus.MouseMayHover) { HintLine.text = hint; HintLine.style.color = RingUi.Text; } });
-                b.RegisterCallback<PointerLeaveEvent>(e => { if (HintLine != null && PadFocus.MouseMayHover) { HintLine.text = ""; } });
+                PadFocus.Hover(b, () => { if (HintLine != null) { HintLine.text = hint; HintLine.style.color = RingUi.Text; } },
+                    () => { if (HintLine != null) HintLine.text = ""; });
                 // фокус без миші показує той самий опис (і причину недоступності), що й наведення (аудит P3 геймпад, 11.11.2026)
                 PadMark.AddHot(b, on => { if (HintLine == null) return; HintLine.text = on ? hint : ""; if (on) HintLine.style.color = RingUi.Text; });
             }
@@ -173,7 +173,7 @@ namespace Game.Gameplay.Ring.UI
             }
             else card.Add(RingUi.Lbl(T.Get("c.dev.none"), 12f, RingUi.Dim));
 
-            var more = Small((_devAll ? "▾ " : "▸ ") + T.Format("c.dev.all", all), () => { _devAll = !_devAll; changed(); }, true, null);
+            var more = RingUi.PadKey(Small((_devAll ? "▾ " : "▸ ") + T.Format("c.dev.all", all), () => { _devAll = !_devAll; changed(); }, true, null), "dev:all");
             more.style.marginTop = 4f;
             card.Add(more);
             if (!_devAll) return card;
@@ -188,6 +188,7 @@ namespace Game.Gameplay.Ring.UI
                 int v = C.Player.Get(a);
                 var b = Small(RingLabels.AttrName(T, a) + " " + Signed(v) + " → " + Signed(v + 1), () => { C.BuyAttr(a); changed(); }, can, null,
                     T.Format("dev.attr.buy", Development.AttrCost) + " — " + T.Get("c.dev.attr.why." + i) + (can ? "" : " · " + T.Get("dev.reason." + reason)));
+                RingUi.PadKey(b, "dev:attr:" + i);
                 b.style.marginRight = 4f;
                 attrs.Add(b);
             }
@@ -205,6 +206,7 @@ namespace Game.Gameplay.Ring.UI
                 string id = m.Id;
                 var b = Small(T.Get(m.NameKey) + " · " + m.Cost, () => { C.LearnMove(id); changed(); }, can, RingUi.Warn,
                     T.Format("c.dev.move.why", RingLabels.ActionName(T, m.Action)) + " — " + T.Format("dev.cost", m.Cost));
+                RingUi.PadKey(b, "dev:move:" + id);
                 b.style.marginRight = 4f;
                 mrow.Add(b);
                 mc++;
@@ -221,6 +223,7 @@ namespace Game.Gameplay.Ring.UI
                 var b = Small(RingLabels.PerkName(T, id) + " · " + p.Cost, () => { C.BuyPerk(id); changed(); }, can,
                     p.Path.HasValue ? RingUi.PathColor(p.Path.Value) : RingUi.Gold,
                     RingLabels.PerkDesc(T, id) + (can ? "" : " · " + T.Get("dev.reason." + reason)));
+                RingUi.PadKey(b, "dev:perk:" + id);
                 b.style.marginRight = 4f;
                 prow.Add(b);
                 pc++;

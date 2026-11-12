@@ -537,8 +537,7 @@ namespace Game.Gameplay.Ring.UI
             _check.style.right = 50f; _check.style.top = 14f;   // ліворуч від ключа: унизу лягала на рядок ефекту (кадр 4:3)
             _check.style.display = DisplayStyle.None;
             _face.Add(_check);
-            RegisterCallback<PointerEnterEvent>(e => { if (PadFocus.MouseMayHover && OnHover != null) OnHover(); });
-            RegisterCallback<PointerLeaveEvent>(e => { if (PadFocus.MouseMayHover && OnUnhover != null) OnUnhover(); });
+            PadFocus.Hover(this, () => { if (OnHover != null) OnHover(); }, () => { if (OnUnhover != null) OnUnhover(); });
             RegisterCallback<PointerDownEvent>(e => { if (_enabled && e.button == 0 && OnClick != null) OnClick(); });
             Sync();
         }
@@ -791,8 +790,8 @@ namespace Game.Gameplay.Ring.UI
             hint.style.right = 18f; hint.style.bottom = 10f;
             Add(hint);
             RegisterCallback<PointerDownEvent>(e => { if (_enabled && e.button == 0 && onClick != null) onClick(); });
-            RegisterCallback<PointerEnterEvent>(e => { if (_enabled && PadFocus.MouseMayHover) { _plate.Outline = RingTheme.Text; _plate.Redraw(); } });
-            RegisterCallback<PointerLeaveEvent>(e => { if (PadFocus.MouseMayHover) { _plate.Outline = null; _plate.Redraw(); } });
+            PadFocus.Hover(this, () => { if (_enabled) { _plate.Outline = RingTheme.Text; _plate.Redraw(); } },
+                () => { _plate.Outline = null; _plate.Redraw(); });
         }
 
         // ---- ціль фокусу без миші: головна дія екрана (ранг 2), фокус — та сама обводка, що наведення ----

@@ -115,6 +115,15 @@ namespace Game.Gameplay.Ring.UI
         /// <summary>Режим без миші: фокус видно, Enter / A натискає ціль у фокусі.</summary>
         public static bool Active { get; private set; }
 
+        /// <summary>Чий фокус видно зараз (щоб зняти його, коли гравець пішов на екран без фокуса без миші).</summary>
+        private static PadFocus _shown;
+
+        /// <summary>Елементи під курсором — і ті, наведення яких режим без миші притримав (див. <see cref="Hover"/>).</summary>
+        private static readonly List<KeyValuePair<VisualElement, Action>> Under = new List<KeyValuePair<VisualElement, Action>>();
+
+        /// <summary>Кадрів поспіль, коли ціль поруч ще без розкладки (<see cref="PadNavMath.WaitLayout"/>); далі — за замовчуванням.</summary>
+        private const int MaxLayoutWaits = 3;
+
         private readonly VisualElement _root;
         private readonly List<VisualElement> _els = new List<VisualElement>();
         private readonly List<IPadTarget> _targets = new List<IPadTarget>();
@@ -123,6 +132,8 @@ namespace Game.Gameplay.Ring.UI
         private VisualElement _curEl;
         private IPadTarget _cur;
         private string _key;
+        private float _lastX = float.NaN, _lastY = float.NaN;
+        private int _waits;
 
         public PadFocus(VisualElement root) { _root = root; }
 
@@ -135,18 +146,70 @@ namespace Game.Gameplay.Ring.UI
         /// <summary>Увімкнути режим без миші й стати на ціль (за ключем, інакше — за замовчуванням), нічого не натискаючи.</summary>
         public void Show()
         {
+            if (_shown != null && _shown != this) _shown.Hide();
             Active = true;
+            _shown = this;
+            _waits = 0;
             Collect();
             ClearHoverLooks();
-            Focus(PadNavMath.Restore(_slots, _key), false);
+            FocusRestored();
         }
 
-        /// <summary>Рух миші: режим без миші вимикається, вигляд фокусу знімається, ключ пам'ятається до наступного разу.</summary>
+        /// <summary>
+        /// Рух миші: режим без миші вимикається, вигляд фокусу знімається, ключ пам'ятається до наступного разу. Елемент під
+        /// нерухомим курсором отримує вигляд наведення одразу — не чекаючи, поки курсор вийде й зайде знову (аудит P3, 11.11.2026).
+        /// </summary>
         public void Hide()
         {
             if (_cur != null) _cur.PadHot(false);
             _cur = null; _curEl = null;
+            _waits = 0;
             Active = false;
+            if (_shown == this) _shown = null;
+            for (int i = Under.Count - 1; i >= 0; i--)
+                if (Under[i].Key.panel == null) Under.RemoveAt(i);
+            for (int i = 0; i < Under.Count; i++) Under[i].Value();
+        }
+
+        /// <summary>
+        /// Екран без фокуса без миші (меню, матч, шоу; шар вимкнений): режим знімається, щоб наведення мишею знову діяло там
+        /// (інакше <see cref="MouseMayHover"/> лишався false до першого руху миші на екрані кар'єри; аудит P3, 11.11.2026).
+        /// </summary>
+        public static void Release()
+        {
+            if (_shown != null) _shown.Hide();
+            Active = false;
+        }
+
+        /// <summary>
+        /// Наведення мишею на ціль: <paramref name="enter"/> / <paramref name="leave"/> — лише поза режимом без миші (інакше
+        /// нерухомий курсор перехоплює фокус); курсор над елементом пам'ятається завжди — для <see cref="Hide"/>. На одному
+        /// елементі може бути кілька реєстрацій (підсвіт кнопки й рядок-підказка) — кожна пам'ятається окремо.
+        /// </summary>
+        public static void Hover(VisualElement el, Action enter, Action leave)
+        {
+            if (el == null) return;
+            el.RegisterCallback<PointerEnterEvent>(e =>
+            {
+                Forget(el, enter);
+                if (enter != null) Under.Add(new KeyValuePair<VisualElement, Action>(el, enter));
+                if (MouseMayHover && enter != null) enter();
+            });
+            el.RegisterCallback<PointerLeaveEvent>(e =>
+            {
+                Forget(el, enter);
+                if (MouseMayHover && leave != null) leave();
+            });
+        }
+
+        /// <summary>Курсор пішов з елемента: забути цю реєстрацію (інші на ньому ж лишаються) і від'єднані елементи.</summary>
+        private static void Forget(VisualElement el, Action enter)
+        {
+            for (int i = Under.Count - 1; i >= 0; i--)
+            {
+                var u = Under[i];
+                if ((u.Key == el && ReferenceEquals(u.Value, enter)) || u.Key.panel == null) Under.RemoveAt(i);
+            }
         }
 
         /// <summary>Хрестовина / стрілки. Перемикач у фокусі (карусель) бере ← → собі.</summary>
@@ -182,10 +245,31 @@ namespace Game.Gameplay.Ring.UI
             if (!Active) return;
             if (_cur != null && Attached(_curEl)) return;
             Collect();
-            Focus(PadNavMath.Restore(_slots, _key), false);
+            FocusRestored();
         }
 
         // ---------------- внутрішнє ----------------
+
+        /// <summary>
+        /// Стати на «ту саму» ціль: за ключем, інакше — на найближчу до місця, де стояв фокус; цілі ще без розкладки — фокус
+        /// з'явиться наступного кадру (<see cref="Sync"/>), не довше <see cref="MaxLayoutWaits"/> кадрів.
+        /// </summary>
+        private void FocusRestored()
+        {
+            int i = PadNavMath.Restore(_slots, _key, _lastX, _lastY);
+            if (i == PadNavMath.WaitLayout)
+            {
+                if (++_waits <= MaxLayoutWaits)
+                {
+                    if (_cur != null && Attached(_curEl)) _cur.PadHot(false);
+                    _cur = null; _curEl = null;
+                    return;
+                }
+                i = PadNavMath.Default(_slots);
+            }
+            _waits = 0;
+            Focus(i, false);
+        }
 
         private void Focus(int i, bool sound)
         {
@@ -194,6 +278,8 @@ namespace Game.Gameplay.Ring.UI
             _cur = _targets[i];
             _curEl = _els[i];
             _key = _slots[i].Key;
+            if (_slots[i].HasGeometry) { _lastX = _slots[i].CX; _lastY = _slots[i].CY; }
+            _shown = this;
             _cur.PadHot(true);
             ScrollIntoView(_curEl);
             if (sound) RingMenuServices.Play(MenuSfx.Move);

@@ -51,10 +51,39 @@ namespace Game.Gameplay.Ring.Models
         /// <summary>Повернути фокус після перебудови: та сама ціль за ключем; ключа немає — ціль за замовчуванням.</summary>
         public static int Restore(IList<PadSlot> slots, string key)
         {
+            return Restore(slots, key, float.NaN, float.NaN);
+        }
+
+        /// <summary><see cref="Restore(IList{PadSlot},string,float,float)"/>: цілі поруч ще без розкладки — спитати наступного кадру.</summary>
+        public const int WaitLayout = -2;
+
+        /// <summary>
+        /// Повернути фокус після перебудови: та сама ціль за ключем; ключа вже немає (куплену перевагу прибрано зі списку) —
+        /// найближча доступна до місця, де стояв фокус (<paramref name="lastX"/>, <paramref name="lastY"/> — центр; NaN —
+        /// невідомо), а не перша плитка екрана (аудит P3 геймпад, 11.11.2026); у цілей ще немає розкладки (щойно перебудовані) —
+        /// <see cref="WaitLayout"/>; інакше — ціль за замовчуванням.
+        /// </summary>
+        public static int Restore(IList<PadSlot> slots, string key, float lastX, float lastY)
+        {
             if (!string.IsNullOrEmpty(key))
                 for (int i = 0; i < slots.Count; i++)
                     if (slots[i].Key == key) return i;
-            return Default(slots);
+            if (string.IsNullOrEmpty(key) || float.IsNaN(lastX) || float.IsNaN(lastY)) return Default(slots);
+            int best = -1;
+            bool laid = false;
+            float bestD = float.MaxValue;
+            for (int i = 0; i < slots.Count; i++)
+            {
+                var s = slots[i];
+                if (!s.HasGeometry) continue;
+                laid = true;
+                if (!s.Enabled) continue;
+                float dx = s.CX - lastX, dy = s.CY - lastY;
+                float d = dx * dx + dy * dy;
+                if (d < bestD) { bestD = d; best = i; }
+            }
+            if (best >= 0) return best;
+            return laid || slots.Count == 0 ? Default(slots) : WaitLayout;
         }
 
         /// <summary>

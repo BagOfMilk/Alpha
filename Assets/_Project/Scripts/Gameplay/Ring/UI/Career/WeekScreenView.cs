@@ -427,30 +427,31 @@ namespace Game.Gameplay.Ring.UI
             var row = RingUi.Row();
             row.style.flexWrap = Wrap.Wrap;
             var st = C.State;
-            row.Add(ShopBtn(st.CostumeBought ? T.Get("c.shop.costume.owned") : T.Format("c.shop.costume", CareerRules.CostumeCost),
+            row.Add(ShopBtn("costume", st.CostumeBought ? T.Get("c.shop.costume.owned") : T.Format("c.shop.costume", CareerRules.CostumeCost),
                 () => C.BuyCostume(), C.CanBuyCostume, T.Get("c.shop.costume.desc")));
             for (int i = 0; i < CareerRules.Coaches.Length; i++)
             {
                 int k = i;
                 bool hired = st.Coach == i;
                 string name = RingLabels.AttrName(T, CareerRules.Coaches[i]);
-                row.Add(ShopBtn(hired ? T.Format("c.shop.coach.hired", name, st.CoachProgress, CareerRules.CoachProgressStep) : T.Format("c.shop.coach", name, CareerRules.CoachWeeklyFee),
+                row.Add(ShopBtn("coach:" + i, hired ? T.Format("c.shop.coach.hired", name, st.CoachProgress, CareerRules.CoachProgressStep) : T.Format("c.shop.coach", name, CareerRules.CoachWeeklyFee),
                     () => C.HireCoach(hired ? -1 : k), hired || C.Money >= CareerRules.CoachWeeklyFee, T.Format("c.shop.coach.desc", name, CareerRules.CoachProgressStep)));
             }
             BodyZone worst = BodyZone.Body; int score = -1;
             for (int z = 0; z < 3; z++) { int sc = st.Injury[z] * 10 + st.ZoneDamage[z]; if (sc > score) { score = sc; worst = (BodyZone)z; } }
-            row.Add(ShopBtn(T.Format("c.shop.clinic", CareerRules.ClinicCost), () => C.Clinic(worst), C.CanClinic(worst), T.Get("c.shop.clinic.desc")));
-            row.Add(ShopBtn(st.InsuredSeason == st.Season ? T.Get("c.shop.insurance.owned") : T.Format("c.shop.insurance", CareerRules.InsuranceCost),
+            row.Add(ShopBtn("clinic", T.Format("c.shop.clinic", CareerRules.ClinicCost), () => C.Clinic(worst), C.CanClinic(worst), T.Get("c.shop.clinic.desc")));
+            row.Add(ShopBtn("insurance", st.InsuredSeason == st.Season ? T.Get("c.shop.insurance.owned") : T.Format("c.shop.insurance", CareerRules.InsuranceCost),
                 () => C.BuyInsurance(), C.CanBuyInsurance, T.Get("c.shop.insurance.desc")));
-            row.Add(ShopBtn(st.AwayShow ? T.Get("c.shop.away.on") : T.Format("c.shop.away", CareerRules.AwayTravelCost), () => C.GoAway(), C.CanGoAway,
+            row.Add(ShopBtn("away", st.AwayShow ? T.Get("c.shop.away.on") : T.Format("c.shop.away", CareerRules.AwayTravelCost), () => C.GoAway(), C.CanGoAway,
                 T.Get("c.shop.away.desc")));
             card.Add(row);
             return card;
         }
 
-        private Button ShopBtn(string text, Func<bool> act, bool enabled, string hint)
+        private Button ShopBtn(string key, string text, Func<bool> act, bool enabled, string hint)
         {
-            var b = Small(text, () => { if (act()) Host.Save(); Refresh(); }, enabled, RingUi.Gold, hint);
+            // сталий ключ: після покупки напис міняється («Костюм · 60» → «Костюм куплено»), а фокус лишається на кнопці
+            var b = RingUi.PadKey(Small(text, () => { if (act()) Host.Save(); Refresh(); }, enabled, RingUi.Gold, hint), "shop:" + key);
             b.style.marginRight = 4f;
             // кнопка — одним рядком: стиснута в ряду, «Клініка · 45» ламалась на два (P3 проходу 08.11, кадр 1080)
             b.style.flexShrink = 0f;

@@ -278,8 +278,7 @@ namespace Game.Gameplay.Ring.UI
             {
                 b.clicked += onClick;
                 // поки фокус без миші (P3 геймпад), нерухомий курсор не перехоплює підсвіт
-                b.RegisterCallback<PointerEnterEvent>(e => { if (PadFocus.MouseMayHover) b.style.backgroundColor = hover; });
-                b.RegisterCallback<PointerLeaveEvent>(e => { if (PadFocus.MouseMayHover) b.style.backgroundColor = back; });
+                PadFocus.Hover(b, () => b.style.backgroundColor = hover, () => b.style.backgroundColor = back);
             }
             // ціль фокусу без миші: доступна — підсвіт, як наведення; недоступна — рамка кольору тексту (видно, де фокус; У0 11.11.2026)
             Color frame = enabled ? Border : RingTheme.WithAlpha(Border, 0.4f);
@@ -309,6 +308,17 @@ namespace Game.Gameplay.Ring.UI
             var pad = PadMark.Of(b);
             if (pad != null) pad.Rank = 2;      // головна дія — перша ціль фокусу
             return b;
+        }
+
+        /// <summary>
+        /// Сталий ключ цілі фокусу без миші замість «btn:» + напис: напис кнопки міняється після дії («Сила +2 → +3» стає
+        /// «+3 → +4»), а фокус має лишитись на ній (аудит P3, 11.11.2026).
+        /// </summary>
+        public static T PadKey<T>(T el, string key) where T : VisualElement
+        {
+            var m = PadMark.Of(el);
+            if (m != null) m.Key = key;
+            return el;
         }
 
         /// <summary>Скрол-обгортка для довгих списків.</summary>
@@ -372,8 +382,7 @@ namespace Game.Gameplay.Ring.UI
             b.style.borderLeftWidth = 3f;
             if (hint != null && !string.IsNullOrEmpty(hintText))
             {
-                b.RegisterCallback<PointerEnterEvent>(e => { if (PadFocus.MouseMayHover) { hint.text = hintText; hint.style.color = Text; } });
-                b.RegisterCallback<PointerLeaveEvent>(e => { if (PadFocus.MouseMayHover) hint.text = ""; });
+                PadFocus.Hover(b, () => { hint.text = hintText; hint.style.color = Text; }, () => hint.text = "");
                 PadMark.AddHot(b, on => { hint.text = on ? hintText : ""; if (on) hint.style.color = Text; });
             }
             return b;
