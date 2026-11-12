@@ -139,6 +139,8 @@ namespace Game.Core.Ring.Career
         public int ActionsDelta;
         /// <summary>Сцена змінила план найближчого шоу.</summary>
         public bool PlanChanged;
+        /// <summary>Сцена повернула роль (§5.3): нова роль; null — повороту не було.</summary>
+        public RingPath? TurnedTo;
     }
 
     /// <summary>Рядок списку прийомів матчу: прийом + доступність дії з урахуванням травми зони і бонусу прийому.</summary>

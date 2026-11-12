@@ -158,8 +158,41 @@ namespace Game.Core.Ring.Career
             Feud.State.AudienceHypeAt = Federation.PopularityHype;
         }
 
-        /// <summary>Роль зараз — домінантний шлях (поворот герой ↔ лиходій — подія кар'єри).</summary>
+        /// <summary>Роль зараз — домінантний шлях (поворот герой ↔ лиходій — подія кар'єри ev_turn, §5.3; <see cref="Turn"/>).</summary>
         public RingPath CurrentRole { get { return Feud.State.DominantPath(); } }
+
+        /// <summary>
+        /// Найсильніша ворожнеча героя зараз — із суперниками, з яких букер складає картку (федерація й дивізіон героя; Молот — шкалою
+        /// ворожнечі, поки її не розв'язано). Умова повороту ролі (§5.3: «потрібна ворожнеча 3+»).
+        /// </summary>
+        public int MaxFeudLevel
+        {
+            get
+            {
+                int m = 0;
+                foreach (var n in BookingPool()) m = Math.Max(m, FeudLevel(n.Id));
+                return m;
+            }
+        }
+
+        /// <summary>
+        /// Поворот ролі (§5.3, ефект сцени <c>turn</c>): очки героя й лиходія міняються місцями — зал перечитує той самий образ навиворіт,
+        /// тож вага образу переходить у нову роль, а куплені перки лишаються. Після повороту нова роль домінує завжди (за рівних очок —
+        /// +1 новій). Лише з протилежної ролі: бунтар (без ролі) не повертається, повернутий удруге в ту саму роль — нічого. Ставить і
+        /// заявлену роль кар'єри. false — повороту не було.
+        /// </summary>
+        public bool Turn(RingPath to)
+        {
+            if (to == RingPath.Rebel) return false;
+            var from = to == RingPath.Face ? RingPath.Heel : RingPath.Face;
+            if (CurrentRole != from) return false;
+            int a = Feud.State.GetPath(from), b = Feud.State.GetPath(to);
+            Feud.State.AddPath(to, a - b);
+            Feud.State.AddPath(from, b - a);
+            while (CurrentRole != to) Feud.State.AddPath(to, 1);
+            State.Role = to == RingPath.Face ? CareerRole.Hero : CareerRole.Villain;
+            return true;
+        }
 
         /// <summary>Матч, що йде зараз: звичайний (окремий) або матч ворожнечі на великому шоу. null — матчу немає.</summary>
         public MatchEngine Engine { get { return State.Phase == ShowPhase.Feud ? Feud.CurrentMatch : _engine; } }
@@ -807,6 +840,10 @@ namespace Game.Core.Ring.Career
                 case "female": return State.Female;
                 case "manager": return State.Manager;
                 case "booker": return Federation.Booker == c.Target;
+                case "role":
+                    RingPath rp;
+                    return FeudVars.TryPath(c.Target, out rp) && CurrentRole == rp;
+                case "max_feud": return MaxFeudLevel >= c.Min;
                 case "champion": return IsChampion;
                 case "last_won": return State.LastOutcome == 1;
                 case "last_lost": return State.LastOutcome == 2;
@@ -900,6 +937,10 @@ namespace Game.Core.Ring.Career
                     break;
                 case "manager":
                     State.Manager = e.Amount > 0;
+                    break;
+                case "turn":
+                    RingPath to;
+                    if (FeudVars.TryPath(e.Target, out to) && Turn(to)) r.TurnedTo = to;
                     break;
             }
         }
