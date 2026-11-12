@@ -129,7 +129,14 @@ namespace Game.Gameplay.Ring.Models
         /// <summary>«Аванс при переході: 80» (з менеджеркою — з поміткою про +25 %).</summary>
         public string AdvanceText
         {
-            get { var c = Contract; return c == null ? "" : _t.Format(c.HasManager ? "c.offer.advance.manager" : "c.offer.advance", c.Advance); }
+            get
+            {
+                var c = Contract;
+                if (c == null) return "";
+                return c.HasManager
+                    ? _t.Format("c.offer.advance.manager", c.Advance, CareerRules.ManagerAdvancePercent - 100)
+                    : _t.Format("c.offer.advance", c.Advance);
+            }
         }
 
         /// <summary>Що видно в дрібному шрифті: не прочитано / нічого не розібрано / «щось є» чи «на око чисто» / пункт пастки чи «чесний».</summary>
