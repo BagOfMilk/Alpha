@@ -20,7 +20,14 @@ namespace Game.Gameplay.Ring.Models
             _t = text ?? throw new ArgumentNullException(nameof(text));
         }
 
-        private OfferKeys Keys { get { return _s.GetOfferKeys(); } }
+        /// <summary>
+        /// Ключі пропозиції — лише до рішення: після «Прийняти» вони рахувалися б уже для нової федерації, після «Лишитися» вже не
+        /// потрібні (лишається рядок стану, <see cref="StatusText"/>).
+        /// </summary>
+        private OfferKeys Keys { get { return _s.State.OfferDecision == 0 ? _s.GetOfferKeys() : null; } }
+
+        /// <summary>Рядки ключів (заголовок, «Глядачі», «Букер») показувати — до рішення.</summary>
+        public bool ShowKeys { get { return Visible && Keys != null; } }
 
         private string FedName(FederationDef f) { return f == null ? "" : _t.Get(f.NameKey); }
 
@@ -31,7 +38,7 @@ namespace Game.Gameplay.Ring.Models
         }
 
         /// <summary>Показувати блок: кінець сезону, підсумок остаточний (після титульного матчу чи відмови).</summary>
-        public bool Visible { get { return _s.SeasonSummaryFinal && Keys != null; } }
+        public bool Visible { get { return _s.SeasonSummaryFinal && (Keys != null || _s.State.OfferDecision != 0); } }
 
         /// <summary>Вище нікуди — замість ключів рядок «вершина».</summary>
         public bool IsTop { get { var k = Keys; return k != null && !k.HasHigher; } }

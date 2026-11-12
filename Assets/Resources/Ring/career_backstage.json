@@ -643,6 +643,7 @@
    "fromWeek": 2,
    "spread": 1,
    "minSeason": 2,
+   "once": true,
    "requires": [
     {
      "career": "tier",

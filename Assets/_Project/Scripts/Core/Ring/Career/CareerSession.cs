@@ -101,11 +101,17 @@ namespace Game.Core.Ring.Career
 
         /// <summary>
         /// Дивізіон героя (P2-6), коли його не знав екран створення (старий сейв, чернетка без <see cref="CharacterDraft.Female"/>):
-        /// хост проставляє з тіла. Пояс героя переходить у його дивізіон; картку першого тижня букер складає наново.
+        /// хост проставляє з тіла. Змінити можна лише до першого кроку кар'єри (сезон 1, тиждень 1, жодної дії) — або один раз, поки
+        /// дивізіон невідомий (старий сейв). Пояс героя (зі старого сейву, де пояс був один) переходить у його дивізіон, а пояс
+        /// колишнього дивізіону повертається до стартового чемпіона; у новому дивізіоні пояс у героя, бо в старій кар'єрі він його
+        /// виграв. Картку тижня букер складає наново, лише поки тиждень не почато.
         /// </summary>
         public void SetFemale(bool female)
         {
             bool changed = State.Female != female;
+            bool fresh = State.Season == 1 && State.Week == 1 && State.ActionsDone.Count == 0 && Feud.Records.Count == 0 && State.Last == null;
+            if (changed && State.FemaleKnown && !fresh)
+                throw new InvalidOperationException("Дивізіон героя змінюють лише до першого тижня");
             if (changed && State.Belt(State.Federation, State.Female) == CareerState.PlayerHolder)
             {
                 State.SetBelt(State.Federation, State.Female, Federation.BeltOf(State.Female) ?? "");
@@ -639,6 +645,14 @@ namespace Game.Core.Ring.Career
         /// <summary>Подія була цього сезону.</summary>
         public bool BackstageSeenThisSeason(string sceneId) { return State.BackstageSeen.Contains(SeenKey(State.Season, sceneId)); }
 
+        /// <summary>Подія була хоч раз за кар'єру (для сцен «раз на кар'єру», <see cref="BackstageScene.Once"/>).</summary>
+        public bool BackstageSeenEver(string sceneId)
+        {
+            string tail = ":" + sceneId;
+            foreach (var k in State.BackstageSeen) if (k.EndsWith(tail, StringComparison.Ordinal)) return true;
+            return false;
+        }
+
         /// <summary>Тиждень сезону, з якого подія доступна (детермінований розкид за зерном кар'єри; не пізніше останнього тижня).</summary>
         public int BackstageDueWeek(BackstageScene sc)
         {
@@ -685,6 +699,7 @@ namespace Game.Core.Ring.Career
             {
                 if (sc.Kind != BackstageKind.Event) continue;
                 if (BackstageSeenThisSeason(sc.Id) || State.Season < sc.MinSeason || State.Week < BackstageDueWeek(sc)) continue;
+                if (sc.Once && BackstageSeenEver(sc.Id)) continue;
                 if (SceneHolds(sc)) return sc;
             }
             foreach (var sc in all) if (sc.Kind == BackstageKind.Booker && SceneHolds(sc)) return sc;
@@ -1467,9 +1482,9 @@ namespace Game.Core.Ring.Career
             // щабля немає, і без цього знімок застигав: третій сезон 81–87 %).
             if (State.TierPos >= 0)
                 State.TierGrowth += (PlayerGrowth() - State.TierGrowth) * CareerRules.SeasonCatchUpNum / CareerRules.SeasonCatchUpDen;
-            // відмови поспіль: сезон без пропозиції серію обриває (рішення «прийняв» її вже скинуло)
-            var offerKeys = GetOfferKeys();
-            if (State.OfferDecision == 0 && (offerKeys == null || !offerKeys.Ready)) State.OfferDeclines = 0;
+            // відмови поспіль (рішення ПМ, 11.11.2026): серію обриває будь-який сезон без явної відмови — мовчазний пропуск, сезон без
+            // пропозиції, перехід; «відмова → пропуск → відмова» не штрафує
+            if (State.OfferDecision != 2) State.OfferDeclines = 0;
             State.OfferDecision = 0;
             State.FarewellResult = 0;
             if (State.Report.Fired && State.Federation > 1)
@@ -1552,7 +1567,9 @@ namespace Game.Core.Ring.Career
                 else if (st.OldBelt == CareerState.PlayerHolder) st.SetBelt(st.Federation, st.Female, CareerState.PlayerHolder);
                 st.OldBelt = null;
             }
-            if (st.Belts.Count > 0) InitBelts();   // до створення героя поясів ще немає
+            // герой уже є (не титул і не створення) — бракує поясів (старий сейв без «belts»; пояс порожній чи невідомий) — стартові
+            // чемпіони; до створення героя поясів ще немає
+            if (stage != CareerStage.Title && stage != CareerStage.Create) InitBelts();
             SyncFederationRules();
             Stage = stage;
             _engine = null;
