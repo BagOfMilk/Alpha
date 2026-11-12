@@ -1156,7 +1156,7 @@
     {
      "id": "n8",
      "type": "line",
-     "speaker": "booker",
+     "speaker": "narrator",
      "text": "bs.ev_contract.n8",
      "next": "end"
     },
@@ -1571,6 +1571,1719 @@
    "requires": [
     {
      "career": "female"
+    }
+   ]
+  },
+  {
+   "id": "booker2_talk",
+   "kind": "booker",
+   "requires": [
+    {
+     "career": "booker",
+     "target": "booker2"
+    }
+   ],
+   "title": "bs.booker_talk.title",
+   "place": "bs.booker2_talk.place",
+   "start": "n1",
+   "nodes": [
+    {
+     "id": "n1",
+     "type": "line",
+     "speaker": "booker2",
+     "text": "bs.booker2_talk.n1",
+     "next": "nb"
+    },
+    {
+     "id": "nb",
+     "type": "branch",
+     "cases": [
+      {
+       "requires": [
+        {
+         "var": "trust",
+         "min": 2,
+         "not": true
+        }
+       ],
+       "next": "c1"
+      },
+      {
+       "requires": [
+        {
+         "career": "last_lost"
+        }
+       ],
+       "next": "l1"
+      },
+      {
+       "requires": [
+        {
+         "career": "title_eligible"
+        }
+       ],
+       "next": "t1"
+      },
+      {
+       "requires": [
+        {
+         "career": "plan_set"
+        },
+        {
+         "career": "parity",
+         "min": 0
+        }
+       ],
+       "next": "p1"
+      }
+     ],
+     "next": "d1"
+    },
+    {
+     "id": "c1",
+     "type": "line",
+     "speaker": "booker2",
+     "text": "bs.booker2_talk.c1",
+     "next": "c2"
+    },
+    {
+     "id": "c2",
+     "type": "choice",
+     "options": [
+      {
+       "id": "humble",
+       "text": "bs.booker2_talk.c2.humble",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "var": "trust",
+         "add": 1
+        }
+       ],
+       "next": "c3",
+       "path": "face"
+      },
+      {
+       "id": "boast",
+       "text": "bs.booker2_talk.c2.boast",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "var": "audience",
+         "add": 1
+        }
+       ],
+       "next": "c4",
+       "path": "heel"
+      },
+      {
+       "id": "pitch",
+       "text": "bs.booker2_talk.c2.pitch",
+       "effects": [
+        {
+         "flag": "bs_pitched"
+        }
+       ],
+       "next": "c5",
+       "path": "rebel",
+       "requires": [
+        {
+         "attr": "charisma",
+         "min": 1
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "c3",
+     "type": "line",
+     "speaker": "booker2",
+     "text": "bs.booker2_talk.c3",
+     "next": "end"
+    },
+    {
+     "id": "c4",
+     "type": "line",
+     "speaker": "booker2",
+     "text": "bs.booker2_talk.c4",
+     "next": "end"
+    },
+    {
+     "id": "c5",
+     "type": "check",
+     "attr": "charisma",
+     "mod": 0,
+     "pick10": 2,
+     "pick7": 1,
+     "rewards": [
+      {
+       "id": "trust",
+       "text": "bs.booker2_talk.c5.r_trust",
+       "effects": [
+        {
+         "var": "trust",
+         "add": 1
+        }
+       ]
+      },
+      {
+       "id": "aud",
+       "text": "bs.booker2_talk.c5.r_aud",
+       "effects": [
+        {
+         "var": "audience",
+         "add": 1
+        }
+       ]
+      },
+      {
+       "id": "hype",
+       "text": "bs.booker2_talk.c5.r_hype",
+       "effects": [
+        {
+         "career": "hype",
+         "add": 1
+        }
+       ]
+      }
+     ],
+     "fail": [
+      {
+       "var": "audience",
+       "add": -1
+      }
+     ],
+     "next": "c6",
+     "next6": "c6"
+    },
+    {
+     "id": "c6",
+     "type": "line",
+     "speaker": "booker2",
+     "text": "bs.booker2_talk.c6",
+     "next": "end"
+    },
+    {
+     "id": "l1",
+     "type": "line",
+     "speaker": "booker2",
+     "text": "bs.booker2_talk.l1",
+     "next": "l2"
+    },
+    {
+     "id": "l2",
+     "type": "choice",
+     "options": [
+      {
+       "id": "own",
+       "text": "bs.booker2_talk.l2.own",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "var": "trust",
+         "add": 1
+        },
+        {
+         "career": "dev",
+         "add": 1
+        }
+       ],
+       "next": "l3",
+       "path": "face"
+      },
+      {
+       "id": "blame",
+       "text": "bs.booker2_talk.l2.blame",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "var": "trust",
+         "add": -1
+        }
+       ],
+       "next": "l4",
+       "path": "heel"
+      },
+      {
+       "id": "rematch",
+       "text": "bs.booker2_talk.l2.rematch",
+       "effects": [
+        {
+         "career": "npc_feud",
+         "target": "last_opponent",
+         "add": 1
+        },
+        {
+         "flag": "rematch_asked"
+        }
+       ],
+       "next": "l5",
+       "path": "rebel",
+       "requires": [
+        {
+         "var": "trust",
+         "min": 2
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "l3",
+     "type": "line",
+     "speaker": "booker2",
+     "text": "bs.booker2_talk.l3",
+     "next": "end"
+    },
+    {
+     "id": "l4",
+     "type": "line",
+     "speaker": "booker2",
+     "text": "bs.booker2_talk.l4",
+     "next": "end"
+    },
+    {
+     "id": "l5",
+     "type": "line",
+     "speaker": "booker2",
+     "text": "bs.booker2_talk.l5",
+     "next": "end"
+    },
+    {
+     "id": "t1",
+     "type": "line",
+     "speaker": "booker2",
+     "text": "bs.booker2_talk.t1",
+     "next": "t2"
+    },
+    {
+     "id": "t2",
+     "type": "line",
+     "speaker": "booker2",
+     "text": "bs.booker2_talk.t2",
+     "next": "t3"
+    },
+    {
+     "id": "t3",
+     "type": "choice",
+     "options": [
+      {
+       "id": "ready",
+       "text": "bs.booker2_talk.t3.ready",
+       "effects": [
+        {
+         "var": "trust",
+         "add": 1
+        },
+        {
+         "career": "hype",
+         "add": 1
+        }
+       ],
+       "next": "t4",
+       "path": "face"
+      },
+      {
+       "id": "earn",
+       "text": "bs.booker2_talk.t3.earn",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "career": "dev",
+         "add": 1
+        }
+       ],
+       "next": "t4",
+       "path": "face"
+      },
+      {
+       "id": "price",
+       "text": "bs.booker2_talk.t3.price",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "career": "money",
+         "add": 15
+        },
+        {
+         "var": "trust",
+         "add": -1
+        }
+       ],
+       "next": "t4",
+       "path": "heel"
+      }
+     ]
+    },
+    {
+     "id": "t4",
+     "type": "line",
+     "speaker": "booker2",
+     "text": "bs.booker2_talk.t4",
+     "next": "end"
+    },
+    {
+     "id": "p1",
+     "type": "line",
+     "speaker": "booker2",
+     "text": "bs.booker2_talk.p1",
+     "next": "p2"
+    },
+    {
+     "id": "p2",
+     "type": "line",
+     "speaker": "booker2",
+     "text": "bs.booker2_talk.p2",
+     "next": "p3"
+    },
+    {
+     "id": "p3",
+     "type": "choice",
+     "options": [
+      {
+       "id": "swerve",
+       "text": "bs.booker2_talk.p3.swerve",
+       "effects": [
+        {
+         "path": "rebel",
+         "add": 1
+        },
+        {
+         "career": "plan",
+         "target": "win_any"
+        }
+       ],
+       "next": "p4",
+       "path": "rebel"
+      },
+      {
+       "id": "paper",
+       "text": "bs.booker2_talk.p3.paper",
+       "effects": [
+        {
+         "var": "trust",
+         "add": 1
+        }
+       ],
+       "next": "p5",
+       "path": "face"
+      },
+      {
+       "id": "fee",
+       "text": "bs.booker2_talk.p3.fee",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "career": "money",
+         "add": 10
+        },
+        {
+         "var": "trust",
+         "add": -1
+        },
+        {
+         "career": "plan",
+         "target": "win_any"
+        }
+       ],
+       "next": "p6",
+       "path": "heel"
+      }
+     ]
+    },
+    {
+     "id": "p4",
+     "type": "line",
+     "speaker": "booker2",
+     "text": "bs.booker2_talk.p4",
+     "next": "end"
+    },
+    {
+     "id": "p5",
+     "type": "line",
+     "speaker": "booker2",
+     "text": "bs.booker2_talk.p5",
+     "next": "end"
+    },
+    {
+     "id": "p6",
+     "type": "line",
+     "speaker": "booker2",
+     "text": "bs.booker2_talk.p6",
+     "next": "end"
+    },
+    {
+     "id": "d1",
+     "type": "branch",
+     "cases": [
+      {
+       "requires": [
+        {
+         "career": "last_won"
+        }
+       ],
+       "next": "dw"
+      }
+     ],
+     "next": "dn"
+    },
+    {
+     "id": "dw",
+     "type": "line",
+     "speaker": "booker2",
+     "text": "bs.booker2_talk.dw",
+     "next": "d2"
+    },
+    {
+     "id": "dn",
+     "type": "line",
+     "speaker": "booker2",
+     "text": "bs.booker2_talk.dn",
+     "next": "d2"
+    },
+    {
+     "id": "d2",
+     "type": "choice",
+     "options": [
+      {
+       "id": "advice",
+       "text": "bs.booker2_talk.d2.advice",
+       "effects": [
+        {
+         "var": "trust",
+         "add": 1
+        }
+       ],
+       "next": "d3",
+       "path": "face"
+      },
+      {
+       "id": "advance",
+       "text": "bs.booker2_talk.d2.advance",
+       "effects": [
+        {
+         "career": "money",
+         "add": 15
+        },
+        {
+         "var": "trust",
+         "add": -1
+        }
+       ],
+       "next": "d4",
+       "requires": [
+        {
+         "var": "trust",
+         "min": 2
+        }
+       ]
+      },
+      {
+       "id": "gossip",
+       "text": "bs.booker2_talk.d2.gossip",
+       "effects": [
+        {
+         "var": "locker",
+         "add": 1
+        },
+        {
+         "path": "rebel",
+         "add": 1
+        }
+       ],
+       "next": "d5",
+       "path": "rebel"
+      }
+     ]
+    },
+    {
+     "id": "d3",
+     "type": "line",
+     "speaker": "booker2",
+     "text": "bs.booker2_talk.d3",
+     "next": "end"
+    },
+    {
+     "id": "d4",
+     "type": "line",
+     "speaker": "booker2",
+     "text": "bs.booker2_talk.d4",
+     "next": "end"
+    },
+    {
+     "id": "d5",
+     "type": "line",
+     "speaker": "booker2",
+     "text": "bs.booker2_talk.d5",
+     "next": "end"
+    },
+    {
+     "id": "end",
+     "type": "end"
+    }
+   ]
+  },
+  {
+   "id": "booker3_talk",
+   "kind": "booker",
+   "requires": [
+    {
+     "career": "booker",
+     "target": "booker3"
+    }
+   ],
+   "title": "bs.booker_talk.title",
+   "place": "bs.booker3_talk.place",
+   "start": "n1",
+   "nodes": [
+    {
+     "id": "n1",
+     "type": "line",
+     "speaker": "booker3",
+     "text": "bs.booker3_talk.n1",
+     "next": "nb"
+    },
+    {
+     "id": "nb",
+     "type": "branch",
+     "cases": [
+      {
+       "requires": [
+        {
+         "var": "trust",
+         "min": 2,
+         "not": true
+        }
+       ],
+       "next": "c1"
+      },
+      {
+       "requires": [
+        {
+         "career": "last_lost"
+        }
+       ],
+       "next": "l1"
+      },
+      {
+       "requires": [
+        {
+         "career": "title_eligible"
+        }
+       ],
+       "next": "t1"
+      },
+      {
+       "requires": [
+        {
+         "career": "plan_set"
+        },
+        {
+         "career": "parity",
+         "min": 0
+        }
+       ],
+       "next": "p1"
+      }
+     ],
+     "next": "d1"
+    },
+    {
+     "id": "c1",
+     "type": "line",
+     "speaker": "booker3",
+     "text": "bs.booker3_talk.c1",
+     "next": "c2"
+    },
+    {
+     "id": "c2",
+     "type": "choice",
+     "options": [
+      {
+       "id": "humble",
+       "text": "bs.booker3_talk.c2.humble",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "var": "trust",
+         "add": 1
+        }
+       ],
+       "next": "c3",
+       "path": "face"
+      },
+      {
+       "id": "boast",
+       "text": "bs.booker3_talk.c2.boast",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "var": "audience",
+         "add": 1
+        }
+       ],
+       "next": "c4",
+       "path": "heel"
+      },
+      {
+       "id": "pitch",
+       "text": "bs.booker3_talk.c2.pitch",
+       "effects": [
+        {
+         "flag": "bs_pitched"
+        }
+       ],
+       "next": "c5",
+       "path": "rebel",
+       "requires": [
+        {
+         "attr": "charisma",
+         "min": 1
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "c3",
+     "type": "line",
+     "speaker": "booker3",
+     "text": "bs.booker3_talk.c3",
+     "next": "end"
+    },
+    {
+     "id": "c4",
+     "type": "line",
+     "speaker": "booker3",
+     "text": "bs.booker3_talk.c4",
+     "next": "end"
+    },
+    {
+     "id": "c5",
+     "type": "check",
+     "attr": "charisma",
+     "mod": 0,
+     "pick10": 2,
+     "pick7": 1,
+     "rewards": [
+      {
+       "id": "trust",
+       "text": "bs.booker3_talk.c5.r_trust",
+       "effects": [
+        {
+         "var": "trust",
+         "add": 1
+        }
+       ]
+      },
+      {
+       "id": "aud",
+       "text": "bs.booker3_talk.c5.r_aud",
+       "effects": [
+        {
+         "var": "audience",
+         "add": 1
+        }
+       ]
+      },
+      {
+       "id": "hype",
+       "text": "bs.booker3_talk.c5.r_hype",
+       "effects": [
+        {
+         "career": "hype",
+         "add": 1
+        }
+       ]
+      }
+     ],
+     "fail": [
+      {
+       "var": "audience",
+       "add": -1
+      }
+     ],
+     "next": "c6",
+     "next6": "c6"
+    },
+    {
+     "id": "c6",
+     "type": "line",
+     "speaker": "booker3",
+     "text": "bs.booker3_talk.c6",
+     "next": "end"
+    },
+    {
+     "id": "l1",
+     "type": "line",
+     "speaker": "booker3",
+     "text": "bs.booker3_talk.l1",
+     "next": "l2"
+    },
+    {
+     "id": "l2",
+     "type": "choice",
+     "options": [
+      {
+       "id": "own",
+       "text": "bs.booker3_talk.l2.own",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "var": "trust",
+         "add": 1
+        },
+        {
+         "career": "dev",
+         "add": 1
+        }
+       ],
+       "next": "l3",
+       "path": "face"
+      },
+      {
+       "id": "blame",
+       "text": "bs.booker3_talk.l2.blame",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "var": "trust",
+         "add": -1
+        }
+       ],
+       "next": "l4",
+       "path": "heel"
+      },
+      {
+       "id": "rematch",
+       "text": "bs.booker3_talk.l2.rematch",
+       "effects": [
+        {
+         "career": "npc_feud",
+         "target": "last_opponent",
+         "add": 1
+        },
+        {
+         "flag": "rematch_asked"
+        }
+       ],
+       "next": "l5",
+       "path": "rebel",
+       "requires": [
+        {
+         "var": "trust",
+         "min": 2
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "l3",
+     "type": "line",
+     "speaker": "booker3",
+     "text": "bs.booker3_talk.l3",
+     "next": "end"
+    },
+    {
+     "id": "l4",
+     "type": "line",
+     "speaker": "booker3",
+     "text": "bs.booker3_talk.l4",
+     "next": "end"
+    },
+    {
+     "id": "l5",
+     "type": "line",
+     "speaker": "booker3",
+     "text": "bs.booker3_talk.l5",
+     "next": "end"
+    },
+    {
+     "id": "t1",
+     "type": "line",
+     "speaker": "booker3",
+     "text": "bs.booker3_talk.t1",
+     "next": "t2"
+    },
+    {
+     "id": "t2",
+     "type": "line",
+     "speaker": "booker3",
+     "text": "bs.booker3_talk.t2",
+     "next": "t3"
+    },
+    {
+     "id": "t3",
+     "type": "choice",
+     "options": [
+      {
+       "id": "ready",
+       "text": "bs.booker3_talk.t3.ready",
+       "effects": [
+        {
+         "var": "trust",
+         "add": 1
+        },
+        {
+         "career": "hype",
+         "add": 1
+        }
+       ],
+       "next": "t4",
+       "path": "face"
+      },
+      {
+       "id": "earn",
+       "text": "bs.booker3_talk.t3.earn",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "career": "dev",
+         "add": 1
+        }
+       ],
+       "next": "t4",
+       "path": "face"
+      },
+      {
+       "id": "price",
+       "text": "bs.booker3_talk.t3.price",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "career": "money",
+         "add": 15
+        },
+        {
+         "var": "trust",
+         "add": -1
+        }
+       ],
+       "next": "t4",
+       "path": "heel"
+      }
+     ]
+    },
+    {
+     "id": "t4",
+     "type": "line",
+     "speaker": "booker3",
+     "text": "bs.booker3_talk.t4",
+     "next": "end"
+    },
+    {
+     "id": "p1",
+     "type": "line",
+     "speaker": "booker3",
+     "text": "bs.booker3_talk.p1",
+     "next": "p2"
+    },
+    {
+     "id": "p2",
+     "type": "line",
+     "speaker": "booker3",
+     "text": "bs.booker3_talk.p2",
+     "next": "p3"
+    },
+    {
+     "id": "p3",
+     "type": "choice",
+     "options": [
+      {
+       "id": "swerve",
+       "text": "bs.booker3_talk.p3.swerve",
+       "effects": [
+        {
+         "path": "rebel",
+         "add": 1
+        },
+        {
+         "career": "plan",
+         "target": "win_any"
+        }
+       ],
+       "next": "p4",
+       "path": "rebel"
+      },
+      {
+       "id": "paper",
+       "text": "bs.booker3_talk.p3.paper",
+       "effects": [
+        {
+         "var": "trust",
+         "add": 1
+        }
+       ],
+       "next": "p5",
+       "path": "face"
+      },
+      {
+       "id": "fee",
+       "text": "bs.booker3_talk.p3.fee",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "career": "money",
+         "add": 10
+        },
+        {
+         "var": "trust",
+         "add": -1
+        },
+        {
+         "career": "plan",
+         "target": "win_any"
+        }
+       ],
+       "next": "p6",
+       "path": "heel"
+      }
+     ]
+    },
+    {
+     "id": "p4",
+     "type": "line",
+     "speaker": "booker3",
+     "text": "bs.booker3_talk.p4",
+     "next": "end"
+    },
+    {
+     "id": "p5",
+     "type": "line",
+     "speaker": "booker3",
+     "text": "bs.booker3_talk.p5",
+     "next": "end"
+    },
+    {
+     "id": "p6",
+     "type": "line",
+     "speaker": "booker3",
+     "text": "bs.booker3_talk.p6",
+     "next": "end"
+    },
+    {
+     "id": "d1",
+     "type": "branch",
+     "cases": [
+      {
+       "requires": [
+        {
+         "career": "last_won"
+        }
+       ],
+       "next": "dw"
+      }
+     ],
+     "next": "dn"
+    },
+    {
+     "id": "dw",
+     "type": "line",
+     "speaker": "booker3",
+     "text": "bs.booker3_talk.dw",
+     "next": "d2"
+    },
+    {
+     "id": "dn",
+     "type": "line",
+     "speaker": "booker3",
+     "text": "bs.booker3_talk.dn",
+     "next": "d2"
+    },
+    {
+     "id": "d2",
+     "type": "choice",
+     "options": [
+      {
+       "id": "advice",
+       "text": "bs.booker3_talk.d2.advice",
+       "effects": [
+        {
+         "var": "trust",
+         "add": 1
+        }
+       ],
+       "next": "d3",
+       "path": "face"
+      },
+      {
+       "id": "advance",
+       "text": "bs.booker3_talk.d2.advance",
+       "effects": [
+        {
+         "career": "money",
+         "add": 15
+        },
+        {
+         "var": "trust",
+         "add": -1
+        }
+       ],
+       "next": "d4",
+       "requires": [
+        {
+         "var": "trust",
+         "min": 2
+        }
+       ]
+      },
+      {
+       "id": "gossip",
+       "text": "bs.booker3_talk.d2.gossip",
+       "effects": [
+        {
+         "var": "locker",
+         "add": 1
+        },
+        {
+         "path": "rebel",
+         "add": 1
+        }
+       ],
+       "next": "d5",
+       "path": "rebel"
+      }
+     ]
+    },
+    {
+     "id": "d3",
+     "type": "line",
+     "speaker": "booker3",
+     "text": "bs.booker3_talk.d3",
+     "next": "end"
+    },
+    {
+     "id": "d4",
+     "type": "line",
+     "speaker": "booker3",
+     "text": "bs.booker3_talk.d4",
+     "next": "end"
+    },
+    {
+     "id": "d5",
+     "type": "line",
+     "speaker": "booker3",
+     "text": "bs.booker3_talk.d5",
+     "next": "end"
+    },
+    {
+     "id": "end",
+     "type": "end"
+    }
+   ]
+  },
+  {
+   "id": "booker4_talk",
+   "kind": "booker",
+   "requires": [
+    {
+     "career": "booker",
+     "target": "booker4"
+    }
+   ],
+   "title": "bs.booker_talk.title",
+   "place": "bs.booker4_talk.place",
+   "start": "n1",
+   "nodes": [
+    {
+     "id": "n1",
+     "type": "line",
+     "speaker": "booker4",
+     "text": "bs.booker4_talk.n1",
+     "next": "nb"
+    },
+    {
+     "id": "nb",
+     "type": "branch",
+     "cases": [
+      {
+       "requires": [
+        {
+         "var": "trust",
+         "min": 2,
+         "not": true
+        }
+       ],
+       "next": "c1"
+      },
+      {
+       "requires": [
+        {
+         "career": "last_lost"
+        }
+       ],
+       "next": "l1"
+      },
+      {
+       "requires": [
+        {
+         "career": "title_eligible"
+        }
+       ],
+       "next": "t1"
+      },
+      {
+       "requires": [
+        {
+         "career": "plan_set"
+        },
+        {
+         "career": "parity",
+         "min": 0
+        }
+       ],
+       "next": "p1"
+      }
+     ],
+     "next": "d1"
+    },
+    {
+     "id": "c1",
+     "type": "line",
+     "speaker": "booker4",
+     "text": "bs.booker4_talk.c1",
+     "next": "c2"
+    },
+    {
+     "id": "c2",
+     "type": "choice",
+     "options": [
+      {
+       "id": "humble",
+       "text": "bs.booker4_talk.c2.humble",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "var": "trust",
+         "add": 1
+        }
+       ],
+       "next": "c3",
+       "path": "face"
+      },
+      {
+       "id": "boast",
+       "text": "bs.booker4_talk.c2.boast",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "var": "audience",
+         "add": 1
+        }
+       ],
+       "next": "c4",
+       "path": "heel"
+      },
+      {
+       "id": "pitch",
+       "text": "bs.booker4_talk.c2.pitch",
+       "effects": [
+        {
+         "flag": "bs_pitched"
+        }
+       ],
+       "next": "c5",
+       "path": "rebel",
+       "requires": [
+        {
+         "attr": "charisma",
+         "min": 1
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "c3",
+     "type": "line",
+     "speaker": "booker4",
+     "text": "bs.booker4_talk.c3",
+     "next": "end"
+    },
+    {
+     "id": "c4",
+     "type": "line",
+     "speaker": "booker4",
+     "text": "bs.booker4_talk.c4",
+     "next": "end"
+    },
+    {
+     "id": "c5",
+     "type": "check",
+     "attr": "charisma",
+     "mod": 0,
+     "pick10": 2,
+     "pick7": 1,
+     "rewards": [
+      {
+       "id": "trust",
+       "text": "bs.booker4_talk.c5.r_trust",
+       "effects": [
+        {
+         "var": "trust",
+         "add": 1
+        }
+       ]
+      },
+      {
+       "id": "aud",
+       "text": "bs.booker4_talk.c5.r_aud",
+       "effects": [
+        {
+         "var": "audience",
+         "add": 1
+        }
+       ]
+      },
+      {
+       "id": "hype",
+       "text": "bs.booker4_talk.c5.r_hype",
+       "effects": [
+        {
+         "career": "hype",
+         "add": 1
+        }
+       ]
+      }
+     ],
+     "fail": [
+      {
+       "var": "audience",
+       "add": -1
+      }
+     ],
+     "next": "c6",
+     "next6": "c6"
+    },
+    {
+     "id": "c6",
+     "type": "line",
+     "speaker": "booker4",
+     "text": "bs.booker4_talk.c6",
+     "next": "end"
+    },
+    {
+     "id": "l1",
+     "type": "line",
+     "speaker": "booker4",
+     "text": "bs.booker4_talk.l1",
+     "next": "l2"
+    },
+    {
+     "id": "l2",
+     "type": "choice",
+     "options": [
+      {
+       "id": "own",
+       "text": "bs.booker4_talk.l2.own",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "var": "trust",
+         "add": 1
+        },
+        {
+         "career": "dev",
+         "add": 1
+        }
+       ],
+       "next": "l3",
+       "path": "face"
+      },
+      {
+       "id": "blame",
+       "text": "bs.booker4_talk.l2.blame",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "var": "trust",
+         "add": -1
+        }
+       ],
+       "next": "l4",
+       "path": "heel"
+      },
+      {
+       "id": "rematch",
+       "text": "bs.booker4_talk.l2.rematch",
+       "effects": [
+        {
+         "career": "npc_feud",
+         "target": "last_opponent",
+         "add": 1
+        },
+        {
+         "flag": "rematch_asked"
+        }
+       ],
+       "next": "l5",
+       "path": "rebel",
+       "requires": [
+        {
+         "var": "trust",
+         "min": 2
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "l3",
+     "type": "line",
+     "speaker": "booker4",
+     "text": "bs.booker4_talk.l3",
+     "next": "end"
+    },
+    {
+     "id": "l4",
+     "type": "line",
+     "speaker": "booker4",
+     "text": "bs.booker4_talk.l4",
+     "next": "end"
+    },
+    {
+     "id": "l5",
+     "type": "line",
+     "speaker": "booker4",
+     "text": "bs.booker4_talk.l5",
+     "next": "end"
+    },
+    {
+     "id": "t1",
+     "type": "line",
+     "speaker": "booker4",
+     "text": "bs.booker4_talk.t1",
+     "next": "t2"
+    },
+    {
+     "id": "t2",
+     "type": "line",
+     "speaker": "booker4",
+     "text": "bs.booker4_talk.t2",
+     "next": "t3"
+    },
+    {
+     "id": "t3",
+     "type": "choice",
+     "options": [
+      {
+       "id": "ready",
+       "text": "bs.booker4_talk.t3.ready",
+       "effects": [
+        {
+         "var": "trust",
+         "add": 1
+        },
+        {
+         "career": "hype",
+         "add": 1
+        }
+       ],
+       "next": "t4",
+       "path": "face"
+      },
+      {
+       "id": "earn",
+       "text": "bs.booker4_talk.t3.earn",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "career": "dev",
+         "add": 1
+        }
+       ],
+       "next": "t4",
+       "path": "face"
+      },
+      {
+       "id": "price",
+       "text": "bs.booker4_talk.t3.price",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "career": "money",
+         "add": 15
+        },
+        {
+         "var": "trust",
+         "add": -1
+        }
+       ],
+       "next": "t4",
+       "path": "heel"
+      }
+     ]
+    },
+    {
+     "id": "t4",
+     "type": "line",
+     "speaker": "booker4",
+     "text": "bs.booker4_talk.t4",
+     "next": "end"
+    },
+    {
+     "id": "p1",
+     "type": "line",
+     "speaker": "booker4",
+     "text": "bs.booker4_talk.p1",
+     "next": "p2"
+    },
+    {
+     "id": "p2",
+     "type": "line",
+     "speaker": "booker4",
+     "text": "bs.booker4_talk.p2",
+     "next": "p3"
+    },
+    {
+     "id": "p3",
+     "type": "choice",
+     "options": [
+      {
+       "id": "swerve",
+       "text": "bs.booker4_talk.p3.swerve",
+       "effects": [
+        {
+         "path": "rebel",
+         "add": 1
+        },
+        {
+         "career": "plan",
+         "target": "win_any"
+        }
+       ],
+       "next": "p4",
+       "path": "rebel"
+      },
+      {
+       "id": "paper",
+       "text": "bs.booker4_talk.p3.paper",
+       "effects": [
+        {
+         "var": "trust",
+         "add": 1
+        }
+       ],
+       "next": "p5",
+       "path": "face"
+      },
+      {
+       "id": "fee",
+       "text": "bs.booker4_talk.p3.fee",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "career": "money",
+         "add": 10
+        },
+        {
+         "var": "trust",
+         "add": -1
+        },
+        {
+         "career": "plan",
+         "target": "win_any"
+        }
+       ],
+       "next": "p6",
+       "path": "heel"
+      }
+     ]
+    },
+    {
+     "id": "p4",
+     "type": "line",
+     "speaker": "booker4",
+     "text": "bs.booker4_talk.p4",
+     "next": "end"
+    },
+    {
+     "id": "p5",
+     "type": "line",
+     "speaker": "booker4",
+     "text": "bs.booker4_talk.p5",
+     "next": "end"
+    },
+    {
+     "id": "p6",
+     "type": "line",
+     "speaker": "booker4",
+     "text": "bs.booker4_talk.p6",
+     "next": "end"
+    },
+    {
+     "id": "d1",
+     "type": "branch",
+     "cases": [
+      {
+       "requires": [
+        {
+         "career": "last_won"
+        }
+       ],
+       "next": "dw"
+      }
+     ],
+     "next": "dn"
+    },
+    {
+     "id": "dw",
+     "type": "line",
+     "speaker": "booker4",
+     "text": "bs.booker4_talk.dw",
+     "next": "d2"
+    },
+    {
+     "id": "dn",
+     "type": "line",
+     "speaker": "booker4",
+     "text": "bs.booker4_talk.dn",
+     "next": "d2"
+    },
+    {
+     "id": "d2",
+     "type": "choice",
+     "options": [
+      {
+       "id": "advice",
+       "text": "bs.booker4_talk.d2.advice",
+       "effects": [
+        {
+         "var": "trust",
+         "add": 1
+        }
+       ],
+       "next": "d3",
+       "path": "face"
+      },
+      {
+       "id": "advance",
+       "text": "bs.booker4_talk.d2.advance",
+       "effects": [
+        {
+         "career": "money",
+         "add": 15
+        },
+        {
+         "var": "trust",
+         "add": -1
+        }
+       ],
+       "next": "d4",
+       "requires": [
+        {
+         "var": "trust",
+         "min": 2
+        }
+       ]
+      },
+      {
+       "id": "gossip",
+       "text": "bs.booker4_talk.d2.gossip",
+       "effects": [
+        {
+         "var": "locker",
+         "add": 1
+        },
+        {
+         "path": "rebel",
+         "add": 1
+        }
+       ],
+       "next": "d5",
+       "path": "rebel"
+      }
+     ]
+    },
+    {
+     "id": "d3",
+     "type": "line",
+     "speaker": "booker4",
+     "text": "bs.booker4_talk.d3",
+     "next": "end"
+    },
+    {
+     "id": "d4",
+     "type": "line",
+     "speaker": "booker4",
+     "text": "bs.booker4_talk.d4",
+     "next": "end"
+    },
+    {
+     "id": "d5",
+     "type": "line",
+     "speaker": "booker4",
+     "text": "bs.booker4_talk.d5",
+     "next": "end"
+    },
+    {
+     "id": "end",
+     "type": "end"
     }
    ]
   }

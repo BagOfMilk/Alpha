@@ -742,7 +742,15 @@ namespace Game.Core.Ring.Career
                 if (sc.Once && BackstageSeenEver(sc.Id)) continue;
                 if (SceneHolds(sc)) return sc;
             }
-            foreach (var sc in all) if (sc.Kind == BackstageKind.Booker && SceneHolds(sc)) return sc;
+            // розмова з букером: спершу та, чиї умови виконано (свій букер федерації); запасна без умов — коли жодна не підходить
+            BackstageScene fallback = null;
+            foreach (var sc in all)
+            {
+                if (sc.Kind != BackstageKind.Booker || !SceneHolds(sc)) continue;
+                if (sc.Requires.Count > 0) return sc;
+                if (fallback == null) fallback = sc;
+            }
+            if (fallback != null) return fallback;
             throw new InvalidOperationException("Немає закулісної сцени для відкриття");
         }
 
@@ -798,6 +806,7 @@ namespace Game.Core.Ring.Career
                 case "injured": return State.IsInjured;
                 case "female": return State.Female;
                 case "manager": return State.Manager;
+                case "booker": return Federation.Booker == c.Target;
                 case "champion": return IsChampion;
                 case "last_won": return State.LastOutcome == 1;
                 case "last_lost": return State.LastOutcome == 2;
