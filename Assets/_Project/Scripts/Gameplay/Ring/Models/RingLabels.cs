@@ -8,6 +8,11 @@ namespace Game.Gameplay.Ring.Models
     {
         public static string AttrName(RingText t, RingAttr a) { return t.Get("attr." + FeudVars.AttrName(a)); }
         public static string PathName(RingText t, RingPath p) { return t.Get("path." + FeudVars.PathName(p)); }
+        /// <summary>
+        /// Назва шляху за статтю борця (P2-6, ПМ 12.11.2026): «Героїня / Лиходійка / Бунтарка» — ключі «path.&lt;шлях&gt;.fem». Не «.f»:
+        /// ту HeroForms підмінила б для обох борців на одному екрані.
+        /// </summary>
+        public static string PathName(RingText t, RingPath p, bool female) { return female ? t.Get("path." + FeudVars.PathName(p) + ".fem") : PathName(t, p); }
         public static string PathMark(RingText t, RingPath p) { return t.Get("path." + FeudVars.PathName(p) + ".mark"); }
         public static string Var(RingText t, string name) { return t.Get("var." + name); }
 

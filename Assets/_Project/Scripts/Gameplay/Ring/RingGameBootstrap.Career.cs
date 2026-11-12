@@ -620,14 +620,16 @@ namespace Game.Gameplay.Ring
 
         /// <summary>
         /// Жіночі форми звертання (П5): героїні — «ключ.f» замість чоловічого роду в промо, закулісся, кінцівках і кар'єрі; на створенні —
-        /// за вибраним тілом (<see cref="HeroForms.IsHeroine"/>).
+        /// за вибраним тілом (<see cref="HeroForms.IsHeroine"/>). Суперниця тижня — «ключ.rf» (картка, чутки, розмова з букером);
+        /// кличеться з кожного MakeView, тож новий суперник нового тижня підхоплюється з першим же екраном.
         /// </summary>
         private void ApplyHeroForms()
         {
             if (_career == null || _text == null) return;
             bool female = HeroForms.IsHeroine(_career, _heroBody);
-            HeroForms.Apply(_text, female);
-            if (_ctx != null && _ctx.Text != null && !ReferenceEquals(_ctx.Text, _text)) HeroForms.Apply(_ctx.Text, female);
+            bool rival = HeroForms.OpponentIsWoman(_career);
+            HeroForms.Apply(_text, female, rival);
+            if (_ctx != null && _ctx.Text != null && !ReferenceEquals(_ctx.Text, _text)) HeroForms.Apply(_ctx.Text, female, rival);
         }
 
         /// <summary>
