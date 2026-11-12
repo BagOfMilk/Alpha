@@ -173,7 +173,7 @@ namespace Game.Gameplay.Ring.Models
                     return t.Format("reason.var", RingLabels.Var(t, c.Key), c.Min);
                 case ConditionKind.Path:
                     RingPath p;
-                    string pn = FeudVars.TryPath(c.Key, out p) ? RingLabels.PathName(t, p) : c.Key;
+                    string pn = FeudVars.TryPath(c.Key, out p) ? RingLabels.PathName(t, p, HeroForms.ShowsHeroine(t)) : c.Key;
                     return t.Format("reason.path", pn, c.Min);
                 case ConditionKind.Flag: return Specific(t, "reason.flag.", c.Key, "reason.flag");
                 case ConditionKind.NotFlag: return Specific(t, "reason.notflag.", c.Key, "reason.notflag");
