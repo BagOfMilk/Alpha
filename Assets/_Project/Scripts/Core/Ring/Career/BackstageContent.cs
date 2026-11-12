@@ -20,6 +20,8 @@ namespace Game.Core.Ring.Career
         /// <summary>Скільки тижнів розкиду: день появи = FromWeek + хеш(зерно, сезон, сцена) % Spread.</summary>
         public int Spread = 1;
         public int MinSeason = 1;
+        /// <summary>Подія раз на кар'єру (не раз на сезон): після першого показу більше не дозріває (скаут, TRPG_DESIGN §6.4).</summary>
+        public bool Once;
 
         public string Id { get { return Promo.Id; } }
     }
@@ -41,7 +43,7 @@ namespace Game.Core.Ring.Career
         }
 
         /// <summary>
-        /// Схема: {"scenes":[{"id","kind":"booker|event","fromWeek","spread","minSeason","requires":[умови],"title","place","start","nodes":[…]}]}.
+        /// Схема: {"scenes":[{"id","kind":"booker|event","fromWeek","spread","minSeason","once","requires":[умови],"title","place","start","nodes":[…]}]}.
         /// Вузли, ефекти й умови — ті самі, що в промо ворожнечі (плюс умови й ефекти кар'єри, <see cref="CareerFx"/>).
         /// </summary>
         public static BackstageContent Load(string json)
@@ -58,7 +60,8 @@ namespace Game.Core.Ring.Career
                     Kind = MoveCatalog.ParseEnum<BackstageKind>(JsonRead.Str(o, "kind", where), where + ".kind"),
                     FromWeek = JsonRead.Int(o, "fromWeek", where, 1),
                     Spread = Math.Max(1, JsonRead.Int(o, "spread", where, 1)),
-                    MinSeason = JsonRead.Int(o, "minSeason", where, 1)
+                    MinSeason = JsonRead.Int(o, "minSeason", where, 1),
+                    Once = JsonRead.Bool(o, "once", where, false)
                 };
                 foreach (var co in JsonRead.ObjList(o, "requires", where)) sc.Requires.Add(FeudCondition.FromJson(co, where + ".requires"));
                 if (c.Find(sc.Id) != null) throw new FormatException("повторна закулісна сцена " + sc.Id);

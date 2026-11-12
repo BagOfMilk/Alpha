@@ -19,7 +19,10 @@ namespace Game.Core.Ring.Career
 
         /// <summary>
         /// Те саме, а щаблі понад межу атрибутів переходять у витримку суперника <paramref name="mods"/> (коли не null): по черзі
-        /// +1 стартового імпульсу (раніше до фінішера), +1 до «Вирватися», «залізна щелепа» (поріг ушкодження +1), +1 жетон реверсу.
+        /// +1 до «Вирватися», «залізна щелепа» (поріг ушкодження +1), +1 жетон реверсу.
+        /// П5, 11.11.2026 (рушій P2-1: фінішер не раніше 8-ї дії): стартовий імпульс із черги прибрано — він більше не наближав
+        /// фінішер, і кожен четвертий щабель пропадав; замір 200 кар'єр: тижневі на національній і світовій 69 / 73 % → 60 / 63 %.
+        /// Кожна витримка окремо слабша за чергу з трьох (лише жетони — суперник навіть слабшає: 85 %).
         /// </summary>
         public static int Strengthen(WrestlerStats s, int steps, MatchModifiers mods)
         {
@@ -40,11 +43,10 @@ namespace Game.Core.Ring.Career
                 if (!done)
                 {
                     if (mods == null) break;
-                    switch (applied % 4)
+                    switch (applied % 3)
                     {
-                        case 0: mods.StartMomentumBonus++; break;
-                        case 1: mods.KickOutBonus++; break;
-                        case 2: mods.DamageThresholdShift++; break;
+                        case 0: mods.KickOutBonus++; break;
+                        case 1: mods.DamageThresholdShift++; break;
                         default: mods.ExtraReversalTokens++; break;
                     }
                 }

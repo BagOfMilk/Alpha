@@ -159,8 +159,10 @@ namespace Game.Core.Ring.Career
         /// <summary>
         /// Щаблів сили на щотижневому шоу за місцем у картці: відкривання → мейн-івент. Мейн-івент +1 — рішення власника 06.11.2026
         /// («Повернути»); провал другого сезону від цієї надбавки знято порогом росту (<see cref="RivalGrowthOffset"/> 16 → 21).
+        /// Відкривання 1 → 0 (П5, 11.11.2026, рушій P2-1 — матч 8–15 дій): перший тиждень став 51 %, місцева загалом 52 % проти
+        /// вікна 55–65 %; з 0 — перший тиждень 61 %, місцева 56 %.
         /// </summary>
-        public static readonly int[] RivalStepsByPosition = { 1, 1, 1, 2 };
+        public static readonly int[] RivalStepsByPosition = { 0, 1, 1, 2 };
         /// <summary>
         /// Букер ставить суперників рівня гравця: + щабель за кожен куплений атрибут понад базу ґіміка і за кожні
         /// <see cref="RivalPerksPerStep"/> перки. Без цього місце в картці насичується на мейн-івенті, а гравець росте далі
@@ -172,20 +174,6 @@ namespace Game.Core.Ring.Career
         /// Offset 21: перші одиниці росту (кінець першого — початок другого сезону) ще не підсилюють суперника.
         /// </summary>
         public const int RivalGrowthNum = 5, RivalGrowthOffset = 21, RivalGrowthDen = 8;
-        /// <summary>
-        /// Пізній ріст (П5, 11.11.2026): понад стільки щаблів суперник отримує щабель за кожні <see cref="RivalLateGrowthDen"/>. Атрибути
-        /// впираються в межу 3, і далі щаблі суперника йдуть у витримку (імпульс, «вирватися», щелепа, жетони) без кінця, а гравець
-        /// росте перками. З федераціями кар'єра триває 5+ сезонів — замір 200 кар'єр: ріст 12+ давав тижневі 39–48 %, титул 13–25 %.
-        /// Перші три сезони (ріст до ~9) не змінюються.
-        /// </summary>
-        public const int RivalLateGrowthFrom = 9, RivalLateGrowthDen = 2;
-
-        /// <summary>Ріст гравця в щаблях суперника: лінійно до <see cref="RivalLateGrowthFrom"/>, далі — повільніше.</summary>
-        public static int RivalGrowthSteps(int rawSteps)
-        {
-            if (rawSteps <= RivalLateGrowthFrom) return Math.Max(0, rawSteps);
-            return RivalLateGrowthFrom + (rawSteps - RivalLateGrowthFrom) / RivalLateGrowthDen;
-        }
         /// <summary>На початку сезону знімок росту щабля наздоганяє поточний ріст на Num/Den.</summary>
         public const int SeasonCatchUpNum = 1, SeasonCatchUpDen = 1;
         /// <summary>Реванш із тим, хто тебе переміг: суперник слабший на стільки щаблів (ти знаєш його слабкість).</summary>
@@ -194,20 +182,27 @@ namespace Game.Core.Ring.Career
         public const int RematchBookingScore = 3;
 
         /// <summary>
-        /// Молот: щаблів понад ріст гравця в 1-му, 2-му і 3-му матчі ворожнечі (матчі — у різних сезонах). П5 (11.11.2026, вікно
-        /// власника «ворожнеча ~50 %»): третій матч +5 → +4 — замір 300 кар'єр давав третьому 37–42 %, першим двом 49–59 %.
+        /// Молот: щаблів понад ріст гравця в 1-му, 2-му і 3-му матчі ворожнечі (матчі — у різних сезонах), як і до федерацій:
+        /// база 1 + 2 за матч.
         /// </summary>
-        public static readonly int[] HammerStepsByMatch = { 1, 3, 4 };
-
+        public static readonly int[] HammerStepsByMatch = { 1, 3, 5 };
+        /// <summary>
+        /// Молот іде слідом (варіант А, П5): на кожному рівні федерації вище місцевої — + стільки щаблів. Без цього ворожнеча на
+        /// регіональній — 61–63 % (замір 200 кар'єр на рушії P2-1; Молот упирається в межу атрибутів, а гравець, якого підвищили,
+        /// сильніший); з 3 — 54 %.
+        /// </summary>
+        public const int FeudTierSteps = 3;
         public static int HammerSteps(int matchesPlayed)
         {
             return HammerStepsByMatch[Math.Max(0, Math.Min(HammerStepsByMatch.Length - 1, matchesPlayed))];
         }
         /// <summary>
-        /// Титульний матч (і захист пояса): чемпіон — найсильніший у федерації. П5 (11.11.2026, вікно власника «титул 35–45 %»): 5 → 4 —
-        /// з двома дивізіонами чемпіон чоловіків місцевої — Барон, а не Комета; замір: 5 щаблів — 32 %, 4 — 36 %.
+        /// Титульний матч (і захист пояса): чемпіон — найсильніший у федерації; щаблів понад ріст — за рівнем федерації (1…4).
+        /// П5 (11.11.2026, вікно «титул 35–45 %» — рекомендація ПМ, рушій P2-1): однакові 3 щаблі давали 49 / 53 / 71 / 75 % — на вищих рівнях
+        /// атрибути чемпіона впираються в межу, і кожен щабель понад неї (витримка) важить менше; з {4, 6, 7, 9} — 35 / 43 / 43 / 45 %.
         /// </summary>
-        public const int TitleSteps = 3;
+        public static readonly int[] TitleStepsByTier = { 4, 6, 7, 9 };
+        public static int TitleSteps(int tier) { return TitleStepsByTier[Math.Max(0, Math.Min(TitleStepsByTier.Length - 1, tier - 1))]; }
 
         public static int RivalSteps(CardPosition p, int growth) { return RivalStepsByPosition[(int)p] + Math.Max(0, growth); }
 

@@ -64,10 +64,10 @@
    "startMomentum": 1,
    "finisher": "charisma",
    "attr": {
-    "strength": 1,
+    "strength": 0,
     "agility": 0,
     "technique": 1,
-    "stamina": 2,
+    "stamina": 1,
     "charisma": 3
    }
   },
@@ -101,7 +101,7 @@
     "strength": 1,
     "agility": 3,
     "technique": 1,
-    "stamina": 1,
+    "stamina": 0,
     "charisma": 1
    },
    "female": true
@@ -119,7 +119,7 @@
     "strength": 2,
     "agility": 1,
     "technique": 0,
-    "stamina": 2,
+    "stamina": 1,
     "charisma": 1
    },
    "female": true
