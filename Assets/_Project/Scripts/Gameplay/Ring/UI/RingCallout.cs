@@ -103,7 +103,8 @@ namespace Game.Gameplay.Ring.UI
                     if (phase == 1) c.Now(t.Get("match.call.one"), null, RingUi.Text, 34f, 0.7f);
                     else if (phase == 2) c.Now(t.Get("match.call.two"), null, RingUi.Warn, 40f, 0.7f);
                     else if (ev.Tier == RollTier.Miss) c.Now(t.Get("match.call.three"), null, RingUi.Bad, 64f, 1.4f);
-                    else c.Now(t.Get(ev.Tier == RollTier.Partial ? "match.call.kickout.two" : "match.call.kickout"),
+                    // «ВИРВАЛАСЯ!» — у роді того, хто вирвався (Actor події Kickout; P2-6).
+                    else c.Now(ev.Tier == RollTier.Partial ? t.Get("match.call.kickout.two") : RingLabels.ForSide(t, "match.call.kickout", ev.Actor),
                         ev.Perk != null ? Who(t, ev) + " · " + RingLabels.PerkName(t, ev.Perk) : Who(t, ev), RingUi.Gold, 54f, 1.5f);
                     return;
                 case MatchEventKind.MatchEnd:
@@ -136,7 +137,7 @@ namespace Game.Gameplay.Ring.UI
 
         private static string Who(RingText t, MatchEvent ev)
         {
-            return t.Get(ev.Actor == MatchSide.Player ? "match.call.you" : "match.call.rival");
+            return ev.Actor == MatchSide.Player ? t.Get("match.call.you") : RingLabels.ForSide(t, "match.call.rival", MatchSide.Rival);
         }
     }
 }

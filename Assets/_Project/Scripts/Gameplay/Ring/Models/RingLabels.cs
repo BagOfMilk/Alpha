@@ -48,12 +48,48 @@ namespace Game.Gameplay.Ring.Models
             }
         }
 
+        // ---------- рід борця на табло (P2-6, ПМ 12.11.2026) ----------
+
+        /// <summary>
+        /// Суфікс жіночої форми слова про борця на табло матчу: «Суперниця», «ВИРВАЛАСЯ!», «Приголомшена», «підвелася». Не «.f» і не
+        /// «.rf»: ті <see cref="HeroForms"/> підмінює для всього екрана, а на табло двоє борців, і рід береться від того, про кого слово.
+        /// </summary>
+        public const string WomanSuffix = ".w";
+
+        /// <summary>Борець — жінка: стать зі стану <see cref="HeroForms"/> (останній Apply хоста перед екраном матчу). Суперниця — лише
+        /// разом із героїнею (суперник своєї статі; героїня проти Молота — він чоловік).</summary>
+        public static bool IsWoman(RingText t, MatchSide side) { return side == MatchSide.Player ? HeroForms.ShowsHeroine(t) : HeroForms.ShowsRivalWoman(t); }
+
+        public static MatchSide Other(MatchSide side) { return side == MatchSide.Player ? MatchSide.Rival : MatchSide.Player; }
+
+        /// <summary>Текст ключа в роді борця <paramref name="side"/>: «ключ.w», якщо борець — жінка і форма є; інакше базовий.</summary>
+        public static string ForSide(RingText t, string key, MatchSide side) { return t.Get(SideKey(t, key, side)); }
+
+        public static string ForSideFormat(RingText t, string key, MatchSide side, params object[] args) { return t.Format(SideKey(t, key, side), args); }
+
+        private static string SideKey(RingText t, string key, MatchSide side)
+        {
+            string w = key + WomanSuffix;
+            return IsWoman(t, side) && t.Has(w) ? w : key;
+        }
+
         public static string PostureName(RingText t, Posture p) { return t.Get("posture." + (int)p); }
+        /// <summary>Стан борця <paramref name="side"/> у його роді («Приголомшена»).</summary>
+        public static string PostureName(RingText t, Posture p, MatchSide side) { return ForSide(t, "posture." + (int)p, side); }
         public static string ActionName(RingText t, MatchActionId id) { return t.Get("action." + (int)id); }
         public static string Unavailable(RingText t, UnavailableReason r)
         {
             if (r == UnavailableReason.TooEarly) return t.Format("match.unavail.too_early", MatchRules.FinisherMinRound);
             return t.Get("unavail." + (int)r);
+        }
+        /// <summary>
+        /// Причина недоступності дії борця <paramref name="actor"/>: «Суперниця не лежить» — у роді його суперника. Рід самого борця
+        /// («Ти ще не виснажена») — через «.f» <see cref="HeroForms"/>: дії на табло обирає лише гравець.
+        /// </summary>
+        public static string Unavailable(RingText t, UnavailableReason r, MatchSide actor)
+        {
+            if (r == UnavailableReason.TooEarly) return t.Format("match.unavail.too_early", MatchRules.FinisherMinRound);
+            return ForSide(t, "unavail." + (int)r, Other(actor));
         }
         public static string EndKind(RingText t, MatchEndKind k) { return t.Get("endkind." + (int)k); }
         public static string WinnerName(RingText t, MatchWinner w) { return t.Get("winner." + (int)w); }
