@@ -49,7 +49,7 @@ namespace Game.Gameplay.Ring.Models
         QteMiss,
         /// <summary>Бій за рингом: удар відкидає суперника на сталевий бар'єр.</summary>
         BarrierHit,
-        /// <summary>Бій за рингом: кидок у бар'єр; предмет із провалом ≤6 — нападник після замаху сам летить у бар'єр (другий дотик).</summary>
+        /// <summary>Бій за рингом: кидок у бар'єр. Предмет ≤6 (нападник після замаху сам у бар'єр, другий дотик) — з кліпом <c>Outside_Weapon_Miss</c>.</summary>
         BarrierSlam,
         /// <summary>Предмет: удар складаним сталевим стільцем — чистий 10+ (якщо режисер обрав стілець) і по дотичній 7–9.</summary>
         WeaponChair,
@@ -59,7 +59,7 @@ namespace Game.Gameplay.Ring.Models
         CountOut,
         /// <summary>Склейка місця: пара вилетіла за ринг чи повернулась — зал здіймається.</summary>
         CrowdSurge,
-        /// <summary>Промах удару чи замах предметом повз (≤6): суперник ухилився, контакту немає — лише рух повітря.</summary>
+        /// <summary>Промах удару: суперник ухилився, контакту немає — лише рух повітря. Замах предметом повз (≤6) — з кліпом <c>Outside_Weapon_Miss</c>.</summary>
         Whiff
     }
 
@@ -85,8 +85,9 @@ namespace Game.Gameplay.Ring.Models
     /// захватами. Де таблиця кліпів ставить заглушку («бракує …» — кидок у бар'єр, кидок через канати, удар стільцем), звук іде за
     /// задуманим рухом із docs/ring/CLIP_NEEDS.md, а не за заглушкою. Предмет — за CLIP_NEEDS і TRPG_DESIGN §4.4 (ПМ 08.11.2026): 10+ —
     /// чистий удар стільцем або кидок на стіл (реквізит обирає режисер, <see cref="RingProp"/>), 7–9 — стілець по дотичній і нападник
-    /// зачепив себе, ≤6 — замах повз і нападник сам у бар'єр. Другий дотик (самоудар, бар'єр) — <see cref="FollowUpOf(MatchEvent)"/>, на
-    /// мітці кліпа.</para>
+    /// зачепив себе, ≤6 — поки нападник сам падає (<c>Bump_Back</c>; замах повз і бар'єр — з кліпом <c>Outside_Weapon_Miss</c>).</para>
+    /// <para>Другий дотик тієї самої дії — <see cref="FollowUpOf(MatchEvent)"/>: режисер грає його на мітці <c>touch_2</c> кліпа, тож
+    /// ЩО звучить, вирішує подія, а ДЕ — мітка (замовляє ПМ «Кліпам»). Без мітки — тиша.</para>
     /// </summary>
     public static class RingSoundMap
     {
@@ -102,7 +103,9 @@ namespace Game.Gameplay.Ring.Models
             { "Reverse", RingCue.Slam },         // 10+ — кидок; 7–9 — обмін захватами, провал — нічого (ступінь — у ForEvent)
             { "Kickout", RingCue.MatSlap },      // «раз-два» долонею, далі вибух залу (CrowdPop режисера)
             { "Endure", RingCue.HoldStrain },
-            { "Rescue", RingCue.Pop },
+            // Напарник відволікає рефері (Ref_Flinch, удару немає). Вибух залу вже дав розрив рахунку (CrowdPop режисера в CountBeats),
+            // Pop тут був дублем (знахідка 5а, 09.11.2026). Вийде напарник із ударом (CLIP_NEEDS §7) — тоді Hit на контакті.
+            { "Rescue", RingCue.CrowdBed },
             { "TurnEnd", RingCue.CrowdBed },     // ініціатива переходить: гул залу, без удару
             { "MatchEnd", RingCue.BellEnd },     // + три долоні, якщо кінець утриманням; відлік за рингом — останні цифри на дії
             { "Flourish", RingCue.QteHit },      // переробка бою: вдале QTE
@@ -115,7 +118,10 @@ namespace Game.Gameplay.Ring.Models
             { "Desperate", RingCue.Hit },
             { "Throw", RingCue.Slam },
             { "Finisher", RingCue.Slam },
-            { "HopeSpot", RingCue.Slam },
+            // Промінь надії — той самий таран, що й відчайдушний (Center_ShoulderBlock / _Heavy, contact 0,676 — плече в груди): удар.
+            // Падіння суперника — другий дотик (Slam, FollowUpOf). Знахідка 6б, 09.11.2026: раніше Slam на тому ж контакті, де в
+            // Desperate — Hit.
+            { "HopeSpot", RingCue.Hit },
             { "TopRope", RingCue.Land },
             { "IntoRopes", RingCue.RopeRebound },   // лише основна гілка: у переробці бою дії немає
             { "IntoCorner", RingCue.CornerHit },    // лише основна гілка
@@ -199,6 +205,25 @@ namespace Game.Gameplay.Ring.Models
         /// <summary>Повітряні фінішери: прийом звучить приземленням (<see cref="RingCue.Land"/>), як стрибок з канатів.</summary>
         public static IReadOnlyCollection<string> AerialFinishers { get { return AerialFinisherKeys; } }
 
+        // Фінішери-удари: власний кліп (не підстановка) починається ударом, а падіння суперника — пізніше. grand_finale —
+        // Center_Clothesline_Flip: такт на contact 0,676 — ласо рукою в груди (Hit), суперник перевертається й падає на мат — другий
+        // дотик (Slam на touch_2, CLIP_NEEDS §9). Знахідка 6в, 09.11.2026: раніше Slam на ласо, а падіння мовчало. Охоронець —
+        // RingSoundMapTests звіряє такт прийому з кліпом.
+        private static readonly HashSet<string> StrikeFinisherKeys = new HashSet<string> { "grand_finale" };
+
+        /// <summary>Фінішери-удари: такт — удар (<see cref="RingCue.Hit"/>), падіння — другий дотик (<see cref="RingCue.Slam"/>).</summary>
+        public static IReadOnlyCollection<string> StrikeFinishers { get { return StrikeFinisherKeys; } }
+
+        // Кліпи стрибка з каната на того, хто стоїть (RingClipTable.AddSpringboard), де перший контакт (0,0 с) — перехоплення в
+        // повітрі, тіло в тіло, а падіння — пізніше: Springboard_Land_Catch (7–9, обоє падають, sell 0,897) і Springboard_Land_Counter
+        // (провал: нападника перехопили й кинули, другий contact 0,879). Такт бере перший контакт — там удар (Hit), падіння — другий
+        // дотик (Land / Slam). Подія сама не знає, на який кліп ляже (стоїть суперник чи лежить — контекст режисера), тож кліп такту
+        // подає режисер (ForEvent з beatClip; знахідка звуку 1, 09.11.2026). Без нього — старий звук на перехопленні.
+        private static readonly HashSet<string> CatchClips = new HashSet<string> { "Springboard_Land_Catch", "Springboard_Land_Counter" };
+
+        /// <summary>Кліпи, де такт — перехоплення в повітрі (удар тіла в тіло), а падіння — другий дотик.</summary>
+        public static IReadOnlyCollection<string> CatchBeatClips { get { return CatchClips; } }
+
         // Прийоми, чий такт — удар тілом об місце (RingClipTable: склейка Cut з Impact). Звук місця — склейка режисера: канат —
         // RopeRebound на мітці rope_hit, кут — CornerHit на corner_hit (RingMatchDirector.RunCut). Подія додає лише те, чого місце не дає.
         // «Затягнути до канатів» (whip, AddWhip): 7–9 і провал (реверс: у канати летить нападник) — лише спина в канат, удару немає —
@@ -230,8 +255,29 @@ namespace Game.Gameplay.Ring.Models
         /// </summary>
         public static RingCue ForEvent(MatchEvent ev, RingProp prop, MatchEvent prev)
         {
+            return ForEvent(ev, prop, prev, null);
+        }
+
+        /// <summary>
+        /// Те саме з кліпом такту (<paramref name="beatClip"/> — <c>RingBeats.For(...).Clip</c> режисера, база пари без <c>_A</c>/<c>_B</c>
+        /// або з ним; null — невідомо). Дія, чий такт — перехоплення в повітрі (<see cref="CatchBeatClips"/>), звучить ударом тіла в
+        /// тіло, а падіння дає другий дотик.
+        /// </summary>
+        public static RingCue ForEvent(MatchEvent ev, RingProp prop, MatchEvent prev, string beatClip)
+        {
             if (IsExchangeAfterPartialReverse(ev, prev)) return RingCue.CrowdBed;
+            if (ev != null && ev.Kind == MatchEventKind.Action && IsCatchBeat(beatClip)) return RingCue.Hit;
             return ForEvent(ev, prop);
+        }
+
+        /// <summary>Чи такт цього кліпа — перехоплення в повітрі (<see cref="CatchBeatClips"/>).</summary>
+        public static bool IsCatchBeat(string beatClip) { return beatClip != null && CatchClips.Contains(ClipBase(beatClip)); }
+
+        // База пари: мітки й таблиці звуку ведуть кліп без «_A» / «_B» (як RingBeats.MarkBase).
+        private static string ClipBase(string clip)
+        {
+            return clip.Length > 2 && (clip.EndsWith("_A", StringComparison.Ordinal) || clip.EndsWith("_B", StringComparison.Ordinal))
+                ? clip.Substring(0, clip.Length - 2) : clip;
         }
 
         /// <summary>
@@ -256,8 +302,9 @@ namespace Game.Gameplay.Ring.Models
             if (kind == "Reverse" && hasRoll)
             {
                 // RingClipTable.Plan: 10+ — захисник кидає нападника (Bodyslam), 7–9 — обмін захватами (Lockup_Exchange), провал —
-                // кроків немає (далі кидок самого нападника), тож і звуку немає.
-                if (tier == RollTier.Strong) return RingCue.Slam;
+                // кроків немає (далі кидок самого нападника), тож і звуку немає. За рингом 10+ — кидок, як і дія Throw там: у бар'єр
+                // (охоронець SameBeatClip_SameSound: той самий Bodyslam за рингом звучав і BarrierSlam, і Slam).
+                if (tier == RollTier.Strong) return outside ? RingCue.BarrierSlam : RingCue.Slam;
                 return tier == RollTier.Partial ? RingCue.Lockup : RingCue.CrowdBed;
             }
             if (c != RingCue.None) return c;
@@ -266,21 +313,37 @@ namespace Game.Gameplay.Ring.Models
         }
 
         /// <summary>
-        /// Другий дотик тієї самої дії — режисер кличе його на мітці кліпа (як <see cref="RingCue.RopeRebound"/> на канаті): предмет 7–9 —
-        /// нападник зачепив себе (<see cref="RingCue.Hit"/>), ≤6 — після замаху повз сам летить у бар'єр (<see cref="RingCue.BarrierSlam"/>).
-        /// None — другого дотику немає.
+        /// Другий дотик тієї самої дії. Режисер грає його на мітці <c>touch_2</c> кліпа кроку виконавця (<c>RingMatchDirector.ArmFollowUp</c>):
+        /// що звучить — тут, де — мітка (без неї тиша). None — другого дотику немає.
+        /// <list type="bullet">
+        /// <item>предмет 7–9 — нападник зачепив себе (<see cref="RingCue.Hit"/>; мітка — у <c>Outside_Chair_Graze</c>);</item>
+        /// <item>стрибок із каната на того, хто стоїть: 7–9 — обоє падають після перехоплення (<see cref="RingCue.Land"/>,
+        /// <c>Springboard_Land_Catch</c>), провал — нападника кинули на мат (<see cref="RingCue.Slam"/>, <c>Springboard_Land_Counter</c>);</item>
+        /// <item>таран відчайдушного й променя надії — суперник падає на мат (<see cref="RingCue.Slam"/>, <c>Center_ShoulderBlock</c> /
+        /// <c>_Heavy</c>); провал відчайдушного — нападник падає сам на такті, другого дотику немає;</item>
+        /// <item>фінішер-удар (<see cref="StrikeFinishers"/>) — суперник падає після удару (<see cref="RingCue.Slam"/>, <c>Center_Clothesline_Flip</c>).</item>
+        /// </list>
+        /// Предмет ≤6 — None: на екрані нападник падає сам (<c>Bump_Back</c>), і це падіння — сам такт. Бар'єр (BarrierSlam) повернеться з
+        /// кліпом <c>Outside_Weapon_Miss</c>. Другий дотик не повторює звук такту тієї самої події — <see cref="RingSoundTrail.SecondTouch"/>.
         /// </summary>
         public static RingCue FollowUpOf(MatchEvent ev)
         {
-            return ev == null ? RingCue.None : FollowUpOf(ev.Kind.ToString(), ev.Action.ToString(), ev.HasRoll, ev.Tier);
+            return ev == null ? RingCue.None : FollowUpOf(ev.Kind.ToString(), ev.Action.ToString(), ev.HasRoll, ev.Tier, ev.MoveKey);
         }
 
-        /// <summary>Другий дотик за назвами (обидва ядра).</summary>
-        public static RingCue FollowUpOf(string kind, string action, bool hasRoll, RollTier tier)
+        /// <summary>Другий дотик за назвами (обидва ядра); <paramref name="moveKey"/> — прийом з каталогу, null — без прийому.</summary>
+        public static RingCue FollowUpOf(string kind, string action, bool hasRoll, RollTier tier, string moveKey = null)
         {
-            if (kind != "Action" || action != "Weapon" || !hasRoll) return RingCue.None;
-            if (tier == RollTier.Partial) return RingCue.Hit;
-            if (tier == RollTier.Miss) return RingCue.BarrierSlam;
+            if (kind != "Action" || !hasRoll) return RingCue.None;
+            switch (action)
+            {
+                case "Weapon": return tier == RollTier.Partial ? RingCue.Hit : RingCue.None;
+                case "TopRope": return tier == RollTier.Partial ? RingCue.Land : tier == RollTier.Miss ? RingCue.Slam : RingCue.None;
+                case "Desperate": return tier == RollTier.Miss ? RingCue.None : RingCue.Slam;
+                case "HopeSpot": return RingCue.Slam;   // провал — план 7–9: суперник однаково лягає
+                case "Finisher":
+                    return tier != RollTier.Miss && moveKey != null && StrikeFinisherKeys.Contains(moveKey) ? RingCue.Slam : RingCue.None;
+            }
             return RingCue.None;
         }
 
@@ -300,8 +363,9 @@ namespace Game.Gameplay.Ring.Models
         /// (<c>Idle_Tired_Loop</c>), тож і звук той самий. Провал важить більше за місце: за рингом промах удару — теж ухил.
         /// Фінішер — за ключем прийому (з 2937113 подія фінішера несе ключ ґіміка): больовий (<see cref="HoldFinishers"/>) — захват,
         /// повітряний (<see cref="AerialFinishers"/>) — приземлення, решта — падіння суперника. «Затягнути до канатів» 7–9 і провал — лише
-        /// канат склейки (гул залу), «затягнути в кут» — удар тілом під звук кута на кожному ступені. Предмет 10+ — реквізит режисера (стілець чи стіл), 7–9 — стілець, ≤6 —
-        /// замах повз (бар'єр — другим дотиком); за рингом удар і кидок ідуть у бар'єр.
+        /// канат склейки (гул залу), «затягнути в кут» — удар тілом під звук кута на кожному ступені. Фінішер-удар (<see cref="StrikeFinishers"/>)
+        /// — удар, падіння — другим дотиком. Предмет 10+ — реквізит режисера (стілець чи стіл), 7–9 — стілець, ≤6 — нападник падає сам
+        /// (Slam, як кожен <c>Bump_Back</c>); за рингом удар і кидок ідуть у бар'єр.
         /// </summary>
         private static RingCue Refine(string action, RingCue c, bool hasRoll, RollTier tier, bool outside, RingProp prop, string moveKey)
         {
@@ -309,7 +373,10 @@ namespace Game.Gameplay.Ring.Models
             {
                 if (!hasRoll || tier == RollTier.Partial) return RingCue.WeaponChair;
                 if (tier == RollTier.Strong) return prop == RingProp.Table ? RingCue.WeaponTable : RingCue.WeaponChair;
-                return RingCue.Whiff;
+                // ≤6: RingClipTable — Bump_Back «предмет не влучив», такт на падінні (0,52 с). Знахідка 6а, 09.11.2026: свист замаху лягав
+                // на падіння. Падіння за рингом звучить як на рингу (EVENT_SOUND, «Бій за рингом»). Кліп Outside_Weapon_Miss (CLIP_NEEDS §5)
+                // поверне Whiff і бар'єр другим дотиком — охоронець Misses_FollowTheClipTable вимагає звук нового кліпа провалу.
+                return RingCue.Slam;
             }
             // Промінь надії: провал рахується як 7–9 — так само ступінь підміняє таблиця кліпів, тож звук іде за тим самим планом.
             if (action == "HopeSpot" && hasRoll && tier == RollTier.Miss) tier = RollTier.Partial;
@@ -334,6 +401,7 @@ namespace Game.Gameplay.Ring.Models
             }
             if (action == "Finisher" && moveKey != null && HoldFinisherKeys.Contains(moveKey)) return RingCue.HoldStrain;
             if (action == "Finisher" && moveKey != null && AerialFinisherKeys.Contains(moveKey)) return RingCue.Land;
+            if (action == "Finisher" && moveKey != null && StrikeFinisherKeys.Contains(moveKey)) return RingCue.Hit;
             if (outside)
             {
                 if (action == "Strike") return RingCue.BarrierHit;
@@ -377,20 +445,58 @@ namespace Game.Gameplay.Ring.Models
     }
 
     /// <summary>
-    /// Слід подій для звуку: пам'ятає подію, що звучала перед поточною, і питає таблицю з нею (<see cref="RingSoundMap.ForEvent(MatchEvent, RingProp, MatchEvent)"/>).
-    /// Без Unity, тож тести подають журнал матчу так само, як режисер подає його в <c>RingSound.OnEvent</c>. Між матчами скидати
-    /// не обов'язково: таблиця звіряє номер події, а обмін слідом за реверсом 7–9 ядро видає в тому ж виклику.
+    /// Слід подій для звуку: пам'ятає подію, що звучала перед поточною, і питає таблицю з нею (<see cref="RingSoundMap.ForEvent(MatchEvent, RingProp, MatchEvent, string)"/>).
+    /// Пам'ятає й звук такту кількох останніх подій, щоб другий дотик не повторив його (<see cref="SecondTouch"/>). Без Unity, тож тести
+    /// подають журнал матчу так само, як режисер подає його в <c>RingSound.OnEvent</c>. Між матчами скидати не обов'язково: таблиця
+    /// звіряє номер події, а обмін слідом за реверсом 7–9 ядро видає в тому ж виклику.
     /// </summary>
     public sealed class RingSoundTrail
     {
         private MatchEvent _prev;
 
-        /// <summary>Звук наступної події; подія стає попередньою для того, що прийде далі.</summary>
-        public RingCue Next(MatchEvent ev, RingProp prop = RingProp.Chair)
+        // Такти останніх подій: другий дотик грає на мітці кліпа пізніше такту, а між ними режисер може подати наступну подію.
+        private const int Keep = 8;
+        private readonly MatchEvent[] _beatEv = new MatchEvent[Keep];
+        private readonly RingCue[] _beatCue = new RingCue[Keep];
+        private int _head;
+
+        /// <summary>
+        /// Звук наступної події; подія стає попередньою для того, що прийде далі. <paramref name="beatClip"/> — кліп такту режисера
+        /// (<c>RingBeats.For(...).Clip</c>), null — невідомо.
+        /// </summary>
+        public RingCue Next(MatchEvent ev, RingProp prop = RingProp.Chair, string beatClip = null)
         {
             var prev = _prev;
             _prev = ev;
-            return RingSoundMap.ForEvent(ev, prop, prev);
+            var cue = RingSoundMap.ForEvent(ev, prop, prev, beatClip);
+            if (ev != null)
+            {
+                _beatEv[_head] = ev;
+                _beatCue[_head] = cue;
+                _head = (_head + 1) % Keep;
+            }
+            return cue;
+        }
+
+        /// <summary>
+        /// Другий дотик події (<see cref="RingSoundMap.FollowUpOf(MatchEvent)"/>) у мить, коли він грає: None, якщо такт ТІЄЇ САМОЇ події
+        /// вже прозвучав тим самим звуком. Так перехоплення стрибка з каната, поки режисер не подає кліп такту (тоді там Land / Slam,
+        /// а не удар), не дає двох Land чи двох Slam (знахідка звуку 1, 09.11.2026). Такту ще не було — другий дотик грає.
+        /// </summary>
+        public RingCue SecondTouch(MatchEvent ev)
+        {
+            var c = RingSoundMap.FollowUpOf(ev);
+            if (c == RingCue.None) return c;
+            for (int i = 0; i < Keep; i++)
+                if (Same(_beatEv[i], ev) && _beatCue[i] == c) return RingCue.None;
+            return c;
+        }
+
+        // Та сама подія журналу: режисер подає в OnEvent і FollowUp той самий об'єкт, але копія з тим самим номером — теж вона.
+        private static bool Same(MatchEvent a, MatchEvent b)
+        {
+            if (a == null || b == null) return false;
+            return ReferenceEquals(a, b) || (a.Seq == b.Seq && a.Kind == b.Kind && a.Action == b.Action && a.Actor == b.Actor);
         }
     }
 }

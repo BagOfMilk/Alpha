@@ -112,9 +112,12 @@ namespace Game.Gameplay.Ring.Stage
         /// без кутової стійки на передньому плані й без рефері на фартуху, обрізаного краєм кадру (<paramref name="referee"/>,
         /// типово <see cref="RingStage3D.OutsideRefPos"/>: або весь у кадрі, або поза ним). Коли таких немає — перший, що вміщає
         /// пару, з поступкою в <see cref="Shot.Compromise"/>.
+        /// <paramref name="preferYaw"/> — курс попереднього кадру «за рингом»: курси перебираються від найближчого до нього, і
+        /// новий план лишається з того самого боку пари, поки там є чистий кадр (огляд 8f: між подіями камера перескакувала з
+        /// одного кінця проходу на інший — gym x −2,2 → +2,4 → −1,5, рефері стрибав з правого переднього плану на лівий).
         /// </summary>
         public static Shot OutsideShot(IList<Vector3> pts, Vector3 pairCenter, Vector3 outward, float aspect,
-            Func<Vector3, bool> allowed = null, IList<float> tops = null, Vector3? referee = null)
+            Func<Vector3, bool> allowed = null, IList<float> tops = null, Vector3? referee = null, float? preferYaw = null)
         {
             var venue = RingStage3D.Venue;
             Vector3 rf = referee ?? RingStage3D.OutsideRefPos;
@@ -139,7 +142,7 @@ namespace Game.Gameplay.Ring.Stage
             // Запасні кадри з поступкою: обрізаний рефері гірший за чистий, але кращий за стійку перед парою (вона закриває бій).
             var refCut = new Shot();
             var postFront = new Shot();
-            foreach (float th in OutsideAngles)
+            foreach (float th in OutsideOrder(outward, along, preferYaw))
             {
                 float r = th * Mathf.Deg2Rad;
                 // Камера дивиться в цьому напрямку; стоїть — по інший бік пари.
@@ -175,6 +178,38 @@ namespace Game.Gameplay.Ring.Stage
                 "[Ринг] план «за рингом» з поступкою: {0}; камера ({1:0.00}; {2:0.00}; {3:0.00}) → ({4:0.00}; {5:0.00}; {6:0.00}), кут {7:0}°",
                 best.Compromise, best.Pos.x, best.Pos.y, best.Pos.z, best.Look.x, best.Look.y, best.Look.z, best.Fov));
             return best;
+        }
+
+        /// <summary>
+        /// Порядок курсів «за рингом»: без <paramref name="preferYaw"/> — звичний (<see cref="OutsideAngles"/>); з ним — від
+        /// найближчого до попереднього курсу камери, за рівності — у звичному порядку (сортування стійке).
+        /// </summary>
+        private static IList<float> OutsideOrder(Vector3 outward, Vector3 along, float? preferYaw)
+        {
+            if (!preferYaw.HasValue) return OutsideAngles;
+            var order = new List<KeyValuePair<float, int>>(OutsideAngles.Length);
+            for (int i = 0; i < OutsideAngles.Length; i++) order.Add(new KeyValuePair<float, int>(OutsideAngles[i], i));
+            Func<float, float> gap = th =>
+            {
+                float r = th * Mathf.Deg2Rad;
+                Vector3 look = outward * Mathf.Cos(r) + along * Mathf.Sin(r);
+                return Mathf.Abs(Mathf.DeltaAngle(Mathf.Atan2(look.x, look.z) * Mathf.Rad2Deg, preferYaw.Value));
+            };
+            order.Sort((a, b) =>
+            {
+                int c = gap(a.Key).CompareTo(gap(b.Key));
+                return c != 0 ? c : a.Value.CompareTo(b.Value);
+            });
+            var res = new float[order.Count];
+            for (int i = 0; i < res.Length; i++) res[i] = order[i].Key;
+            return res;
+        }
+
+        /// <summary>Курс кадру (°, від осі Z за годинниковою зверху) — те, що приймає <see cref="OutsideShot"/> як preferYaw.</summary>
+        public static float YawOf(Shot s)
+        {
+            Vector3 f = s.Look - s.Pos;
+            return Mathf.Atan2(f.x, f.z) * Mathf.Rad2Deg;
         }
 
         /// <summary>

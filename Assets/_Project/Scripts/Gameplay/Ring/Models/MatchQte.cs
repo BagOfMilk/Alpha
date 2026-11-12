@@ -103,6 +103,22 @@ namespace Game.Gameplay.Ring.Models
     }
 
     /// <summary>
+    /// Натиск QTE від хоста до режисера (Ф3 п. 4). Хост (лінтується) не бачить сцени Unity, тож режисер сам реєструє тут
+    /// свій <c>QtePress</c>, поки живий. Немає режисера чи вікна — <see cref="TryPress"/> false, клавіша йде далі як завжди.
+    /// </summary>
+    public static class MatchQteInput
+    {
+        private static Func<bool> _press;
+
+        public static void Bind(Func<bool> press) { _press = press; }
+
+        /// <summary>Знімає лише свій зв'язок: новий режисер, що вже зареєструвався, не зникає.</summary>
+        public static void Unbind(Func<bool> press) { if (_press == press) _press = null; }
+
+        public static bool TryPress() { var p = _press; return p != null && p(); }
+    }
+
+    /// <summary>
     /// Звідки брати номер події для видовища: ядро (<see cref="MatchEngine.RegisterFlourish"/>) приймає лише влучний прийом
     /// ГРАВЦЯ, тож вікно кліпа треба прив'язати до такої події. Чиста функція — без Unity.
     /// </summary>

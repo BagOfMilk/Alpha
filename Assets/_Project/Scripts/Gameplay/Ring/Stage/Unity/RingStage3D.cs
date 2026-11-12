@@ -611,7 +611,9 @@ namespace Game.Gameplay.Ring.Stage
                 for (int i = 0; i < mats.Length; i++) mats[i] = mat;
                 r.sharedMaterials = mats;
                 r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
-                r.receiveShadows = true;
+                // Діагностика огляду облич (-ring-diag-nohead-shadow, лише кадри): голова не приймає тіней — чи сіра пляма на
+                // підборідді (огляд «щелепи», hall 018) — тінь. У грі прапорця немає.
+                r.receiveShadows = !(Characters.CharacterAssembler.PartOf(r.name) == "body_head" && RingLaunchArgs.Has("-ring-diag-nohead-shadow"));
                 // Межі скін-меша стоять у бінд-позі набору (авторовані осторонь), а кліпи рингу запечені з абсолютним
                 // зсувом: без цього постать відсікається камерою, щойно її таз відходить від старих меж.
                 var smr = r as SkinnedMeshRenderer;

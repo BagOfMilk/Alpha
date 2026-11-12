@@ -83,7 +83,8 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(RingCue.WeaponChair, RingSoundMap.ForEvent("Action", "Weapon", true, RollTier.Strong, true, RingProp.Chair));
             Assert.AreEqual(RingCue.WeaponTable, RingSoundMap.ForEvent("Action", "Weapon", true, RollTier.Strong, true, RingProp.Table));
             Assert.AreEqual(RingCue.WeaponChair, RingSoundMap.ForEvent("Action", "Weapon", true, RollTier.Partial, true, RingProp.Table), "7–9 — завжди стілець");
-            Assert.AreEqual(RingCue.Whiff, RingSoundMap.ForEvent("Action", "Weapon", true, RollTier.Miss, true, RingProp.Table), "≤6 — замах повз");
+            Assert.AreEqual(RingCue.Slam, RingSoundMap.ForEvent("Action", "Weapon", true, RollTier.Miss, true, RingProp.Table),
+                "≤6 — нападник падає сам (Bump_Back); замах повз і бар'єр — з кліпом Outside_Weapon_Miss");
             Assert.AreEqual(RingCue.WeaponChair, RingSoundMap.ForEvent("Action", "Weapon", false, RollTier.Miss, true, RingProp.Table), "без кидка — стілець");
             // за рингом удар і кидок ідуть у бар'єр; на рингу — як завжди
             Assert.AreEqual(RingCue.BarrierHit, RingSoundMap.ForEvent("Action", "Strike", true, RollTier.Partial, true));
@@ -137,17 +138,79 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void Weapon_SecondTouch_IsSelfHitOrBarrier()
+        public void SecondTouch_ByEvent()
         {
-            // Другий дотик режисер кличе на мітці кліпа: 7–9 — нападник зачепив себе, ≤6 — після замаху сам у бар'єр; 10+ — без нього.
+            // Другий дотик режисер грає на мітці touch_2 кліпа: що звучить — подія, де — мітка (без неї тиша).
+            // Предмет: 7–9 — нападник зачепив себе; ≤6 — поки падає сам на такті (Bump_Back), бар'єр — з кліпом Outside_Weapon_Miss.
             Assert.AreEqual(RingCue.Hit, RingSoundMap.FollowUpOf("Action", "Weapon", true, RollTier.Partial));
-            Assert.AreEqual(RingCue.BarrierSlam, RingSoundMap.FollowUpOf("Action", "Weapon", true, RollTier.Miss));
+            Assert.AreEqual(RingCue.None, RingSoundMap.FollowUpOf("Action", "Weapon", true, RollTier.Miss), "≤6 — без другого дотику (знахідка 6а)");
             Assert.AreEqual(RingCue.None, RingSoundMap.FollowUpOf("Action", "Weapon", true, RollTier.Strong));
-            Assert.AreEqual(RingCue.None, RingSoundMap.FollowUpOf("Action", "Weapon", false, RollTier.Miss), "без кидка ступінь не читається");
-            Assert.AreEqual(RingCue.None, RingSoundMap.FollowUpOf("Sell", "Weapon", true, RollTier.Miss), "продаж — не дія");
+            // Стрибок із каната на того, хто стоїть: перехоплення — такт, падіння — другий дотик (знахідка 1).
+            Assert.AreEqual(RingCue.Land, RingSoundMap.FollowUpOf("Action", "TopRope", true, RollTier.Partial), "7–9: обоє падають (Springboard_Land_Catch)");
+            Assert.AreEqual(RingCue.Slam, RingSoundMap.FollowUpOf("Action", "TopRope", true, RollTier.Miss), "провал: нападника кинули (Springboard_Land_Counter)");
+            Assert.AreEqual(RingCue.None, RingSoundMap.FollowUpOf("Action", "TopRope", true, RollTier.Strong), "10+: приземлення на суперника — сам такт");
+            // Таран: удар плечем — такт, падіння суперника — другий дотик (знахідка 6б); провал відчайдушного — падає сам на такті.
+            foreach (var t in new[] { RollTier.Strong, RollTier.Partial })
+                Assert.AreEqual(RingCue.Slam, RingSoundMap.FollowUpOf("Action", "Desperate", true, t), "відчайдушний " + t);
+            Assert.AreEqual(RingCue.None, RingSoundMap.FollowUpOf("Action", "Desperate", true, RollTier.Miss));
+            foreach (RollTier t in Enum.GetValues(typeof(RollTier)))
+                Assert.AreEqual(RingCue.Slam, RingSoundMap.FollowUpOf("Action", "HopeSpot", true, t), "промінь надії " + t + " (провал — план 7–9)");
+            // Фінішер-удар: ласо — такт, падіння — другий дотик (знахідка 6в); інші фінішери — падіння на самому такті.
+            foreach (var t in new[] { RollTier.Strong, RollTier.Partial })
+                Assert.AreEqual(RingCue.Slam, RingSoundMap.FollowUpOf(Act(MatchActionId.Finisher, t, false, "grand_finale")), "grand_finale " + t);
+            Assert.AreEqual(RingCue.None, RingSoundMap.FollowUpOf(Act(MatchActionId.Finisher, RollTier.Miss, false, "grand_finale")), "провал — Bump_Back");
+            Assert.AreEqual(RingCue.None, RingSoundMap.FollowUpOf(Act(MatchActionId.Finisher, RollTier.Strong, false, "crusher")));
+            Assert.AreEqual(RingCue.None, RingSoundMap.FollowUpOf(Act(MatchActionId.Finisher, RollTier.Strong)));
+            Assert.AreEqual(RingCue.None, RingSoundMap.FollowUpOf("Action", "Weapon", false, RollTier.Partial), "без кидка ступінь не читається");
+            Assert.AreEqual(RingCue.None, RingSoundMap.FollowUpOf("Sell", "HopeSpot", true, RollTier.Partial), "продаж — не дія");
             Assert.AreEqual(RingCue.None, RingSoundMap.FollowUpOf("Action", "Strike", true, RollTier.Miss));
             Assert.AreEqual(RingCue.None, RingSoundMap.FollowUpOf(null));
             Assert.AreEqual(RingCue.None, RingSoundMap.FollowUpOf(new MatchEvent()), "порожня подія — без другого дотику");
+        }
+
+        [Test]
+        public void SecondTouch_NeverRepeatsTheBeatOfTheSameEvent()
+        {
+            // Режисер кличе FollowUp на старті кроку з затримкою до мітки, а звук вирішується в мить звуку — такт уже прозвучав.
+            var trail = new RingSoundTrail();
+            int seq = 10;
+            Func<MatchActionId, RollTier, MatchEvent> ev = (a, t) => { var e = Act(a, t); e.Seq = seq++; return e; };
+            // кліп такту від режисера: перехоплення стрибка — удар, падіння — другим дотиком
+            var catchEv = ev(MatchActionId.TopRope, RollTier.Partial);
+            Assert.AreEqual(RingCue.Hit, trail.Next(catchEv, RingProp.Chair, "Springboard_Land_Catch"), "перехоплення — удар тіла в тіло");
+            Assert.AreEqual(RingCue.Land, trail.SecondTouch(catchEv), "падіння обох після перехоплення");
+            var counterEv = ev(MatchActionId.TopRope, RollTier.Miss);
+            Assert.AreEqual(RingCue.Hit, trail.Next(counterEv, RingProp.Chair, "Springboard_Land_Counter_A"), "половина пари — та сама база");
+            Assert.AreEqual(RingCue.Slam, trail.SecondTouch(counterEv));
+            // без кліпа такту (режисер ще не подає) — старий звук на перехопленні, і другий дотик його не дублює
+            var oldCatch = ev(MatchActionId.TopRope, RollTier.Partial);
+            Assert.AreEqual(RingCue.Land, trail.Next(oldCatch));
+            Assert.AreEqual(RingCue.None, trail.SecondTouch(oldCatch), "два Land на одній події — ні");
+            var oldCounter = ev(MatchActionId.TopRope, RollTier.Miss);
+            Assert.AreEqual(RingCue.Slam, trail.Next(oldCounter));
+            // між тактом і міткою режисер встигає подати наступні події — пам'ять тримає кілька тактів
+            trail.Next(ev(MatchActionId.Strike, RollTier.Strong));
+            trail.Next(ev(MatchActionId.Taunt, RollTier.Strong));
+            Assert.AreEqual(RingCue.None, trail.SecondTouch(oldCounter), "два Slam на одній події — ні (застереження ПМ)");
+            // різні звуки — обидва
+            var weapon = ev(MatchActionId.Weapon, RollTier.Partial);
+            Assert.AreEqual(RingCue.WeaponChair, trail.Next(weapon));
+            Assert.AreEqual(RingCue.Hit, trail.SecondTouch(weapon));
+            var hope = ev(MatchActionId.HopeSpot, RollTier.Miss);
+            Assert.AreEqual(RingCue.Hit, trail.Next(hope), "промінь надії: удар плечем");
+            Assert.AreEqual(RingCue.Slam, trail.SecondTouch(hope), "суперник падає");
+            // такту ще не було — другий дотик грає; копія події з тим самим номером — та сама подія
+            var lone = ev(MatchActionId.Desperate, RollTier.Strong);
+            Assert.AreEqual(RingCue.Slam, trail.SecondTouch(lone));
+            var copy = Act(MatchActionId.TopRope, RollTier.Partial);
+            copy.Seq = oldCatch.Seq;
+            Assert.AreEqual(RingCue.None, trail.SecondTouch(copy));
+            // кліп перехоплення міняє лише звук дії
+            var sell = new MatchEvent { Kind = MatchEventKind.Sell, Action = MatchActionId.TopRope, HasRoll = true, Tier = RollTier.Partial, Seq = seq++ };
+            Assert.AreEqual(RingCue.CrowdBed, RingSoundMap.ForEvent(sell, RingProp.Chair, null, "Springboard_Land_Catch"));
+            Assert.AreEqual(RingCue.Land, RingSoundMap.ForEvent(Act(MatchActionId.TopRope, RollTier.Partial), RingProp.Chair, null, "Land_Swallow_Knees"),
+                "на лежачого — пірнання, такт на приземленні");
+            Assert.IsFalse(RingSoundMap.IsCatchBeat(null));
         }
 
         private static MatchEvent Act(MatchActionId a, RollTier t, bool outside = false, string moveKey = null)
@@ -177,6 +240,9 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(RingCue.Lockup, RingSoundMap.ForEvent(rev(RollTier.Partial)));
             Assert.AreEqual(RingCue.CrowdBed, RingSoundMap.ForEvent(rev(RollTier.Miss)), "провал реверсу — на екрані нічого, удару немає");
             Assert.AreEqual(RingCue.Slam, RingSoundMap.ForEvent(MatchEventKind.Reverse, MatchActionId.Throw), "без кидка — кидок");
+            // за рингом кидок захисника — як дія Throw там: у бар'єр; обмін захватами — той самий
+            Assert.AreEqual(RingCue.BarrierSlam, RingSoundMap.ForEvent("Reverse", "Throw", true, RollTier.Strong, true));
+            Assert.AreEqual(RingCue.Lockup, RingSoundMap.ForEvent("Reverse", "Throw", true, RollTier.Partial, true));
         }
 
         [Test]
@@ -287,17 +353,211 @@ namespace Game.Tests.EditMode
                     "повітряний фінішер звучить як стрибок з канатів");
             }
             Assert.AreEqual(RingCue.Slam, RingSoundMap.ForEvent(Act(MatchActionId.Finisher, RollTier.Miss, false, "meteor")), "провал — падіння (Bump_Back)");
-            Assert.AreEqual(RingCue.Slam, RingSoundMap.ForEvent(Act(MatchActionId.Finisher, RollTier.Strong, false, "grand_finale")));
             Assert.AreEqual(RingCue.Hit, RingSoundMap.ForEvent(Act(MatchActionId.Strike, RollTier.Strong, false, "meteor")), "ключ змінює лише фінішер");
             var catalog = MoveCatalog.Load(CareerKit.Read("career_moves.json"));
             var expected = catalog.All.Where(m => m.Action == MatchActionId.Finisher && m.Category == MoveCategory.Aerial).Select(m => m.Id).OrderBy(s => s).ToList();
             CollectionAssert.AreEqual(expected, RingSoundMap.AerialFinishers.OrderBy(s => s).ToList(), "повітряні фінішери каталогу й таблиці звуку");
-            // кожен фінішер каталогу має свій звук: больовий — захват, повітряний — приземлення, решта — падіння суперника
+            // кожен фінішер каталогу має свій звук: больовий — захват, повітряний — приземлення, удар — удар (падіння другим дотиком),
+            // решта — падіння суперника
             foreach (var m in catalog.All.Where(x => x.Action == MatchActionId.Finisher))
             {
-                var want = m.Category == MoveCategory.Submission ? RingCue.HoldStrain : m.Category == MoveCategory.Aerial ? RingCue.Land : RingCue.Slam;
+                var want = m.Category == MoveCategory.Submission ? RingCue.HoldStrain : m.Category == MoveCategory.Aerial ? RingCue.Land
+                    : RingSoundMap.StrikeFinishers.Contains(m.Id) ? RingCue.Hit : RingCue.Slam;
                 Assert.AreEqual(want, RingSoundMap.ForEvent(Act(MatchActionId.Finisher, RollTier.Strong, false, m.Id)), m.Id + " (" + m.Category + ")");
             }
+        }
+
+        // Мітки обох наборів; extra — додаткові рядки до чоловічого (Add не чіпає кліпів, що вже є, тож лише разом із ним).
+        private static RingClipEvents Marks(string extra = null)
+        {
+            string dir = Path.Combine(Root(), "Assets", "Art", "Animations");
+            var marks = RingClipEvents.Parse(File.ReadAllText(Path.Combine(dir, "ring_anims_events.txt")) + "\n" + (extra ?? ""));
+            marks.Add(File.ReadAllText(Path.Combine(dir, "ring_anims_f_events.txt")));
+            return marks;
+        }
+
+        // Кінцеві вузли половин пари з маніфесту набору рингу: кліп → (вузол A, вузол B).
+        private static Dictionary<string, string[]> EndNodes()
+        {
+            var d = new Dictionary<string, string[]>();
+            string path = Path.Combine(Root(), "Assets", "Art", "Animations", "ring_anims_manifest.txt");
+            foreach (var line in File.ReadAllLines(path))
+            {
+                var f = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                if (f.Length < 9 || !(f[0].EndsWith("_A") || f[0].EndsWith("_B"))) continue;
+                string b = f[0].Substring(0, f[0].Length - 2);
+                string[] n;
+                if (!d.TryGetValue(b, out n)) d[b] = n = new string[2];
+                n[f[0].EndsWith("_A") ? 0 : 1] = f[f.Length - 1];
+            }
+            return d;
+        }
+
+        private static bool Falls(string node) { return node != null && (node.StartsWith("lying") || node.StartsWith("pinned")); }
+
+        // Усі події, які показує таблиця кліпів: дії й прийоми каталогу × ступені × місце пари × лежить суперник, і решта видів подій.
+        private static IEnumerable<KeyValuePair<MatchEvent, PlanContext>> AllPlannedEvents()
+        {
+            var catalog = MoveCatalog.Load(CareerKit.Read("career_moves.json"));
+            var ctxs = new[] { default(PlanContext), new PlanContext { VictimDown = true } };
+            foreach (var c in ctxs)
+                foreach (RollTier t in Enum.GetValues(typeof(RollTier)))
+                    foreach (var o in new[] { false, true })
+                    {
+                        foreach (MatchActionId a in Enum.GetValues(typeof(MatchActionId)))
+                            yield return new KeyValuePair<MatchEvent, PlanContext>(new MatchEvent { Kind = MatchEventKind.Action, Actor = MatchSide.Player,
+                                Action = a, HasRoll = true, Tier = t, Outside = o }, c);
+                        foreach (var m in catalog.All)
+                            yield return new KeyValuePair<MatchEvent, PlanContext>(new MatchEvent { Kind = MatchEventKind.Action, Actor = MatchSide.Player,
+                                Action = m.Action, HasRoll = true, Tier = t, MoveKey = m.Id, Staging = m.Staging, Outside = o }, c);
+                        foreach (MatchEventKind k in Enum.GetValues(typeof(MatchEventKind)))
+                            if (k != MatchEventKind.Action)
+                                yield return new KeyValuePair<MatchEvent, PlanContext>(new MatchEvent { Kind = k, Actor = MatchSide.Player,
+                                    Action = MatchActionId.Throw, HasRoll = true, Tier = t, Outside = o }, c);
+                    }
+        }
+
+        private static string Title(MatchEvent e, PlanContext c)
+        {
+            return e.Kind + " " + (e.MoveKey ?? e.Action.ToString()) + " " + e.Tier + (e.Outside ? " за рингом" : "") + (c.VictimDown ? " (лежачий)" : "");
+        }
+
+        [Test]
+        public void SameBeatClip_SameSound()
+        {
+            // Знахідки 6а і 6б (09.11.2026): свист предмета ≤6 лягав на падіння Bump_Back, де кожна інша подія звучить падінням;
+            // промінь надії — Slam, відчайдушний — Hit на тому самому контакті тарана. Правило: власний кліп (не підстановка «бракує …»)
+            // на тому самому такті звучить однаково. За рингом — окремо: там кліп поки той самий, а бар'єр задумано (EVENT_SOUND).
+            var marks = Marks();
+            var groups = new Dictionary<string, Dictionary<RingCue, string>>();
+            foreach (var kv in AllPlannedEvents())
+            {
+                var e = kv.Key;
+                var steps = RingClipTable.Plan(e, kv.Value);
+                var bp = RingBeats.For(steps, marks, _ => 0f);
+                if (bp.Step < 0 || bp.IsCount || bp.Clip == null) continue;
+                var st = steps[bp.Step];
+                if (st.Note != null && st.Note.Contains("бракує")) continue;
+                string key = bp.Clip + (st.Kind == StageStepKind.Cut ? " [склейка]" : "") + (e.Outside ? " [за рингом]" : "");
+                var cue = RingSoundMap.ForEvent(e, RingProp.Chair, null, bp.Clip);
+                Dictionary<RingCue, string> g;
+                if (!groups.TryGetValue(key, out g)) groups[key] = g = new Dictionary<RingCue, string>();
+                if (!g.ContainsKey(cue)) g[cue] = Title(e, kv.Value);
+            }
+            var bad = groups.Where(g => g.Value.Count > 1)
+                .Select(g => g.Key + ": " + string.Join(" / ", g.Value.Select(c => c.Key + " ← " + c.Value))).ToList();
+            Assert.IsEmpty(bad, "той самий кліп такту — різні звуки:\n" + string.Join("\n", bad));
+            Assert.Greater(groups.Count, 30, "перебір дійшов до кліпів");
+            Assert.IsTrue(groups.ContainsKey("Center_ShoulderBlock") && groups["Center_ShoulderBlock"].ContainsKey(RingCue.Hit), "таран — удар");
+            Assert.IsTrue(groups.ContainsKey("Bump_Back [за рингом]") && groups["Bump_Back [за рингом]"].Keys.Single() == RingCue.Slam, "падіння за рингом");
+        }
+
+        // Мітки touch_2, які зона звуку чекає від «Кліпів» (CLIP_NEEDS §9 і запит звуку 09.11.2026), і звук на них. Час — будь-який
+        // після такту: тест перевіряє, ДЕ режисер зіграє другий дотик (крок виконавця з міткою) і ЩО прозвучить.
+        // Мітка другого дотику — RingMatchDirector.FollowUpMark (Stage/Unity, у тести не входить).
+        private const string Touch2 = "touch_2";
+
+        // Хто падає на другому дотику: половина пари з маніфесту (0 — A, виконавець; 1 — B, суперник), що кінчається лежачи.
+        private static readonly Dictionary<string, int> SecondTouchFaller = new Dictionary<string, int>
+        {
+            { "Springboard_Land_Catch", 1 }, { "Springboard_Land_Counter", 0 }, { "Center_Clothesline_Flip", 1 },
+            { "Center_ShoulderBlock", 1 }, { "Center_ShoulderBlock_Heavy", 1 },
+        };
+
+        private static readonly Dictionary<string, RingCue> ExpectedSecondTouch = new Dictionary<string, RingCue>
+        {
+            { "Springboard_Land_Catch", RingCue.Land },     // 7–9: після перехоплення падають обоє (sell 0,897)
+            { "Springboard_Land_Counter", RingCue.Slam },   // провал: нападника кинули на мат (другий contact 0,879)
+            { "Center_Clothesline_Flip", RingCue.Slam },    // grand_finale: після ласо суперник перевертається й падає
+            { "Center_ShoulderBlock", RingCue.Slam },       // таран 7–9 (відчайдушний, промінь надії): суперник падає на спину
+            { "Center_ShoulderBlock_Heavy", RingCue.Slam }, // таран 10+
+        };
+
+        [Test]
+        public void SecondTouch_LandsOnTheFall()
+        {
+            // Режисер (RingMatchDirector.ArmFollowUp): крок пари чи соло виконавця події, у кліпа якого є мітка touch_2, — другий дотик
+            // FollowUpOf. Тест ставить очікувані мітки поверх справжніх і перебирає всі події таблиці кліпів.
+            var real = Marks();
+            var extra = new System.Text.StringBuilder();
+            foreach (var c in ExpectedSecondTouch.Keys)
+                if (real.Time(c, Touch2) < 0f) extra.AppendLine(c + " " + Touch2 + " 2.000 - -");
+            var marks = Marks(extra.ToString());
+            foreach (var c in ExpectedSecondTouch.Keys) Assert.GreaterOrEqual(marks.Time(c, Touch2), 0f, c + ": мітка для перевірки");
+            var nodes = EndNodes();
+            var reached = new HashSet<string>();
+            var bad = new List<string>();
+            foreach (var kv in AllPlannedEvents())
+            {
+                var e = kv.Key;
+                if (RingSoundMap.FollowUpOf(e) == RingCue.None) continue;
+                var steps = RingClipTable.Plan(e, kv.Value);
+                var at = steps.Where(st => (st.Kind == StageStepKind.Pair || st.Kind == StageStepKind.Solo) && st.Actor == e.Actor
+                    && marks.Time(RingBeats.MarkBase(st.Clip), Touch2) >= 0f).ToList();
+                string title = Title(e, kv.Value);
+                if (at.Count == 0) continue;                                  // мітки немає — тиша, а не звук не в такт
+                if (at.Count > 1) { bad.Add(title + ": другий дотик двічі (" + string.Join(", ", at.Select(x => x.Clip)) + ")"); continue; }
+                string clip = at[0].Clip;
+                reached.Add(clip);
+                var second = RingSoundMap.FollowUpOf(e);
+                RingCue want;
+                if (!ExpectedSecondTouch.TryGetValue(clip, out want)) { bad.Add(title + ": мітка touch_2 у «" + clip + "» без рядка ExpectedSecondTouch"); continue; }
+                if (second != want) bad.Add(title + ": на «" + clip + "» " + second + ", а чекали " + want);
+                var bp = RingBeats.For(steps, marks, _ => 0f);
+                var beatCue = RingSoundMap.ForEvent(e, RingProp.Chair, null, bp.Clip);
+                if (beatCue == second) bad.Add(title + ": другий дотик повторює такт (" + second + " на «" + bp.Clip + "»)");
+                string[] n;
+                int who;
+                if ((second == RingCue.Slam || second == RingCue.Land)
+                    && (!nodes.TryGetValue(clip, out n) || !SecondTouchFaller.TryGetValue(clip, out who) || !Falls(n[who])))
+                    bad.Add(title + ": у «" + clip + "» не лягає той, чиє падіння звучить " + second);
+            }
+            foreach (var c in ExpectedSecondTouch.Keys)
+                if (!reached.Contains(c)) bad.Add("«" + c + "»: мітку touch_2 не озвучує жодна подія");
+            CollectionAssert.AreEquivalent(ExpectedSecondTouch.Keys, SecondTouchFaller.Keys, "у кожного другого дотику — хто падає");
+            // справжні мітки touch_2 (коли «Кліпи» їх додадуть) — кожна має звук: інакше мітка мертва
+            foreach (var c in real.Clips)
+                if (real.Time(c, Touch2) >= 0f && !reached.Contains(c) && !ExpectedSecondTouch.ContainsKey(c))
+                    bad.Add("справжня мітка touch_2 у «" + c + "» — вирішити її звук (FollowUpOf і ExpectedSecondTouch)");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        [Test]
+        public void StrikeFinisher_HitThenFall()
+        {
+            // grand_finale — власний кліп Center_Clothesline_Flip: такт на ласо (contact 0,676) — удар, суперник падає пізніше — другий
+            // дотик Slam (знахідка 6в). Розійдеться кліп у таблиці кліпів — тест червоний: спершу вирішити звук.
+            var marks = Marks();
+            var catalog = MoveCatalog.Load(CareerKit.Read("career_moves.json"));
+            foreach (var key in RingSoundMap.StrikeFinishers)
+            {
+                var m = catalog.All.SingleOrDefault(x => x.Id == key);
+                Assert.IsNotNull(m, key + " — у каталозі прийомів");
+                Assert.AreEqual(MatchActionId.Finisher, m.Action, key);
+                foreach (var t in new[] { RollTier.Strong, RollTier.Partial })
+                {
+                    var e = Act(MatchActionId.Finisher, t, false, key);
+                    var steps = RingClipTable.Plan(e, default(PlanContext));
+                    var bp = RingBeats.For(steps, marks, _ => 0f);
+                    Assert.AreEqual("Center_Clothesline_Flip", bp.Clip, key + " " + t + ": такт");
+                    Assert.IsTrue(steps[bp.Step].Note == null || !steps[bp.Step].Note.Contains("бракує"), key + ": власний кліп, не підстановка");
+                    Assert.AreEqual(RingCue.Hit, RingSoundMap.ForEvent(e), key + " " + t + ": ласо — удар");
+                    Assert.AreEqual(RingCue.Slam, RingSoundMap.FollowUpOf(e), key + " " + t + ": падіння — другим дотиком");
+                }
+                Assert.AreEqual(RingCue.Slam, RingSoundMap.ForEvent(Act(MatchActionId.Finisher, RollTier.Miss, false, key)), key + ": провал — падіння (Bump_Back)");
+            }
+            Assert.AreEqual(RingCue.Hit, RingSoundMap.ForEvent(Act(MatchActionId.Strike, RollTier.Strong, false, "grand_finale")), "ключ змінює лише фінішер");
+        }
+
+        [Test]
+        public void Rescue_DoesNotPopTwice()
+        {
+            // Розрив рахунку напарником: вибух залу дає режисер на розв'язці відліку (CrowdPop, CountBeats); подія Rescue показує лише
+            // рефері, якого відволікли (Ref_Flinch), — удару немає, тож гул залу, а не другий Pop (знахідка 5а).
+            var ev = new MatchEvent { Kind = MatchEventKind.Rescue, Actor = MatchSide.Player, HasRoll = true, Tier = RollTier.Strong };
+            Assert.AreEqual(RingCue.CrowdBed, RingSoundMap.ForEvent(ev));
+            var steps = RingClipTable.Plan(ev);
+            Assert.IsTrue(steps.All(st => st.Kind == StageStepKind.Ref), "Rescue — лише рефері; вийде напарник (CLIP_NEEDS §7) — дати удар");
         }
 
         // Що показує кліп провалу → який звук (RingClipTable). Новий кліп провалу без рядка тут — червоний тест: спершу вирішити звук.
@@ -313,10 +573,11 @@ namespace Game.Tests.EditMode
             { "LegLock_Enter_Fail", RingCue.Lockup },
             { "Land_Swallow_Miss", RingCue.Slam },
             // Прийоми каталогу (ключ MoveKey, KeyedMoves_SoundAtTheBeat): таран із канатів повз — ухил (контакту немає); метеор повз —
-            // нападник сам падає на мат; стрибок із каната перехоплено — нападника кидають на мат.
+            // нападник сам падає на мат; стрибок із каната перехоплено — такт на перехопленні (удар тіла в тіло), а що нападника кинули
+            // на мат — другий дотик Slam (SecondTouch_LandsOnTheFall).
             { "Charge_Sidestep", RingCue.Whiff },
             { "Land_Meteor_Miss", RingCue.Slam },
-            { "Springboard_Land_Counter", RingCue.Slam },
+            { "Springboard_Land_Counter", RingCue.Hit },
         };
 
         [Test]
@@ -349,9 +610,9 @@ namespace Game.Tests.EditMode
                 }
                 RingCue want;
                 Assert.IsTrue(MissClipSound.TryGetValue(last.Clip, out want), a + ": новий кліп провалу «" + last.Clip + "» — вирішити його звук");
-                // Предмет ≤6 — за порядком ПМ: замах повз (Whiff), падіння в бар'єр — другим дотиком на мітці кліпа.
-                if (a == MatchActionId.Weapon) { Assert.AreEqual(RingCue.Whiff, cue); Assert.AreEqual(RingCue.BarrierSlam, RingSoundMap.FollowUpOf(ev)); continue; }
                 Assert.AreEqual(want, cue, a + ": провал показує «" + last.Clip + "»");
+                // Нападник падає сам (Bump_Back, зокрема предмет ≤6 — знахідка 6а): падіння — сам такт, другого дотику немає.
+                if (last.Clip == "Bump_Back") Assert.AreEqual(RingCue.None, RingSoundMap.FollowUpOf(ev), a + ": падіння вже на такті");
             }
             // реверс: той самий принцип за ступенями
             foreach (var a in new[] { MatchActionId.Throw, MatchActionId.TopRope, MatchActionId.Finisher })
@@ -387,7 +648,9 @@ namespace Game.Tests.EditMode
                         var beat = RingBeats.For(steps, marks, _ => 0f);
                         if (beat.Step < 0 || beat.IsCount) continue;
                         string at = m.Id + " " + t + (ctx.VictimDown ? " (лежачий)" : "") + ": такт на «" + beat.Clip + "»";
-                        var cue = RingSoundMap.ForEvent(ev);
+                        // кліп такту — як режисер подаватиме його (запит звуку ПМ, 09.11.2026: BeatNow → OnEvent(..., _plan.Clip)); доки
+                        // не подає, перехоплення стрибка звучить старим Land / Slam (SecondTouch_NeverRepeatsTheBeatOfTheSameEvent)
+                        var cue = RingSoundMap.ForEvent(ev, RingProp.Chair, null, beat.Clip);
                         var st = steps[beat.Step];
                         if (st.Kind == StageStepKind.Cut)
                         {

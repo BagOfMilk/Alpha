@@ -445,6 +445,22 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(-1, MatchQteSource.SeqFor(r.State.Log, rend, "Armbar_Crank"));
         }
 
+        /// <summary>
+        /// Джерело вікна на *_Crank — больовий саме гравця: чужий больовий між ним і «Терпіти» пропускається (рев'ю D 11.11.2026:
+        /// без умови «Actor == Player» тести не червоніли). Журнал зібрано руками — порядок подій тут важливіший за правила.
+        /// </summary>
+        [Test]
+        public void QteSource_Endure_SkipsTheRivalsSubmission_TakesThePlayers()
+        {
+            var log = new List<MatchEvent>
+            {
+                new MatchEvent { Seq = 0, Kind = MatchEventKind.Action, Action = MatchActionId.Submission, Actor = MatchSide.Player, HasRoll = true, Tier = RollTier.Strong },
+                new MatchEvent { Seq = 1, Kind = MatchEventKind.Action, Action = MatchActionId.Submission, Actor = MatchSide.Rival, HasRoll = true, Tier = RollTier.Miss },
+                new MatchEvent { Seq = 2, Kind = MatchEventKind.Endure, Actor = MatchSide.Rival },
+            };
+            Assert.AreEqual(0, MatchQteSource.SeqFor(log, log[2], "Armbar_Crank"), "больовий гравця, не суперника");
+        }
+
         private static void DriveTopRopeAndHolds(MatchEngine e)
         {
             if (e.IsOver) return;

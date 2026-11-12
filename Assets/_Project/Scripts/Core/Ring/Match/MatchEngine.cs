@@ -249,7 +249,7 @@ namespace Game.Core.Ring.Match
                             else if (me.Momentum < MatchRules.FinisherMomentum) r = UnavailableReason.NeedImpulse;
                             else if (_s.Hype < MatchRules.FinisherHype) r = UnavailableReason.NeedHype;
                             else if (opp.Damage < MatchRules.FinisherTargetDamage) r = UnavailableReason.TargetNotHurt;
-                            else if (_s.Round < MatchRules.FinisherMinRound && _setup.RoundLimit <= MatchRules.ActionLimit) r = UnavailableReason.TooEarly;
+                            else if (_s.Round < MatchRules.FinisherMinRound && !_setup.NoFinisherMinimum) r = UnavailableReason.TooEarly;
                             break;
                         case MatchActionId.Desperate:
                             if (me.DesperateUsed) r = UnavailableReason.AlreadyUsed;

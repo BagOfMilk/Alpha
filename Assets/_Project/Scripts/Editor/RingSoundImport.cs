@@ -9,7 +9,7 @@ namespace Game.Gameplay.EditorTools
     /// кадрує ринг) і Vorbis. Пам'ять: музика виходів — потокова (не розпаковується цілком), гул залу й оплески — стиснені в пам'яті,
     /// короткі удари — розпаковані при завантаженні (без затримки на контакт). Звук меню (<c>Assets/Art/Ring/Audio/</c>) — у
     /// <see cref="RingMenuAudioImport"/>, тут не чіпається. Іде після загального правила Alpha (<c>AudioImportSettings</c>, тека CC0/Audio)
-    /// і перекриває його для рингу. Значення .meta звіряє <c>RingSoundImportTests</c>. Не лінтується (AudioImporter — API редактора).
+    /// і перекриває його для рингу. Значення .meta звіряє <c>RingSoundMapTests.RingSound_IsImportedMono</c>. Не лінтується (AudioImporter — API редактора).
     /// </summary>
     public sealed class RingSoundImport : AssetPostprocessor
     {

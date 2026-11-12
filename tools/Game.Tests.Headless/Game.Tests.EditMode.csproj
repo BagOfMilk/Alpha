@@ -97,6 +97,7 @@
     <!-- Ринг, кар'єра (П5): вигляд NPC — чистий C#, охоронець CareerTransitionTests (у кожного NPC ростеру свій вигляд і стать тіла). -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/CareerLooks.cs" />
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingBeats.cs" />
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingOutsideCourse.cs" />
     <!-- Ринг: сценарії демо під нове ядро (Ф2, крок 9) — справжній рушій і кубик за сценарієм, охоронці RingDemoScriptTests. -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingDemoScript.cs" />
     <!-- Ринг: екран виходу (ТЗ B07) і персональний вихід (ENTRANCE_PROFILE.md) — чистий C#, охоронці EntranceScreenTests, EntranceProfileTests. -->

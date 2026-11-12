@@ -28,7 +28,13 @@ namespace Game.Gameplay.Ring
         {
             var eng = !_onTitle ? _career.Engine : null;
             if (eng == null || eng.IsOver || !BotTurn(eng)) return false;
-            if (!ReviewMoves(eng)) MatchAi.Step(eng);
+            // -ring-shot-ending: ціль матчу під кінцівку ворожнечі (Кар'єра, FeudBot); без прапорця — той самий ШІ, що за суперника
+            var goal = ShotMatchGoal;
+            if (!ReviewMoves(eng, goal))
+            {
+                if (goal.HasValue) FeudBot.Step(eng, goal.Value);
+                else MatchAi.Step(eng);
+            }
             _view.Refresh();
             return true;
         }
@@ -62,10 +68,10 @@ namespace Game.Gameplay.Ring
         /// Кожен другий раз бере прийом зі склейкою, якщо такий є: інакше за сезон огляду склейку можна й не побачити. Правила
         /// матчу й ШІ суперника не змінюються.
         /// </summary>
-        private bool ReviewMoves(MatchEngine eng)
+        private bool ReviewMoves(MatchEngine eng, MatchGoal? goal)
         {
             if (eng.Phase != MatchPhase.AwaitAction || eng.CurrentActor != MatchSide.Player) return false;
-            var id = MatchAi.ChooseAction(eng);
+            var id = goal.HasValue ? FeudBot.ChooseAction(eng, goal.Value) : MatchAi.ChooseAction(eng);
             MoveOption plain = null, staged = null;
             foreach (var o in _career.GetMoveOptions())
             {

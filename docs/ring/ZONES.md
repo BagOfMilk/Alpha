@@ -42,12 +42,12 @@
 
 | Сесія | Файли |
 |---|---|
-| **ПМ + Бій** — `local_27331424…`, гілка `claude/ring-combat-overhaul` | `Core/Ring/Match/**`, `Core/Ring/RingContracts.cs` (кар'єрне з нього переїде в `CareerContracts.cs` — Кар'єрі), `Gameplay/Ring/Stage/RingClipTable.cs`, `Stage/RingBeats.cs`, `Stage/RingDemoScript.cs` (сценарії демо через справжнє ядро; новий, 09.11), `Stage/Unity/RingMatchDirector.cs`, `Models/MatchScreenModel.cs`, `Models/RingLabels.cs`, `UI/MatchScreenView.cs`, `UI/RingCallout.cs`, `RingGameBootstrap.Match.cs`; `Assets/Resources/Ring/career_moves.json`; тести `Match*`, `HopeSpot*`, `FinisherReach*`, `RingBeat*`, `RingDemoScript*`, матчеві частини `RingModelsTests`; документи `docs/TRPG_DESIGN.md`, `docs/TRPG_DECISIONS.md`, `docs/ring/iter1_gaps.md`, `docs/ring/ZONES.md`, `docs/ring/CLIP_NEEDS.md`, `docs/ring/F2_DIRECTOR.md` |
+| **ПМ + Бій** — `local_27331424…`, гілка `claude/ring-combat-overhaul` | `Core/Ring/Match/**`, `Core/Ring/RingContracts.cs` (кар'єрне з нього переїде в `CareerContracts.cs` — Кар'єрі), `Gameplay/Ring/Stage/RingClipTable.cs`, `Stage/RingBeats.cs`, `Stage/RingDemoScript.cs` (сценарії демо через справжнє ядро; новий, 09.11), `Stage/RingOutsideCourse.cs` (курс за рингом і реквізит звуку; новий, 11.11), `Stage/Unity/RingMatchDirector.cs`, `Models/MatchScreenModel.cs`, `Models/RingLabels.cs`, `UI/MatchScreenView.cs`, `UI/RingCallout.cs`, `RingGameBootstrap.Match.cs`; `Assets/Resources/Ring/career_moves.json`; тести `Match*`, `HopeSpot*`, `FinisherReach*`, `RingBeat*`, `RingDemoScript*`, матчеві частини `RingModelsTests`; документи `docs/TRPG_DESIGN.md`, `docs/TRPG_DECISIONS.md`, `docs/ring/iter1_gaps.md`, `docs/ring/ZONES.md`, `docs/ring/CLIP_NEEDS.md`, `docs/ring/F2_DIRECTOR.md` |
 | **Изучение игры Ring** — `local_4d3baef2…` | Сцена, камера, вихід: `Gameplay/Ring/Stage/Unity/**` (крім `RingMatchDirector`, `RingSound`, `RingMenuAudio`, `RingMenuAssets`, `RingContactWatch`), `Stage/RingStageContract.cs`, `Stage/EntranceProfile.cs`, `Stage/EntranceScreen.cs`, `Core/Ring/RopeSim.cs`, `RingGameBootstrap.cs` (каркас), Editor: `RingSceneBuilder` (сцена), `RingStageSceneSetup`, `RingInEditor`, `RingEntranceScreenImport`; Blender: арени, натовп, реквізит, cast, закулісся (`tools/blender/ring_venues*`, `ring_gym`, `ring_show`, `ring_crowd`, `ring_props`, `ring_hero`, `ring_cast/**`); `docs/ring/ENTRANCE_PROFILE.md`, `Assets/Art/Ring/Cast/CAST_ANIM.md`; `Stage/RingVenue.cs` (зали, бік «за рингом»; новий, 08.11.2026); тести `Entrance*`, `RingVenue*` |
-| **Кар'єра** — нова сесія (не створено: власник 09.11.2026 на «Запустити сесію «Кар'єра»?» — «Поки ні») | `Core/Ring/Career/**`, `Core/Ring/Feud/**`, `Core/Ring/Promo/**`, `Core/Ring/Progression/**`, `Core/Ring/Json/**`, `Core/Ring/RingCampaign.cs`, `Models/DevelopmentScreenModel.cs`, `FeudScreenModel.cs`, `PromoScreenModel.cs`, нові моделі екранів кар'єри, `CareerLooks.cs`, `RingFeudBootstrap.cs`, `RingGameBootstrap.Career.cs`, `RingSaveFile.cs` (після злиття «Скилів»); ресурси `career_backstage.json`, `career_gimmicks.json`, `career_roster.json`, `feud_hammer.json`, `backstage_uk.json`; тести `Career*`, `Feud*`, `Promo*`, `Gimmick*`, `Economy*`, `Progression*`, `Backstage*`, `WeekActions*`, `RingCampaign*`, `MiniJson*` |
+| **Кар'єра** — `local_23e55a54…`, гілка `claude/trusting-stonebraker-8d5570` (створено 11.11.2026) | `Core/Ring/Career/**`, `Core/Ring/Feud/**`, `Core/Ring/Promo/**`, `Core/Ring/Progression/**`, `Core/Ring/Json/**`, `Core/Ring/RingCampaign.cs`, `Models/DevelopmentScreenModel.cs`, `FeudScreenModel.cs`, `PromoScreenModel.cs`, нові моделі екранів кар'єри, `CareerLooks.cs`, `RingFeudBootstrap.cs`, `RingGameBootstrap.Career.cs`, `RingSaveFile.cs` (після злиття «Скилів»); ресурси `career_backstage.json`, `career_gimmicks.json`, `career_roster.json`, `feud_hammer.json`, `backstage_uk.json`; тести `Career*`, `Feud*`, `Promo*`, `Gimmick*`, `Economy*`, `Progression*`, `Backstage*`, `WeekActions*`, `RingCampaign*`, `MiniJson*` |
 | **Меню** — `local_d8c816ac…` (+ форк звуку `local_bc183877…`) | `Gameplay/Ring/UI/Menus/**`, вигляд екранів кар'єри (`UI/Career/**` B03 v2, `UI/CareerScreens.cs` — під цією назвою до ітерації 2, `FeudScreenView`, `PromoScreenView`, `EndingScreenView`), `UI/RingUi.cs`, `Models/RingText.cs`, `MenuMotion.cs`, `RingSettings.cs`, `RingPause.cs`, `RingAudioMix.cs`, `RingSoundApproval.cs`, `RingGameBootstrap.Menus.cs`, `RingMenuShots.cs`, `RingSoundGate.cs`, `Stage/Unity/RingSound.cs`, `RingMenuAudio.cs`, `RingMenuAssets.cs`, Editor `RingMenuAudioImport`; `sound_approvals.json`, `tools/ring_audio/**`, переклади всіх `*_<мова>` (крім `uk`: `ui_`, `ring_strings_`, `strings_`, `backstage_`) і охоронець «кожен ключ перекладено»; тести `RingMenuModel*`, `RingSoundApproval*`, `MonoBehaviourFileName*`; журнал `docs/menus-progress.md` |
 | **Кліпи** — `local_815630bf…` (+ wwe `local_383c333e…`) | `tools/blender/ring_anims*`, `tools/blender/ring_review.py` (огляд кліпів; створено лінією анімацій, 8861986), `docs/ring/ANIM_REVIEW_*.md`, `Assets/Art/Animations/RING_Moves*.fbx`, `ring_anims_*.txt`, `docs/ring/ANIM_BRIEF_COMBAT_CENTER.md`, `docs/ring/ANIM_PLAN_ITER2.md`, `docs/research/RING_ANIM_REFERENCES.md` |
-| **Відео огляд** — `local_c3c3cec5…` (інтегратор) | Злиття в основну гілку, `tools/run-offscreen.ps1`, `tools/ring-editor.ps1`, Editor `RingSceneBuilder.Player.cs` (BuildPlayer*), `RingLaunchArgs.cs`, `Assets/Settings/URP-*`, `ProjectSettings/QualitySettings.asset`, оточення збірки (Burst) |
+| **Відео огляд** — `local_c3c3cec5…` (інтегратор) | Злиття в основну гілку, `tools/run-offscreen.ps1`, `tools/ring-editor.ps1`, Editor `RingSceneBuilder.Player.cs` (BuildPlayer*), `RingLaunchArgs.cs`, `Assets/Settings/URP-*`, `ProjectSettings/QualitySettings.asset`, оточення збірки (Burst), `tools/ring-build.ps1`, `RingFpsProbe.cs` (новий, 364b373) |
 | **Скилы** — `local_f69d1b50…` (QA) | `.claude/skills/**`, `docs/ring/playtest_*`, `docs/ring/skills_audit_*`; вимірювачі QA (рішення ПМ 08.11.2026, на гру не впливають): `Gameplay/Ring/Stage/RingCapsules.cs`, `Stage/Unity/RingContactWatch.cs`, тести `RingCapsule*`. Код інших зон не правити, вади — промптом ПМ |
 | **Арт-директор** — нова сесія замість зниклої | `docs/ring/DESIGN_SYSTEM.md`, `docs/ring/design/**`, `tools/ring_design/**`, `Models/BrandTokens.cs`, `UI/RingTheme.cs`, `UI/RingFonts.cs`, `RingFontSet.cs`, `RingFontSpike.cs`, Editor `RingFontAssets`, шрифти, тести `RingDesignGuard*`, `TitantronAssetsGuard*` |
 
@@ -56,6 +56,7 @@
 - `RingGameBootstrap.Career.cs` (Кар'єра; до її появи — «Изучение»): дані, сейв `ICareerHost`, `MigrateSave`, `Rebind`,
   `ViewKey` / `MakeView`, `BackstageCtx`, `StartShow`, бот тижня (`BotWeekStep`, `ReviewPerks`, `BotGrow`);
 - `RingGameBootstrap.Match.cs` (Бій): `BotMatchStep`, `ReviewRopes` (у бою — `ReviewMoves`), `BotTurn`, `BeatShots`;
+  у каркасі `HandleKeys` рядок QTE (`confirm && MatchQteInput.TryPress()`) — теж Бій (11.11.2026, «Изучение» передало);
 - `RingGameBootstrap.Menus.cs` («Меню») — без змін;
 - `Editor/RingSceneBuilder.cs` — сцена («Изучение»); `Editor/RingSceneBuilder.Player.cs` — збірка («Відео огляд»).
 
@@ -265,8 +266,12 @@ Unity «Меню» однаково не влазить): відповідь п�
    Unity / Ring.exe / Blender не запущені. Глушник ПМ `mute_loop` перезапущено на 4 год. До вимкнення не відповіли
    «Изучение» (прогони 8f обірвались, exit 4) і форк звуку — обом лист «закомітити й SHA». Листи до М1 — «Изучение»,
    «Кліпам», «Меню», форку звуку, «Відео огляд».
+   **11.11.2026, 22:40.** «Изучение» пройшло слот 8f (бій gym ч/ж, обличчя «до», діагностика щелепи; причина — борода
+   `beard_short` у «Молота» за замовчуванням, У0 у власника) і звільнило Unity. Доступно ~1,1 ГБ — наступний слот чекає
+   ≥ 3,5 ГБ. Глушник перезапущено на 5 год.
    **Черга зараз:**
-   - Unity / Ring.exe: «Изучение» дознімає 8f і обличчя → «Меню» слот 28 → «Відео огляд» (Burst AOT і FPS);
+   - Unity / Ring.exe: «Меню» слот 28 (тури m720, m21x9, переповнення, рядки Кар'єри) → «Відео огляд» (Burst AOT, FPS,
+     `ring-build`) → бій ПМ (`RingSoundImport`, Кар'єра `-ring-shot-ending forgotten -ring-shot-seasons 3`);
    - Blender: «Кліпи» (боді-слем, підйоми, лабораторія, §9) → вікно «Изучение» для сітки рота — за запитом.
 
    Unity і Blender разом — лише коли доступно ≥ 3,5 ГБ.
@@ -395,7 +400,7 @@ Unity «Меню» однаково не влазить): відповідь п�
 | P2-5 закулісся | Изучение (3D) + Кар'єра (вміст) | відкрито |
 | P3 HUD матчу (підкладка журналу, підказка без миші) | Бій | відкрито |
 | P3 сцена («!», кабель, світло, роздягальня, модель у промо) | Изучение | частково в пачці |
-| P3 геймпад | Меню | відкрито |
+| P3 геймпад | Меню | **ітерація 2** (власник 11.11.2026: «Геймпад ітерація 2, навіть реальний xbox підключу.»); у М1 фокус вимкнений прапорцем, вади клавіатури на створенні героя — у М1 |
 
 **Прохід 3 «Скилів»** (08.11.2026, збірка 7f19686 — старий бій; 3 сезони, 37 хв, винятків 0; звіт
 `docs/ring/playtest_2026-11-08_pass3.md` у worktree «Скилів», не закомічено). Фаз-тест: телепорти 10 (4 під склейкою),
