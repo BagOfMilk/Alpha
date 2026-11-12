@@ -563,11 +563,12 @@ namespace Game.Gameplay.Ring.Stage
                 new RingDress.Piece("hair_short02", new Color(0.16f, 0.11f, 0.08f)),
             });
             RingDress.Apply(_player.Model, assets.kitMale, new[] { new RingDress.Piece("hair_short01", new Color(0.12f, 0.08f, 0.05f)) });
-            RingDress.Apply(_rival.Model, assets.kitMale, new[]
-            {
-                new RingDress.Piece("hair_short04", new Color(0.55f, 0.42f, 0.26f)),
-                new RingDress.Piece("beard_short", new Color(0.5f, 0.38f, 0.24f)),
-            });
+            // Борода набору Alpha скроєна під іншу голову: на голові cast вона висить пластиною під підборіддям і при закинутій
+            // голові читається «щелепою як у скелета» (власник, 09.11.2026; кадр hall p8ed 018). Прибрати її чи ні — рішення
+            // власника; до нього -ring-diag-nobeard знімає бороду лише в оглядах — «до/після» в одній збірці.
+            var rivalDress = new List<RingDress.Piece> { new RingDress.Piece("hair_short04", new Color(0.55f, 0.42f, 0.26f)) };
+            if (!RingLaunchArgs.Has("-ring-diag-nobeard")) rivalDress.Add(new RingDress.Piece("beard_short", new Color(0.5f, 0.38f, 0.24f)));
+            RingDress.Apply(_rival.Model, assets.kitMale, rivalDress);
             if (assets.mic != null)
             {
                 _mic = Instantiate(assets.mic, transform);
@@ -1365,7 +1366,7 @@ namespace Game.Gameplay.Ring.Stage
         public void SetShot(StageCam cam)
         {
             // Низький план утримання — склейкою: камера, що пливе з загального плану всередину рингу, пролітала крізь канат.
-            if (cam == StageCam.Low && _shot != StageCam.Low) _camInit = false;
+            if (cam == StageCam.Low && _shot != StageCam.Low) { _camInit = false; _holdOk = false; _holdAge = 99f; }
             // Вихід із кіноплану — теж склейкою: наїзд із кіноплану на загальний перелітав ринг (кадр «між планами»).
             if (_shot == StageCam.Cine && cam != StageCam.Cine) _camInit = false;
             if (_shot != cam) _shotAge = 0f;
@@ -1441,6 +1442,7 @@ namespace Game.Gameplay.Ring.Stage
 
             Vector3 pos, look;
             float fov;
+            bool held = false;
             if (_show != null && _show.LeftBackstage) { _show.LeftBackstage = false; _camInit = false; }
             bool show = _show != null && _show.CamActive;
             if (_feetCam && _player != null && _rival != null)
@@ -1488,7 +1490,9 @@ namespace Game.Gameplay.Ring.Stage
                         fov = 33f;
                         break;
                     case StageCam.Low:
-                        // Утримання: камера низько біля мату, збоку — накриття, плече на маті й рука рефері, що б'є «раз — два».
+                        // Утримання (П2): згори під 35–45°, обидва борці й рефері в кадрі — HoldShot; нижче — запасний низький план.
+                        if (HoldShot(dt, out pos, out look, out fov)) { held = true; break; }
+                        // Запасний: камера низько біля мату, збоку — накриття, плече на маті й рука рефері, що б'є «раз — два».
                         look = mid + new Vector3(0f, 0.3f, 0f);
                         // Камера з боку, протилежного рефері (він за парою, z+), вздовж тіл; ринг тісний — ширший кут замість відстані.
                         pos = look + new Vector3(1.7f, 0.95f, -1.5f);
@@ -1514,13 +1518,15 @@ namespace Game.Gameplay.Ring.Stage
                         fov = 33f;
                         break;
                 }
+                if (_shot != StageCam.Low && _shot != StageCam.Cine) pos = OverRopes(pos);
             }
 
             // Ринг підняти над центром кадру: знизу панель дій (UI).
             Vector3 fwd = (look - pos).normalized;
             Vector3 up = Vector3.Cross(Vector3.Cross(fwd, Vector3.up), fwd).normalized;
             float halfH = (look - pos).magnitude * Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad);
-            bool cine = !show && _mode != RingStageMode.Promo && _shot == StageCam.Cine;
+            // Кіноплан і план утримання вже розкладені з полями під виноски й панель — без зсуву рингу вгору.
+            bool cine = !show && _mode != RingStageMode.Promo && (_shot == StageCam.Cine || held);
             Vector3 aim = look - up * (halfH * (show || cine ? 0f : _frameShift));
             Quaternion rot = Quaternion.LookRotation(aim - pos, Vector3.up);
 
@@ -1555,6 +1561,111 @@ namespace Game.Gameplay.Ring.Stage
             }
             _cam.fieldOfView = _camFov;
             LogBudget(dt);
+        }
+
+        private Vector3 _holdPos, _holdLook;
+        private float _holdFov, _holdYaw, _holdAge = 99f;
+        private bool _holdOk;
+        private static readonly float[] HoldYaws = { 0f, 25f, -25f, 50f, -50f, 75f, -75f, 180f };
+        private static readonly float[] HoldPitch = { 40f, 35f, 45f };
+        private static readonly float[] HoldFovs = { 40f, 46f, 52f, 58f };
+
+        /// <summary>
+        /// План утримання (П2; ПМ 11.11.2026: «утримання 35–45°, обидва в кадрі»): камера згори під 35–45°, у кадрі обидва
+        /// борці (голова, таз, стопи) і рефері поруч (до 2,5 м — голова й таз), поля під виноски (верх 24 %) і панель (низ 80 %).
+        /// Курс — з боку, протилежного рефері (він за парою), далі ±25/50/75°; камера в канатах або над ними (лінія до кожної стопи
+        /// над верхнім канатом, <see cref="RingVenue.CamYOverRopes"/>). Перераховується щочверть секунди, спершу з попереднім
+        /// курсом — план не стрибає між курсами; камера доганяє плавно, вхід у план — склейкою (<see cref="SetShot"/>).
+        /// Огляд 8f: старий низький план (22°, з-за плеча) обрізав верхнім краєм того, хто накриває, і рефері (033–043).
+        /// </summary>
+        private bool HoldShot(float dt, out Vector3 pos, out Vector3 look, out float fov)
+        {
+            _holdAge += dt;
+            if (_holdAge >= 0.25f && _player != null && _rival != null)
+            {
+                _holdAge = 0f;
+                var pts = new List<Vector3>();
+                var feet = new List<Vector3>();
+                HoldBody(pts, feet, _player);
+                HoldBody(pts, feet, _rival);
+                Vector3 mid = (_player.PosePos + _rival.PosePos) * 0.5f;
+                Vector3 toRef = Vector3.forward;
+                if (_ref != null)
+                {
+                    Vector3 r = _ref.PosePos - mid;
+                    r.y = 0f;
+                    if (r.magnitude < 2.5f)
+                    {
+                        pts.Add(_ref.HeadPos);
+                        if (_ref.Hips != null) pts.Add(_ref.Hips.position);
+                    }
+                    if (r.sqrMagnitude > 0.04f) toRef = r.normalized;
+                }
+                float yaw0 = Mathf.Atan2(toRef.x, toRef.z) * Mathf.Rad2Deg;
+                var venue = Venue;
+                Func<Vector3, bool> ok = p =>
+                {
+                    if (p.y > MatY + 4.5f) return false;
+                    float rr = Mathf.Max(Mathf.Abs(p.x), Mathf.Abs(p.z));
+                    if (rr <= venue.RopeLine - 0.15f) return true;
+                    if (rr > venue.Plat + 2.0f) return false;
+                    for (int i = 0; i < feet.Count; i++)
+                        if (venue.CamYOverRopes(p.x, p.y, p.z, feet[i].x, feet[i].z) > p.y + 1e-3f) return false;
+                    return true;
+                };
+                var yaws = new List<float>(HoldYaws.Length + 1);
+                if (_holdOk) yaws.Add(_holdYaw);
+                foreach (float dy in HoldYaws) yaws.Add(yaw0 + dy);
+                bool found = false;
+                foreach (float yaw in yaws)
+                {
+                    foreach (float pitch in HoldPitch)
+                    {
+                        var s = RingCine.FrameAny(pts, yaw, pitch, HoldFovs, CamAspect, 0.24f, 0.80f, 0.06f, ok, 1.2f, 8f);
+                        if (!s.Ok) continue;
+                        _holdPos = s.Pos; _holdLook = s.Look; _holdFov = s.Fov; _holdYaw = yaw;
+                        found = true;
+                        break;
+                    }
+                    if (found) break;
+                }
+                _holdOk = found;
+            }
+            pos = _holdPos; look = _holdLook; fov = _holdFov;
+            return _holdOk;
+        }
+
+        /// <summary>Точки тіла для плану утримання: голова, таз, обидві стопи (стопи — ще й для лінії над канатом).</summary>
+        private static void HoldBody(List<Vector3> pts, List<Vector3> feet, RingActor a)
+        {
+            pts.Add(a.HeadPos);
+            if (a.Hips != null) pts.Add(a.Hips.position);
+            int n = feet.Count;
+            if (a.Anim != null)
+                foreach (var b in new[] { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot })
+                {
+                    var t = a.Anim.GetBoneTransform(b);
+                    if (t != null) { pts.Add(t.position); feet.Add(t.position); }
+                }
+            if (feet.Count == n) feet.Add(a.PosePos);
+        }
+
+        /// <summary>
+        /// Плани з-за канатів (загальний, середній, великий): камера піднімається, доки лінія до стоп кожного борця в рингу не
+        /// пройде над верхнім канатом (<see cref="RingVenue.CamYOverRopes"/>), — канат не перетинає постать (огляд 8e: arena demo
+        /// 005–027, канат на рівні колін). Ціль кадру та сама — нахил стає крутішим; стеля підйому — 2,5 м.
+        /// </summary>
+        private Vector3 OverRopes(Vector3 pos)
+        {
+            if (_player == null || _rival == null) return pos;
+            float y = pos.y;
+            foreach (var a in new[] { _player, _rival })
+            {
+                Vector3 f = a.PosePos;
+                y = Venue.CamYOverRopes(pos.x, y, pos.z, f.x, f.z);
+            }
+            pos.y = Mathf.Min(y, pos.y + 2.5f);
+            return pos;
         }
 
         /// <summary>

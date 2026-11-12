@@ -212,6 +212,94 @@ namespace Game.Gameplay.Ring.Stage
             return Mathf.Atan2(f.x, f.z) * Mathf.Rad2Deg;
         }
 
+        /// <summary>Де рефері в кадрі відносно пари (<see cref="Referee"/>).</summary>
+        public enum RefereeView
+        {
+            /// <summary>Жодна його точка не в кадрі.</summary>
+            Outside,
+            /// <summary>Накриває пару на екрані, але стоїть за нею (глибше за центр пари щонайменше на <c>behind</c>) — пара його
+            /// затуляє, а не він пару.</summary>
+            Behind,
+            /// <summary>Цілком у кадрі й пари на екрані майже не накриває.</summary>
+            Beside,
+            /// <summary>Пари не накриває, але частина його точок за краєм кадру (голова чи ноги зрізані).</summary>
+            Cut,
+            /// <summary>Накриває пару на екрані й стоїть не за нею — закриває дію.</summary>
+            Blocks,
+        }
+
+        /// <summary>Результат <see cref="Referee"/>.</summary>
+        public struct RefereeCheck
+        {
+            public RefereeView View;
+            /// <summary>Частка прямокутника пари на екрані, яку накриває прямокутник рефері (0–1).</summary>
+            public float Cover;
+            /// <summary>Середня глибина рефері мінус середня глибина пари вздовж погляду, м: «+» — за парою, «−» — перед нею.</summary>
+            public float Depth;
+            /// <summary>Рефері не заважає кадру: поза ним, за парою або збоку цілком у кадрі.</summary>
+            public bool Clear { get { return View == RefereeView.Outside || View == RefereeView.Behind || View == RefereeView.Beside; } }
+            /// <summary>Те саме, але й обрізаний краєм рефері допустимий (план, де головне — пара).</summary>
+            public bool NotBlocking { get { return View != RefereeView.Blocks; } }
+        }
+
+        /// <summary>
+        /// Чи заважає рефері кадру <paramref name="s"/> (огляд 8f, meteor ч 494–496: кіноплан фінішера ставив рефері перед
+        /// парою на 1,15 м — він закривав пів кадру, а літуна зрізало верхнім краєм). Точки пари й рефері — ті самі, що для
+        /// розкладки (<see cref="Body"/>: стопи чи коліна, таз, голова). На екрані — прямокутники точок пари й рефері (у межах
+        /// кадру); <see cref="RefereeCheck.Cover"/> — яку частку прямокутника пари накриває рефері. Понад <paramref name="maxCover"/>
+        /// він «за парою», якщо глибший за її центр щонайменше на <paramref name="behind"/> м, інакше «закриває». Режисер бере
+        /// перший план з <see cref="RefereeCheck.Clear"/> (чи хоч <see cref="RefereeCheck.NotBlocking"/>), а план з
+        /// <see cref="RefereeView.Blocks"/> — лише коли іншого немає.
+        /// </summary>
+        public static RefereeCheck Referee(Shot s, IList<Vector3> pair, IList<Vector3> referee, float aspect,
+            float behind = 0.3f, float maxCover = 0.15f)
+        {
+            var res = new RefereeCheck { View = RefereeView.Outside };
+            if (!s.Ok || pair == null || pair.Count == 0 || referee == null || referee.Count == 0) return res;
+            Vector3 f = (s.Look - s.Pos).normalized, r = Vector3.Cross(Vector3.up, f).normalized, u = Vector3.Cross(f, r);
+            float tanH = Mathf.Tan(s.Fov * 0.5f * Mathf.Deg2Rad), tanW = tanH * Mathf.Max(0.1f, aspect);
+
+            float pz = 0f, pxLo = 1f, pxHi = -1f, pyLo = 1f, pyHi = -1f;
+            int pn = 0;
+            foreach (var p in pair)
+            {
+                Vector3 v = p - s.Pos;
+                float z = Vector3.Dot(v, f);
+                pz += z;
+                if (z < 0.05f) continue;
+                float x = Mathf.Clamp(Vector3.Dot(v, r) / (z * tanW), -1f, 1f), y = Mathf.Clamp(Vector3.Dot(v, u) / (z * tanH), -1f, 1f);
+                pxLo = Mathf.Min(pxLo, x); pxHi = Mathf.Max(pxHi, x); pyLo = Mathf.Min(pyLo, y); pyHi = Mathf.Max(pyHi, y);
+                pn++;
+            }
+            pz /= pair.Count;
+
+            float rz = 0f, rxLo = 1f, rxHi = -1f, ryLo = 1f, ryHi = -1f;
+            int rIn = 0, rFront = 0;
+            foreach (var p in referee)
+            {
+                Vector3 v = p - s.Pos;
+                float z = Vector3.Dot(v, f);
+                rz += z;
+                if (z < 0.05f) continue;
+                float x = Vector3.Dot(v, r) / (z * tanW), y = Vector3.Dot(v, u) / (z * tanH);
+                rFront++;
+                if (Mathf.Abs(x) <= 1f && Mathf.Abs(y) <= 1f) rIn++;
+                x = Mathf.Clamp(x, -1f, 1f); y = Mathf.Clamp(y, -1f, 1f);
+                rxLo = Mathf.Min(rxLo, x); rxHi = Mathf.Max(rxHi, x); ryLo = Mathf.Min(ryLo, y); ryHi = Mathf.Max(ryHi, y);
+            }
+            rz /= referee.Count;
+            res.Depth = rz - pz;
+            if (rIn == 0 && !(rFront > 0 && rxLo < rxHi && ryLo < ryHi && rxLo > -1f && rxHi < 1f)) return res;   // поза кадром
+
+            float pArea = Mathf.Max(1e-4f, (pxHi - pxLo) * (pyHi - pyLo));
+            float ix = Mathf.Max(0f, Mathf.Min(pxHi, rxHi) - Mathf.Max(pxLo, rxLo));
+            float iy = Mathf.Max(0f, Mathf.Min(pyHi, ryHi) - Mathf.Max(pyLo, ryLo));
+            res.Cover = pn > 0 && rFront > 0 ? Mathf.Clamp01(ix * iy / pArea) : 0f;
+            if (res.Cover > maxCover) res.View = res.Depth >= behind ? RefereeView.Behind : RefereeView.Blocks;
+            else res.View = rIn < referee.Count ? RefereeView.Cut : RefereeView.Beside;
+            return res;
+        }
+
         /// <summary>
         /// Журнал кадру «за рингом» (прапорець запуску <c>-ring-cine-log</c>, для оглядів): камера, ціль, кут і найближча кутова
         /// стійка — відстань від камери й кут від осі кадру проти відстані до пари.

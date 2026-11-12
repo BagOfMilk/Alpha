@@ -572,58 +572,63 @@ namespace Game.Gameplay.Ring.Stage
 
         /// <summary>
         /// Крупні плани облич (<c>-ring-demo &lt;тека&gt; -ring-faces 1 [-ring-demo-sex m|f] [-ring-venue hall|arena]</c>): огляд
-        /// «щелепа як у скелета» (власник, 09.11.2026). Гравець у центрі рингу: стоячи, на спині (кінець Bump_Back), на животі
-        /// (кінець Bump_Front), притиснутий (Cover_Hold_Loop_B) і на руках суперника в боді-слемі (Bodyslam_B на 0,35 / 0,5 /
-        /// 0,62 кліпа; пара заморожена, як у кліпі); наостанок рефері стоячи. Камера — довкола голови: чотири сторони світу
-        /// низько (15°) і згори, 0,8 м, кут 24°; світло — залу, як у матчі. У журнал — розгин шиї кожної пози.
+        /// «щелепа як у скелета» (власник, 09.11.2026). Обидва борці по черзі — гравець (<c>pl</c>), потім суперник (<c>rv</c>;
+        /// у кадрі власника 8e лежав суперник): стоячи, на спині (кінець Bump_Back), на животі (кінець Bump_Front),
+        /// притиснутий (Cover_Hold_Loop_B) і на руках іншого в боді-слемі (Bodyslam_B на 0,35 / 0,5 / 0,62 кліпа; пара
+        /// заморожена, як у кліпі); наостанок рефері стоячи. Види — від обличчя (<see cref="Faces"/>); світло — залу, як у
+        /// матчі. У журнал — розгин шиї кожної пози і для кожного виду — відстань камери й що загороджувало.
         /// </summary>
         private static IEnumerator FacesReview(RingStage3D stage, string folder)
         {
             stage.BeginDemoMatch();
             RingActor pl = stage.Actor(MatchSide.Player), rv = stage.Actor(MatchSide.Rival), rf = stage.Referee;
-            string tag = RingStage3D.Venue.Id + "_" + (stage.IsFemale(pl) ? "f" : "m");
             Vector3 c = new Vector3(0f, RingStage3D.MatY, 0f);
             // Решта — у кутах, щоб не тінили обличчя й не лізли в кадр.
-            Vector3 rvAway = new Vector3(1.9f, RingStage3D.MatY, -1.9f), rfAway = new Vector3(-1.9f, RingStage3D.MatY, -1.9f);
-            stage.Place(rv, rvAway, -45f, "Ring_Stance_Loop");
-            stage.Place(rf, rfAway, 45f, "Ref_Idle_Loop");
-
-            stage.Place(pl, c, 180f, "Ring_Stance_Loop");
-            Forget(stage);
-            yield return Faces(stage, folder, tag + "_stand", pl);
-
-            foreach (var pose in new[] { new[] { "Bump_Back", "back" }, new[] { "Bump_Front", "belly" } })
+            Vector3 otherAway = new Vector3(1.9f, RingStage3D.MatY, -1.9f), rfAway = new Vector3(-1.9f, RingStage3D.MatY, -1.9f);
+            foreach (var who in new[] { pl, rv })
             {
-                stage.Place(pl, c, 180f, "Ring_Stance_Loop");
-                Freeze(stage, pl, pose[0], 1f, c, 180f);
+                RingActor other = who == pl ? rv : pl;
+                string tag = RingStage3D.Venue.Id + "_" + (who == pl ? "pl" : "rv") + "_" + (stage.IsFemale(who) ? "f" : "m");
+                stage.Place(other, otherAway, -45f, "Ring_Stance_Loop");
+                stage.Place(rf, rfAway, 45f, "Ref_Idle_Loop");
+
+                stage.Place(who, c, 180f, "Ring_Stance_Loop");
                 Forget(stage);
-                yield return Faces(stage, folder, tag + "_" + pose[1], pl);
-            }
+                yield return Faces(stage, folder, tag + "_stand", who);
 
-            stage.Place(pl, c, 180f, "Cover_Hold_Loop_B");
-            Forget(stage);
-            yield return Faces(stage, folder, tag + "_pinned", pl);
-
-            // Боді-слем: суперник кидає (A), гравець у повітрі (B) — зсув і поворот пари з маніфесту статі.
-            var ia = stage.Info("Bodyslam_A", stage.IsFemale(rv));
-            if (ia != null)
-            {
-                float ya = 90f, yb = ya - ia.Rotation;
-                Vector3 off = Quaternion.Euler(0f, ya, 0f) * new Vector3(ia.Offset.x, 0f, ia.Offset.z);
-                Vector3 pa = c - off * 0.5f, pb = c + off * 0.5f;
-                foreach (float frac in new[] { 0.35f, 0.5f, 0.62f })
+                foreach (var pose in new[] { new[] { "Bump_Back", "back" }, new[] { "Bump_Front", "belly" } })
                 {
-                    stage.Place(rv, pa, ya, "Ring_Stance_Loop");
-                    stage.Place(pl, pb, yb, "Ring_Stance_Loop");
-                    Freeze(stage, rv, "Bodyslam_A", frac, pa, ya);
-                    Freeze(stage, pl, "Bodyslam_B", frac, pb, yb);
+                    stage.Place(who, c, 180f, "Ring_Stance_Loop");
+                    Freeze(stage, who, pose[0], 1f, c, 180f);
                     Forget(stage);
-                    yield return Faces(stage, folder, tag + string.Format(CultureInfo.InvariantCulture, "_bodyslam{0:00}", frac * 100f), pl);
+                    yield return Faces(stage, folder, tag + "_" + pose[1], who);
                 }
-            }
-            else Debug.LogWarning("[Ринг] обличчя: немає рядка Bodyslam_A у маніфесті");
 
-            stage.Place(rv, rvAway, -45f, "Ring_Stance_Loop");
+                stage.Place(who, c, 180f, "Cover_Hold_Loop_B");
+                Forget(stage);
+                yield return Faces(stage, folder, tag + "_pinned", who);
+
+                // Боді-слем: інший кидає (A), цей у повітрі (B) — зсув і поворот пари з маніфесту статі того, хто кидає.
+                var ia = stage.Info("Bodyslam_A", stage.IsFemale(other));
+                if (ia != null)
+                {
+                    float ya = 90f, yb = ya - ia.Rotation;
+                    Vector3 off = Quaternion.Euler(0f, ya, 0f) * new Vector3(ia.Offset.x, 0f, ia.Offset.z);
+                    Vector3 pa = c - off * 0.5f, pb = c + off * 0.5f;
+                    foreach (float frac in new[] { 0.35f, 0.5f, 0.62f })
+                    {
+                        stage.Place(other, pa, ya, "Ring_Stance_Loop");
+                        stage.Place(who, pb, yb, "Ring_Stance_Loop");
+                        Freeze(stage, other, "Bodyslam_A", frac, pa, ya);
+                        Freeze(stage, who, "Bodyslam_B", frac, pb, yb);
+                        Forget(stage);
+                        yield return Faces(stage, folder, tag + string.Format(CultureInfo.InvariantCulture, "_bodyslam{0:00}", frac * 100f), who);
+                    }
+                }
+                else Debug.LogWarning("[Ринг] обличчя: немає рядка Bodyslam_A у маніфесті");
+            }
+
+            stage.Place(rv, otherAway, -45f, "Ring_Stance_Loop");
             stage.Place(pl, new Vector3(1.9f, RingStage3D.MatY, 1.9f), -135f, "Ring_Stance_Loop");
             stage.Place(rf, c, 180f, "Ref_Idle_Loop");
             Forget(stage);
@@ -640,12 +645,25 @@ namespace Game.Gameplay.Ring.Stage
             a.PlayAtTime(c, c.length * Mathf.Clamp01(frac), false, pos, yaw, 0f);
         }
 
-        private static readonly string[] FaceViewNames = { "n", "e", "s", "w", "top" };
-        private static readonly Vector2[] FaceViews = { new Vector2(0f, 15f), new Vector2(90f, 15f), new Vector2(180f, 15f), new Vector2(270f, 15f), new Vector2(0f, 80f) };
+        /// <summary>Види огляду облич: анфас, 3/4 ліворуч і праворуч (±40° довкола осі шиї), знизу на підборіддя (35° від
+        /// анфасу до грудей) і «як камера гри» (згори під 40° з боку обличчя).</summary>
+        private static readonly string[] FaceViewNames = { "front", "l40", "r40", "chin", "game" };
+        private static readonly float[] FaceDistances = { 0.8f, 0.6f, 0.45f, 0.35f };
+        private static readonly HumanBodyBones[] FaceBlockers =
+        {
+            HumanBodyBones.Hips, HumanBodyBones.Spine, HumanBodyBones.Chest, HumanBodyBones.UpperChest, HumanBodyBones.Neck, HumanBodyBones.Head,
+            HumanBodyBones.LeftUpperArm, HumanBodyBones.RightUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.RightLowerArm,
+            HumanBodyBones.LeftHand, HumanBodyBones.RightHand, HumanBodyBones.LeftUpperLeg, HumanBodyBones.RightUpperLeg,
+            HumanBodyBones.LeftLowerLeg, HumanBodyBones.RightLowerLeg, HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot,
+        };
 
         /// <summary>
-        /// Крупні плани голови постаті з п'яти боків. Ціль — 9 см від кістки голови вздовж шиї (середина обличчя); у журнал —
-        /// кут між шиєю (шия → голова) і грудьми (верх грудей → шия): 0° — голова на продовженні тулуба, більше — нахил.
+        /// Крупні плани обличчя постаті — види від самого обличчя, а не за сторонами світу (огляд 11.11.2026: види «s»/«w»
+        /// лежачих поз ставили камеру в тіло, і зріз шиї оболонки голови видавався за ваду). Вісь обличчя: «угору» — шия → голова,
+        /// «праворуч» — ліве плече → праве, «вперед» — їхній добуток. Ціль — 9 см від кістки голови вздовж шиї і 5 см уперед
+        /// (середина обличчя). Камера — 0,8 м, кут 24°; якщо між нею й обличчям тіло (кістки трьох постатей кулями 9–15 см,
+        /// крім голови й шиї цієї постаті) чи мат — ближче (0,6 / 0,45 / 0,35 м); не вийшло — кадр на 0,8 м з позначкою в журналі.
+        /// У журнал — кут між шиєю (шия → голова) і грудьми (верх грудей → шия): 0° — голова на продовженні тулуба.
         /// </summary>
         private static IEnumerator Faces(RingStage3D stage, string folder, string tag, RingActor a)
         {
@@ -653,18 +671,73 @@ namespace Game.Gameplay.Ring.Stage
             yield return null;
             Transform head = a.Head, neck = a.GetBone(HumanBodyBones.Neck), chest = a.GetBone(HumanBodyBones.UpperChest);
             if (chest == null) chest = a.GetBone(HumanBodyBones.Chest);
+            Transform la = a.GetBone(HumanBodyBones.LeftUpperArm), ra = a.GetBone(HumanBodyBones.RightUpperArm);
             Vector3 h = head != null ? head.position : a.HeadPos;
             Vector3 up = head != null && neck != null ? (head.position - neck.position).normalized : Vector3.up;
-            Vector3 target = h + up * 0.09f;
+            Vector3 right = Vector3.ProjectOnPlane(la != null && ra != null ? ra.position - la.position : a.Slot.right, up);
+            if (right.sqrMagnitude < 1e-4f) right = Vector3.ProjectOnPlane(a.Slot.right, up);
+            right.Normalize();
+            Vector3 fwd = Vector3.Cross(right, up).normalized;
+            Vector3 target = h + up * 0.09f + fwd * 0.05f;
             float bend = head != null && neck != null && chest != null ? Vector3.Angle(neck.position - chest.position, head.position - neck.position) : -1f;
-            Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] обличчя {0}: голова ({1:0.00}; {2:0.00}; {3:0.00}), шия до грудей {4:0}°, кліп {5}",
-                tag, h.x, h.y, h.z, bend, a.CurrentClip != null ? a.CurrentClip.name : "—"));
-            for (int i = 0; i < FaceViews.Length; i++)
+            Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] обличчя {0}: голова ({1:0.00}; {2:0.00}; {3:0.00}), шия до грудей {4:0}°, обличчя дивиться ({5:0.00}; {6:0.00}; {7:0.00}), кліп {8}",
+                tag, h.x, h.y, h.z, bend, fwd.x, fwd.y, fwd.z, a.CurrentClip != null ? a.CurrentClip.name : "—"));
+            // «Як камера гри»: з боку обличчя згори під 40°; обличчя дивиться вгору чи вниз — з боку тулуба (видно від підборіддя).
+            Vector3 flat = Vector3.ProjectOnPlane(fwd, Vector3.up);
+            if (flat.sqrMagnitude < 0.09f) flat = -Vector3.ProjectOnPlane(up, Vector3.up);
+            if (flat.sqrMagnitude < 1e-4f) flat = Vector3.forward;
+            flat.Normalize();
+            var dirs = new[]
             {
-                Vector3 d = Quaternion.Euler(-FaceViews[i].y, FaceViews[i].x, 0f) * Vector3.forward;
-                stage.Cine(target + d * 0.8f, target, 24f, true);
-                yield return Shot(folder, "face_" + tag + "_" + FaceViewNames[i], 0.25f);
+                fwd,
+                Quaternion.AngleAxis(40f, up) * fwd,
+                Quaternion.AngleAxis(-40f, up) * fwd,
+                (fwd * Mathf.Cos(35f * Mathf.Deg2Rad) - up * Mathf.Sin(35f * Mathf.Deg2Rad)).normalized,
+                (flat * Mathf.Cos(40f * Mathf.Deg2Rad) + Vector3.up * Mathf.Sin(40f * Mathf.Deg2Rad)).normalized,
+            };
+            for (int i = 0; i < dirs.Length; i++)
+            {
+                string why = null;
+                float dist = FaceDistances[0];
+                foreach (float d in FaceDistances)
+                {
+                    why = FaceBlocked(stage, a, target, target + dirs[i] * d);
+                    if (why == null) { dist = d; break; }
+                }
+                Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] обличчя {0} {1}: камера {2:0.00} м{3}",
+                    tag, FaceViewNames[i], dist, why != null ? " — ЗАГОРОДЖЕНО: " + why : ""));
+                stage.Cine(target + dirs[i] * dist, target, 24f, true);
+                yield return Shot(folder, "face_" + tag + "_" + FaceViewNames[i] + (why != null ? "_blocked" : ""), 0.25f);
             }
+        }
+
+        /// <summary>Що загороджує обличчя з камери <paramref name="cam"/>: мат під камерою чи на лінії, або кістка постаті ближче
+        /// за її радіус до лінії камера → обличчя (без останніх 12 см біля обличчя; голова й шия самої постаті не рахуються).
+        /// <c>null</c> — вид чистий.</summary>
+        private static string FaceBlocked(RingStage3D stage, RingActor subject, Vector3 target, Vector3 cam)
+        {
+            float mat = RingStage3D.MatY + 0.04f;
+            if (cam.y < mat) return "мат";
+            Vector3 seg = target - cam;
+            float len = seg.magnitude;
+            if (len < 0.2f) return null;
+            Vector3 dir = seg / len;
+            float span = len - 0.12f;
+            foreach (var who in new[] { stage.Actor(MatchSide.Player), stage.Actor(MatchSide.Rival), stage.Referee })
+            {
+                if (who == null) continue;
+                foreach (var b in FaceBlockers)
+                {
+                    if (who == subject && (b == HumanBodyBones.Head || b == HumanBodyBones.Neck)) continue;
+                    Transform t = who.GetBone(b);
+                    if (t == null) continue;
+                    float r = b == HumanBodyBones.Hips || b == HumanBodyBones.Spine || b == HumanBodyBones.Chest || b == HumanBodyBones.UpperChest ? 0.15f
+                        : b == HumanBodyBones.Head ? 0.12f : 0.09f;
+                    float along = Mathf.Clamp(Vector3.Dot(t.position - cam, dir), 0f, span);
+                    if ((cam + dir * along - t.position).sqrMagnitude < r * r) return who.Name + " " + b;
+                }
+            }
+            return null;
         }
 
         private static IEnumerator Shot(string folder, string tag, float wait)
