@@ -271,14 +271,17 @@ namespace Game.Gameplay.Ring
         {
             if (_menuInput == null) return false;
             var nav = _view as IMenuNavigable;
-            if (nav != null)
+            if (nav == null && _view == null) return false;
+            // кому ввід кадру — чиста модель (тест CareerPadFeatureTests): у М1 фокус без миші вимкнений, поле імені — завжди друк
+            switch (CareerPadFeature.Route(nav != null, nav == null && Typing, nav == null && _view.PadEnabled))
             {
-                _menuInput.Poll(nav, Time.unscaledDeltaTime);
-                return true;
+                case CareerInputRoute.Menu:
+                    _menuInput.Poll(nav, Time.unscaledDeltaTime);
+                    return true;
+                case CareerInputRoute.Typing: return PollTyping();
+                case CareerInputRoute.Pad: return PollCareerPad();
+                default: return false;
             }
-            if (_view == null) return false;
-            if (Typing) return PollTyping();
-            return _view.PadEnabled && PollCareerPad();
         }
 
         private readonly CareerPadSink _careerPad = new CareerPadSink();

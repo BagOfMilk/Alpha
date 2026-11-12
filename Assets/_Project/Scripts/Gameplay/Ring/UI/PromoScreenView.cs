@@ -15,7 +15,7 @@ namespace Game.Gameplay.Ring.UI
     public sealed class PromoScreenView : RingScreenView
     {
         /// <summary>Проходиться без миші (P3 геймпад, 11.11.2026): усі дії — кнопки RingUi, цілі фокусу.</summary>
-        public override bool PadEnabled { get { return true; } }
+        protected override bool PadTargets { get { return true; } }
 
         private readonly PromoScreenModel _m;
         private string _lastSpeaker = "";

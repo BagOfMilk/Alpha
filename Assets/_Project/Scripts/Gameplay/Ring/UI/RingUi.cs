@@ -66,11 +66,17 @@ namespace Game.Gameplay.Ring.UI
         public virtual void Tick(float unscaledDeltaTime) { }
 
         /// <summary>
-        /// Екран приймає фокус без миші (хрестовина, стік, стрілки; A / Enter натискає ціль у фокусі; P3 геймпад, 11.11.2026).
-        /// Вимкнено за замовчуванням: екран вмикає сам, коли всі його дії мають ціль фокусу (кнопки <see cref="RingUi"/>,
-        /// плитки, плити й <see cref="PadMark"/>).
+        /// Екран приймає фокус без миші (хрестовина, стік, стрілки; A / Enter натискає ціль у фокусі; P3 геймпад, 11.11.2026):
+        /// лише коли шар увімкнений (<see cref="CareerPadFeature.Enabled"/>; у М1 — ні, ітерація 2) і всі дії екрана мають ціль
+        /// фокусу (<see cref="PadTargets"/>). Маршрут вводу, підписи й огляд читають саме це — прапорець не обійти.
         /// </summary>
-        public virtual bool PadEnabled { get { return false; } }
+        public bool PadEnabled { get { return CareerPadFeature.PadOn(PadTargets); } }
+
+        /// <summary>
+        /// Усі дії екрана мають ціль фокусу (кнопки <see cref="RingUi"/>, плитки, плити й <see cref="PadMark"/>). Вимкнено за
+        /// замовчуванням: екран вмикає сам.
+        /// </summary>
+        protected virtual bool PadTargets { get { return false; } }
 
         private PadFocus _pad;
         private VisualElement _padRoot;

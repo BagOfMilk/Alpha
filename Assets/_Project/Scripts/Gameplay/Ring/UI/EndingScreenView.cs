@@ -12,7 +12,7 @@ namespace Game.Gameplay.Ring.UI
     public sealed class EndingScreenView : RingScreenView
     {
         /// <summary>Проходиться без миші (P3 геймпад, 11.11.2026): усі дії — кнопки RingUi, цілі фокусу.</summary>
-        public override bool PadEnabled { get { return true; } }
+        protected override bool PadTargets { get { return true; } }
 
         private readonly DevelopmentScreenModel _m;
         private bool _opened;

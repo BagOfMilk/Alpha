@@ -40,7 +40,7 @@ namespace Game.Gameplay.Ring.UI
         }
 
         /// <summary>Екрани кар'єри B03 v2 проходяться без миші (P3 геймпад, 11.11.2026): усі дії — цілі фокусу.</summary>
-        public override bool PadEnabled { get { return true; } }
+        protected override bool PadTargets { get { return true; } }
 
         protected VisualElement Glass(float pad = 10f)
         {

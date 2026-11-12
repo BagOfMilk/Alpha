@@ -17,10 +17,10 @@ namespace Game.Gameplay.Ring.UI
     public static class ArenaKit
     {
         /// <summary>Підпис клавіші головної дії на золотій плиті: «Enter» або «A» — за пристроєм, яким гравець грав останнім (P3 геймпад).</summary>
-        public static string ConfirmHint(RingText t) { return t.Get(Menus.RingMenuInput.PadLast ? "m.hint.pad_a" : "m.hint.enter"); }
+        public static string ConfirmHint(RingText t) { return t.Get(CareerPadFeature.PadHints(Menus.RingMenuInput.PadLast) ? "m.hint.pad_a" : "m.hint.enter"); }
 
         /// <summary>Рядок клавіш екрана вибору (промо, ворожнеча): клавіатурний чи геймпадний — за останнім пристроєм.</summary>
-        public static string ChooseHint(RingText t) { return t.Get(Menus.RingMenuInput.PadLast ? "m.hint.pad_choose" : "ui.hint.keys"); }
+        public static string ChooseHint(RingText t) { return t.Get(CareerPadFeature.PadHints(Menus.RingMenuInput.PadLast) ? "m.hint.pad_choose" : "ui.hint.keys"); }
 
         // ---- розкладка (еталон 900; B03 §2: значення 1080p × 0,833) ----
         public const float Edge = CareerTileLayout.Edge;          // безпечні боки ACC-04
