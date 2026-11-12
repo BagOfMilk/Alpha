@@ -966,7 +966,10 @@ namespace Game.Gameplay.Ring.Stage
                     }
                 }
             }
-            if (!shot.Ok) shot = RingCine.OutsideShot(pts, c, RingStage3D.OutsideOut, _s.CamAspect);
+            // Рефері стоїть на своєму місці фартуха — кадр рахує з ним (огляд 8f: голову рефері зрізав край кадру в усіх залах),
+            // і лишається з того боку пари, з якого знято попередній кадр цього виходу (скидається разом з _outHave).
+            if (!shot.Ok)
+                shot = RingCine.OutsideShot(pts, c, RingStage3D.OutsideOut, _s.CamAspect, null, null, RingStage3D.OutsideRefPos, _outHave ? (float?)_outYaw : null);
             if (!shot.Ok) return false;
             Vector3 f = shot.Look - shot.Pos;
             float yaw = YawOf(f);
@@ -1320,7 +1323,7 @@ namespace Game.Gameplay.Ring.Stage
 
             var refActor = _s.Referee;
             // Утримання: рефері йде до плечей захисника й стає на коліно сам (RefCount) — паралельно з підходом нападника.
-            if (st.Count) StartCoroutine(RefCount(ev, B, pA, st.RefClip));
+            if (st.Count) StartCoroutine(RefCount(ev, A, B, pA, st.RefClip));
             bool hard = fromCut || st.CutIn;
             if (hard)
             {
@@ -1457,7 +1460,7 @@ namespace Game.Gameplay.Ring.Stage
             PlayInSlot(B, cb, 0f, slotB, rotB, ib != null && ib.Loop);
             if (Trace)
                 Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] ланцюг: {0} (A {1}, B {2})", st.Clip, liveA ? "у слоті" : "від B", liveB ? "у слоті" : "від A"));
-            if (st.Count) StartCoroutine(RefCount(ev, B, A.PosePos, st.RefClip));
+            if (st.Count) StartCoroutine(RefCount(ev, A, B, A.PosePos, st.RefClip));
             yield return PairTail(st, ev, idx, ca, cb, ia, 0f);
         }
 
@@ -1545,7 +1548,7 @@ namespace Game.Gameplay.Ring.Stage
             }
             PlayInSlot(A, ca, 0f, slotA, rotA, ia.Loop);
             PlayInSlot(B, cb, 0f, slotB, rotB, ib != null && ib.Loop);
-            if (st.Count) StartCoroutine(RefCount(ev, B, pAc, st.RefClip));
+            if (st.Count) StartCoroutine(RefCount(ev, A, B, pAc, st.RefClip));
             yield return PairTail(st, ev, idx, ca, cb, ia, 0f);
         }
 
@@ -1655,12 +1658,19 @@ namespace Game.Gameplay.Ring.Stage
             yield return new WaitForSeconds(air.length / RingStage3D.PlaySpeed);
         }
 
+        /// <summary>Найближче до осі тіла, де рефері стоїть і ставить коліна на відліку, м (ПЛЕЙСХОЛДЕР, від осі тулуба).</summary>
+        private const float CountBodyClear = 0.35f;
+        /// <summary>Довжина ніг від таза в бік, протилежний голові, м (ПЛЕЙСХОЛДЕР: стегно й гомілка лежачого).</summary>
+        private const float CountBodyLegs = 0.95f;
+        /// <summary>Де в рефері коліна на стійці, уперед від таза, м (ПЛЕЙСХОЛДЕР).</summary>
+        private const float CountKneeFwd = 0.25f;
+
         /// <summary>
         /// Відлік утримання (<see cref="StageStep.Count"/>): рефері йде до плечей захисника — з боку, протилежного нападникові,
         /// на <see cref="CountReach"/> від них, — стає на коліно (<c>Ref_Kneel_Down</c>) і рахує кліпом, обраним за ступенем
         /// ядра. Звідси ж стартує відлік такту (<see cref="CountBeats"/>), і крок утримання чекає саме його (<see cref="_countT0"/>).
         /// </summary>
-        private IEnumerator RefCount(MatchEvent ev, RingActor B, Vector3 pA, string countClip)
+        private IEnumerator RefCount(MatchEvent ev, RingActor A, RingActor B, Vector3 pA, string countClip)
         {
             var R = _s.Referee;
             _countClip = countClip;
@@ -1684,6 +1694,25 @@ namespace Game.Gameplay.Ring.Stage
             float lim = RingStage3D.RingHalf - 0.3f;
             spot = new Vector3(Mathf.Clamp(spot.x, -lim, lim), RingStage3D.MatY, Mathf.Clamp(spot.z, -lim, lim));
             float yaw = RingStage3D.YawTo(spot, sh);
+            // Не стояти й не ставати колінами на тіла (огляд 8f, «залізна хватка»: коліна рефері на стегні суперника). Вісь
+            // захисника — від голови до ступнів (ноги — з протилежного від голови боку від таза), нападника — його точка.
+            {
+                Vector3 feet = hip - h * CountBodyLegs;
+                var bodies = new List<RefPlacement.Seg>
+                {
+                    new RefPlacement.Seg(head.x, head.z, feet.x, feet.z),
+                    new RefPlacement.Seg(pA.x, pA.z, pA.x, pA.z),
+                };
+                Vector3 fwd = Rot(yaw, Vector3.forward);
+                float sx = spot.x, sz = spot.z;
+                if (RefPlacement.PushClear(ref sx, ref sz, fwd.x, fwd.z, CountKneeFwd, bodies, CountBodyClear, lim))
+                {
+                    if ((sx - spot.x) * (sx - spot.x) + (sz - spot.z) * (sz - spot.z) > 1e-4f && Trace)
+                        Debug.Log("[Ринг] відлік: рефері відсунуто від тіл на " + Mathf.Sqrt((sx - spot.x) * (sx - spot.x) + (sz - spot.z) * (sz - spot.z)).ToString("0.00", CultureInfo.InvariantCulture) + " м");
+                    spot = new Vector3(sx, RingStage3D.MatY, sz);
+                    yaw = RingStage3D.YawTo(spot, sh);
+                }
+            }
             yield return Walk(new[] { new SlideItem(R, spot, yaw) });
             var down = _s.Clip("Ref_Kneel_Down");
             if (down != null && Upright(R))
@@ -1815,6 +1844,9 @@ namespace Game.Gameplay.Ring.Stage
             }
             if (shot.Ok) _s.Cine(shot.Pos, shot.Look, shot.Fov, true);
             else Debug.LogWarning("[Ринг] 3D: кіноплан фінішера не вмістився — лишається " + _plan.Clip);
+            // Обраний ракурс міг виявитись «з боку рефері» (запасні кути): тоді він між камерою і парою й закриває пів кадру
+            // (огляд 8f, «Метеор»: «перед пари на 1,15 м»). Переставляємо його за пару відносно ФАКТИЧНОЇ камери.
+            if (shot.Ok) KeepRefBehindPair(aC, pB, YawOf(shot.Look - shot.Pos));
             // Для огляду: де рефері відносно кадру в мить склейки (за парою — добре; перед нею — закриває) і де його голова по
             // висоті кадру (зона слова — верхні 8–22 %).
             if (shot.Ok)
@@ -1825,6 +1857,28 @@ namespace Game.Gameplay.Ring.Stage
                 Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] фінішер: кіноплан, рефері {0} пари на {1:0.00} м, голова рефері на {2:0} % від верху кадру ({3})",
                     depth >= 0f ? "за" : "перед", Mathf.Abs(depth), 100f * FromTop(shot, refHead), _plan.Clip));
             }
+        }
+
+        /// <summary>Відстань рефері до осі тіла борця на кіноплані й відліку, м (ПЛЕЙСХОЛДЕР: капсула тулуба з запасом).</summary>
+        private const float RefBodyClear = 0.85f;
+
+        /// <summary>
+        /// Рефері не між камерою й парою: якщо він ближче ніж <see cref="RefPlacement.MinBehind"/> позаду пари (за поглядом
+        /// камери) — ставимо його за пару, у межах рингу, не ближче <see cref="RefBodyClear"/> до обох. Немає місця — лишаємо.
+        /// </summary>
+        private void KeepRefBehindPair(Vector3 aC, Vector3 pB, float camYaw)
+        {
+            var R = _s.Referee;
+            Vector3 mid = (aC + pB) * 0.5f, v = Rot(camYaw, Vector3.forward);
+            Vector3 r = R.PosePos - mid;
+            if (r.x * v.x + r.z * v.z >= RefPlacement.MinBehind) return;
+            var bodies = new List<RefPlacement.Seg> { new RefPlacement.Seg(aC.x, aC.z, aC.x, aC.z), new RefPlacement.Seg(pB.x, pB.z, pB.x, pB.z) };
+            float x, z;
+            if (!RefPlacement.BehindPair(mid.x, mid.z, v.x, v.z, bodies, 1.75f, RefBodyClear, out x, out z)) return;
+            var p = new Vector3(x, RingStage3D.MatY, z);
+            StopWalk(R);
+            _s.Place(R, p, RingStage3D.YawTo(p, mid), "Ref_Idle_Loop");
+            if (Trace) Debug.Log("[Ринг] фінішер: рефері переставлено за пару відносно камери");
         }
 
         /// <summary>Де точка світу в кадрі кіноплану по висоті: частка від верху (0 — верх, 1 — низ).</summary>
