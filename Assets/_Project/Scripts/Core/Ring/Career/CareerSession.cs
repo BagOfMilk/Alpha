@@ -353,7 +353,7 @@ namespace Game.Core.Ring.Career
             int units = Math.Max(0, bought - 1) + perkCost / CareerRules.RivalPerksPerStep + learned;
             // Опукло: перші одиниці росту (вільний бал, перший перк) майже не роблять гравця сильнішим — суперник ще не росте;
             // далі — щабель на кожні ~1,6 одиниці (замір 06.11.2026: лінійно — другий сезон 40–45 %, третій 47–60 %).
-            return CareerRules.RivalGrowthSteps((CareerRules.RivalGrowthNum * units - CareerRules.RivalGrowthOffset) / CareerRules.RivalGrowthDen);
+            return Math.Max(0, (CareerRules.RivalGrowthNum * units - CareerRules.RivalGrowthOffset) / CareerRules.RivalGrowthDen);
         }
 
         private WrestlerStats Strengthened(WrestlerStats npc, MatchModifiers rivalMods)
@@ -368,8 +368,8 @@ namespace Game.Core.Ring.Career
         {
             int growth = PlayerGrowth();
             // Кульмінації — на поточному рості: ворожнеча й титул лишаються важкими.
-            if (State.IsFeudShow) return CareerRules.HammerSteps(Feud.Records.Count) + growth;
-            if (State.IsTitle) return CareerRules.TitleSteps + growth;
+            if (State.IsFeudShow) return CareerRules.HammerSteps(Feud.Records.Count) + CareerRules.FeudTierSteps * (State.Federation - 1) + growth;
+            if (State.IsTitle) return CareerRules.TitleSteps(State.Federation) + growth;
             // Щотижневі — на знімку росту, знятому на вході в щабель картки: виріс між підвищеннями — виграєш частіше (пік);
             // підвищили — суперники знову твого рівня. Реванш — суперник слабший.
             int steps = CareerRules.RivalSteps(State.Position, State.TierPos < 0 ? growth : State.TierGrowth);

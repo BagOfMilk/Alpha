@@ -429,7 +429,7 @@ namespace Game.Tests.EditMode
             public int Reached(int tier) { int n = 0; for (int se = 1; se < 12; se++) n += FirstSeason[tier, se]; return n; }
         }
 
-        public static TempoReport Measure(int careers, int seasons)
+        public static TempoReport Measure(int careers, int seasons, int seedBase = 9000)
         {
             var rep = new TempoReport { Careers = careers };
             Action<string, MatchWinner> add = (k, w) =>
@@ -440,7 +440,7 @@ namespace Game.Tests.EditMode
             };
             for (int i = 0; i < careers; i++)
             {
-                var s = CareerKit.NewHero((ulong)(9000 + i));
+                var s = CareerKit.NewHero((ulong)(seedBase + i));
                 s.SetFemale(i % 2 == 1);
                 var bot = new CareerRunReport();
                 var seen = new bool[CareerContent.MaxTier + 1];
@@ -508,11 +508,12 @@ namespace Game.Tests.EditMode
             var r = Measure(200, 8);
             TestContext.WriteLine(Report(r));
             System.Console.WriteLine("[tempo] " + Report(r));
-            // Замір 11.11.2026 (ключ букера 4, ріст суперника понад 9 — удвічі повільніше, титул +3): регіональна з S2 у 80 % і з S3
-            // у 18 %; національна з S3 у 29 %, з S4 у 62 %; світова з S4 у 15 %, з S5 у 37 %, далі — решта.
-            // Перемоги: тижневі 54–60 %, ворожнеча 47–50 %, титул 37 / 37 / 49 / 47 % (чоловіки й жінки разом).
+            // Замір 11.11.2026 на рушії P2-1 (матч 8–15 дій; ключ букера 4, титул {4, 6, 7, 9}, Молот +3 на рівень), три набори сідів
+            // (9000 / 30000 / 55000): регіональна з S2 у 73–77 %, з S3 у 17–23 %, з S4 у 4–8 %; національна з S3 у 22–25 %, з S4 у 62–65 %;
+            // світова з S4 у 15–16 %, з S5 у 32–34 %, далі — решта. Перемоги: тижневі 53–63 %, ворожнеча 42–54 %, титул 35–49 %
+            // (чоловіки й жінки разом). Межі — із запасом на шум 200 кар'єр.
             Assert.GreaterOrEqual(r.Reached(2), r.Careers * 98 / 100, "з місцевої виходять майже всі");
-            Assert.GreaterOrEqual(r.FirstSeason[2, 2] + r.FirstSeason[2, 3], r.Careers * 95 / 100, "місцева — S1–S2");
+            Assert.GreaterOrEqual(r.FirstSeason[2, 2] + r.FirstSeason[2, 3], r.Careers * 90 / 100, "місцева — S1–S2");
             Assert.That(r.MedianFirstSeason(2), Is.InRange(2, 3), "регіональна — з S2–S3");
             Assert.That(r.MedianFirstSeason(3), Is.InRange(3, 4), "національна — з S3–S4");
             Assert.That(r.MedianFirstSeason(4), Is.InRange(5, 6), "світова — з S5+");
