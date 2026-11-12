@@ -275,6 +275,17 @@ namespace Game.Gameplay.Ring
             injury[(int)Game.Core.Ring.Career.BodyZone.Body] = wasInjury;
             h.CurrentView.Refresh();
             yield return Wait(0.3f);
+            // ---- наведення на «Промо» (ПМ 11.11.2026, У0 власника): плитка з коротшим описом і рядок-підказка шапки — не більше
+            //      двох рядків ----
+            var week = h.CurrentView as UI.WeekScreenView;
+            if (week != null && week.HoverTileForShots(4, true))
+            {
+                yield return Wait(0.4f);
+                yield return Snap(h, "week_hover_promo");
+                week.HoverTileForShots(4, false);
+                yield return Wait(0.3f);
+            }
+            else Debug.LogError("[Ринг] огляд меню: на тижні немає плитки «Промо» (ключ 4) — кадр підказки шапки не знято");
             // ---- геймпад без миші на тижні: фокус на плитці, хрестовиною до вкладки шухляди, A відкриває, B закриває (не пауза) ----
             if (pad)
             {

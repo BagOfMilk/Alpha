@@ -25,6 +25,7 @@ namespace Game.Gameplay.Ring.UI
         private bool _dev, _accordionSet;
         private bool _shop = ExpandForShots;
         private readonly List<ActionTile> _tiles = new List<ActionTile>();
+        private readonly List<int> _tileKeys = new List<int>();   // ключ плитки (цифра) поруч із _tiles — для огляду меню
         private Label _hint;
         private VisualElement _row, _gold, _weekPlate, _last, _ropes, _header, _drawer, _poster;
         private string _hintDefault = "";
@@ -53,7 +54,7 @@ namespace Game.Gameplay.Ring.UI
             _drawerScroll = null;
             Root.Clear();
             Root.style.paddingLeft = 0f; Root.style.paddingRight = 0f; Root.style.paddingTop = 0f; Root.style.paddingBottom = 0f;
-            _tiles.Clear();
+            _tiles.Clear(); _tileKeys.Clear();
             var v = C.GetCareerView();
             var w = C.GetWeekView();
             if (!_accordionSet)
@@ -199,8 +200,23 @@ namespace Game.Gameplay.Ring.UI
             };
             t.OnUnhover = () => { t.Focused = false; SetHint(_hintDefault); };
             _tiles.Add(t);
+            _tileKeys.Add(key);
             _row.Add(t);
             return t;
+        }
+
+        /// <summary>
+        /// Огляд меню (<c>RingMenuShots</c>): навести на плитку з ключем <paramref name="key"/> так само, як курсор (підсвіт і опис у
+        /// рядку-підказці шапки), чи прибрати наведення. false — такої плитки на тижні немає.
+        /// </summary>
+        internal bool HoverTileForShots(int key, bool enter)
+        {
+            int i = _tileKeys.IndexOf(key);
+            if (i < 0) return false;
+            var t = _tiles[i];
+            if (enter) { if (t.OnHover != null) t.OnHover(); }
+            else if (t.OnUnhover != null) t.OnUnhover();
+            return true;
         }
 
         /// <summary>Рядок-підказка шапки ряду: підкладка лише під текстом (порожня підкладка читалась як зайва смуга — кадр 08.11.2026).</summary>
