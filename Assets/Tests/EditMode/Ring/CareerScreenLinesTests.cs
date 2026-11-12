@@ -142,7 +142,23 @@ namespace Game.Tests.EditMode
             string src = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "Core", "Ring", "Progression", "DevelopmentAdvice.cs"));
             var keys = new List<string>();
             foreach (Match m in Regex.Matches(src, "\"(c\\.dev\\.why\\.[a-z_]+)\"")) keys.Add(m.Groups[1].Value);
-            Assert.GreaterOrEqual(keys.Count, 5, "скан ключів ядра нічого не знайшов");
+            // причини минулого матчу — через WhyFor(причина, вид поради): вид — той, яким порада створена в цьому циклі ядра
+            // (Kind = AdviceKind.X перед викликом); «Кар'єра», 12.11.2026: атрибут — основа, перк — .perk, прийом — .move
+            int reasons = 0;
+            foreach (Match m in Regex.Matches(src, @"WhyFor\(([^;]*?), a\.Kind\)"))
+            {
+                var kinds = Regex.Matches(src.Substring(0, m.Index), @"Kind = AdviceKind\.(\w+)");
+                Assert.Greater(kinds.Count, 0, "вид поради перед " + m.Value + " не знайдено");
+                var kind = (AdviceKind)System.Enum.Parse(typeof(AdviceKind), kinds[kinds.Count - 1].Groups[1].Value);
+                foreach (Match r in Regex.Matches(m.Groups[1].Value, "\"([a-z_]+)\""))
+                {
+                    keys.Add(DevelopmentAdvice.WhyFor(r.Groups[1].Value, kind));
+                    reasons++;
+                }
+            }
+            Assert.GreaterOrEqual(keys.Count, 7, "скан ключів ядра нічого не знайшов");
+            Assert.GreaterOrEqual(reasons, 5, "причини минулого матчу (WhyFor) не знайдено");
+            keys.Add(DevelopmentAdvice.RoleMoveKey(RingPath.Heel));   // брудний прийом лиходієві — єдиний прийом ролі в ядрі
             for (int i = 0; i < 3; i++) keys.Add(DevelopmentAdvice.RoleKey((RingPath)i));
             for (int i = 0; i < 5; i++) keys.Add("c.dev.attr.why." + i);
             keys.Add("c.dev.move.why");
@@ -151,7 +167,6 @@ namespace Game.Tests.EditMode
 
         // ---------------- федерації (П5, запит ПМ 12.11.2026) ----------------
 
-        /// <summary>Як CareerTransitionTests.CloseSeason: кінець сезону у федерації з популярністю, довірою й поясом; титул розіграно.</summary>
         /// <summary>
         /// «Пропустити титульний матч» — з наслідком (ПМ 12.11.2026, кадр слоту 28: порожня плитка): що буде — завжди; чемпіонові —
         /// ризиком довіра −1, і саме стільки забирає ядро.
@@ -200,6 +215,7 @@ namespace Game.Tests.EditMode
                     Assert.IsFalse(other.IsMatch(line), file + ": смуга провалу не «≤6» — " + line.Trim());
         }
 
+        /// <summary>Як CareerTransitionTests.CloseSeason: кінець сезону у федерації з популярністю, довірою й поясом; титул розіграно.</summary>
         private static CareerSession AtSeasonEnd(ulong seed, int tier, int pop, int trust, bool champion = false)
         {
             var s = CareerKit.NewHero(seed);
