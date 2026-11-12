@@ -142,6 +142,7 @@ namespace Game.Core.Ring.Career
             tier = Math.Max(1, Math.Min(Content.Federations.Count, tier));
             if (IsChampion) State.BeltHolder = Federation.BeltOf(State.Female) ?? "";
             State.Federation = tier;
+            State.ContractExclusive = false; State.ContractEndSeason = 0; State.ContractPenalty = 0;
             SyncFederationRules();
             Feud.State.Audience = popularity;
             Feud.State.Trust = trust;
@@ -335,7 +336,7 @@ namespace Game.Core.Ring.Career
             {
                 IsBig = State.IsBig, IsTitle = State.IsTitle, IsFeud = State.IsFeudShow, Opponent = opp,
                 OpponentFeudLevel = opp == null ? 0 : FeudLevel(opp.Id), Position = State.Position, Plan = State.Plan,
-                Stipulations = State.Stip, Fee = ShowBooker.Fee(State.Position, State.IsBig, Federation.FeePercent),
+                Stipulations = State.Stip, Fee = ContractFee(),
                 WinBonus = CareerRules.WinBonus, HypeBonus = CareerRules.HypeBonus, PromoHypeBonus = State.NextHypeBonus,
                 CanWithdraw = State.IsInjured && !State.IsBig, RivalSteps = RivalStepsNow(), IsRematch = IsRematch, IsOutgrown = !IsRematch && IsOutgrown, IsFarewell = State.Farewell
             };
@@ -453,7 +454,10 @@ namespace Game.Core.Ring.Career
         }
 
         /// <summary>Виїзне шоу цього тижня (не велике й не титульне): дорога зараз, гонорар ×2, наступного тижня на дію менше.</summary>
-        public bool CanGoAway { get { return Stage == CareerStage.Week && !State.AwayShow && !State.IsBig && State.Money >= CareerRules.AwayTravelCost; } }
+        public bool CanGoAway
+        {
+            get { return Stage == CareerStage.Week && !State.AwayShow && !State.IsBig && !ExclusiveActive && State.Money >= CareerRules.AwayTravelCost; }
+        }
 
         public bool GoAway()
         {
@@ -793,6 +797,7 @@ namespace Game.Core.Ring.Career
                 case "parity": return State.Week % 2 == c.Min;
                 case "injured": return State.IsInjured;
                 case "female": return State.Female;
+                case "manager": return State.Manager;
                 case "champion": return IsChampion;
                 case "last_won": return State.LastOutcome == 1;
                 case "last_lost": return State.LastOutcome == 2;
@@ -884,6 +889,9 @@ namespace Game.Core.Ring.Career
                 case "dev":
                     Feud.State.DevPoints += e.Amount;
                     break;
+                case "manager":
+                    State.Manager = e.Amount > 0;
+                    break;
             }
         }
 
@@ -901,6 +909,7 @@ namespace Game.Core.Ring.Career
         {
             var r = Begin(WeekActionKind.SideJob);
             if (!r.Ok) return r;
+            if (ExclusiveActive) { r.Ok = false; r.Reason = "exclusive"; return r; }
             int gain = CareerRules.SideJobBase + 5 * Math.Max(0, Player.Get(RingAttr.Stamina));
             State.Money += gain; r.MoneyDelta = gain;
             r.HasRoll = true;
@@ -1188,9 +1197,16 @@ namespace Game.Core.Ring.Career
                 Position = State.Position, Winner = res.Winner, EndKind = res.Kind, Hype = res.FinalHype, Rounds = res.Rounds,
                 PlanOutcome = outcome, PopularityBefore = popBefore, TrustBefore = trustBefore
             };
-            r.Fee = ShowBooker.Fee(State.Position, State.IsBig, Federation.FeePercent) * (State.AwayShow ? CareerRules.AwayFeePercent : 100) / 100;
+            r.Fee = ContractFee() * (State.AwayShow ? CareerRules.AwayFeePercent : 100) / 100;
             if (res.Winner == MatchWinner.Player) r.FeeWinBonus = CareerRules.WinBonus;
             if (res.FinalHype >= CareerRules.HypeBonusAt) r.FeeHypeBonus = CareerRules.HypeBonus;
+            if (State.Manager)
+            {
+                // менеджер бере 15 % усього гонорару (база + бонуси; з бонусу 5 окремо вийшло б 0) — знято з бази, тож рядок
+                // «гонорар (база + бонуси)» сходиться. Приз за титул — не гонорар, його менеджер не ділить
+                r.ManagerCut = CareerRules.ManagerCut(r.TotalFee);
+                r.Fee -= r.ManagerCut;
+            }
             State.Money += r.TotalFee;
 
             // P1-6: поразка чи нічия дає популярність лише з ажіотажем ≥ 9 і раз за сезон. Приріст від поразки в стані ворожнечі —
@@ -1461,7 +1477,7 @@ namespace Game.Core.Ring.Career
             {
                 if (!SeasonSummaryFinal || State.Report.Fired || State.OfferDecision != 0 || State.Farewell) return false;
                 var k = GetOfferKeys();
-                return k != null && k.Ready;
+                return k != null && k.Ready && !ExitLocked;
             }
         }
 
@@ -1475,6 +1491,12 @@ namespace Game.Core.Ring.Career
         public void AcceptOffer()
         {
             if (!OfferAvailable) throw new InvalidOperationException("Пропозиції зараз немає");
+            var to = OfferFederation;
+            // вийти з чинної пастки раніше строку — штраф (§6.4); умови нового паперу фіксуються зараз, діють із переходом
+            int penalty = ExitPenaltyDue;
+            State.Money -= penalty;
+            State.PendingExclusive = OfferIsExclusive;
+            State.PendingAdvance = CareerRules.Advance(to, State.PendingExclusive, State.Manager);
             State.OfferDecision = 1;
             State.OfferDeclines = 0;
             if (!IsChampion)
@@ -1512,7 +1534,108 @@ namespace Game.Core.Ring.Career
         {
             var to = Content.Federation(State.Federation + 1);
             EnterFederation(to.Tier, CareerRules.EntryPopularity(to), trust);
+            State.Money += State.PendingAdvance;
+            if (State.PendingExclusive)
+            {
+                // строк — сезони нової федерації: наступний і ще один; вийти на кінці останнього — уже не рано
+                State.ContractExclusive = true;
+                State.ContractEndSeason = State.Season + CareerRules.ExclusiveSeasons;
+                State.ContractPenalty = CareerRules.ExitPenalty(to);
+            }
+            State.PendingExclusive = false;
+            State.PendingAdvance = 0;
             RefreshSeasonReport();
+        }
+
+        // ---------- контракт (§6.4): аванс, пастка «виключне право», менеджер ----------
+
+        /// <summary>Чинна пастка «виключне право»: гонорар ×0,7, без виїзних шоу й підробітку — до кінця строку.</summary>
+        public bool ExclusiveActive { get { return State.ContractExclusive && State.Season <= State.ContractEndSeason; } }
+
+        /// <summary>Гонорар шоу за місцем у картці й рівнем федерації — і за контрактом (пастка ×0,7). Без виїзду й менеджера.</summary>
+        private int ContractFee()
+        {
+            return ShowBooker.Fee(State.Position, State.IsBig, Federation.FeePercent) * (ExclusiveActive ? CareerRules.ExclusiveFeePercent : 100) / 100;
+        }
+
+        /// <summary>Штраф, якщо піти з федерації зараз: чинна пастка й строк ще не скінчився (0 — вільний).</summary>
+        public int ExitPenaltyDue { get { return ExclusiveActive && State.Season < State.ContractEndSeason ? State.ContractPenalty : 0; } }
+
+        /// <summary>Пастка тримає: піти раніше строку можна, лише заплативши штраф, — а грошей не вистачає.</summary>
+        public bool ExitLocked { get { return ExitPenaltyDue > State.Money; } }
+
+        /// <summary>Огляд (QA, <c>-ring-shot-contract</c>): пропозиція — пастка (true) чи чесна (false); null — як вирішить зерно. Не в сейві.</summary>
+        public bool? ForcedOfferExclusive { get; set; }
+
+        /// <summary>
+        /// Пропозиція цього кінця сезону — пастка «виключне право»? Детерміновано від зерна, сезону й рівня (повторна пропозиція
+        /// наступного сезону — новий папір). Екран цього не бачить: лише <see cref="GetOfferContract"/>.
+        /// </summary>
+        internal bool OfferIsExclusive
+        {
+            get
+            {
+                if (ForcedOfferExclusive.HasValue) return ForcedOfferExclusive.Value;
+                var k = GetOfferKeys();
+                int tier = k == null ? State.Federation + 1 : k.ToTier;
+                return ShowBooker.Mix(State.Seed, State.Season * 10 + tier, 29) % 100 < CareerRules.ExclusiveOfferPercent;
+            }
+        }
+
+        /// <summary>Контракт пропозиції для екрана (null — ключів немає чи рішення вже ухвалено). Рахується й тоді, коли пастка тримає.</summary>
+        public ContractView GetOfferContract()
+        {
+            var k = GetOfferKeys();
+            if (k == null || !k.Ready || !SeasonSummaryFinal || State.Report.Fired || State.OfferDecision != 0 || State.Farewell) return null;
+            var to = Content.Federation(k.ToTier);
+            bool ex = OfferIsExclusive;
+            var sight = State.Manager ? ContractSight.Seen : (ContractSight)Math.Max(0, Math.Min(3, State.OfferRead));
+            var v = new ContractView
+            {
+                ToTier = to.Tier, Advance = CareerRules.Advance(to, ex, State.Manager), HasManager = State.Manager, Sight = sight,
+                ExclusiveSeen = sight == ContractSight.Seen && ex, HintSomething = sight == ContractSight.Hint && ex,
+                CanRead = !State.Manager && State.OfferRead == 0, ReadModifier = Player.Get(CareerRules.ContractReadAttr),
+                ExitPenalty = ExitPenaltyDue, ExitLocked = ExitLocked
+            };
+            if (v.ExclusiveSeen)
+            {
+                v.ExclusiveFeePercent = CareerRules.ExclusiveFeePercent;
+                v.ExclusiveSeasons = CareerRules.ExclusiveSeasons;
+                v.ExclusivePenalty = CareerRules.ExitPenalty(to);
+            }
+            return v;
+        }
+
+        /// <summary>
+        /// «Прочитати дрібний шрифт» (§6.4: «Пункт видно кидком Техніки або з менеджером»): 2d6 + Техніка, раз на пропозицію, дій
+        /// тижня не бере. 10+ — пункт видно; 7–9 — видно, чи щось є; 6− — нічого не знайдено. З менеджером читати не треба.
+        /// </summary>
+        public ContractReadResult ReadOfferContract()
+        {
+            var r = new ContractReadResult();
+            var c = GetOfferContract();
+            if (c == null) { r.Reason = "no_offer"; return r; }
+            if (State.Manager) { r.Reason = "manager"; return r; }
+            if (State.OfferRead != 0) { r.Reason = "already"; return r; }
+            r.Roll = TwoD6.Roll(Dice, "career:contract");
+            r.Modifier = Player.Get(CareerRules.ContractReadAttr);
+            r.Total = r.Roll + r.Modifier;
+            r.Tier = TwoD6.TierOf(r.Total);
+            r.Sight = r.Tier == RollTier.Strong ? ContractSight.Seen : r.Tier == RollTier.Partial ? ContractSight.Hint : ContractSight.Missed;
+            State.OfferRead = (int)r.Sight;
+            r.Ok = true;
+            return r;
+        }
+
+        /// <summary>Менеджер найнятий (§6.4): 15 % кожного гонорару; пастку бачить без кидка; аванс переходу +25 %.</summary>
+        public bool HasManager { get { return State.Manager; } }
+
+        /// <summary>Звільнити менеджера — будь-коли, без штрафу (наймає сцена закулісся ev_manager).</summary>
+        public bool FireManager()
+        {
+            if (!State.Manager || Stage == CareerStage.Title || Stage == CareerStage.Create) return false;
+            State.Manager = false;
+            return true;
         }
 
         /// <summary>
@@ -1547,6 +1670,7 @@ namespace Game.Core.Ring.Career
             if (State.OfferDecision != 2) State.OfferDeclines = 0;
             State.OfferDecision = 0;
             State.FarewellResult = 0;
+            State.OfferRead = 0;
             if (State.Report.Fired && State.Federation > 1)
             {
                 // нижче підлоги — контракт не продовжують: рівень нижче (власник 11.11.2026), кар'єра триває
@@ -1573,6 +1697,11 @@ namespace Game.Core.Ring.Career
             Array.Clear(State.SeasonRecord, 0, State.SeasonRecord.Length);
             State.SeasonPopStart = Popularity;
             State.Season++; State.Week = 1;
+            if (State.ContractExclusive && State.Season > State.ContractEndSeason)
+            {
+                // строк пастки скінчився — контракт продовжується як чесний
+                State.ContractExclusive = false; State.ContractEndSeason = 0; State.ContractPenalty = 0;
+            }
             State.Strained = false;
             StartWeek();
             Stage = CareerStage.Week;

@@ -36,6 +36,11 @@ namespace Game.Core.Ring.Career
         public int DevPointsGained;
         /// <summary>P1-6: чому поразка не дала популярності — 0 (не застосовно), 1 — ажіотаж нижче 9, 2 — уже було цього сезону.</summary>
         public int LossPopularityBlocked;
+        /// <summary>
+        /// Частка менеджера (§6.4, 15 % усього гонорару), уже знята з бази Fee — суми рядка «гонорар» сходяться без нового рядка; окремий рядок
+        /// «менеджер −N» — за бажанням екрана.
+        /// </summary>
+        public int ManagerCut;
 
         public int TotalFee { get { return Fee + FeeWinBonus + FeeHypeBonus; } }
 
@@ -46,7 +51,7 @@ namespace Game.Core.Ring.Career
                 B(Played), B(Withdrew), B(IsBig), B(IsTitle), B(IsFeud), Uri.EscapeDataString(OpponentId ?? ""), I((int)Position),
                 I((int)Winner), I((int)EndKind), I(Hype), I(Rounds), I((int)PlanOutcome), I(Fee), I(FeeWinBonus), I(FeeHypeBonus),
                 I(PopularityBefore), I(PopularityAfter), I(TrustBefore), I(TrustAfter), I(InjuredZone), I(InjuryWeeks), B(TitleWon),
-                I(DevPointsGained), I(LossPopularityBlocked)
+                I(DevPointsGained), I(LossPopularityBlocked), I(ManagerCut)
             });
         }
 
@@ -54,8 +59,8 @@ namespace Game.Core.Ring.Career
         {
             if (string.IsNullOrEmpty(s)) return null;
             var p = s.Split(',');
-            // 24-те поле (LossPopularityBlocked) додано 11.11.2026: старі зліпки мають 23
-            if (p.Length != 23 && p.Length != 24) throw new FormatException("пошкоджений підсумок шоу у зліпку кар'єри");
+            // 24-те поле (LossPopularityBlocked) додано 11.11.2026, 25-те (ManagerCut) — 12.11.2026: старі зліпки мають 23 чи 24
+            if (p.Length < 23 || p.Length > 25) throw new FormatException("пошкоджений підсумок шоу у зліпку кар'єри");
             int i = 0;
             var r = new ShowResult();
             r.Played = Bo(p[i++]); r.Withdrew = Bo(p[i++]); r.IsBig = Bo(p[i++]); r.IsTitle = Bo(p[i++]); r.IsFeud = Bo(p[i++]);
@@ -65,6 +70,7 @@ namespace Game.Core.Ring.Career
             r.PopularityBefore = In(p[i++]); r.PopularityAfter = In(p[i++]); r.TrustBefore = In(p[i++]); r.TrustAfter = In(p[i++]);
             r.InjuredZone = In(p[i++]); r.InjuryWeeks = In(p[i++]); r.TitleWon = Bo(p[i++]); r.DevPointsGained = In(p[i++]);
             if (p.Length > 23) r.LossPopularityBlocked = In(p[i++]);
+            if (p.Length > 24) r.ManagerCut = In(p[i++]);
             return r;
         }
 
@@ -247,6 +253,18 @@ namespace Game.Core.Ring.Career
         public bool Farewell;
         public int FarewellResult;
         public readonly SortedSet<int> ClosedTiers = new SortedSet<int>();
+        /// <summary>
+        /// Контракт (§6.4): чинна пастка «виключне право» — до якого сезону включно і штраф за вихід раніше; прочитаний дрібний шрифт
+        /// пропозиції цього кінця сезону (0 — ні, 1 — провал, 2 — «щось є», 3 — видно); підписаний, але ще не почався (прощальний
+        /// матч чемпіона): пастка й аванс; менеджер найнятий.
+        /// </summary>
+        public bool ContractExclusive;
+        public int ContractEndSeason;
+        public int ContractPenalty;
+        public int OfferRead;
+        public bool PendingExclusive;
+        public int PendingAdvance;
+        public bool Manager;
         public int TitlesWon;
         public bool FeudResolved;
         /// <summary>Очки розвитку на початок поточного матчу (для підсумку).</summary>
@@ -324,6 +342,9 @@ namespace Game.Core.Ring.Career
             var ct = new List<int>(ClosedTiers);
             sb.Append("|offer=").Append(OfferDecision).Append("|offerdecl=").Append(OfferDeclines).Append("|farewell=").Append(b(Farewell))
               .Append("|fwres=").Append(FarewellResult).Append("|closed=").Append(Ints(ct));
+            sb.Append("|excl=").Append(b(ContractExclusive)).Append("|exend=").Append(ContractEndSeason).Append("|expen=").Append(ContractPenalty)
+              .Append("|offread=").Append(OfferRead).Append("|pendex=").Append(b(PendingExclusive)).Append("|pendadv=").Append(PendingAdvance)
+              .Append("|manager=").Append(b(Manager));
         }
 
         internal void Restore(Dictionary<string, string> kv)
@@ -410,6 +431,14 @@ namespace Game.Core.Ring.Career
             ClosedTiers.Clear();
             if (kv.TryGetValue("closed", out v))
                 foreach (var t in v.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)) ClosedTiers.Add(int.Parse(t, CultureInfo.InvariantCulture));
+            // контракт і менеджер додано 12.11.2026: старі зліпки — чесний контракт, менеджера немає, дрібний шрифт не читано
+            ContractExclusive = kv.TryGetValue("excl", out v) && v == "1";
+            ContractEndSeason = kv.TryGetValue("exend", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
+            ContractPenalty = kv.TryGetValue("expen", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
+            OfferRead = kv.TryGetValue("offread", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
+            PendingExclusive = kv.TryGetValue("pendex", out v) && v == "1";
+            PendingAdvance = kv.TryGetValue("pendadv", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
+            Manager = kv.TryGetValue("manager", out v) && v == "1";
         }
 
         /// <summary>Пояс зі зліпка до 11.11.2026 (один на федерацію): сесія розкладе його по дивізіонах. Не зберігається.</summary>

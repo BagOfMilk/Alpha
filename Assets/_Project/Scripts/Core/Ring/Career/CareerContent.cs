@@ -194,7 +194,7 @@ namespace Game.Core.Ring.Career
         public BackstageContent Backstage;
 
         /// <summary>Мови сцен, крім ростера: букер, гравець, оповідач, публіка, ведуча місцевого каналу, агент чужої федерації.</summary>
-        public static readonly string[] ExtraSpeakers = { "booker", "player", "narrator", "crowd", "host", "scout", "booker2", "booker3", "booker4" };
+        public static readonly string[] ExtraSpeakers = { "booker", "player", "narrator", "crowd", "host", "scout", "booker2", "booker3", "booker4", "manager" };
 
         public static CareerContent Load(string feudJson, string movesJson, string gimmicksJson, string rosterJson, string backstageJson = null)
         {
