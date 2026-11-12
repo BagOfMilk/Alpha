@@ -351,7 +351,10 @@ namespace Game.Core.Ring.Career
             if (id == HammerId) throw new FormatException(where + ": Молот — суперник ворожнечі, а не чемпіон");
         }
 
-        /// <summary>Закулісні сцени посилаються лише на наявних NPC й допустимих мовців; ефекти не чіпають план і умови матчу ворожнечі.</summary>
+        /// <summary>
+        /// Закулісні сцени посилаються лише на наявних NPC й допустимих мовців; ефекти не чіпають план і умови матчу ворожнечі.
+        /// Умова booker — лише на букера якоїсь федерації; у розмові свого букера (умова сцени booker) букери інших федерацій не говорять.
+        /// </summary>
         private void ValidateBackstage()
         {
             foreach (var sc in Backstage.Scenes)
@@ -359,11 +362,15 @@ namespace Game.Core.Ring.Career
                 string where = "закулісна сцена " + sc.Id;
                 var effects = new List<FeudEffect>();
                 var conds = new List<FeudCondition>(sc.Requires);
+                string own = null;
+                foreach (var cd in sc.Requires) if (cd.Kind == ConditionKind.Career && cd.Key == "booker" && !cd.Negate) own = cd.Target;
                 foreach (var n in sc.Promo.Nodes)
                 {
                     if (n.Type == PromoNodeType.Line && n.Speaker != null && FindNpc(n.Speaker) == null
                         && Array.IndexOf(ExtraSpeakers, n.Speaker) < 0)
                         throw new FormatException(where + "/" + n.Id + ": невідомий мовець '" + n.Speaker + "'");
+                    if (n.Type == PromoNodeType.Line && own != null && n.Speaker != own && IsFederationBooker(n.Speaker))
+                        throw new FormatException(where + "/" + n.Id + ": розмова букера '" + own + "' — репліка чужого букера '" + n.Speaker + "'");
                     foreach (var o in n.Options) { effects.AddRange(o.Effects); conds.AddRange(o.Requires); }
                     foreach (var r in n.Rewards) effects.AddRange(r.Effects);
                     effects.AddRange(n.Fail);
@@ -377,9 +384,20 @@ namespace Game.Core.Ring.Career
                         throw new FormatException(where + ": ворожнеча з невідомим NPC '" + e.Target + "'");
                 }
                 foreach (var cd in conds)
+                {
                     if (cd.Kind == ConditionKind.Career && cd.Key == "npc_feud" && FindNpc(cd.Target) == null)
                         throw new FormatException(where + ": умова ворожнечі з невідомим NPC '" + cd.Target + "'");
+                    if (cd.Kind == ConditionKind.Career && cd.Key == "booker" && !IsFederationBooker(cd.Target))
+                        throw new FormatException(where + ": умова booker — '" + cd.Target + "' не букер жодної федерації");
+                }
             }
+        }
+
+        /// <summary>Мовець — букер якоїсь федерації.</summary>
+        public bool IsFederationBooker(string speaker)
+        {
+            foreach (var f in Federations) if (f.Booker == speaker) return true;
+            return false;
         }
 
         public NpcDef FindNpc(string id)

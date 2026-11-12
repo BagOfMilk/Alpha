@@ -73,11 +73,12 @@ namespace Game.Core.Ring
     {
         /// <summary>Умови: money(min), season(min), week(min), parity(min 0/1 — парність тижня), injured, champion, last_won,
         /// last_lost, last_draw, last_swerved, plan_set, title_eligible, actions(min), npc_feud(target, min), tier(min — рівень федерації),
-        /// female (героїня — жіночий дивізіон, P2-6), manager (менеджер найнятий, §6.4).</summary>
+        /// female (героїня — жіночий дивізіон, P2-6), manager (менеджер найнятий, §6.4), booker(target — букер поточної федерації: розмова
+        /// свого букера, §6.4).</summary>
         public static readonly string[] Conditions =
         {
             "money", "season", "week", "parity", "injured", "champion", "last_won", "last_lost", "last_draw", "last_swerved",
-            "plan_set", "title_eligible", "actions", "npc_feud", "tier", "female", "manager"
+            "plan_set", "title_eligible", "actions", "npc_feud", "tier", "female", "manager", "booker"
         };
 
         /// <summary>Ефекти: money(add), injure(target зона head/body/legs/random, add — ушкодження), npc_feud(target NPC | opponent |
@@ -120,6 +121,7 @@ namespace Game.Core.Ring
                 c.Target = JsonRead.Str(o, "target", where, false);
                 if (!CareerFx.IsCondition(c.Key)) throw new FormatException(where + ": невідома умова кар'єри '" + c.Key + "'");
                 if (c.Key == "npc_feud" && c.Target == null) throw new FormatException(where + ": npc_feud потребує target");
+                if (c.Key == "booker" && c.Target == null) throw new FormatException(where + ": booker потребує target — id букера федерації");
             }
             else if (JsonRead.Has(o, "flag")) { c.Kind = ConditionKind.Flag; c.Key = JsonRead.Str(o, "flag", where); }
             else if (JsonRead.Has(o, "notFlag")) { c.Kind = ConditionKind.NotFlag; c.Key = JsonRead.Str(o, "notFlag", where); }

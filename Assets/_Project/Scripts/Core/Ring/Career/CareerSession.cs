@@ -742,7 +742,15 @@ namespace Game.Core.Ring.Career
                 if (sc.Once && BackstageSeenEver(sc.Id)) continue;
                 if (SceneHolds(sc)) return sc;
             }
-            foreach (var sc in all) if (sc.Kind == BackstageKind.Booker && SceneHolds(sc)) return sc;
+            // розмова з букером: спершу та, чиї умови виконано (свій букер федерації); запасна без умов — коли жодна не підходить
+            BackstageScene fallback = null;
+            foreach (var sc in all)
+            {
+                if (sc.Kind != BackstageKind.Booker || !SceneHolds(sc)) continue;
+                if (sc.Requires.Count > 0) return sc;
+                if (fallback == null) fallback = sc;
+            }
+            if (fallback != null) return fallback;
             throw new InvalidOperationException("Немає закулісної сцени для відкриття");
         }
 
@@ -798,6 +806,7 @@ namespace Game.Core.Ring.Career
                 case "injured": return State.IsInjured;
                 case "female": return State.Female;
                 case "manager": return State.Manager;
+                case "booker": return Federation.Booker == c.Target;
                 case "champion": return IsChampion;
                 case "last_won": return State.LastOutcome == 1;
                 case "last_lost": return State.LastOutcome == 2;
@@ -1632,11 +1641,18 @@ namespace Game.Core.Ring.Career
         /// <summary>Менеджер найнятий (§6.4): 15 % кожного гонорару; пастку бачить без кидка; аванс переходу +25 %.</summary>
         public bool HasManager { get { return State.Manager; } }
 
-        /// <summary>Звільнити менеджера — будь-коли, без штрафу (наймає сцена закулісся ev_manager).</summary>
+        /// <summary>Прапор кар'єри «менеджерку звільнено»: сцена ev_manager читає його й вітається інакше (знову найняти можна).</summary>
+        public const string ManagerFiredFlag = "manager_fired";
+
+        /// <summary>
+        /// Звільнити менеджера — будь-коли, без штрафу (наймає сцена закулісся ev_manager). Наступного сезону Марта приходить знову
+        /// і пам'ятає звільнення (гілка сцени за прапором <see cref="ManagerFiredFlag"/>); відмова в сцені закриває її назавжди.
+        /// </summary>
         public bool FireManager()
         {
             if (!State.Manager || Stage == CareerStage.Title || Stage == CareerStage.Create) return false;
             State.Manager = false;
+            Feud.State.Flags.Add(ManagerFiredFlag);
             return true;
         }
 
