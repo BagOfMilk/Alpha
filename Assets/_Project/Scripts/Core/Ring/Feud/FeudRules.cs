@@ -75,11 +75,11 @@ namespace Game.Core.Ring
         /// last_lost, last_draw, last_swerved, plan_set, title_eligible, actions(min), npc_feud(target, min), tier(min — рівень федерації),
         /// female (героїня — жіночий дивізіон, P2-6), manager (менеджер найнятий, §6.4), booker(target — букер поточної федерації: розмова
         /// свого букера, §6.4), role(target face/heel/rebel — роль зараз, домінантний шлях, §5.3), max_feud(min — найсильніша ворожнеча
-        /// з суперниками федерації, §5.3).</summary>
+        /// з суперниками федерації, §5.3), seen_before(target — id сцени: була в одному з минулих сезонів, §7).</summary>
         public static readonly string[] Conditions =
         {
             "money", "season", "week", "parity", "injured", "champion", "last_won", "last_lost", "last_draw", "last_swerved",
-            "plan_set", "title_eligible", "actions", "npc_feud", "tier", "female", "manager", "booker", "role", "max_feud"
+            "plan_set", "title_eligible", "actions", "npc_feud", "tier", "female", "manager", "booker", "role", "max_feud", "seen_before"
         };
 
         /// <summary>Ефекти: money(add), injure(target зона head/body/legs/random, add — ушкодження), npc_feud(target NPC | opponent |
@@ -124,6 +124,7 @@ namespace Game.Core.Ring
                 if (!CareerFx.IsCondition(c.Key)) throw new FormatException(where + ": невідома умова кар'єри '" + c.Key + "'");
                 if (c.Key == "npc_feud" && c.Target == null) throw new FormatException(where + ": npc_feud потребує target");
                 if (c.Key == "booker" && c.Target == null) throw new FormatException(where + ": booker потребує target — id букера федерації");
+                if (c.Key == "seen_before" && c.Target == null) throw new FormatException(where + ": seen_before потребує target — id сцени");
                 RingPath rp;
                 if (c.Key == "role" && !FeudVars.TryPath(c.Target, out rp)) throw new FormatException(where + ": role потребує target face/heel/rebel");
             }
