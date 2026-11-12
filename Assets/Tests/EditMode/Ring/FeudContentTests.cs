@@ -47,7 +47,9 @@ namespace Game.Tests.EditMode
         {
             // Кожен рядок або згаданий у сценарії, або спільний (мовці, нагороди) — мертвого тексту немає.
             string json = File.ReadAllText(Path.Combine(Dir(), "feud_hammer.json"));
-            var unused = Strings().Keys.Where(k => !json.Contains("\"" + k + "\"") && !k.StartsWith("speaker.")).ToList();
+            // жіноча форма «ключ.f» (HeroForms) у сценарії не згадується — досить, щоб був базовий ключ
+            var unused = Strings().Keys.Select(k => k.EndsWith(".f") ? k.Substring(0, k.Length - 2) : k)
+                .Where(k => !json.Contains("\"" + k + "\"") && !k.StartsWith("speaker.")).ToList();
             Assert.IsEmpty(unused, string.Join(", ", unused));
         }
     }

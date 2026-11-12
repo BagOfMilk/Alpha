@@ -658,6 +658,12 @@
    "title": "bs.ev_parking.title",
    "place": "bs.ev_parking.place",
    "start": "n1",
+   "requires": [
+    {
+     "career": "female",
+     "not": true
+    }
+   ],
    "nodes": [
     {
      "id": "n1",
@@ -1169,6 +1175,110 @@
    ]
   },
   {
+   "id": "ev_manager",
+   "kind": "event",
+   "title": "bs.ev_manager.title",
+   "place": "bs.ev_manager.place",
+   "start": "n1",
+   "fromWeek": 2,
+   "spread": 2,
+   "requires": [
+    {
+     "var": "audience",
+     "min": 3
+    },
+    {
+     "career": "manager",
+     "not": true
+    }
+   ],
+   "nodes": [
+    {
+     "id": "n1",
+     "type": "line",
+     "speaker": "narrator",
+     "text": "bs.ev_manager.n1",
+     "next": "n2"
+    },
+    {
+     "id": "n2",
+     "type": "line",
+     "speaker": "manager",
+     "text": "bs.ev_manager.n2",
+     "next": "n3"
+    },
+    {
+     "id": "n3",
+     "type": "line",
+     "speaker": "manager",
+     "text": "bs.ev_manager.n3",
+     "next": "n4"
+    },
+    {
+     "id": "n4",
+     "type": "choice",
+     "options": [
+      {
+       "id": "hire",
+       "text": "bs.ev_manager.n4.hire",
+       "effects": [
+        {
+         "career": "manager",
+         "add": 1
+        }
+       ],
+       "next": "n5"
+      },
+      {
+       "id": "later",
+       "text": "bs.ev_manager.n4.later",
+       "effects": [
+        {
+         "flag": "manager_card"
+        }
+       ],
+       "next": "n6"
+      },
+      {
+       "id": "refuse",
+       "text": "bs.ev_manager.n4.refuse",
+       "effects": [
+        {
+         "flag": "manager_refused"
+        }
+       ],
+       "next": "n7"
+      }
+     ]
+    },
+    {
+     "id": "n5",
+     "type": "line",
+     "speaker": "manager",
+     "text": "bs.ev_manager.n5",
+     "next": "end"
+    },
+    {
+     "id": "n6",
+     "type": "line",
+     "speaker": "manager",
+     "text": "bs.ev_manager.n6",
+     "next": "end"
+    },
+    {
+     "id": "n7",
+     "type": "line",
+     "speaker": "manager",
+     "text": "bs.ev_manager.n7",
+     "next": "end"
+    },
+    {
+     "id": "end",
+     "type": "end"
+    }
+   ]
+  },
+  {
    "id": "ev_friend",
    "kind": "event",
    "title": "bs.ev_friend.title",
@@ -1301,6 +1411,135 @@
    ],
    "fromWeek": 2,
    "spread": 3
+  },
+  {
+   "id": "ev_mixed",
+   "kind": "event",
+   "title": "bs.ev_mixed.title",
+   "place": "bs.ev_mixed.place",
+   "start": "n1",
+   "nodes": [
+    {
+     "id": "n1",
+     "type": "line",
+     "speaker": "narrator",
+     "text": "bs.ev_mixed.n1",
+     "next": "n2"
+    },
+    {
+     "id": "n2",
+     "type": "line",
+     "speaker": "booker",
+     "text": "bs.ev_mixed.n2",
+     "next": "n3"
+    },
+    {
+     "id": "n3",
+     "type": "line",
+     "speaker": "booker",
+     "text": "bs.ev_mixed.n3",
+     "next": "n4"
+    },
+    {
+     "id": "n4",
+     "type": "choice",
+     "options": [
+      {
+       "id": "fight",
+       "text": "bs.ev_mixed.n4.fight",
+       "path": "face",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "var": "trust",
+         "add": 1
+        }
+       ],
+       "next": "n5"
+      },
+      {
+       "id": "crowd",
+       "text": "bs.ev_mixed.n4.crowd",
+       "path": "rebel",
+       "requires": [
+        {
+         "attr": "charisma",
+         "min": 1
+        }
+       ],
+       "effects": [
+        {
+         "path": "rebel",
+         "add": 1
+        },
+        {
+         "career": "hype",
+         "add": 1
+        }
+       ],
+       "next": "n6"
+      },
+      {
+       "id": "taunt",
+       "text": "bs.ev_mixed.n4.taunt",
+       "path": "heel",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "var": "heat",
+         "add": 1
+        }
+       ],
+       "next": "n7"
+      }
+     ]
+    },
+    {
+     "id": "n5",
+     "type": "line",
+     "speaker": "booker",
+     "text": "bs.ev_mixed.n5",
+     "next": "n8"
+    },
+    {
+     "id": "n6",
+     "type": "line",
+     "speaker": "booker",
+     "text": "bs.ev_mixed.n6",
+     "next": "n8"
+    },
+    {
+     "id": "n7",
+     "type": "line",
+     "speaker": "booker",
+     "text": "bs.ev_mixed.n7",
+     "next": "n8"
+    },
+    {
+     "id": "n8",
+     "type": "line",
+     "speaker": "narrator",
+     "text": "bs.ev_mixed.n8",
+     "next": "end"
+    },
+    {
+     "id": "end",
+     "type": "end"
+    }
+   ],
+   "once": true,
+   "auto": "feud_first",
+   "requires": [
+    {
+     "career": "female"
+    }
+   ]
   }
  ]
 }

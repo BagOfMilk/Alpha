@@ -122,6 +122,41 @@ namespace Game.Core.Ring.Career
         /// <summary>Популярність, з якою гравець входить у федерацію (статус входу; у М1 — стеля нової − 2).</summary>
         public static int EntryPopularity(FederationDef to) { return Math.Max(to.Floor, to.Ceiling - EntryCeilingGap); }
 
+        // ---------- контракт переходу (§6.4; власник 11.11.2026: «Пастка «виключне право» — так»). ПЛЕЙСХОЛДЕР ----------
+        // Аванс — FederationDef.Advance (40 / 80 / 150 на рівнях 2 / 3 / 4). Пропозиція — один папір: чесний або пастка.
+
+        /// <summary>Яка частка пропозицій — пастка «виключне право» (детерміновано від зерна, сезону й рівня).</summary>
+        public const int ExclusiveOfferPercent = 34;
+        /// <summary>Пастка: аванс у відсотках від чесного (×2) — приманка.</summary>
+        public const int ExclusiveAdvancePercent = 200;
+        /// <summary>Пастка: гонорар за кожне шоу федерації (×0,7), поки строк.</summary>
+        public const int ExclusiveFeePercent = 70;
+        /// <summary>Пастка: строк у сезонах федерації; без виїзних шоу й підробітку.</summary>
+        public const int ExclusiveSeasons = 2;
+        /// <summary>Пастка: вийти раніше строку — штраф у відсотках від чесного авансу (= аванс пастки, ×2).</summary>
+        public const int ExclusivePenaltyPercent = 200;
+        /// <summary>«Прочитати дрібний шрифт»: 2d6 + Техніка, раз на пропозицію. 10+ — пункт видно; 7–9 — видно, що щось є; 6− — нічого.</summary>
+        public const RingAttr ContractReadAttr = RingAttr.Technique;
+        /// <summary>Менеджер: частка кожного гонорару (§6.4 «Менеджер бере 15 %»).</summary>
+        public const int ManagerFeePercent = 15;
+        /// <summary>Менеджер торгується: аванс переходу у відсотках (+25 %). Пастку бачить без кидка.</summary>
+        public const int ManagerAdvancePercent = 125;
+        /// <summary>З якої популярності менеджер приходить познайомитися (сцена закулісся ev_manager) — дані сцени; тут для тестів.</summary>
+        public const int ManagerPopularity = 3;
+
+        /// <summary>Аванс переходу: чесний — аванс федерації; пастка — ×2; з менеджером — ще +25 %.</summary>
+        public static int Advance(FederationDef to, bool exclusive, bool manager)
+        {
+            int a = to.Advance * (exclusive ? ExclusiveAdvancePercent : 100) / 100;
+            return manager ? a * ManagerAdvancePercent / 100 : a;
+        }
+
+        /// <summary>Штраф за вихід із пастки раніше строку (від чесного авансу федерації, без надбавки менеджера).</summary>
+        public static int ExitPenalty(FederationDef of) { return of.Advance * ExclusivePenaltyPercent / 100; }
+
+        /// <summary>Частка менеджера з суми гонорару (ціле, вниз).</summary>
+        public static int ManagerCut(int amount) { return amount > 0 ? amount * ManagerFeePercent / 100 : 0; }
+
         /// <summary>
         /// Контракт не продовжують: популярність нижче підлоги федерації на кінці сезону (власник 11.11.2026 — рівень нижче); на
         /// місцевій (підлога 0) — популярність 0, як і було (§6.2: повернення на мінімум, не кінець гри).
@@ -274,6 +309,49 @@ namespace Game.Core.Ring.Career
         public bool BookerOk;
         public bool BeltCounted;
         public bool Ready;
+    }
+
+    /// <summary>Що видно про дрібний шрифт пропозиції: не читано; прочитано, але нічого не знайдено (6−); «щось є» чи «чисто» (7–9); усе (10+ чи менеджер).</summary>
+    public enum ContractSight { Unread = 0, Missed = 1, Hint = 2, Seen = 3 }
+
+    /// <summary>
+    /// Контракт пропозиції вищої федерації (§6.4) для екрана кінця сезону. Ядро знає, чи це пастка, завжди; вид каже лише те, що
+    /// гравець бачить: аванс (у пастки він подвійний — приманка) і стільки дрібного шрифту, скільки прочитано.
+    /// </summary>
+    public sealed class ContractView
+    {
+        public int ToTier;
+        /// <summary>Аванс, який заплатять при переході (з надбавкою менеджера).</summary>
+        public int Advance;
+        public bool HasManager;
+        public ContractSight Sight;
+        /// <summary>Пункт «виключне право» видно (Sight == Seen і він є). Тоді видно й умови нижче.</summary>
+        public bool ExclusiveSeen;
+        /// <summary>7–9: у папері щось дрібним шрифтом є (true) чи на око чисто (false). Лише Sight == Hint.</summary>
+        public bool HintSomething;
+        /// <summary>Умови пастки — для рядка, коли пункт видно: гонорар у відсотках, строк у сезонах, штраф за ранній вихід.</summary>
+        public int ExclusiveFeePercent;
+        public int ExclusiveSeasons;
+        public int ExclusivePenalty;
+        /// <summary>Можна прочитати дрібний шрифт (раз на пропозицію, без менеджера) і модифікатор кидка (Техніка) — для шансів до кидка.</summary>
+        public bool CanRead;
+        public int ReadModifier;
+        /// <summary>Чинна пастка тримає: вийти зараз — штраф (0 — вільний); грошей не вистачає — пропозицію не прийняти.</summary>
+        public int ExitPenalty;
+        public bool ExitLocked;
+    }
+
+    /// <summary>Підсумок кидка «прочитати дрібний шрифт».</summary>
+    public sealed class ContractReadResult
+    {
+        public bool Ok;
+        /// <summary>Чому ні: no_offer, already, manager.</summary>
+        public string Reason;
+        public int Roll;
+        public int Modifier;
+        public int Total;
+        public RollTier Tier;
+        public ContractSight Sight;
     }
 
     public enum CareerStage { Title = 0, Create = 1, Week = 2, Show = 3, SeasonEnd = 4 }

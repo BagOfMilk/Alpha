@@ -460,12 +460,14 @@ namespace Game.Tests.EditMode
         /// <summary>
         /// Найгірші три пояснення «Радимо зараз» у рядках (DevelopmentAdvice.For): ключ c.dev.why.* — щонайбільше раз (одне пояснення — одна
         /// порада, повтор бере опис із каталогу); причина програшу — або втримали, або здався (lost_pin і lost_sub разом не бувають);
-        /// описи з каталогу (перк, прийом для дії, атрибут) можуть повторитися.
+        /// описи з каталогу (перк, прийом для дії, атрибут) можуть повторитися; жіноча форма пояснення («.f», «.rf» — HeroForms) — той самий
+        /// ключ, не окрема порада.
         /// </summary>
         private static int WorstThreeWhyLines(float width, out string which)
         {
             if (_ui == null) Ui("c.dev.all");
-            var once = new List<KeyValuePair<string, int>>();
+            // форми звертання (HeroForms: «ключ.f», «ключ.rf») — той самий ключ: на екрані один із текстів, тож рахується найдовший
+            var byKey = new Dictionary<string, int>(StringComparer.Ordinal);
             int catalog = 0;
             string catalogText = "";
             foreach (var kv in _ui)
@@ -480,9 +482,17 @@ namespace Game.Tests.EditMode
                 if (!why && !desc) continue;
                 float widest;
                 int n = Math.Max(1, TextFont.Lines(TextBreak.GlueDashes(s), BrandTokens.TypeMinInfo, width, 0f, out widest));
-                if (why) once.Add(new KeyValuePair<string, int>(k, n));
+                if (why)
+                {
+                    string b = k;
+                    foreach (var suf in new[] { HeroForms.FemaleSuffix, HeroForms.RivalSuffix })
+                        if (k.EndsWith(suf, StringComparison.Ordinal) && _ui.ContainsKey(k.Substring(0, k.Length - suf.Length))) b = k.Substring(0, k.Length - suf.Length);
+                    int was;
+                    if (!byKey.TryGetValue(b, out was) || n > was) byKey[b] = n;
+                }
                 else if (n > catalog) { catalog = n; catalogText = s; }
             }
+            var once = new List<KeyValuePair<string, int>>(byKey);
             Assert.Greater(once.Count, 8, "пояснень c.dev.why.* — десяток; менше — розбір ui_uk.json зламався");
             int worst = 0;
             which = "";

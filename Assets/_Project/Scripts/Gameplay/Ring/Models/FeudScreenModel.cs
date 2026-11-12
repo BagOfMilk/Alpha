@@ -81,7 +81,7 @@ namespace Game.Gameplay.Ring.Models
                 rows.Add(new FeudPathRow
                 {
                     Path = p,
-                    Name = RingLabels.PathName(_t, p),
+                    Name = RingLabels.PathName(_t, p, HeroForms.ShowsHeroine(_t)),
                     Mark = RingLabels.PathMark(_t, p),
                     Points = pts,
                     Rank = rank,

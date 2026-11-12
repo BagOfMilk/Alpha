@@ -401,7 +401,7 @@ namespace Game.Gameplay.Ring.UI
             string s = a.Name + "  ·  " + a.CostText;
             if (a.AttrText.Length > 0) s += "  ·  " + a.AttrText + " " + a.ModifierText;
             if (a.HasRoll && a.Percents.Length == 3)
-                s += "   |   " + t.Format(a.RollIsOpponents ? "match.action.chances.opp" : "match.chances.short", a.Percents[0], a.Percents[1], a.Percents[2]);
+                s += "   |   " + MatchScreenModel.ChancesShort(t, a);
             return s;
         }
 

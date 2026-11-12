@@ -41,6 +41,8 @@ namespace Game.Gameplay.Ring.Models
     {
         public int Number;
         public MatchActionId Id;
+        /// <summary>Чия дія: рід суперника в шансах і причинах («Її «Вирватися»», «Суперниця не лежить») — від протилежного борця.</summary>
+        public MatchSide Side;
         /// <summary>Прийом кар'єри (ключ каталогу) або null — системна дія рушія.</summary>
         public string MoveId;
         /// <summary>Той самий прийом двічі поспіль: −1 ажіотажу.</summary>
@@ -253,7 +255,7 @@ namespace Game.Gameplay.Ring.Models
                 Penalty = pen,
                 Momentum = f.Momentum,
                 MomentumMax = MatchRules.MaxMomentum,
-                PostureText = RingLabels.PostureName(_t, f.Posture),
+                PostureText = RingLabels.PostureName(_t, f.Posture, side),
                 Stamina = f.Stamina,
                 StaminaMax = MatchRules.MaxStamina,
                 HasInitiative = !_e.IsOver && _e.CurrentActor == side,
@@ -282,8 +284,8 @@ namespace Game.Gameplay.Ring.Models
             get
             {
                 if (_e.IsOver) return "";
-                string key = _e.CurrentActor == MatchSide.Player ? "match.initiative.player" : "match.initiative.rival";
-                return _t.Format(key, _e.Chain + 1);
+                if (_e.CurrentActor == MatchSide.Player) return _t.Format("match.initiative.player", _e.Chain + 1);
+                return RingLabels.ForSideFormat(_t, "match.initiative.rival", MatchSide.Rival, _e.Chain + 1);
             }
         }
 
@@ -314,7 +316,7 @@ namespace Game.Gameplay.Ring.Models
                     case MatchInput.PlayerBoost: return _t.Get("match.turn.boost");
                     case MatchInput.PlayerAction: return _t.Get("match.turn.player");
                     default:
-                        return _t.Get(_e.Phase == MatchPhase.AwaitReaction ? "match.turn.rival.react" : "match.turn.rival");
+                        return RingLabels.ForSide(_t, _e.Phase == MatchPhase.AwaitReaction ? "match.turn.rival.react" : "match.turn.rival", MatchSide.Rival);
                 }
             }
         }
@@ -367,6 +369,7 @@ namespace Game.Gameplay.Ring.Models
             var r = new MatchActionRow
             {
                 Id = o.Id,
+                Side = side,
                 Name = name,
                 Cost = o.Cost,
                 CostText = o.Cost > 0 ? _t.Format("match.action.cost", o.Cost) : _t.Get("match.action.free"),
@@ -383,7 +386,7 @@ namespace Game.Gameplay.Ring.Models
                 r.ModifierText = RingChances.Signed(o.Modifier);
                 FillChanceTexts(r);
             }
-            if (!o.Available) r.ReasonText = RingLabels.Unavailable(_t, o.Reason);
+            if (!o.Available) r.ReasonText = RingLabels.Unavailable(_t, o.Reason, side);
             // «Сили після дії» — з прев'ю рушія (одна правда з Perform); WrongPhase не заважає: сторона може й не ходити.
             var pv = _e.Preview(side, o.Id);
             r.StaminaBefore = pv.StaminaBefore;
@@ -401,9 +404,10 @@ namespace Game.Gameplay.Ring.Models
             if (r.RollIsOpponents)
             {
                 r.ChancesInverted = true;
+                var opp = RingLabels.Other(r.Side);   // «Вирвалася» — у роді того, хто вириватиметься
                 r.ChanceTexts = new[]
                 {
-                    _t.Format("match.chance.opp.strong", p2), _t.Format("match.chance.opp.partial", p1), _t.Format("match.chance.opp.miss", p0)
+                    RingLabels.ForSideFormat(_t, "match.chance.opp.strong", opp, p2), _t.Format("match.chance.opp.partial", p1), _t.Format("match.chance.opp.miss", p0)
                 };
                 return;
             }
@@ -426,8 +430,15 @@ namespace Game.Gameplay.Ring.Models
             string s = a.Name + "  ·  " + a.CostText;
             if (a.AttrText.Length > 0) s += "  ·  " + a.AttrText + " " + a.ModifierText;
             if (a.HasRoll && a.Percents.Length == 3)
-                s += "   |   " + _t.Format(a.RollIsOpponents ? "match.action.chances.opp" : "match.chances.short", a.Percents[0], a.Percents[1], a.Percents[2]);
+                s += "   |   " + ChancesShort(_t, a);
             return s;
+        }
+
+        /// <summary>«Шанси: 10+ … » або для «Утримання» «Його / Її «Вирватися»: …» — у роді суперника борця, що діє.</summary>
+        public static string ChancesShort(RingText t, MatchActionRow a)
+        {
+            if (a.RollIsOpponents) return RingLabels.ForSideFormat(t, "match.action.chances.opp", RingLabels.Other(a.Side), a.Percents[0], a.Percents[1], a.Percents[2]);
+            return t.Format("match.chances.short", a.Percents[0], a.Percents[1], a.Percents[2]);
         }
 
         /// <summary>Підказка, поки ніщо не в фокусі й не під мишею.</summary>
@@ -769,7 +780,7 @@ namespace Game.Gameplay.Ring.Models
         private string EffectText(MatchEffect e)
         {
             string who = _t.Get(_e.State.Get(e.Who).Stats.NameKey);
-            string kind = _t.Get("fx." + (int)e.Kind);
+            string kind = RingLabels.ForSide(_t, "fx." + (int)e.Kind, e.Who);   // «підвелася» — у роді того, з ким сталося
             switch (e.Kind)
             {
                 case MatchEffectKind.Down:

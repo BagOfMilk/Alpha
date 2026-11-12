@@ -170,6 +170,8 @@ namespace Game.Tests.EditMode
 
         private static void DoWeek(CareerSession s, int variant, CareerRunReport rep)
         {
+            // подія, що відкрилась сама на початку тижня (мішаний матч, P2-6), — спершу її; дій тижня вона не забирає
+            if (s.BackstageOpen) CareerKit.PlayScene(s, variant + s.State.Week);
             if (s.State.Strained) rep.Strained++;
             // розвиток: вивчити прийом / купити атрибут / перк, коли вистачає очок
             foreach (var m in s.Content.Moves.All) if (s.LearnMove(m.Id)) break;

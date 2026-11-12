@@ -32,7 +32,13 @@ namespace Game.Gameplay.Ring
 
         // ---------------- ICareerHost ----------------
 
-        public int HeroBody { get; set; }
+        private int _heroBody;
+        /// <summary>Тіло героя. На створенні зміна тіла одразу міняє форми звертання (<see cref="HeroForms.IsHeroine"/>).</summary>
+        public int HeroBody
+        {
+            get { return _heroBody; }
+            set { _heroBody = value; if (_career != null && _career.Stage == CareerStage.Create) ApplyHeroForms(); }
+        }
         public int HeroHair { get; set; }
         public WeekActionResult LastWeekResult { get; set; }
 
@@ -68,6 +74,9 @@ namespace Game.Gameplay.Ring
             HeroBody = 0; HeroHair = 0;
             LastWeekResult = null;
             _career.StartNewGame();
+            // -ring-shot-heroine: тіло героїні — після скидання тіла (на завантаженні прапорці читаються ще на титулі)
+            ReadCareerShotArgs();
+            ApplyShotHeroine();
             _onTitle = false;
             Rebind();
         }
@@ -252,6 +261,8 @@ namespace Game.Gameplay.Ring
         private RingScreenView MakeView()
         {
             if (_onTitle) return new TitleMenuView(_ctx, this);
+            // Тут, а не в Rebind: стать стає відомою після створення героя (SyncHeroSex), а меню може перечитати тексти.
+            ApplyHeroForms();
             switch (_career.Stage)
             {
                 case CareerStage.Create: return new CreateScreenView(_ctx);
@@ -330,7 +341,8 @@ namespace Game.Gameplay.Ring
             grew = false;
             ReadCareerShotArgs();
             BotForceScenes();
-            if (BotLoadStep() || BotEndingStep() || BotDeclineTitleStep() || BotOfferStep()) { grew = true; return true; }
+            BotContract();
+            if (BotLoadStep() || BotEndingStep() || BotDeclineTitleStep() || BotContractReadStep() || BotOfferStep()) { grew = true; return true; }
             BotForceOpponent();
             bool week = !_onTitle && _career.Stage == CareerStage.Week && !_career.BackstageOpen;
             if (!week) return false;
@@ -364,6 +376,14 @@ namespace Game.Gameplay.Ring
         private string _shotEvent;
         private bool _shotBackstageAll;
         private Queue<string> _shotBackstageQueue;
+        /// <summary><c>-ring-shot-heroine</c>: огляд героїні — перше жіноче тіло на екрані створення (<see cref="ApplyShotHeroine"/>).</summary>
+        private bool _shotHeroine;
+        /// <summary><c>-ring-shot-contract exclusive|honest</c>: папір пропозиції огляду (§6.4) — пастка чи чесний; null — як вирішить зерно.</summary>
+        private bool? _shotContract;
+        /// <summary><c>-ring-shot-contract-read</c>: на кінці сезону з пропозицією — «Прочитати дрібний шрифт» (кидок Техніки).</summary>
+        private bool _shotContractRead;
+        /// <summary><c>-ring-shot-manager</c>: менеджерка найнята з першого тижня огляду (рядки контракту й гонорару з її часткою).</summary>
+        private bool _shotManager;
 
         /// <summary>Прапорці огляду кар'єри — лише разом з <c>-ring-shots</c> (сейв і гра гравця не чіпаються).</summary>
         private void ReadCareerShotArgs()
@@ -385,6 +405,16 @@ namespace Game.Gameplay.Ring
                 if (offer == "decline") _shotOfferDecline = true;
                 else if (offer != "accept") Debug.LogWarning("[Ринг] -ring-shot-offer: accept або decline, а не '" + offer + "' — як за замовчуванням (accept)");
             }
+            string contract = ReadArg("-ring-shot-contract");
+            if (contract != null)
+            {
+                if (contract == "exclusive") _shotContract = true;
+                else if (contract == "honest") _shotContract = false;
+                else Debug.LogWarning("[Ринг] -ring-shot-contract: exclusive або honest, а не '" + contract + "' — як вирішить зерно");
+                if (_shotContract.HasValue) ShotNote("папір пропозиції: " + (_shotContract.Value ? "пастка «виключне право»" : "чесний") + " (-ring-shot-contract)");
+            }
+            _shotContractRead = RingLaunchArgs.Has("-ring-shot-contract-read");
+            _shotManager = RingLaunchArgs.Has("-ring-shot-manager");
             string name = ReadArg("-ring-hero-name");
             if (name != null)
             {
@@ -396,6 +426,8 @@ namespace Game.Gameplay.Ring
                     ShotNote("ім'я героя: «" + name + "» (" + name.Length + " знаків, межа " + CareerSession.MaxNameLength + ")");
                 }
             }
+            _shotHeroine = RingLaunchArgs.Has("-ring-shot-heroine");
+            ApplyShotHeroine();
             _shotOpponent = ReadArg("-ring-shot-opponent");
             _shotEvent = ReadArg("-ring-shot-event");
             string bs = ReadArg("-ring-shot-backstage");
@@ -598,6 +630,60 @@ namespace Game.Gameplay.Ring
             if (!_shotDeclineTitle || _onTitle || _career == null || _career.Stage != CareerStage.SeasonEnd || !_career.CanStartTitleMatch) return false;
             ShotNote("титульний шанс: відмова (-ring-shot-decline-title)");
             _career.SkipTitle();
+            Save();
+            _view.Refresh();
+            return true;
+        }
+
+        /// <summary>
+        /// Жіночі форми звертання (П5): героїні — «ключ.f» замість чоловічого роду в промо, закулісся, кінцівках і кар'єрі; на створенні —
+        /// за вибраним тілом (<see cref="HeroForms.IsHeroine"/>). Суперниця тижня — «ключ.rf» (картка, чутки, розмова з букером);
+        /// кличеться з кожного MakeView, тож новий суперник нового тижня підхоплюється з першим же екраном.
+        /// </summary>
+        private void ApplyHeroForms()
+        {
+            if (_career == null || _text == null) return;
+            bool female = HeroForms.IsHeroine(_career, _heroBody);
+            bool rival = HeroForms.OpponentIsWoman(_career);
+            HeroForms.Apply(_text, female, rival);
+            if (_ctx != null && _ctx.Text != null && !ReferenceEquals(_ctx.Text, _text)) HeroForms.Apply(_ctx.Text, female, rival);
+        }
+
+        /// <summary>
+        /// <c>-ring-shot-heroine</c>: огляд героїні (жіночі форми тексту, подія мішаного матчу) — перше жіноче тіло на екрані створення.
+        /// Лише нова кар'єра (стадія створення): стать сейва не чіпає. Кличеться і з читання прапорців, і з NewGame після скидання тіла.
+        /// </summary>
+        private void ApplyShotHeroine()
+        {
+            if (!_shotHeroine || _career == null || _career.Stage != CareerStage.Create) return;
+            int fb = Array.FindIndex(CareerLooks.HeroBodies, CareerLooks.IsFemaleBody);
+            if (fb >= 0 && HeroBody != fb) { HeroBody = fb; ShotNote("героїня: тіло " + CareerLooks.HeroBodies[fb]); }
+        }
+
+        /// <summary>
+        /// <c>-ring-shot-contract</c> і <c>-ring-shot-manager</c> (огляд екрана контракту, §6.4): примус паперу пропозиції — щокроку, бо
+        /// його немає в сейві (переживає «Нова гра» й «Продовжити»); менеджерка — раз, на першому тижні. Кроку бота не займає.
+        /// </summary>
+        private void BotContract()
+        {
+            if (_onTitle || _career == null) return;
+            if (_shotContract.HasValue) _career.ForcedOfferExclusive = _shotContract;
+            if (_shotManager && !_career.HasManager && _career.Stage == CareerStage.Week)
+            {
+                _career.State.Manager = true;
+                _shotManager = false;
+                ShotNote("менеджерка найнята (-ring-shot-manager)");
+            }
+        }
+
+        /// <summary><c>-ring-shot-contract-read</c>: на кінці сезону з пропозицією — «Прочитати дрібний шрифт» (той самий виклик, що й кнопка).</summary>
+        private bool BotContractReadStep()
+        {
+            if (!_shotContractRead || _onTitle || _career == null || _career.Stage != CareerStage.SeasonEnd) return false;
+            var c = _career.GetOfferContract();
+            if (c == null || !c.CanRead) return false;
+            var r = _career.ReadOfferContract();
+            ShotNote("дрібний шрифт: 2d6 " + r.Roll + " + Техніка " + r.Modifier + " = " + r.Total + " — " + r.Sight + " (-ring-shot-contract-read)");
             Save();
             _view.Refresh();
             return true;

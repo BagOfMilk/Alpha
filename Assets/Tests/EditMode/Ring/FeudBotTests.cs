@@ -252,6 +252,7 @@ namespace Game.Tests.EditMode
 
         private static void DoWeek(CareerSession s, int variant, FeudEnding target)
         {
+            if (s.BackstageOpen) PlayScene(s, target);   // подія, що відкрилась сама (мішаний матч, P2-6)
             foreach (var m in s.Content.Moves.All) if (s.LearnMove(m.Id)) break;
             foreach (RingAttr a in new[] { RingAttr.Strength, RingAttr.Agility, RingAttr.Technique, RingAttr.Stamina, RingAttr.Charisma })
                 if (s.BuyAttr(a)) break;
