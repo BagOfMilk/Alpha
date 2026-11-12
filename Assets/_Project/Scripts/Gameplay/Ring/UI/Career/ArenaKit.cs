@@ -25,8 +25,8 @@ namespace Game.Gameplay.Ring.UI
         // ---- розкладка (еталон 900; B03 §2: значення 1080p × 0,833) ----
         public const float Edge = CareerTileLayout.Edge;          // безпечні боки ACC-04
         public const float Top = 45f;
-        public const float StripW = 410f, StripH = 106f;
-        public const float SecondY = 162f;      // друга плита під стрічкою
+        public const float StripW = CareerTileLayout.StripW, StripH = 106f;
+        public const float SecondY = CareerTileLayout.SecondY;      // друга плита під стрічкою
         public const float RopesY = 668f;
         public const float HeaderY = 694f;
         public const float RowY = 743f, TileH = CareerTileLayout.TileH;
@@ -38,7 +38,7 @@ namespace Game.Gameplay.Ring.UI
         // Шухляда тижня не налазить на афішу, доки під афішею лишається хоч стільки (далі — прокрутка); менше — до стрічки суперника.
         public const float DrawerMinRoom = 150f;
         // Низ екрана — відлік ЗНИЗУ: при «Розмірі інтерфейсу» 90–120 % логічна висота панелі 750–1000, а не 900
-        public const float RowBottom = 45f, HeaderBottom = 164f, RopesBottom = 210f; // ширша панель — золота плита повна; вужча (4:3, великий масштаб) — вужча
+        public const float RowBottom = 45f, HeaderBottom = 164f, RopesBottom = CareerTileLayout.RopesBottom; // ширша панель — золота плита повна; вужча (4:3, великий масштаб) — вужча
 
         /// <summary>Колір обводки й смужки за роллю (герой — кобальт, лиходій — кармін, бунтар — рожевий): мітка сторони, не оформлення.</summary>
         public static Color RoleColor(RingPath p)

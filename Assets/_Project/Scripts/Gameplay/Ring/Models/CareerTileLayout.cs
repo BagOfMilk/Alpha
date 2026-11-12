@@ -99,6 +99,39 @@ namespace Game.Gameplay.Ring.Models
         public const float HintMaxHeight = 48f, HintPadV = 6f;
         public const int HintMaxLines = 2;
 
+        // ---- плита розвитку (підсумок матчу, кінець сезону) ----
+        /// <summary>Еталонна висота панелі (розмір інтерфейсу 100 %); при 90–120 % логічна висота 1000–750.</summary>
+        public const float PanelH = 900f;
+        /// <summary>Верх другої плити (під стрічкою) — відлік ЗГОРИ; ширина стрічки й плит під нею.</summary>
+        public const float SecondY = 162f, StripW = 410f;
+        /// <summary>Лінія канатів — відлік ЗНИЗУ (низ 210, висота 22): її верх на еталонній панелі — 668.</summary>
+        public const float RopesBottom = 210f, RopeH = 22f;
+        public static float RopesTop(float panelH) { return panelH - RopesBottom - RopeH; }
+        /// <summary>Кінець сезону: плита розвитку — під плитою ресурсів (висота 104) з просвітом 14.</summary>
+        public const float SeasonDevTop = SecondY + 104f + 14f;
+        /// <summary>Підсумок матчу на вузькій панелі: плита розвитку — під табличкою кінцівки (70) й ажіотажем (40).</summary>
+        public const float ResultDevTopNarrow = SecondY + 132f;
+        /// <summary>
+        /// Просвіт плити розвитку до канатів. Плита не вища за <see cref="DevPlateMaxH"/>: коли порад більше, ніж місця, стискається
+        /// лише прокрутка, а шапка й підвал («Усе (N)», рядок-підказка) лишаються цілі (кадри слоту 30, 12.11.2026: на кінці сезону
+        /// край прокрутки різав «▸ Усе (19)» навпіл; на підсумку 4:3 плита лягала на канати). Плиту ставить відлік згори, канати —
+        /// знизу, тож межа — від справжньої висоти панелі (розмір інтерфейсу), а не від 668.
+        /// </summary>
+        public const float DevRopeClear = 4f;
+        public static float DevPlateMaxH(float top, float panelH)
+        {
+            if (float.IsNaN(panelH) || panelH <= 0f) panelH = PanelH;   // до першої розкладки — еталон
+            return Math.Max(0f, RopesTop(panelH) - DevRopeClear - top);
+        }
+        /// <summary>Кінець сезону: відступи шапки, прокрутки й підвалу (лівий — від смужки плити).</summary>
+        public const float DevPadLeft = 20f, DevPadRight = 14f, DevHeadPadTop = 8f, DevHeadGap = 2f, DevScrollPadBottom = 4f;
+        /// <summary>Підвал: перемикач «Усе (N)» і рядок-підказка — від прокрутки й до низу плити.</summary>
+        public const float DevFootTop = 4f, DevFootPadBottom = 8f;
+        /// <summary>Картка порад (<c>Glass(8)</c>): внутрішній відступ — підвал і число в шапці стають на ту саму вертикаль.</summary>
+        public const float DevCardPad = 8f;
+        /// <summary>Заголовок плити кінця сезону і число очок у шапці (на підсумку — 28 і 44: там шапка ще й розгортає плиту).</summary>
+        public const float DevTitleSize = 25f, DevPointsSize = 28f;
+
         // ---- золота плита ----
         public const float WordSize = 36f, WordMin = 26f, WordTrack = 0.01f;
         public const float WordLeft = 40f, WordRight = 16f, WordTop = 12f, WordBottom = 6f;

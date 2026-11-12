@@ -58,6 +58,32 @@ namespace Game.Gameplay.Ring.UI
             return HintLine;
         }
 
+        /// <summary>
+        /// Підвал плити розвитку (кадри слоту 30, 12.11.2026): на кінці сезону край прокрутки різав «▸ Усе (19)» навпіл, а рядок-підказка
+        /// повного списку лежав у прокрутці під ним — поза видимим. Тепер обидва під прокруткою, в один рядок: перемикач кладе сюди
+        /// <see cref="DevelopmentPanel"/> (moreTo), підказку — <see cref="DevFooterHint"/>. Підвал не стискається — стискається прокрутка.
+        /// </summary>
+        protected static VisualElement DevFooter(float padLeft, float padRight, float padBottom)
+        {
+            var foot = RingUi.Row();
+            foot.style.flexShrink = 0f;
+            foot.style.alignItems = Align.FlexStart;
+            foot.style.paddingLeft = padLeft; foot.style.paddingRight = padRight; foot.style.paddingBottom = padBottom;
+            return foot;
+        }
+
+        /// <summary>Рядок-підказка підвалу — праворуч від «Усе (N)», перший рядок на висоті напису кнопки, без порожньої смуги (minHeight 0).</summary>
+        protected void DevFooterHint(VisualElement foot)
+        {
+            var hint = MakeHint();
+            hint.style.minHeight = 0f;
+            hint.style.marginTop = CareerTileLayout.DevFootTop;
+            hint.style.paddingTop = 4f;
+            hint.style.marginLeft = 12f;
+            hint.style.flexGrow = 1f; hint.style.flexShrink = 1f; hint.style.minWidth = 0f;
+            foot.Add(hint);
+        }
+
         /// <summary>Компактна однорядкова кнопка; <paramref name="hint"/> — у рядок-підказку при наведенні.</summary>
         protected Button Small(string text, Action onClick, bool enabled, Color? accent, string hint = null)
         {
@@ -112,8 +138,10 @@ namespace Game.Gameplay.Ring.UI
         /// пояснень, «Спритність −1» на кнопці), далі «Усе (N)» — повний список. Атрибут — «було → стане».
         /// Рекомендації — від ядра «Кар'єри» (<c>DevelopmentAdvice.For</c>, P2-2, 11.11.2026): від ролі, ґіміка й того, чого бракувало
         /// в минулому матчі; очок багато — на одну більше. Рядки — <see cref="CareerScreenLines.DevRecs"/>.
+        /// <paramref name="moreTo"/> — куди стати перемикачу «Усе (N)»: плити розвитку ставлять його в підвал під прокруткою
+        /// (<see cref="DevFooter"/>), щоб край прокрутки його не різав; без нього — останнім у картці порад.
         /// </summary>
-        protected VisualElement DevelopmentPanel(Action changed, int maxRecs = 3, bool headerShowsPoints = false)
+        protected VisualElement DevelopmentPanel(Action changed, int maxRecs = 3, bool headerShowsPoints = false, VisualElement moreTo = null)
         {
             var card = Glass(8f);
             string points = CareerScreenLines.DevPointsLine(T, C, headerShowsPoints);
@@ -157,8 +185,9 @@ namespace Game.Gameplay.Ring.UI
             else card.Add(RingUi.Lbl(T.Get("c.dev.none"), 12f, RingUi.Dim));
 
             var more = RingUi.PadKey(Small((_devAll ? "▾ " : "▸ ") + T.Format("c.dev.all", all), () => { _devAll = !_devAll; changed(); }, true, null), "dev:all");
-            more.style.marginTop = 4f;
-            card.Add(more);
+            more.style.marginTop = CareerTileLayout.DevFootTop;
+            if (moreTo != null) { more.style.marginBottom = 0f; more.style.flexShrink = 0f; moreTo.Add(more); }
+            else card.Add(more);
             if (!_devAll) return card;
 
             var attrs = RingUi.Row();
@@ -226,7 +255,7 @@ namespace Game.Gameplay.Ring.UI
             var b = RingUi.PadKey(Small(title, buy, true, accent), padKey);
             b.style.marginBottom = 0f;
             box.Add(b);
-            var l = RingUi.Lbl(why, BrandTokens.TypeMinInfo, RingUi.Dim);
+            var l = RingUi.Lbl(TextBreak.GlueDashes(why), BrandTokens.TypeMinInfo, RingUi.Dim);   // тире рядка не починає (TextBreak)
             l.style.whiteSpace = WhiteSpace.Normal;
             l.style.flexShrink = 0f;   // рядок росте разом із підказкою, а не підлазить під наступну кнопку
             box.style.flexShrink = 0f;

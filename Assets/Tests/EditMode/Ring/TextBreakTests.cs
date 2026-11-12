@@ -106,6 +106,9 @@ namespace Game.Tests.EditMode
             string ui = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI");
             string kit = File.ReadAllText(Path.Combine(ui, "Menus", "MenuKit.cs"));
             StringAssert.Contains("new Label(TextBreak.GlueDashes(text))", kit, "MenuKit.Body");
+            // пояснення поради під кнопкою («Радимо зараз») — багаторядкове й з тире («…на три — цей перк…»), мітка не через MenuKit.Body
+            // (кадри слоту 30: правило оминало його)
+            StringAssert.Contains("RingUi.Lbl(TextBreak.GlueDashes(why),", File.ReadAllText(Path.Combine(ui, "CareerScreens.cs")), "пояснення поради (Rec)");
             var hintSet = new Regex(@"\b(_hint|HintLine|hint)\.text\s*=\s*([^;]*);");
             int setters = 0;
             foreach (var rel in new[] { Path.Combine("Career", "WeekScreenView.cs"), Path.Combine("Career", "CreateScreenView.cs"), "CareerScreens.cs", "RingUi.cs" })

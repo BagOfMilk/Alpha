@@ -450,11 +450,56 @@ namespace Game.Tests.EditMode
                 bad.Add("ShowScreens: плитка пропуску титулу без наслідку з моделі");
             if (!CodeLine(career, "string points = CareerScreenLines.DevPointsLine(T, C, headerShowsPoints);") || career.Contains("T.Format(\"dev.points\""))
                 bad.Add("CareerScreens: рядок очок розвитку повз модель");
-            int pointsHead = show.IndexOf("T.Get(\"c.hub.points\")");
-            int panelAfterHead = pointsHead < 0 ? -1 : show.IndexOf("DevelopmentPanel(", pointsHead);
-            if (pointsHead < 0 || panelAfterHead < 0 || !show.Substring(panelAfterHead).StartsWith("DevelopmentPanel(Refresh, 2, headerShowsPoints: true)"))
-                bad.Add("ShowScreens: під шапкою «ОЧКІВ N» — те саме число вдруге");
-            if (Regex.Matches(show + week, "headerShowsPoints: true").Count != 1) bad.Add("шапка з числом очок — лише на підсумку матчу");
+            // плити розвитку показу (підсумок матчу, кінець сезону; слот 30): у кожній шапка «ОЧКІВ N», тож картка числа вдруге не пише;
+            // тиждень шапки з числом не має
+            var plates = Regex.Matches(show, @"DevelopmentPanel\(Refresh, 2[^;]*;");
+            if (plates.Count != 2) bad.Add("ShowScreens: плит розвитку — дві (підсумок і кінець сезону), знайдено " + plates.Count);
+            foreach (Match p in plates)
+            {
+                int pointsHead = show.LastIndexOf("T.Get(\"c.hub.points\")", p.Index);
+                int method = show.LastIndexOf("private VisualElement DevPlate()", p.Index);
+                if (!p.Value.Contains("headerShowsPoints: true") || pointsHead < 0 || method < 0 || pointsHead < method)
+                    bad.Add("ShowScreens: плита розвитку без числа очок у своїй шапці або з тим самим числом удруге — " + p.Value);
+            }
+            if (week.Contains("headerShowsPoints: true")) bad.Add("WeekScreenView: шапки з числом очок у шухляді немає");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Плити розвитку показу (кадри слоту 30, 12.11.2026): «▸ Усе (19)» на кінці сезону різав навпіл край прокрутки, підказка повного
+        /// списку лежала в прокрутці під ним, а на підсумку 4:3 плита лягала на канати. Перемикач і підказка — у підвалі під прокруткою;
+        /// плита не вища за місце до канатів (від висоти панелі: канати — відлік знизу); стискається лише прокрутка.
+        /// </summary>
+        [Test]
+        public void Sources_DevPlates_KeepAllAndHintBelowTheScroll_AboveTheRopes()
+        {
+            string ui = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI");
+            string show = File.ReadAllText(Path.Combine(ui, "Career", "ShowScreens.cs"));
+            string career = File.ReadAllText(Path.Combine(ui, "CareerScreens.cs"));
+            var bad = new List<string>();
+            if (!CodeLine(career, "if (moreTo != null) { more.style.marginBottom = 0f; more.style.flexShrink = 0f; moreTo.Add(more); }"))
+                bad.Add("CareerScreens: перемикач «Усе (N)» не йде в підвал");
+            if (show.Contains("scroll.Add(MakeHint())")) bad.Add("ShowScreens: рядок-підказка знову в прокрутці");
+            int n = 0;
+            foreach (Match m in Regex.Matches(show, @"private VisualElement DevPlate\(\)\s*\{"))
+            {
+                n++;
+                int end = show.IndexOf("return box;", m.Index);
+                string body = end < 0 ? "" : show.Substring(m.Index, end - m.Index);
+                int foot = body.IndexOf("= DevFooter("), panel = body.IndexOf("moreTo: foot)"), scroll = body.IndexOf(".Add(scroll);");
+                int hint = body.IndexOf("DevFooterHint(foot);"), footAdd = body.IndexOf(".Add(foot);");
+                if (foot < 0 || panel < foot || scroll < panel || hint < scroll || footAdd < hint)
+                    bad.Add("DevPlate №" + n + ": не «підвал → панель із moreTo → прокрутка → підказка в підвал → підвал після прокрутки»");
+                if (!body.Contains("scroll.style.flexShrink = 1f;")) bad.Add("DevPlate №" + n + ": прокрутка не стискається");
+                if (!body.Contains("CareerTileLayout.DevPlateMaxH(")) bad.Add("DevPlate №" + n + ": плита без межі до канатів");
+                if (body.Contains("scroll.style.maxHeight = 370f")) bad.Add("DevPlate №" + n + ": стара стала висота прокрутки кінця сезону");
+            }
+            if (n != 2) bad.Add("DevPlate: плит розвитку на екранах показу — дві, знайдено " + n);
+            // межа від справжньої висоти панелі — і при зміні розміру (кінець сезону), і при зміні верху на вузькій панелі (підсумок)
+            if (!CodeLine(show, "if (_devBox != null) _devBox.style.maxHeight = CareerTileLayout.DevPlateMaxH(CareerTileLayout.SeasonDevTop, Root.layout.height);"))
+                bad.Add("SeasonEnd: межа плити не оновлюється з висотою панелі");
+            if (!CodeLine(show, "if (_devCol != null) _devCol.style.maxHeight = CareerTileLayout.DevPlateMaxH(top, Root.layout.height);"))
+                bad.Add("ShowResult.Fit: межа плити не йде за її верхом");
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
     }
