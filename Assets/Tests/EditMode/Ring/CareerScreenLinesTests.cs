@@ -480,6 +480,14 @@ namespace Game.Tests.EditMode
             if (!CodeLine(career, "if (moreTo != null) { more.style.marginBottom = 0f; more.style.flexShrink = 0f; moreTo.Add(more); }"))
                 bad.Add("CareerScreens: перемикач «Усе (N)» не йде в підвал");
             if (show.Contains("scroll.Add(MakeHint())")) bad.Add("ShowScreens: рядок-підказка знову в прокрутці");
+            // рев'ю слоту 30: підказка — лише в розгорнутому списку й сталої висоти (підвал не росте при наведенні); щойно розгорнутий
+            // список — прокрутка до його початку
+            if (!CodeLine(career, "if (!_devAll) { HintLine = null; return; }")) bad.Add("CareerScreens: згорнутий підвал з порожньою підказкою");
+            if (!CodeLine(career, "hint.style.minHeight = h; hint.style.height = h; hint.style.maxHeight = h;")
+                || !career.Contains("float h = CareerTileLayout.DevFootHintH;"))
+                bad.Add("CareerScreens: висота підказки підвалу не стала");
+            if (!career.Contains("_devAll = !_devAll; _devAllOpened = _devAll;")) bad.Add("CareerScreens: перемикач «Усе» не позначає щойно розгорнутий список");
+            if (!CodeLine(career, "if (opened) DevAllStart = attrsHead;")) bad.Add("CareerScreens: не позначено початок повного списку");
             int n = 0;
             foreach (Match m in Regex.Matches(show, @"private VisualElement DevPlate\(\)\s*\{"))
             {
@@ -493,6 +501,9 @@ namespace Game.Tests.EditMode
                 if (!body.Contains("scroll.style.flexShrink = 1f;")) bad.Add("DevPlate №" + n + ": прокрутка не стискається");
                 if (!body.Contains("CareerTileLayout.DevPlateMaxH(")) bad.Add("DevPlate №" + n + ": плита без межі до канатів");
                 if (body.Contains("scroll.style.maxHeight = 370f")) bad.Add("DevPlate №" + n + ": стара стала висота прокрутки кінця сезону");
+                if (!body.Contains("scroll.style.minHeight = CareerTileLayout.DevScrollMinH;")) bad.Add("DevPlate №" + n + ": найменша прокрутка не з моделі");
+                int to = body.IndexOf("ScrollToDevAll(scroll);");
+                if (to < footAdd) bad.Add("DevPlate №" + n + ": після підвалу немає прокрутки до щойно розгорнутого списку");
             }
             if (n != 2) bad.Add("DevPlate: плит розвитку на екранах показу — дві, знайдено " + n);
             // межа від справжньої висоти панелі — і при зміні розміру (кінець сезону), і при зміні верху на вузькій панелі (підсумок)

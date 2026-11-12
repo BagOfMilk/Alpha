@@ -60,28 +60,58 @@ namespace Game.Gameplay.Ring.UI
 
         /// <summary>
         /// Підвал плити розвитку (кадри слоту 30, 12.11.2026): на кінці сезону край прокрутки різав «▸ Усе (19)» навпіл, а рядок-підказка
-        /// повного списку лежав у прокрутці під ним — поза видимим. Тепер обидва під прокруткою, в один рядок: перемикач кладе сюди
-        /// <see cref="DevelopmentPanel"/> (moreTo), підказку — <see cref="DevFooterHint"/>. Підвал не стискається — стискається прокрутка.
+        /// повного списку лежав у прокрутці під ним — поза видимим. Тепер обидва під прокруткою: перемикач (його кладе сюди
+        /// <see cref="DevelopmentPanel"/>, moreTo), під ним — підказка на всю ширину (<see cref="DevFooterHint"/>). Підвал не стискається —
+        /// стискається прокрутка.
         /// </summary>
         protected static VisualElement DevFooter(float padLeft, float padRight, float padBottom)
         {
-            var foot = RingUi.Row();
+            var foot = RingUi.Column();
             foot.style.flexShrink = 0f;
             foot.style.alignItems = Align.FlexStart;
             foot.style.paddingLeft = padLeft; foot.style.paddingRight = padRight; foot.style.paddingBottom = padBottom;
             return foot;
         }
 
-        /// <summary>Рядок-підказка підвалу — праворуч від «Усе (N)», перший рядок на висоті напису кнопки, без порожньої смуги (minHeight 0).</summary>
+        /// <summary>
+        /// Рядок-підказка підвалу — лише коли розгорнуто «Усе»: підказки при наведенні дає тільки повний список (у порад і перемикача
+        /// їх немає), тож згорнутий підвал — без порожньої смуги. Під перемикачем на всю ширину, сталої висоти
+        /// (<see cref="CareerTileLayout.DevFootHintH"/>): поруч із «Усе (N)» опис перка займав 3–5 рядків, підвал ріс при кожному
+        /// наведенні, а прокрутка стрибала (рев'ю слоту 30).
+        /// </summary>
         protected void DevFooterHint(VisualElement foot)
         {
+            if (!_devAll) { HintLine = null; return; }
             var hint = MakeHint();
-            hint.style.minHeight = 0f;
-            hint.style.marginTop = CareerTileLayout.DevFootTop;
-            hint.style.paddingTop = 4f;
-            hint.style.marginLeft = 12f;
-            hint.style.flexGrow = 1f; hint.style.flexShrink = 1f; hint.style.minWidth = 0f;
+            float h = CareerTileLayout.DevFootHintH;
+            hint.style.minHeight = h; hint.style.height = h; hint.style.maxHeight = h;
+            hint.style.marginTop = 0f;
+            hint.style.paddingTop = CareerTileLayout.DevFootHintPadTop;
+            hint.style.alignSelf = Align.Stretch;
+            hint.style.flexShrink = 0f;
+            hint.style.overflow = Overflow.Hidden;
             foot.Add(hint);
+        }
+
+        /// <summary>
+        /// Щойно розгорнутий «Усе (N)» (рев'ю слоту 30): перемикач — у підвалі під прокруткою, а екран після натискання перебудовується з
+        /// прокруткою на нулі, тож повний список лежав би під згином, нижче за перемикач. Після розкладки прокрутка стає на його початок.
+        /// Лише після натискання перемикача: після покупки в списку фокус без миші сам тримає свою кнопку на видноті.
+        /// </summary>
+        protected void ScrollToDevAll(ScrollView scroll)
+        {
+            var mark = DevAllStart;
+            DevAllStart = null;
+            if (mark == null || scroll == null) return;
+            // один раз, після першої розкладки мітки; зсув — наступним кадром, коли ScrollView уже оновила межі прокрутки. Позиція — у
+            // координатах вмісту (від поточного зсуву не залежить)
+            EventCallback<GeometryChangedEvent> once = null;
+            once = e =>
+            {
+                mark.UnregisterCallback(once);
+                scroll.schedule.Execute(() => scroll.scrollOffset = new Vector2(0f, mark.ChangeCoordinatesTo(scroll.contentContainer, Vector2.zero).y));
+            };
+            mark.RegisterCallback(once);
         }
 
         /// <summary>Компактна однорядкова кнопка; <paramref name="hint"/> — у рядок-підказку при наведенні.</summary>
@@ -132,6 +162,10 @@ namespace Game.Gameplay.Ring.UI
 
         /// <summary>Розвиток: атрибути, нові прийоми, перки — компактні кнопки, описи в рядку-підказці.</summary>
         private bool _devAll;
+        /// <summary>«Усе (N)» щойно розгорнуто — плита прокрутить до початку повного списку (<see cref="ScrollToDevAll"/>).</summary>
+        private bool _devAllOpened;
+        /// <summary>Початок повного списку, до якого прокрутити після розкладки; null — не прокручувати.</summary>
+        protected VisualElement DevAllStart;
 
         /// <summary>
         /// Розвиток: спершу до трьох рекомендацій, кожна з поясненням одним рядком (огляд фану 06.11.2026, R6/F7: ~16 кнопок без
@@ -184,10 +218,13 @@ namespace Game.Gameplay.Ring.UI
             }
             else card.Add(RingUi.Lbl(T.Get("c.dev.none"), 12f, RingUi.Dim));
 
-            var more = RingUi.PadKey(Small((_devAll ? "▾ " : "▸ ") + T.Format("c.dev.all", all), () => { _devAll = !_devAll; changed(); }, true, null), "dev:all");
+            var more = RingUi.PadKey(Small((_devAll ? "▾ " : "▸ ") + T.Format("c.dev.all", all), () => { _devAll = !_devAll; _devAllOpened = _devAll; changed(); }, true, null), "dev:all");
             more.style.marginTop = CareerTileLayout.DevFootTop;
             if (moreTo != null) { more.style.marginBottom = 0f; more.style.flexShrink = 0f; moreTo.Add(more); }
             else card.Add(more);
+            bool opened = _devAllOpened;
+            _devAllOpened = false;
+            DevAllStart = null;
             if (!_devAll) return card;
 
             var attrs = RingUi.Row();
@@ -204,7 +241,9 @@ namespace Game.Gameplay.Ring.UI
                 b.style.marginRight = 4f;
                 attrs.Add(b);
             }
-            card.Add(Section(T.Get("c.dev.attrs")));
+            var attrsHead = Section(T.Get("c.dev.attrs"));
+            if (opened) DevAllStart = attrsHead;
+            card.Add(attrsHead);
             card.Add(attrs);
             var mrow = RingUi.Row();
             mrow.style.flexWrap = Wrap.Wrap;

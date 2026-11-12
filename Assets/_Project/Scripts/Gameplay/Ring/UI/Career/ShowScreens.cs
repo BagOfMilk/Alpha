@@ -652,7 +652,8 @@ namespace Game.Gameplay.Ring.UI
             box.pickingMode = PickingMode.Position;
             box.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaPanel), Stripe = RingTheme.Gold, Mirror = true });
             var col = new VisualElement();
-            col.style.paddingLeft = 24f; col.style.paddingRight = 28f; col.style.paddingTop = 10f; col.style.paddingBottom = 12f;
+            col.style.paddingLeft = CareerTileLayout.ResultDevPadLeft; col.style.paddingRight = CareerTileLayout.ResultDevPadRight;
+            col.style.paddingTop = CareerTileLayout.ResultDevPadTop; col.style.paddingBottom = CareerTileLayout.ResultDevPadBottom;
             col.style.maxHeight = CareerTileLayout.DevPlateMaxH(ArenaKit.SecondY, Root.layout.height);   // Fit уточнює за верхом плити
             _devCol = col;
             var head = ArenaKit.Row();
@@ -660,7 +661,7 @@ namespace Game.Gameplay.Ring.UI
             head.pickingMode = PickingMode.Position;
             var titleCol = new VisualElement();
             titleCol.pickingMode = PickingMode.Ignore;
-            var title = MenuKit.Display(T.Get("dev.title"), 28f, RingTheme.Text, RingFontRole.Display900, 0.02f);
+            var title = MenuKit.Display(T.Get("dev.title"), CareerTileLayout.ResultDevTitleSize, RingTheme.Text, RingFontRole.Display900, 0.02f);
             titleCol.Add(title);
             titleCol.Add(ArenaKit.Tag(T.Get(_dev ? "c.hub.collapse" : "c.hub.expand"), RingTheme.TextDim));
             head.Add(titleCol);
@@ -668,7 +669,7 @@ namespace Game.Gameplay.Ring.UI
             var pl = ArenaKit.Tag(T.Get("c.hub.points"), RingTheme.TextDim);
             pl.style.marginRight = 10f; pl.style.marginTop = 10f;
             head.Add(pl);
-            head.Add(ArenaKit.Big(C.DevPoints.ToString(), 44f, RingTheme.Gold));
+            head.Add(ArenaKit.Big(C.DevPoints.ToString(), CareerTileLayout.ResultDevPointsSize, RingTheme.Gold));
             head.RegisterCallback<PointerDownEvent>(e => { if (e.button == 0) { _dev = !_dev; Refresh(); } });
             PadMark.Mark(head, () => { _dev = !_dev; Refresh(); }, "devhead", 4);   // розгорнути «Розвиток» без миші
             col.Add(head);
@@ -676,9 +677,9 @@ namespace Game.Gameplay.Ring.UI
             {
                 var scroll = new ScrollView(ScrollViewMode.Vertical);
                 scroll.style.maxHeight = 380f;
-                scroll.style.flexShrink = 1f; scroll.style.minHeight = 60f;   // до канатів стискається лише прокрутка
+                scroll.style.flexShrink = 1f; scroll.style.minHeight = CareerTileLayout.DevScrollMinH;   // до канатів стискається лише прокрутка
                 ArenaKit.ThinScroller(scroll);   // смуга в стилі «Арена» (кадри слоту 27)
-                // «Усе (N)» і рядок-підказка — у підвалі під прокруткою (кадри слоту 30): на одній вертикалі з порадами картки
+                // «Усе (N)» і рядок-підказка (лише розгорнутий список) — у підвалі під прокруткою (кадри й рев'ю слоту 30), на вертикалі порад
                 var foot = DevFooter(CareerTileLayout.DevCardPad, CareerTileLayout.DevCardPad, 0f);   // низ — відступ колонки (12)
                 var content = DevelopmentPanel(Refresh, 2, headerShowsPoints: true, moreTo: foot);   // «ОЧКІВ N» уже в шапці
                 content.style.backgroundColor = Color.clear;
@@ -687,6 +688,7 @@ namespace Game.Gameplay.Ring.UI
                 col.Add(scroll);
                 DevFooterHint(foot);
                 col.Add(foot);
+                ScrollToDevAll(scroll);   // щойно розгорнутий «Усе» — до початку повного списку
             }
             box.Add(col);
             return box;
@@ -918,7 +920,7 @@ namespace Game.Gameplay.Ring.UI
         }
 
         /// <summary>
-        /// Плита розвитку кінця сезону: шапка «РОЗВИТОК · ОЧКІВ N», прокрутка порад, підвал «Усе (N)» з рядком-підказкою.
+        /// Плита розвитку кінця сезону: шапка «РОЗВИТОК · ОЧКІВ N», прокрутка порад, підвал «Усе (N)» (розгорнутий — з рядком-підказкою).
         /// Кадри слоту 30 (12.11.2026): прокрутка висотою 370 різала «▸ Усе (19)» навпіл, підказка повного списку лежала під ним
         /// поза видимим. Тепер плита — до канатів (<see cref="CareerTileLayout.DevPlateMaxH"/>, від висоти панелі), стискається
         /// лише прокрутка; число очок — у шапці, як на підсумку матчу: рядок «Очок розвитку: N» у картці з'їдав висоту третьої
@@ -946,7 +948,7 @@ namespace Game.Gameplay.Ring.UI
             box.Add(head);
             var scroll = new ScrollView(ScrollViewMode.Vertical);
             ArenaKit.ThinScroller(scroll);   // системна сіра смуга зі стрілками випадала зі стилю (кадри слоту 27)
-            scroll.style.flexShrink = 1f; scroll.style.minHeight = 60f;
+            scroll.style.flexShrink = 1f; scroll.style.minHeight = CareerTileLayout.DevScrollMinH;
             scroll.style.paddingLeft = CareerTileLayout.DevPadLeft; scroll.style.paddingRight = CareerTileLayout.DevPadRight;
             scroll.style.paddingBottom = CareerTileLayout.DevScrollPadBottom;
             var foot = DevFooter(CareerTileLayout.DevPadLeft + CareerTileLayout.DevCardPad, right, CareerTileLayout.DevFootPadBottom);
@@ -957,6 +959,7 @@ namespace Game.Gameplay.Ring.UI
             box.Add(scroll);
             DevFooterHint(foot);
             box.Add(foot);
+            ScrollToDevAll(scroll);   // щойно розгорнутий «Усе» — до початку повного списку
             _devBox = box;
             return box;
         }

@@ -351,6 +351,21 @@ namespace UnityEngine.UIElements
     {
         public void RegisterCallback<TEventType>(EventCallback<TEventType> callback, TrickleDown useTrickleDown = TrickleDown.NoTrickleDown)
             where TEventType : EventBase<TEventType>, new() { }
+        // плита розвитку «Рингу»: одноразовий обробник розкладки (прокрутка до щойно розгорнутого списку)
+        public void UnregisterCallback<TEventType>(EventCallback<TEventType> callback, TrickleDown useTrickleDown = TrickleDown.NoTrickleDown)
+            where TEventType : EventBase<TEventType>, new() { }
+    }
+
+    public interface IVisualElementScheduledItem { }
+
+    public interface IVisualElementScheduler
+    {
+        IVisualElementScheduledItem Execute(Action timerUpdateEvent);
+    }
+
+    public static class VisualElementExtensions
+    {
+        public static UnityEngine.Vector2 ChangeCoordinatesTo(this VisualElement src, VisualElement dest, UnityEngine.Vector2 point) { return point; }
     }
 
     public abstract class Focusable : CallbackEventHandler
@@ -397,6 +412,9 @@ namespace UnityEngine.UIElements
         public void Remove(VisualElement element) { }
         public void RemoveFromHierarchy() { }
         public void BringToFront() { }
+        // плита розвитку «Рингу»: прокрутка до щойно розгорнутого списку після розкладки
+        public IVisualElementScheduler schedule { get { return null; } }
+        public virtual VisualElement contentContainer { get { return this; } }
     }
 
     public class TextElement : VisualElement

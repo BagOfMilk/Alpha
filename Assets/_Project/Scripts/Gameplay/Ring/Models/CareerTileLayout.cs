@@ -129,8 +129,26 @@ namespace Game.Gameplay.Ring.Models
         public const float DevFootTop = 4f, DevFootPadBottom = 8f;
         /// <summary>Картка порад (<c>Glass(8)</c>): внутрішній відступ — підвал і число в шапці стають на ту саму вертикаль.</summary>
         public const float DevCardPad = 8f;
+        /// <summary>
+        /// Найменша висота прокрутки порад, коли плиті тісно (розмір інтерфейсу 120 %, 4:3): видно хоч одну пораду з однорядковим
+        /// поясненням (52,7). Менше за це прокрутка не стискається — інакше плита перейшла б канати.
+        /// </summary>
+        public const float DevScrollMinH = 56f;
         /// <summary>Заголовок плити кінця сезону і число очок у шапці (на підсумку — 28 і 44: там шапка ще й розгортає плиту).</summary>
         public const float DevTitleSize = 25f, DevPointsSize = 28f;
+        /// <summary>Підсумок матчу: відступи колонки плити розвитку (праворуч ширше — там скіс дзеркальної плити), заголовок і число очок.</summary>
+        public const float ResultDevPadLeft = 24f, ResultDevPadRight = 28f, ResultDevPadTop = 10f, ResultDevPadBottom = 12f;
+        public const float ResultDevTitleSize = 28f, ResultDevPointsSize = 44f;
+        /// <summary>
+        /// Рядок-підказка підвалу (текст 12, рядок Fixel ≈ 16,56) — лише коли розгорнуто «Усе»: підказки при наведенні є тільки в
+        /// повному списку (у порад і перемикача їх немає). Він під перемикачем на всю ширину й сталої висоти —
+        /// <see cref="DevFootHintLines"/> рядків: опис перка (до ~180 знаків) займав поруч із перемикачем 3–5 рядків, і підвал ріс при
+        /// кожному наведенні, а прокрутка стрибала (рев'ю слоту 30). Найдовша підказка вміщається — CareerTextFitTests.
+        /// </summary>
+        public const int DevFootHintLines = 3;
+        public const float DevFootHintLineH = 16.56f, DevFootHintPadTop = 4f;
+        /// <summary>Висота рядка-підказки підвалу: відступ, рядки й поля мітки Unity (1 + 2).</summary>
+        public static float DevFootHintH { get { return DevFootHintPadTop + DevFootHintLines * DevFootHintLineH + 3f; } }
 
         // ---- золота плита ----
         public const float WordSize = 36f, WordMin = 26f, WordTrack = 0.01f;

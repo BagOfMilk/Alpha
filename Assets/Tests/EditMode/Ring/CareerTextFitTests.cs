@@ -515,11 +515,97 @@ namespace Game.Tests.EditMode
             return worst;
         }
 
+        /// <summary>Найдовший із текстів ключа та його форм звертання (HeroForms «.f», «.rf» — на екрані один із них).</summary>
+        private static string UiForms(string key)
+        {
+            if (_ui == null) Ui("c.dev.all");
+            string best = Ui(key);
+            foreach (var suf in new[] { HeroForms.FemaleSuffix, HeroForms.RivalSuffix })
+            {
+                object v;
+                var s = _ui.TryGetValue(key + suf, out v) ? v as string : null;
+                if (s != null && TextFont.Width(s, 12f) > TextFont.Width(best, 12f)) best = s;
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// Усі підказки повного списку «Усе» (CareerScreens.DevelopmentPanel, наведення на кнопку): атрибут — ціна, навіщо й причина
+        /// недоступності; прийом — для якої дії й ціна; перк — опис і причина. Числа — найгірші (99), причина — найдовша.
+        /// </summary>
+        private static List<string> DevAllHints()
+        {
+            if (_ui == null) Ui("c.dev.all");
+            string reason = "";
+            foreach (var kv in _ui)
+                if (kv.Key.StartsWith("dev.reason.", StringComparison.Ordinal) && kv.Key.IndexOf('.', "dev.reason.".Length) < 0)
+                {
+                    string r = UiForms(kv.Key);
+                    if (TextFont.Width(r, 12f) > TextFont.Width(reason, 12f)) reason = r;
+                }
+            var all = new List<string>();
+            for (int i = 0; i < 5; i++)
+                all.Add(string.Format(UiForms("dev.attr.buy"), 99) + " — " + UiForms("c.dev.attr.why." + i) + " · " + reason);
+            foreach (var kv in _ui)
+            {
+                string k = kv.Key;
+                if (k.StartsWith("action.", StringComparison.Ordinal) && k.IndexOf('.', "action.".Length) < 0)
+                    all.Add(string.Format(UiForms("c.dev.move.why"), UiForms(k)) + " — " + string.Format(UiForms("dev.cost"), 99));
+                if (k.StartsWith("perk.", StringComparison.Ordinal) && k.EndsWith(".desc", StringComparison.Ordinal))
+                    all.Add(UiForms(k) + " · " + reason);
+            }
+            return all;
+        }
+
+        /// <summary>
+        /// Рядок-підказка підвалу плити розвитку (рев'ю слоту 30: поруч із «Усе (N)» опис перка займав 3–5 рядків, підвал ріс при кожному
+        /// наведенні, прокрутка стрибала). Тепер він під перемикачем на всю ширину й сталої висоти: кожна підказка повного списку
+        /// вміщається в <see cref="CareerTileLayout.DevFootHintLines"/> рядків на вужчій із двох плит (підсумок матчу) — текст 12.
+        /// </summary>
+        [Test]
+        public void DevFooter_Hint_EveryFullListHint_FitsTheFixedLines()
+        {
+            float season = CareerTileLayout.StripW - (CareerTileLayout.DevPadLeft + CareerTileLayout.DevCardPad)
+                - (CareerTileLayout.DevPadRight + CareerTileLayout.DevCardPad);
+            float result = CareerTileLayout.StripW - CareerTileLayout.ResultDevPadLeft - CareerTileLayout.ResultDevPadRight - 2f * CareerTileLayout.DevCardPad;
+            float width = Math.Min(season, result) - 4f - RenderSlack;   // поля мітки Unity 2 і 2
+            var hints = DevAllHints();
+            Assert.Greater(hints.Count, 20, "підказок повного списку — десятки; менше — розбір ui_uk.json зламався");
+            int worst = 0;
+            string worstText = "";
+            foreach (var h in hints)
+            {
+                float widest;
+                int n = Math.Max(1, TextFont.Lines(TextBreak.GlueDashes(h), 12f, width, 0f, out widest));
+                if (n > worst) { worst = n; worstText = h; }
+            }
+            Assert.LessOrEqual(worst, CareerTileLayout.DevFootHintLines, string.Format(CultureInfo.InvariantCulture,
+                "ширина {0:0}: «{1}» — {2} рядки", width, worstText, worst));
+            Assert.AreEqual(CareerTileLayout.DevFootHintLineH, TextFont.LineHeight(12f), 0.05f, "рядок тексту 12 — як у моделі");
+        }
+
+        /// <summary>Підвал плити розвитку: «Усе (N)» (кнопка Small) і, коли список розгорнуто, рядок-підказка сталої висоти під ним.</summary>
+        private static float DevFoot(bool expanded, float padBottom)
+        {
+            return CareerTileLayout.DevFootTop + RecButtonH + (expanded ? CareerTileLayout.DevFootHintH : 0f) + padBottom;
+        }
+
+        /// <summary>Шапка плити кінця сезону: «РОЗВИТОК», мітка й число очок у рядку.</summary>
+        private static float SeasonDevHead
+        {
+            get
+            {
+                return CareerTileLayout.DevHeadPadTop
+                    + Math.Max(WordFont.LineHeight(CareerTileLayout.DevTitleSize), Math.Max(WordFont.LineHeight(CareerTileLayout.DevPointsSize),
+                        LegendFont.LineHeight(BrandTokens.TypeLabel)))
+                    + CareerTileLayout.DevHeadGap;
+            }
+        }
+
         /// <summary>
         /// Плита розвитку кінця сезону (кадри слоту 30, 12.11.2026: край прокрутки висотою 370 різав «▸ Усе (19)» навпіл). Тепер плита —
-        /// до канатів (<see cref="CareerTileLayout.DevPlateMaxH"/>), «Усе (N)» і рядок-підказка — у підвалі під прокруткою. Тут — бюджет:
-        /// на еталонній панелі (розмір інтерфейсу 100 %) шапка, три поради з найдовшими поясненнями й підвал з дворядковою підказкою
-        /// вміщаються без прокрутки; на найменшій панелі (120 %) прокрутці лишається щонайменше її мінімум (60), а підвал видно.
+        /// до канатів (<see cref="CareerTileLayout.DevPlateMaxH"/>), «Усе (N)» — у підвалі під прокруткою. Тут — бюджет на еталонній панелі
+        /// (розмір інтерфейсу 100 %): шапка, три поради з найдовшими поясненнями й згорнутий підвал уміщаються без прокрутки.
         /// </summary>
         [Test]
         public void SeasonEnd_DevPlate_ThreeAdviceAndFooter_FitAboveTheRopes()
@@ -527,27 +613,52 @@ namespace Game.Tests.EditMode
             string which;
             int lines = WorstThreeWhyLines(SeasonDevWhyW, out which);
             float line15 = TextFont.LineHeight(BrandTokens.TypeMinInfo), line12 = TextFont.LineHeight(12f);
-            float head = CareerTileLayout.DevHeadPadTop
-                + Math.Max(WordFont.LineHeight(CareerTileLayout.DevTitleSize), Math.Max(WordFont.LineHeight(CareerTileLayout.DevPointsSize),
-                    LegendFont.LineHeight(BrandTokens.TypeLabel)))
-                + CareerTileLayout.DevHeadGap;
+            float head = SeasonDevHead;
             // картка Glass(8): рамка 1 і поля 8 згори й знизу; «Радимо зараз:» — мітка 12 з полями Unity
             float card = 1f + 8f + line12 + 1f + 3 * (RecButtonH + RecGap) + lines * line15 + 8f + 1f;
             float scroll = card + CareerTileLayout.DevScrollPadBottom;
-            // підвал: «Усе (N)» поруч із підказкою (12, до двох рядків — Hints_TwoFullLinesAtMost…), вищий із двох
-            float foot = Math.Max(CareerTileLayout.DevFootTop + RecButtonH, CareerTileLayout.DevFootTop + 4f + 2f * line12)
-                + CareerTileLayout.DevFootPadBottom;
+            float foot = DevFoot(false, CareerTileLayout.DevFootPadBottom);
             float max = CareerTileLayout.DevPlateMaxH(CareerTileLayout.SeasonDevTop, CareerTileLayout.PanelH);
             Assert.LessOrEqual(head + scroll + foot, max, string.Format(CultureInfo.InvariantCulture,
                 "плита кінця сезону на 100 %: шапка {0:0.0} + прокрутка {1:0.0} + підвал {2:0.0} > {3:0.0} до канатів; пояснення: {4} (разом {5} рядків)",
                 head, scroll, foot, max, which, lines));
+        }
 
-            int maxScale = 0;
-            foreach (var s in RingSettingsValues.UiScales) maxScale = Math.Max(maxScale, s);
-            float smallest = CareerTileLayout.PanelH * 100f / maxScale;
-            float maxSmall = CareerTileLayout.DevPlateMaxH(CareerTileLayout.SeasonDevTop, smallest);
-            Assert.GreaterOrEqual(maxSmall - head - foot, 60f, string.Format(CultureInfo.InvariantCulture,
-                "розмір інтерфейсу {0} % (панель {1:0}): до канатів {2:0.0}, прокрутці лишається {3:0.0} < 60", maxScale, smallest, maxSmall, maxSmall - head - foot));
+        /// <summary>
+        /// Обидві плити розвитку (кінець сезону; підсумок матчу — широка й вузька панель) за кожного розміру інтерфейсу (90–120 %: канати
+        /// відлічуються знизу, тож місце плити міняється) і в обох станах «Усе»: шапка, найменша прокрутка
+        /// (<see cref="CareerTileLayout.DevScrollMinH"/> — не менше за одну пораду з однорядковим поясненням) і підвал не сягають канатів.
+        /// Найтісніше — підсумок на 4:3 при 120 % з розгорнутим списком.
+        /// </summary>
+        [Test]
+        public void DevPlates_HeadMinScrollAndFooter_StayAboveTheRopes_AtEveryUiSize()
+        {
+            float oneRec = RecButtonH + TextFont.LineHeight(BrandTokens.TypeMinInfo) + RecGap;
+            Assert.GreaterOrEqual(CareerTileLayout.DevScrollMinH, oneRec, "найменша прокрутка — хоч одна порада цілком");
+            // шапка підсумку: «РОЗВИТОК» над міткою «Згорнути» ліворуч, число очок праворуч — вища з двох
+            float resultHead = Math.Max(WordFont.LineHeight(CareerTileLayout.ResultDevTitleSize) + LegendFont.LineHeight(BrandTokens.TypeLabel),
+                WordFont.LineHeight(CareerTileLayout.ResultDevPointsSize));
+            var bad = new List<string>();
+            foreach (int scale in RingSettingsValues.UiScales)
+            {
+                float panel = CareerTileLayout.PanelH * 100f / scale;
+                foreach (bool expanded in new[] { false, true })
+                {
+                    float season = SeasonDevHead + CareerTileLayout.DevScrollMinH + DevFoot(expanded, CareerTileLayout.DevFootPadBottom);
+                    float seasonMax = CareerTileLayout.DevPlateMaxH(CareerTileLayout.SeasonDevTop, panel);
+                    if (season > seasonMax) bad.Add(string.Format(CultureInfo.InvariantCulture, "кінець сезону {0} %{1}: {2:0.0} > {3:0.0}",
+                        scale, expanded ? ", «Усе» розгорнуто" : "", season, seasonMax));
+                    float result = CareerTileLayout.ResultDevPadTop + resultHead + CareerTileLayout.DevScrollMinH + DevFoot(expanded, 0f)
+                        + CareerTileLayout.ResultDevPadBottom;
+                    foreach (var top in new[] { CareerTileLayout.SecondY, CareerTileLayout.ResultDevTopNarrow })
+                    {
+                        float resultMax = CareerTileLayout.DevPlateMaxH(top, panel);
+                        if (result > resultMax) bad.Add(string.Format(CultureInfo.InvariantCulture, "підсумок (верх {0:0}) {1} %{2}: {3:0.0} > {4:0.0}",
+                            top, scale, expanded ? ", «Усе» розгорнуто" : "", result, resultMax));
+                    }
+                }
+            }
+            Assert.IsEmpty(bad, string.Join("\n", bad));
         }
 
         // ---------------- ряд показу ----------------
