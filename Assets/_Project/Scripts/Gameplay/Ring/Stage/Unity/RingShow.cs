@@ -92,9 +92,9 @@ namespace Game.Gameplay.Ring.Stage
 
         /// <summary>
         /// Закочування під нижнім канатом (Entrance_Roll_In): таз на старті — за 0,36 м від краю помосту (половина помосту
-        /// 2,438 м, venue_gym_info.txt), на підлозі, обличчям до рингу (+X); кліп сам піднімає таз на мат.
+        /// з якорів залу, у спортзалі 2,438 м), на підлозі, обличчям до рингу (+X); кліп сам піднімає таз на мат.
         /// </summary>
-        private static readonly Vector3 RollStart = new Vector3(-(2.438f + 0.357f), 0f, 0f);
+        private static Vector3 RollStart { get { return new Vector3(-(RingStage3D.Venue.Plat + 0.357f), 0f, 0f); } }
 
         /// <summary>
         /// За шторою виходу (дверні панелі арки — x ≈ −14,9; кадри огляду 08.11.2026: тут борець стояв і раніше, лише його не
@@ -126,7 +126,7 @@ namespace Game.Gameplay.Ring.Stage
         private const int BarrierVertex = 2;
 
         /// <summary>Перетин канатів північно-західного кута (anchor_rope_NW, Unity) на висоті мату — поза на другому канаті.</summary>
-        private static readonly Vector3 CornerNW = new Vector3(-2.138f, RingStage3D.MatY, 2.138f);
+        private static Vector3 CornerNW { get { float c = RingStage3D.Venue.RopeLine; return new Vector3(-c, RingStage3D.MatY, c); } }
 
         // Над завісою, вище банера зали (на 3,4 м екран закривав банер — огляд 04.11.2026).
         private static readonly Vector3 CurtainTop = new Vector3(-15.9f, 5.3f, 0f);
@@ -659,7 +659,8 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Чи кутова стійка рингу (верх — 1,5 м над матом) стоїть між камерою й точкою.</summary>
         private static bool PostBlocks(Vector3 cam, Vector3 target)
         {
-            const float post = 2.138f, top = RingStage3D.MatY + 1.5f, r = 0.32f;
+            const float r = 0.32f;
+            float post = RingStage3D.Venue.RopeLine, top = RingStage3D.MatY + 1.5f;
             Vector2 a = new Vector2(cam.x, cam.z), b = new Vector2(target.x, target.z), ab = b - a;
             for (int sx = -1; sx <= 1; sx += 2)
                 for (int sz = -1; sz <= 1; sz += 2)

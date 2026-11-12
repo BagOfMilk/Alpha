@@ -239,10 +239,14 @@ namespace Game.Tests.EditMode
             Assert.Less(ShowBooker.Fee(CardPosition.SemiMain, false), ShowBooker.Fee(CardPosition.Main, false));
             Assert.AreEqual(ShowBooker.Fee(CardPosition.Midcard, false) * CareerRules.BigShowFeePercent / 100, ShowBooker.Fee(CardPosition.Midcard, true));
             Assert.Greater(ShowBooker.Fee(CardPosition.Midcard, true), ShowBooker.Fee(CardPosition.Midcard, false), "велике шоу платить більше");
-            Assert.AreEqual(CardPosition.Opener, CareerRules.PositionFor(0));
-            Assert.AreEqual(CardPosition.Midcard, CareerRules.PositionFor(3));
-            Assert.AreEqual(CardPosition.SemiMain, CareerRules.PositionFor(6));
-            Assert.AreEqual(CardPosition.Main, CareerRules.PositionFor(10));
+            // місце в картці — від відстані до стелі федерації (П5): стеля — головна, −1 — півголовна, −2 — середина
+            Assert.AreEqual(CardPosition.Opener, CareerRules.PositionFor(1, 4));
+            Assert.AreEqual(CardPosition.Midcard, CareerRules.PositionFor(2, 4));
+            Assert.AreEqual(CardPosition.SemiMain, CareerRules.PositionFor(3, 4));
+            Assert.AreEqual(CardPosition.Main, CareerRules.PositionFor(4, 4));
+            Assert.AreEqual(CardPosition.Opener, CareerRules.PositionFor(7, 10));
+            Assert.AreEqual(CardPosition.Main, CareerRules.PositionFor(10, 10));
+            Assert.AreEqual(ShowBooker.Fee(CardPosition.Main, false) * 6, ShowBooker.Fee(CardPosition.Main, false, 600), "гонорар світової ×6");
         }
 
         [Test]

@@ -1,5 +1,6 @@
 {
- "beltHolder": "komet",
+ "beltHolder": "baron",
+ "beltFemale": "komet",
  "npcs": [
   {
    "id": "stalevyi",
@@ -50,7 +51,8 @@
     "technique": 2,
     "stamina": 1,
     "charisma": 0
-   }
+   },
+   "female": true
   },
   {
    "id": "baron",
@@ -99,9 +101,413 @@
     "strength": 1,
     "agility": 3,
     "technique": 1,
+    "stamina": 0,
+    "charisma": 1
+   },
+   "female": true
+  },
+  {
+   "id": "inti",
+   "name": "w.inti.name",
+   "bio": "npc.inti.bio",
+   "gimmick": "monster",
+   "role": "hero",
+   "rank": 5,
+   "startMomentum": 1,
+   "finisher": "strength",
+   "attr": {
+    "strength": 2,
+    "agility": 1,
+    "technique": 0,
     "stamina": 1,
     "charisma": 1
-   }
+   },
+   "female": true
+  }
+ ],
+ "federations": [
+  {
+   "tier": 1,
+   "name": "fed.1.name",
+   "booker": "booker",
+   "ceiling": 4,
+   "floor": 0,
+   "popHype": 7,
+   "startTrust": 1,
+   "feePercent": 100,
+   "living": 48,
+   "travel": 0,
+   "costume": 60,
+   "advance": 0
+  },
+  {
+   "tier": 2,
+   "name": "fed.2.name",
+   "booker": "booker2",
+   "ceiling": 6,
+   "floor": 2,
+   "popHype": 7,
+   "startTrust": 1,
+   "feePercent": 200,
+   "living": 60,
+   "travel": 15,
+   "costume": 120,
+   "advance": 40,
+   "beltHolder": "ronin",
+   "beltFemale": "skorpion",
+   "npcs": [
+    {
+     "id": "sirena",
+     "name": "w.sirena.name",
+     "bio": "npc.sirena.bio",
+     "gimmick": "flyer",
+     "role": "hero",
+     "rank": 1,
+     "startMomentum": 0,
+     "finisher": "agility",
+     "attr": {
+      "strength": 0,
+      "agility": 2,
+      "technique": 1,
+      "stamina": 0,
+      "charisma": 0
+     },
+     "female": true
+    },
+    {
+     "id": "buivol",
+     "name": "w.buivol.name",
+     "bio": "npc.buivol.bio",
+     "gimmick": "monster",
+     "role": "hero",
+     "rank": 2,
+     "startMomentum": 1,
+     "finisher": "strength",
+     "attr": {
+      "strength": 2,
+      "agility": 0,
+      "technique": 0,
+      "stamina": 1,
+      "charisma": 1
+     }
+    },
+    {
+     "id": "hadiuka",
+     "name": "w.hadiuka.name",
+     "bio": "npc.hadiuka.bio",
+     "gimmick": "showman",
+     "role": "villain",
+     "rank": 3,
+     "startMomentum": 1,
+     "finisher": "charisma",
+     "attr": {
+      "strength": 0,
+      "agility": 1,
+      "technique": 1,
+      "stamina": 0,
+      "charisma": 3
+     },
+     "female": true
+    },
+    {
+     "id": "husar",
+     "name": "w.husar.name",
+     "bio": "npc.husar.bio",
+     "gimmick": "showman",
+     "role": "villain",
+     "rank": 4,
+     "startMomentum": 1,
+     "finisher": "charisma",
+     "attr": {
+      "strength": 1,
+      "agility": 0,
+      "technique": 1,
+      "stamina": 1,
+      "charisma": 3
+     }
+    },
+    {
+     "id": "skorpion",
+     "name": "w.skorpion.name",
+     "bio": "npc.skorpion.bio",
+     "gimmick": "technician",
+     "role": "hero",
+     "rank": 5,
+     "startMomentum": 2,
+     "finisher": "technique",
+     "attr": {
+      "strength": 0,
+      "agility": 2,
+      "technique": 3,
+      "stamina": 1,
+      "charisma": 1
+     },
+     "female": true
+    },
+    {
+     "id": "ronin",
+     "name": "w.ronin.name",
+     "bio": "npc.ronin.bio",
+     "gimmick": "technician",
+     "role": "villain",
+     "rank": 6,
+     "startMomentum": 2,
+     "finisher": "technique",
+     "attr": {
+      "strength": 1,
+      "agility": 1,
+      "technique": 3,
+      "stamina": 1,
+      "charisma": 1
+     }
+    }
+   ]
+  },
+  {
+   "tier": 3,
+   "name": "fed.3.name",
+   "booker": "booker3",
+   "ceiling": 8,
+   "floor": 4,
+   "popHype": 8,
+   "startTrust": 1,
+   "feePercent": 350,
+   "living": 80,
+   "travel": 30,
+   "costume": 250,
+   "advance": 80,
+   "beltHolder": "toa",
+   "beltFemale": "valkiriia",
+   "npcs": [
+    {
+     "id": "maharadzha",
+     "name": "w.maharadzha.name",
+     "bio": "npc.maharadzha.bio",
+     "gimmick": "showman",
+     "role": "villain",
+     "rank": 1,
+     "startMomentum": 0,
+     "finisher": "charisma",
+     "attr": {
+      "strength": 1,
+      "agility": 0,
+      "technique": 0,
+      "stamina": 0,
+      "charisma": 2
+     }
+    },
+    {
+     "id": "blyskavka",
+     "name": "w.blyskavka.name",
+     "bio": "npc.blyskavka.bio",
+     "gimmick": "flyer",
+     "role": "hero",
+     "rank": 2,
+     "startMomentum": 1,
+     "finisher": "agility",
+     "attr": {
+      "strength": 0,
+      "agility": 3,
+      "technique": 1,
+      "stamina": 0,
+      "charisma": 1
+     },
+     "female": true
+    },
+    {
+     "id": "kharakternyk",
+     "name": "w.kharakternyk.name",
+     "bio": "npc.kharakternyk.bio",
+     "gimmick": "technician",
+     "role": "hero",
+     "rank": 3,
+     "startMomentum": 1,
+     "finisher": "technique",
+     "attr": {
+      "strength": 0,
+      "agility": 1,
+      "technique": 3,
+      "stamina": 0,
+      "charisma": 1
+     }
+    },
+    {
+     "id": "troianda",
+     "name": "w.troianda.name",
+     "bio": "npc.troianda.bio",
+     "gimmick": "technician",
+     "role": "villain",
+     "rank": 4,
+     "startMomentum": 1,
+     "finisher": "technique",
+     "attr": {
+      "strength": 0,
+      "agility": 2,
+      "technique": 3,
+      "stamina": 0,
+      "charisma": 1
+     },
+     "female": true
+    },
+    {
+     "id": "toa",
+     "name": "w.toa.name",
+     "bio": "npc.toa.bio",
+     "gimmick": "monster",
+     "role": "villain",
+     "rank": 5,
+     "startMomentum": 2,
+     "finisher": "strength",
+     "attr": {
+      "strength": 3,
+      "agility": 0,
+      "technique": 1,
+      "stamina": 2,
+      "charisma": 1
+     }
+    },
+    {
+     "id": "valkiriia",
+     "name": "w.valkiriia.name",
+     "bio": "npc.valkiriia.bio",
+     "gimmick": "monster",
+     "role": "hero",
+     "rank": 6,
+     "startMomentum": 2,
+     "finisher": "strength",
+     "attr": {
+      "strength": 3,
+      "agility": 1,
+      "technique": 1,
+      "stamina": 2,
+      "charisma": 1
+     },
+     "female": true
+    }
+   ]
+  },
+  {
+   "tier": 4,
+   "name": "fed.4.name",
+   "booker": "booker4",
+   "ceiling": 10,
+   "floor": 6,
+   "popHype": 8,
+   "startTrust": 1,
+   "feePercent": 600,
+   "living": 110,
+   "travel": 50,
+   "costume": 450,
+   "advance": 150,
+   "beltHolder": "atlant",
+   "beltFemale": "feniks",
+   "npcs": [
+    {
+     "id": "khvylia",
+     "name": "w.khvylia.name",
+     "bio": "npc.khvylia.bio",
+     "gimmick": "flyer",
+     "role": "hero",
+     "rank": 1,
+     "startMomentum": 1,
+     "finisher": "agility",
+     "attr": {
+      "strength": 0,
+      "agility": 3,
+      "technique": 1,
+      "stamina": 0,
+      "charisma": 0
+     },
+     "female": true
+    },
+    {
+     "id": "burevii",
+     "name": "w.burevii.name",
+     "bio": "npc.burevii.bio",
+     "gimmick": "flyer",
+     "role": "hero",
+     "rank": 2,
+     "startMomentum": 1,
+     "finisher": "agility",
+     "attr": {
+      "strength": 0,
+      "agility": 3,
+      "technique": 1,
+      "stamina": 0,
+      "charisma": 1
+     }
+    },
+    {
+     "id": "berehynia",
+     "name": "w.berehynia.name",
+     "bio": "npc.berehynia.bio",
+     "gimmick": "monster",
+     "role": "hero",
+     "rank": 3,
+     "startMomentum": 1,
+     "finisher": "strength",
+     "attr": {
+      "strength": 3,
+      "agility": 0,
+      "technique": 1,
+      "stamina": 1,
+      "charisma": 1
+     },
+     "female": true
+    },
+    {
+     "id": "korason",
+     "name": "w.korason.name",
+     "bio": "npc.korason.bio",
+     "gimmick": "showman",
+     "role": "hero",
+     "rank": 4,
+     "startMomentum": 1,
+     "finisher": "charisma",
+     "attr": {
+      "strength": 1,
+      "agility": 2,
+      "technique": 1,
+      "stamina": 0,
+      "charisma": 3
+     }
+    },
+    {
+     "id": "feniks",
+     "name": "w.feniks.name",
+     "bio": "npc.feniks.bio",
+     "gimmick": "technician",
+     "role": "villain",
+     "rank": 5,
+     "startMomentum": 2,
+     "finisher": "technique",
+     "attr": {
+      "strength": 1,
+      "agility": 3,
+      "technique": 3,
+      "stamina": 0,
+      "charisma": 1
+     },
+     "female": true
+    },
+    {
+     "id": "atlant",
+     "name": "w.atlant.name",
+     "bio": "npc.atlant.bio",
+     "gimmick": "monster",
+     "role": "villain",
+     "rank": 6,
+     "startMomentum": 2,
+     "finisher": "strength",
+     "attr": {
+      "strength": 3,
+      "agility": 1,
+      "technique": 1,
+      "stamina": 2,
+      "charisma": 1
+     }
+    }
+   ]
   }
  ]
 }

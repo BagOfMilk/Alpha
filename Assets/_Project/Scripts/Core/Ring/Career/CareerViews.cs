@@ -13,6 +13,11 @@ namespace Game.Core.Ring.Career
         public string RingName = "";
         /// <summary>Індекс кольору костюма (0…<see cref="CareerSession.CostumeCount"/>−1) — лише вигляд.</summary>
         public int CostumeColor;
+        /// <summary>
+        /// Дивізіон (P2-6): жіночий чи чоловічий — суперник за замовчуванням своєї статі. Ставить екран створення з тіла героя;
+        /// null — не поставив (хост проставить сам через <see cref="CareerSession.SetFemale"/>), до того — чоловічий.
+        /// </summary>
+        public bool? Female;
     }
 
     public sealed class GimmickView
@@ -49,6 +54,8 @@ namespace Game.Core.Ring.Career
         public bool IsTitle;
         /// <summary>Велике шоу з етапами ворожнечі з Молотом (проходить екранами RingCampaign).</summary>
         public bool IsFeud;
+        /// <summary>Прощальний матч чемпіона перед переходом: план букера «віддай пояс» наступнику (А2).</summary>
+        public bool IsFarewell;
         public NpcDef Opponent;
         public int OpponentFeudLevel;
         public CardPosition Position;

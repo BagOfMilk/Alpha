@@ -182,8 +182,8 @@ namespace Game.Gameplay.Ring.UI
             head.style.justifyContent = Justify.SpaceBetween;
             head.style.alignItems = Align.Center;
             head.Add(RingUi.Lbl(c.Name, 17f, accent, true));
-            // Стан і зона — коротко: «Стоїть · Центр».
-            head.Add(RingUi.Lbl(c.PostureText + " · " + c.ZoneText, 13f, RingUi.Dim));
+            // Стан і «Сили» — коротко: «Стоїть · Сили 7/10».
+            head.Add(RingUi.Lbl(c.PostureText + " · " + c.StaminaText, 13f, RingUi.Dim));
             p.Add(head);
 
             p.Add(BarLine(c.Damage, c.DamageMax, c.Penalty > 0 ? RingUi.Bad : RingUi.Warn, 8f, Ctx.Text.Get("match.card.short.damage"), c.Damage + "/" + c.DamageMax));
@@ -230,8 +230,8 @@ namespace Game.Gameplay.Ring.UI
             var top = RingUi.Row();
             top.style.justifyContent = Justify.Center;
             top.Add(RingUi.Lbl(_m.RoundText, 15f, RingUi.Gold, true));
-            string count = _m.CountText;
-            if (count.Length > 0) { var c = RingUi.Lbl("   " + count, 13f, RingUi.Bad); top.Add(c); }
+            string init = _m.InitiativeText;
+            if (init.Length > 0) { var c = RingUi.Lbl("   " + init, 13f, RingUi.Gold); top.Add(c); }
             p.Add(top);
             var hype = RingUi.Bar(_m.Hype / (float)_m.HypeMax, RingUi.Warn, 5f);
             hype.style.width = Length.Percent(100f);

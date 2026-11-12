@@ -205,7 +205,7 @@ namespace Game.Tests.EditMode
             ok = false;
             if (e.CurrentActor != MatchSide.Player) return 0;
             e.Perform(MatchActionId.Strike, first); e.Commit(0);
-            if (e.IsOver || e.CurrentActor != MatchSide.Player || e.Phase != MatchPhase.AwaitAction || e.Ap < 1) return 0;
+            if (e.IsOver || e.CurrentActor != MatchSide.Player || e.Phase != MatchPhase.AwaitAction) return 0;
             int before = e.State.Hype;
             e.Perform(MatchActionId.Strike, second);
             if (e.Phase != MatchPhase.AwaitBoost) return 0;

@@ -6,39 +6,85 @@ namespace Game.Core.Ring.Match
 
     public enum Posture { Standing = 0, Down = 1, Stunned = 2 }
 
-    public enum Zone { Center = 0, Ropes = 1, Corner = 2, Outside = 3 }
-
     public enum MatchPhase { AwaitAction = 0, AwaitReaction = 1, AwaitBoost = 2, Over = 3 }
 
     public enum ReactionChoice { Sell = 0, Reverse = 1 }
 
-    /// <summary>Дії матчу (gdd §2.3). Значення стабільні — на них посилаються UI і журнал.</summary>
+    /// <summary>
+    /// Постановка прийому (рішення власника 08.11.2026, TRPG_DESIGN §4.4/§4.12): усе — у центрі рингу; прийом із канатів чи кута
+    /// показується склейкою кадру (план нападника на канаті/куті → стрибок → приземлення в центр). Рушію байдуже — лише для показу.
+    /// </summary>
+    public enum MoveStaging { Center = 0, Ropes = 1, Corner = 2 }
+
+    /// <summary>
+    /// Дії матчу (TRPG_DESIGN §4.6). Значення стабільні — на них посилаються UI (ключі «action.N») і журнал. 08.11.2026 прибрано
+    /// 2 «У канати» і 3 «У кут» — усе в центрі рингу (§4.4); ці номери не перевикористовувати. 12 і 13 — бій за рингом: власник
+    /// лишив його в ітерації 1 склейкою; значення ті самі, що до переробки.
+    /// </summary>
     public enum MatchActionId
     {
-        Strike = 0, Throw = 1, IntoRopes = 2, IntoCorner = 3, TopRope = 4, Taunt = 5, Dirty = 6,
-        Submission = 7, Pin = 8, Finisher = 9, Desperate = 10, GetUp = 11, LeaveRing = 12, ReturnToRing = 13,
-        Recover = 14, Ally = 15, CatchBreath = 16,
+        Strike = 0, Throw = 1,
+        /// <summary>«Ризикований трюк» (§4.6): стрибок із канатів чи кута, показ склейкою; кута для нього більше не треба.</summary>
+        TopRope = 4,
+        Taunt = 5, Dirty = 6, Submission = 7, Pin = 8, Finisher = 9, Desperate = 10, GetUp = 11,
+        /// <summary>«Вийти з рингу»: викинути суперника за канати й піти слідом — пара за рингом (кидок Сили).</summary>
+        LeaveRing = 12,
+        /// <summary>«Повернутися в ринг»: закотити суперника й повернутись; відлік скинуто, ініціатива лишається.</summary>
+        ReturnToRing = 13,
+        Recover = 14, Ally = 15,
+        /// <summary>«Перевести подих»: +«Сили», ініціатива переходить до суперника.</summary>
+        CatchBreath = 16,
         /// <summary>«Промінь надії» (кар'єра): великий прийом слабшого, що не може закінчити матч. Не входить до GetAvailableActions —
         /// пропонується окремо (Describe/HopeSpotAvailable), доки матч не ввімкнув MatchSetup.HopeSpotEnabled.</summary>
-        HopeSpot = 17
+        HopeSpot = 17,
+        /// <summary>«Предмет» за рингом — стілець, стіл (§4.4): лише в матчі «без дискваліфікації» (кидок Сили).</summary>
+        Weapon = 18
     }
 
+    /// <summary>Чому дія недоступна. Значення стабільні (ключі «unavail.N»); 7, 9, 10 — зони рингу, прибрані 08.11.2026.</summary>
     public enum UnavailableReason
     {
-        None = 0, WrongPhase, NotEnoughAp, ActorDown, TargetNotStanding, TargetNotDown, TargetNotDownOrOutside,
-        NotSameZone, NotInRing, NotInCorner, InRopes, NeedImpulse, NeedHype, TargetNotHurt, ImpulseTooHigh,
-        NotExhausted, AlreadyUsed, NoAlly, AllyForbidden, NotLying, NotOutside, AlreadyOutside, NothingToRecover,
-        NotFarBehind
+        None = 0, WrongPhase = 1,
+        /// <summary>Замало «Сил» на ризикований трюк чи фінішер (решту можна робити й на нулі — з −1 до кидка).</summary>
+        NotEnoughStamina = 2,
+        ActorDown = 3, TargetNotStanding = 4, TargetNotDown = 5,
+        /// <summary>«Дражнити» — коли суперник лежить або приголомшений.</summary>
+        TargetNotDownOrStunned = 6,
+        /// <summary>Пара за рингом: утримання, больовий, фінішер, трюк — лише на рингу.</summary>
+        NotInRing = 8,
+        NeedImpulse = 11, NeedHype = 12, TargetNotHurt = 13, ImpulseTooHigh = 14,
+        NotExhausted = 15, AlreadyUsed = 16, NoAlly = 17, AllyForbidden = 18, NotLying = 19,
+        NotOutside = 20, AlreadyOutside = 21,
+        NothingToRecover = 22, NotFarBehind = 23,
+        /// <summary>Щойно накривав: утримати знову можна лише після іншого прийому.</summary>
+        JustPinned = 24,
+        /// <summary>Предмети — лише в матчі «без дискваліфікації».</summary>
+        NeedNoDq = 25,
+        /// <summary>Фінішер раніше за <see cref="MatchRules.FinisherMinRound"/>-ї дії недоступний (P2-1: матч — історія, а не один ланцюг).</summary>
+        TooEarly = 26
     }
 
-    public enum MatchEventKind { Exchange = 0, Action, Sell, Reverse, Kickout, Endure, Rescue, TurnEnd, MatchEnd }
+    /// <summary>
+    /// Подія журналу. TurnEnd — «ініціатива переходить» (Actor — той, хто її втратив); Exchange — Обмін на старті й після реверсу 7–9;
+    /// Flourish — вдале QTE (лише видовище: +1 ажіотажу, кидків не чіпає). Значення стабільні.
+    /// </summary>
+    public enum MatchEventKind { Exchange = 0, Action, Sell, Reverse, Kickout, Endure, Rescue, TurnEnd, MatchEnd, Flourish }
 
+    /// <summary>Наслідки подій. 11 (очки дій) прибрано 08.11.2026; 6 — тепер місце пари (1 — за рингом, 0 — на рингу), не зона.</summary>
     public enum MatchEffectKind
     {
-        Damage = 0, Momentum, Hype, Down, Stand, Stunned, ZoneChange, Warning, RefereeDistracted, Count, Token, ApChange
+        Damage = 0, Momentum = 1, Hype = 2, Down = 3, Stand = 4, Stunned = 5,
+        /// <summary>Пара змінила місце: Amount 1 — за рингом, 0 — знову на рингу. Показ — склейкою.</summary>
+        Place = 6,
+        Warning = 7, RefereeDistracted = 8,
+        /// <summary>Відлік рефері за рингом зріс на Amount.</summary>
+        Count = 9,
+        Token = 10,
+        /// <summary>«Сили» (ускладнення 7–9 удару, «Перевести подих»).</summary>
+        Stamina = 12
     }
 
-    /// <summary>Один наслідок події: хто, що, на скільки (Amount для зони — її число).</summary>
+    /// <summary>Один наслідок події: хто, що, на скільки.</summary>
     public struct MatchEffect
     {
         public MatchEffectKind Kind;
@@ -47,10 +93,11 @@ namespace Game.Core.Ring.Match
         public MatchEffect(MatchEffectKind kind, MatchSide who, int amount) { Kind = kind; Who = who; Amount = amount; }
     }
 
-    /// <summary>Запис журналу матчу — для UI (стрічка, кидки) і тестів. Текст будує показ, не ядро.</summary>
+    /// <summary>Запис журналу матчу — для UI (стрічка, кидки), показу і тестів. Текст будує показ, не ядро.</summary>
     public sealed class MatchEvent
     {
         public int Seq;
+        /// <summary>Номер дії матчу (з 08.11.2026 ланцюг ініціативи: кожна дія — +1; раундів немає).</summary>
         public int Round;
         public MatchEventKind Kind;
         public MatchSide Actor;
@@ -63,8 +110,18 @@ namespace Game.Core.Ring.Match
         public int Total;
         public RollTier Tier;
         public int BoostSpent;
+        /// <summary>Обмін: підсумок суперника (Total — гравця).</summary>
+        public int OtherTotal;
         /// <summary>Перк з дією, що змінив цю подію (показ: «Імпровізація», «Підкуплений суддя»); null — жоден.</summary>
         public string Perk;
+        /// <summary>Ключ прийому кар'єри (каталог), що стоїть за дією; null — без прийому (дія рушія, ШІ без підказки).</summary>
+        public string MoveKey;
+        /// <summary>Постановка прийому для показу: центр або склейка з канатів/кута.</summary>
+        public MoveStaging Staging;
+        /// <summary>Місце дії в ланцюгу ініціативи (1 — перша дія того, хто щойно взяв ініціативу).</summary>
+        public int ChainIndex;
+        /// <summary>Пара була за рингом, коли дія почалась (показ — план «за рингом»); для «Вийти з рингу» — false.</summary>
+        public bool Outside;
         public List<MatchEffect> Effects = new List<MatchEffect>();
 
         public int EffectSum(MatchEffectKind kind, MatchSide who)
@@ -76,10 +133,11 @@ namespace Game.Core.Ring.Match
         }
     }
 
-    /// <summary>Рядок списку дій для UI: ціна, атрибут, доступність з причиною і шанси до кидка.</summary>
+    /// <summary>Рядок списку дій для UI: ціна в «Силах», атрибут, доступність з причиною і шанси до кидка (як у XCOM — завжди видно).</summary>
     public sealed class ActionOption
     {
         public MatchActionId Id;
+        /// <summary>Ціна в «Силах» (TRPG_DESIGN §4.3).</summary>
         public int Cost;
         public bool HasAttr;
         public RingAttr Attr;
@@ -91,8 +149,37 @@ namespace Game.Core.Ring.Match
         /// <summary>Чий кидок показують шанси: свій чи суперника (для «Утримання» — його «Вирватися»).</summary>
         public bool RollIsOpponents;
         public int Modifier;
+        /// <summary>«Сил» 0 — у модифікаторі вже −1.</summary>
+        public bool Winded;
         /// <summary>Шанси у тридцять шостих: [провал ≤6, 7–9, 10+] (для кидка суперника — його ступені).</summary>
         public int[] Chances;
+    }
+
+    /// <summary>
+    /// Прев'ю дії для будь-якої сторони (<see cref="MatchEngine.Preview"/>): чисте читання, без кубика. Для сторони, що не ходить,
+    /// Available=false (WrongPhase), але Modifier і Chances36 пораховані її статами.
+    /// </summary>
+    public sealed class ActionPreview
+    {
+        public MatchSide Side;
+        public MatchActionId Id;
+        public bool Available;
+        public UnavailableReason Reason;
+        public int Cost;
+        public int StaminaBefore;
+        /// <summary>«Сили» після дії (перевести подих — +3 до максимуму; решта — мінус ціна, не нижче 0).</summary>
+        public int StaminaAfter;
+        public bool Winded;
+        public bool HasAttr;
+        public RingAttr Attr;
+        public bool HasRoll;
+        public bool RollIsOpponents;
+        public int Modifier;
+        /// <summary>Шанси у тридцять шостих: [≤6, 7–9, 10+] (для кидка суперника — його ступені).</summary>
+        public int[] Chances36;
+        public bool IsBig;
+        /// <summary>false для «променя надії»: провал не віддає ініціативу.</summary>
+        public bool MissPassesInitiative;
     }
 
     /// <summary>Кидок нападника відомий, наслідки ще ні — тут гравець може докрутити імпульсом.</summary>
@@ -111,7 +198,7 @@ namespace Game.Core.Ring.Match
         public bool CanBoost;
     }
 
-    /// <summary>Захисник обирає до кидка нападника (gdd §2.5).</summary>
+    /// <summary>Захисник обирає до кидка нападника (TRPG_DESIGN §4.7).</summary>
     public sealed class PendingReaction
     {
         public MatchSide Attacker;

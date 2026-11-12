@@ -6,6 +6,7 @@ using Game.Core.Ring;
 using Game.Core.Ring.Career;
 using Game.Core.Ring.Match;
 using Game.Gameplay.Combat;
+using Game.Gameplay.Ring.Models;
 using NUnit.Framework;
 
 namespace Game.Tests.EditMode
@@ -16,7 +17,8 @@ namespace Game.Tests.EditMode
     /// </summary>
     public class BackstageTests
     {
-        private static readonly string[] EventIds = { "ev_parking", "ev_interview", "ev_contract", "ev_friend" };
+        /// <summary>Події в порядку файлу (перша дозріла — перша): скаут (П5) — з сезону 2, решта — з першого.</summary>
+        private static readonly string[] EventIds = { "ev_scout", "ev_parking", "ev_interview", "ev_contract", "ev_friend" };
 
         private static CareerContent Shared() { return CareerKit.Content(); }
 
@@ -32,11 +34,12 @@ namespace Game.Tests.EditMode
         /// <summary>Сесія, де першою відкриється подія id: попередні події цього сезону вже були, тиждень — останній (усе дозріло).</summary>
         private static CareerSession HeroForEvent(CareerContent c, string id, ulong seed = 1)
         {
-            var s = Hero(c, seed, 4);
+            int season = Math.Max(1, c.Backstage.Find(id).MinSeason);
+            var s = Hero(c, seed, 4, season);
             foreach (var e in EventIds)
             {
                 if (e == id) break;
-                s.State.BackstageSeen.Add("1:" + e);
+                s.State.BackstageSeen.Add(season + ":" + e);
             }
             return s;
         }
@@ -391,7 +394,7 @@ namespace Game.Tests.EditMode
         {
             var c = Shared();
             var s = HeroForEvent(c, "ev_interview");
-            s.Feud.State.Audience = 1;   // інтерв'ю потребує популярності ≥ 2
+            s.Feud.State.Audience = 0;   // інтерв'ю потребує популярності ≥ 1 (П5: місцева шкала 0–4, старт 1)
             Assert.AreNotEqual("ev_interview", s.Backstage().SceneId);
         }
 
@@ -789,6 +792,43 @@ namespace Game.Tests.EditMode
                 CareerBot.Step(s, 3, rep);
             }
             Assert.Greater(rep.Scenes.Count, 0, "бот-варіант 3 заходить у закулісся");
+        }
+
+        /// <summary>
+        /// Огляд QA (-ring-shot-event, -ring-shot-backstage all): примусова сцена відкривається наступним «Закуліссям» навіть
+        /// без своїх умов і до свого тижня, рівно один раз; далі вибір звичайний. У сейв не входить; невідомий id — виняток.
+        /// </summary>
+        [Test]
+        public void ForcedScene_OpensOnceIgnoringConditions_NotSaved()
+        {
+            var c = Shared();
+            var s = Hero(c, 3, 1);
+            s.Feud.State.Audience = 0;   // ev_contract вимагає популярності ≥ 1 і доступний з тижня 2
+            s.ForceBackstage("ev_contract");
+            Assert.AreEqual("ev_contract", s.ForcedBackstageScene);
+            var fresh = CareerKit.Fresh(3, c);
+            fresh.RestoreState(s.CaptureState());
+            Assert.IsNull(fresh.ForcedBackstageScene, "примусова сцена — лише огляд, у сейв не йде");
+
+            var r = s.Backstage();
+            Assert.IsTrue(r.NeedsScene);
+            Assert.AreEqual("ev_contract", r.SceneId);
+            Assert.IsNull(s.ForcedBackstageScene, "одноразова");
+            var pm = new PromoScreenModel(s.CurrentBackstage, RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json"), CareerKit.Read("backstage_uk.json")));
+            Assert.IsFalse(pm.HasAct, "у закулісся немає актів — без «Акт 0»");
+            Assert.IsNull(pm.ActText);
+            var fm = new PromoScreenModel(RingCampaignDriver.NewCampaign(1).StartPromo(), RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json")));
+            Assert.IsTrue(fm.HasAct, "промо ворожнечі — з актом");
+            StringAssert.Contains(fm.Act.ToString(), fm.ActText);
+            CareerKit.PlayScene(s);
+
+            var r2 = s.Backstage();
+            Assert.IsTrue(r2.NeedsScene);
+            Assert.AreNotEqual("ev_contract", r2.SceneId, "друга — звичайним вибором (умови ev_contract не виконані)");
+
+            Assert.Throws<ArgumentException>(() => s.ForceBackstage("no_such_scene"));
+            s.ForceBackstage(null);
+            Assert.IsNull(s.ForcedBackstageScene);
         }
     }
 }

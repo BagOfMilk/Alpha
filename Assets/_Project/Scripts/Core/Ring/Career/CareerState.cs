@@ -167,7 +167,31 @@ namespace Game.Core.Ring.Career
         /// <summary>Ворожнеча з NPC (крім Молота, поки ворожнеча триває — його рівень у FeudState.Heat).</summary>
         public readonly SortedDictionary<string, int> NpcFeud = new SortedDictionary<string, int>(StringComparer.Ordinal);
         public const string PlayerHolder = "player";
-        public string BeltHolder = "";
+
+        /// <summary>Федерація, де виступає гравець: 1 — місцева … 4 — світова (П5).</summary>
+        public int Federation = 1;
+        /// <summary>Дивізіон героя (P2-6): жіночий чи чоловічий. Ставить екран створення (CharacterDraft.Female); до того — хост із тіла.</summary>
+        public bool Female;
+        /// <summary>Дивізіон уже відомий: проставив екран створення або хост (старі зліпки без ключа «fem» — ні).</summary>
+        public bool FemaleKnown;
+        /// <summary>
+        /// Пояси всіх федерацій і дивізіонів (P2-6, два пояси на федерацію): ключ «рівень + m|f» → хто тримає (<see cref="PlayerHolder"/>,
+        /// id NPC; "" — вакантний). Пояс ніколи не переїжджає з гравцем у іншу федерацію.
+        /// </summary>
+        public readonly SortedDictionary<string, string> Belts = new SortedDictionary<string, string>(StringComparer.Ordinal);
+
+        public static string BeltKey(int tier, bool female) { return tier.ToString(CultureInfo.InvariantCulture) + (female ? "f" : "m"); }
+
+        public string Belt(int tier, bool female)
+        {
+            string h;
+            return Belts.TryGetValue(BeltKey(tier, female), out h) ? h : "";
+        }
+
+        public void SetBelt(int tier, bool female, string holder) { Belts[BeltKey(tier, female)] = holder ?? ""; }
+
+        /// <summary>Пояс дивізіону героя в його федерації.</summary>
+        public string BeltHolder { get { return Belt(Federation, Female); } set { SetBelt(Federation, Female, value); } }
 
         // шоу
         public ShowPhase Phase;
@@ -199,7 +223,10 @@ namespace Game.Core.Ring.Career
         public int TierPos = -1;
         /// <summary>Сітки витрат (06.11.2026): костюм куплено; тренер ростера (−1 — немає) і прогрес його атрибута; страховка на
         /// сезон (номер сезону, 0 — ні); виїзне шоу цього тижня й штраф часу наступного.</summary>
-        public bool CostumeBought;
+        /// <summary>Рівень купленого костюма (0 — немає). Ажіотаж виходу дає лише костюм не нижчий за рівень федерації (П5).</summary>
+        public int CostumeTier;
+        /// <summary>Костюм пасує цій федерації (старий у палаці не вражає).</summary>
+        public bool CostumeBought { get { return CostumeTier >= Federation; } }
         public int Coach = -1;
         public int CoachProgress;
         public int InsuredSeason;
@@ -210,6 +237,16 @@ namespace Game.Core.Ring.Career
         public readonly SortedSet<string> Grudges = new SortedSet<string>(StringComparer.Ordinal);
 
         public int FiredCount;
+        /// <summary>
+        /// Перехід (А2): рішення щодо пропозиції цього кінця сезону (0 — ще ні, 1 — прийняв, 2 — відмовився); відмов поспіль;
+        /// прощальний матч чемпіона йде («віддай пояс»); його підсумок (0 — не було, 1 — пішов красиво, 2 — пояс зняли); рівні,
+        /// куди повернення закрите.
+        /// </summary>
+        public int OfferDecision;
+        public int OfferDeclines;
+        public bool Farewell;
+        public int FarewellResult;
+        public readonly SortedSet<int> ClosedTiers = new SortedSet<int>();
         public int TitlesWon;
         public bool FeudResolved;
         /// <summary>Очки розвитку на початок поточного матчу (для підсумку).</summary>
@@ -260,7 +297,10 @@ namespace Game.Core.Ring.Career
             var nf = new List<string>();
             foreach (var kv in NpcFeud) nf.Add(Esc(kv.Key) + ":" + kv.Value);
             sb.Append("|npcfeud=").Append(string.Join(",", nf));
-            sb.Append("|belt=").Append(Esc(BeltHolder));
+            var belts = new List<string>();
+            foreach (var kv in Belts) belts.Add(kv.Key + ":" + Esc(kv.Value));
+            sb.Append("|belts=").Append(string.Join(",", belts));
+            sb.Append("|fed=").Append(Federation).Append("|fem=").Append(FemaleKnown ? b(Female) : "");
             sb.Append("|phase=").Append((int)Phase).Append("|opp=").Append(Esc(Opponent)).Append("|lastopp=").Append(Esc(LastOpponent));
             sb.Append("|plan=").Append((int)Plan).Append("|stip=").Append((int)Stip).Append("|pos=").Append((int)Position);
             sb.Append("|big=").Append(b(IsBig)).Append("|title=").Append(b(IsTitle)).Append("|feudshow=").Append(b(IsFeudShow));
@@ -274,13 +314,16 @@ namespace Game.Core.Ring.Career
             sb.Append("|bs=").Append(string.Join(",", bs));
             sb.Append("|lastout=").Append(LastOutcome).Append("|lastplan=").Append((int)LastPlanOutcome);
             sb.Append("|tierpos=").Append(TierPos).Append("|tiergrowth=").Append(TierGrowth);
-            sb.Append("|costume2=").Append(b(CostumeBought)).Append("|coach=").Append(Coach).Append("|coachp=").Append(CoachProgress);
+            sb.Append("|costumetier=").Append(CostumeTier).Append("|coach=").Append(Coach).Append("|coachp=").Append(CoachProgress);
             sb.Append("|insured=").Append(InsuredSeason).Append("|away=").Append(b(AwayShow)).Append("|awaytired=").Append(b(AwayTired));
             var gr = new List<string>();
             foreach (var g in Grudges) gr.Add(Esc(g));
             sb.Append("|grudges=").Append(string.Join(",", gr));
             sb.Append("|srec=").Append(Ints(SeasonRecord)).Append("|spop=").Append(SeasonPopStart);
             sb.Append("|losspop=").Append(LossPopularitySeason);
+            var ct = new List<int>(ClosedTiers);
+            sb.Append("|offer=").Append(OfferDecision).Append("|offerdecl=").Append(OfferDeclines).Append("|farewell=").Append(b(Farewell))
+              .Append("|fwres=").Append(FarewellResult).Append("|closed=").Append(Ints(ct));
         }
 
         internal void Restore(Dictionary<string, string> kv)
@@ -306,7 +349,24 @@ namespace Game.Core.Ring.Career
                 if (c < 0) throw new FormatException("пошкоджена ворожнеча з NPC у зліпку кар'єри");
                 NpcFeud[Uri.UnescapeDataString(p.Substring(0, c))] = int.Parse(p.Substring(c + 1), CultureInfo.InvariantCulture);
             }
-            BeltHolder = S("belt");
+            // федерації й два дивізіони додано 11.11.2026 (П5): старі зліпки — місцева федерація, дивізіон невідомий (хост
+            // проставить із тіла), один пояс «belt» — у дивізіоні його власника (гравця — чоловічий); решту поясів добудує сесія
+            string v;
+            Federation = kv.TryGetValue("fed", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 1;
+            FemaleKnown = kv.TryGetValue("fem", out v) && v.Length > 0;
+            Female = FemaleKnown && v == "1";
+            Belts.Clear();
+            OldBelt = null;
+            if (kv.TryGetValue("belts", out v))
+            {
+                foreach (var p in v.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    int c = p.IndexOf(':');
+                    if (c < 0) throw new FormatException("пошкоджені пояси у зліпку кар'єри");
+                    Belts[p.Substring(0, c)] = Uri.UnescapeDataString(p.Substring(c + 1));
+                }
+            }
+            else if (kv.TryGetValue("belt", out v)) OldBelt = Uri.UnescapeDataString(v);
             Phase = (ShowPhase)I("phase"); Opponent = S("opp"); LastOpponent = S("lastopp");
             Plan = (BookerPlan)I("plan"); Stip = (MatchStipulations)I("stip"); Position = (CardPosition)I("pos");
             IsBig = B("big"); IsTitle = B("title"); IsFeudShow = B("feudshow");
@@ -319,14 +379,15 @@ namespace Game.Core.Ring.Career
             string bs;
             if (kv.TryGetValue("bs", out bs))
                 foreach (var k in bs.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)) BackstageSeen.Add(Uri.UnescapeDataString(k));
-            string v;
             LastOutcome = kv.TryGetValue("lastout", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
             LastPlanOutcome = kv.TryGetValue("lastplan", out v) ? (FeudPlanOutcome)int.Parse(v, CultureInfo.InvariantCulture) : FeudPlanOutcome.Neither;
             // сходинки сили додано 06.11.2026: старі зліпки — «знімка ще не було», образ немає
             TierPos = kv.TryGetValue("tierpos", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : -1;
             TierGrowth = kv.TryGetValue("tiergrowth", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
             // сітки витрат додано 06.11.2026: старі зліпки — нічого не куплено
-            CostumeBought = kv.TryGetValue("costume2", out v) && v == "1";
+            // рівень костюма додано 11.11.2026: старий «costume2=1» — костюм місцевого рівня
+            CostumeTier = kv.TryGetValue("costumetier", out v) ? int.Parse(v, CultureInfo.InvariantCulture)
+                : kv.TryGetValue("costume2", out v) && v == "1" ? 1 : 0;
             Coach = kv.TryGetValue("coach", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : -1;
             CoachProgress = kv.TryGetValue("coachp", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
             InsuredSeason = kv.TryGetValue("insured", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
@@ -341,7 +402,18 @@ namespace Game.Core.Ring.Career
             SeasonPopStart = kv.TryGetValue("spop", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : -1;
             // P1-6 додано 11.11.2026: старі зліпки — поразка цього сезону популярності ще не давала
             LossPopularitySeason = kv.TryGetValue("losspop", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
+            // перехід між федераціями додано 11.11.2026: старі зліпки — пропозицій і закритих федерацій ще не було
+            OfferDecision = kv.TryGetValue("offer", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
+            OfferDeclines = kv.TryGetValue("offerdecl", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
+            Farewell = kv.TryGetValue("farewell", out v) && v == "1";
+            FarewellResult = kv.TryGetValue("fwres", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
+            ClosedTiers.Clear();
+            if (kv.TryGetValue("closed", out v))
+                foreach (var t in v.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)) ClosedTiers.Add(int.Parse(t, CultureInfo.InvariantCulture));
         }
+
+        /// <summary>Пояс зі зліпка до 11.11.2026 (один на федерацію): сесія розкладе його по дивізіонах. Не зберігається.</summary>
+        internal string OldBelt;
 
         private static string Need(Dictionary<string, string> kv, string key)
         {

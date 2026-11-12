@@ -18,7 +18,11 @@ namespace Game.Tests.EditMode
         {
             public int Matches, Miss, Partial, Strong, Rounds, NearFallMatches, PlayerNearFalls, RivalNearFalls,
                 LongestMissStreak, SumMissStreakMax, FirstPopSum, FirstPopCount, NoPop, Wins, Losses, Draws, FinisherLanded,
-                ComebackWins;
+                ComebackWins, InitiativeChangedMatches;
+            /// <summary>Довжина кожного матчу в діях без підйомів (State.Round на кінці).</summary>
+            public List<int> Lengths = new List<int>();
+            /// <summary>Довжина кожного матчу з підйомами: кількість подій Action у журналі, включно з GetUp.</summary>
+            public List<int> FullLengths = new List<int>();
         }
 
         /// <summary>Поп — подія, після якої зал вибухає: вирвався «на два», фінішер, або ажіотаж +2 і більше за раз.</summary>
@@ -29,21 +33,24 @@ namespace Game.Tests.EditMode
             return ev.EffectSum(MatchEffectKind.Hype, MatchSide.Player) >= 2;
         }
 
-        public static Feel Measure(int matches)
+        public static Feel Measure(int matches, int seedBase = 5000)
         {
             var f = new Feel { Matches = matches };
             for (int i = 0; i < matches; i++)
             {
-                var s = CareerKit.NewHero((ulong)(5000 + i));
+                var s = CareerKit.NewHero((ulong)(seedBase + i));
                 s.EndWeek();
                 var e = s.StartShow();
                 int guard = 0;
                 while (!e.IsOver && guard++ < 4000) MatchAi.Step(e);
 
                 int streak = 0, maxStreak = 0, actions = 0, firstPop = -1;
-                bool nearFall = false, wasBehind = false;
+                bool nearFall = false, wasBehind = false, initChanged = false;
+                int fullActions = 0;
                 foreach (var ev in e.State.Log)
                 {
+                    if (ev.Kind == MatchEventKind.Action) fullActions++;
+                    if (ev.Kind == MatchEventKind.TurnEnd) initChanged = true;
                     if (ev.Kind == MatchEventKind.Action && ev.Actor == MatchSide.Player && ev.HasRoll)
                     {
                         actions++;
@@ -63,6 +70,9 @@ namespace Game.Tests.EditMode
                 f.LongestMissStreak = Math.Max(f.LongestMissStreak, maxStreak);
                 if (firstPop >= 0) { f.FirstPopSum += firstPop; f.FirstPopCount++; } else f.NoPop++;
                 f.Rounds += e.State.Round;
+                f.Lengths.Add(e.State.Round);
+                f.FullLengths.Add(fullActions);
+                if (initChanged) f.InitiativeChangedMatches++;
                 var r = e.Result;
                 if (r.Winner == MatchWinner.Player) { f.Wins++; if (wasBehind) f.ComebackWins++; }
                 else if (r.Winner == MatchWinner.Rival) f.Losses++;
@@ -71,10 +81,29 @@ namespace Game.Tests.EditMode
             return f;
         }
 
+        /// <summary>Розподіл довжин: min, p10, медіана, p90, max, середнє, частки &lt;8, 8–15, &gt;15.</summary>
+        public static string LengthStats(List<int> v)
+        {
+            var a = new List<int>(v); a.Sort();
+            int n = a.Count; double sum = 0; int lo = 0, mid = 0, hi = 0;
+            foreach (var x in a) { sum += x; if (x < 8) lo++; else if (x <= 15) mid++; else hi++; }
+            return string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "min {0}, p10 {1}, медіана {2}, p90 {3}, max {4}, середнє {5:F1}; <8 {6:P1}, 8–15 {7:P1}, >15 {8:P1}",
+                a[0], a[n / 10], a[n / 2], a[Math.Min(n - 1, n * 9 / 10)], a[n - 1], sum / n, (double)lo / n, (double)mid / n, (double)hi / n);
+        }
+
+        public static double ShareIn815(List<int> v)
+        {
+            int c = 0;
+            foreach (var x in v) if (x >= 8 && x <= 15) c++;
+            return (double)c / v.Count;
+        }
+
         public static string Report(Feel f)
         {
             int rolls = Math.Max(1, f.Miss + f.Partial + f.Strong);
-            return string.Format(
+            return "довжина без підйомів: " + LengthStats(f.Lengths) + "; з підйомами: " + LengthStats(f.FullLengths)
+                + "; ініціатива змінилась у " + ((double)f.InitiativeChangedMatches / f.Matches).ToString("P1") + " матчів; " + string.Format(
                 "матчів {0}; кидків гравця {1}: чистий {2:P0}, частково {3:P0}, провал {4:P0}; раундів у середньому {5:F1}; " +
                 "near-fall «на два» у {6:P0} матчів (гравець вирвався {7}, суперник {8}); найдовша серія провалів {9}, " +
                 "у середньому найдовша за матч {10:F1}; до першого попу {11:F1} дій гравця, без попу {12:P0} матчів; " +
@@ -97,7 +126,7 @@ namespace Game.Tests.EditMode
         /// поміряй» на 75 % перемог у тижні 1). Кар'єру веде CareerBot (дії тижня, розвиток), кожен матч — однаковий ШІ за обидві
         /// сторони; титульний шанс береться завжди. Ключ — «s{сезон} w{тиждень}» і окремо «ворожнеча», «титул».
         /// </summary>
-        public static SortedDictionary<string, int[]> WinRates(int careers, int seasons)
+        public static SortedDictionary<string, int[]> WinRates(int careers, int seasons, int seedBase = 9000)
         {
             var d = new SortedDictionary<string, int[]>();
             Action<string, MatchWinner> add = (k, w) =>
@@ -108,7 +137,7 @@ namespace Game.Tests.EditMode
             };
             for (int i = 0; i < careers; i++)
             {
-                var s = CareerKit.NewHero((ulong)(9000 + i));
+                var s = CareerKit.NewHero((ulong)(seedBase + i));
                 var rep = new CareerRunReport();
                 int guard = 0;
                 string extra = null;
@@ -219,12 +248,20 @@ namespace Game.Tests.EditMode
             System.Console.WriteLine("[feel] " + Report(f));
             // Замір 06.11.2026 (поріг фінішера 3): чистий 39 %, частково 44 %, провал 17 %; 5,7 раунду; «на два» у 35 % матчів;
             // середня найдовша серія провалів 0,9; перший поп — після 3,8 дії, без попу 11 % матчів. Межі — з запасом.
+            // Замір 11.11.2026 (P2-1: підйом не в лічильнику, фінішер з 8-ї, пізня стадія з 11-ї): 11,2 дії, 8–15 у 89–91 % матчів (3 набори сідів), «на два» у ~50 %, перемог 57–60 %.
+            // Замір 08.11.2026 (ланцюг ініціативи, «свіжий борець», докрутка гравця до 10+): чистий 27 %, частково 42 %, провал 30 %;
+            // 15,0 дії; «на два» у 56 % матчів; найдовша серія провалів 1,3; без попу 2 %.
             int rolls = f.Miss + f.Partial + f.Strong;
             Assert.GreaterOrEqual((double)f.Strong / rolls, 0.25, "чистий успіх має бути частим, а не рідкістю");
             Assert.GreaterOrEqual((double)f.NearFallMatches / f.Matches, 0.25, "«на два» — хоча б у чверті матчів (найгучніший момент вечора)");
             Assert.LessOrEqual((double)f.NoPop / f.Matches, 0.20, "матч без жодного попу залу — не частіше за кожен п'ятий");
             Assert.LessOrEqual((double)f.SumMissStreakMax / f.Matches, 1.5, "серії провалів поспіль — короткі");
-            Assert.LessOrEqual((double)f.Rounds / f.Matches, 6.5, "малий бій лишається коротким (Поправка №11)");
+            // З 08.11.2026 матч рахує дії ланцюга ініціативи, а не раунди: критерій М1 — 8–15 дій (P2-1 проходу 08.11, Поправка №11).
+            // З 11.11.2026 (P2-1): підйом не рахується, фінішер — з 8-ї дії, пізня стадія росте з 11-ї; не середнє, а частка матчів.
+            double actions = (double)f.Rounds / f.Matches;
+            Assert.That(actions, Is.InRange(8.0, 15.0), "матч — 8–15 дій: не розгром і не тягучка");
+            Assert.GreaterOrEqual(ShareIn815(f.Lengths), 0.88, "матч — 8–15 дій: не менше 88 % матчів у вікні");
+            Assert.GreaterOrEqual((double)f.InitiativeChangedMatches / f.Matches, 0.99, "ініціатива переходить майже в кожному матчі");
         }
     }
 }

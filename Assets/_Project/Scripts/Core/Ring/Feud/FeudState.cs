@@ -35,7 +35,21 @@ namespace Game.Core.Ring
             Player = player ?? throw new ArgumentNullException(nameof(player));
         }
 
-        public int Audience { get { return _audience; } set { _audience = FeudVars.Clamp(FeudVars.Audience, value); } }
+        public int Audience { get { return _audience; } set { _audience = Math.Min(_audienceCap, FeudVars.Clamp(FeudVars.Audience, value)); } }
+
+        private int _audienceCap = int.MaxValue;
+        /// <summary>
+        /// Стеля популярності: у кар'єрі — стеля федерації (П5: 4 / 6 / 8 / 10). Не зберігається — її ставить власник стану
+        /// (CareerSession) після створення й відновлення; нижча стеля одразу зрізає поточне значення.
+        /// </summary>
+        public int AudienceCap
+        {
+            get { return _audienceCap; }
+            set { _audienceCap = Math.Max(0, value); _audience = Math.Min(_audienceCap, _audience); }
+        }
+
+        /// <summary>Ажіотаж фіналу, з якого матч дає популярність (П5: 7 на місцевій і регіональній, 8 вище). Не зберігається.</summary>
+        public int AudienceHypeAt = 7;
         public int Heat { get { return _heat; } set { _heat = FeudVars.Clamp(FeudVars.Heat, value); } }
         public int Momentum { get { return _momentum; } set { _momentum = FeudVars.Clamp(FeudVars.Momentum, value); } }
         public int Trust { get { return _trust; } set { _trust = FeudVars.Clamp(FeudVars.Trust, value); } }
@@ -245,7 +259,7 @@ namespace Game.Core.Ring
             if (r == null) throw new ArgumentNullException(nameof(r));
             var outcome = EvaluatePlan(r);
 
-            if (r.FinalHype >= 7) Audience += audienceWeight;
+            if (r.FinalHype >= AudienceHypeAt) Audience += audienceWeight;
             else if (r.FinalHype <= 3) Audience -= audienceWeight;
 
             if (outcome == FeudPlanOutcome.Fulfilled) Trust += 1;

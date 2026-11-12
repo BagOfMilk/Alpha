@@ -43,7 +43,8 @@ namespace Game.Tests.EditMode
         public void NotInTheDefaultActionList_SoOldScreensDoNotChange()
         {
             var e = PlayerFirst(true);
-            Assert.AreEqual(17, e.GetAvailableActions().Count);
+            // Усі дії рушія, крім самого «Променя надії» (число дій змінювалось: 08.11.2026 прибрано зони, додано «Перевести подих»).
+            Assert.AreEqual(System.Enum.GetValues(typeof(MatchActionId)).Length - 1, e.GetAvailableActions().Count);
             Assert.IsFalse(e.GetAvailableActions().Any(o => o.Id == MatchActionId.HopeSpot));
         }
 
@@ -111,13 +112,14 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void CostsTwoAp_AndNotWhileOutsideTheRing()
+        public void CostsNoStamina_AvailableEvenWinded()
         {
             var e = PlayerFirst(true);
             e.State.Player.Damage = 9; e.State.Rival.Damage = 0;
-            Assert.AreEqual(2, e.Describe(MatchActionId.HopeSpot).Cost);
-            e.State.Player.Zone = Zone.Outside;
-            Assert.AreEqual(UnavailableReason.NotInRing, e.Describe(MatchActionId.HopeSpot).Reason);
+            Assert.AreEqual(0, e.Describe(MatchActionId.HopeSpot).Cost);
+            e.State.Player.Stamina = 0;
+            Assert.IsTrue(e.Describe(MatchActionId.HopeSpot).Available);
+            Assert.IsFalse(e.Describe(MatchActionId.HopeSpot).Winded, "промінь надії без штрафу «Сил»");
         }
 
         [Test]
