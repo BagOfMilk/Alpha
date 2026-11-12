@@ -27,6 +27,10 @@ namespace Game.Core.Ring
     /// бракувало в останньому матчі (утримання, больовий, ажіотаж, травма); лише те, що можна купити зараз. Брудних прийомів
     /// героєві й перків чужого шляху не радить. Очок багато — на одну пораду більше (до чотирьох). Порядок: найкраща порада
     /// кожного виду, далі решта за оцінкою. Лише читає стан — нічого не купує.
+    /// Два пояснення однаковими не бувають (кадри «Меню», слот 28, рев'ю ПМ 12.11.2026: «Друге дихання» і «Витривалість» обидві
+    /// казали «вчися вириватися»): причина з минулого матчу пояснюється за видом поради — атрибут як основа, перк як порятунок саме
+    /// в цю мить, прийом як відповідь тим самим (<see cref="WhyFor"/>); якщо ключ однаково повторився (два перки ролі, два прийоми
+    /// ґіміка), нижча порада йде з описом із каталогу.
     /// </summary>
     public static class DevelopmentAdvice
     {
@@ -36,6 +40,19 @@ namespace Game.Core.Ring
 
         /// <summary>Ключ «пасує твоїй ролі»: c.dev.why.role.0 (герой) / .1 (лиходій) / .2 (бунтар).</summary>
         public static string RoleKey(RingPath role) { return "c.dev.why.role." + (int)role; }
+
+        /// <summary>Ключ «прийом твоєї ролі» (брудний прийом лиходієві): c.dev.why.role.N.move — не те саме, що в перка ролі.</summary>
+        public static string RoleMoveKey(RingPath role) { return RoleKey(role) + ".move"; }
+
+        /// <summary>
+        /// Ключ причини з минулого матчу (<c>lost_pin</c>, <c>lost_sub</c>, <c>low_hype</c>) за видом поради: атрибут —
+        /// c.dev.why.&lt;причина&gt; (основа на кожен матч), перк — .perk, прийом — .move.
+        /// </summary>
+        public static string WhyFor(string reason, AdviceKind kind)
+        {
+            string k = "c.dev.why." + reason;
+            return kind == AdviceKind.Perk ? k + ".perk" : kind == AdviceKind.Move ? k + ".move" : k;
+        }
 
         public static List<DevAdvice> For(CareerSession s, int maxRecs)
         {
@@ -56,8 +73,8 @@ namespace Game.Core.Ring
                 if (p.Path.HasValue && p.Path.Value != role) continue;   // чужий шлях — не радимо
                 var a = new DevAdvice { Kind = AdviceKind.Perk, Id = p.Id, Cost = p.Cost, Score = p.Path.HasValue ? 30 + 2 * p.Rank : 18 };
                 if (p.Path.HasValue) a.WhyKey = RoleKey(role);
-                if ((lostPin || lostSub) && (p.Id == PerkCatalog.SecondWind || p.Id == PerkCatalog.Veteran)) { a.Score += 12; a.WhyKey = lostPin ? "c.dev.why.lost_pin" : "c.dev.why.lost_sub"; }
-                if (lowHype && (p.Id == PerkCatalog.CrowdFavorite || p.Id == PerkCatalog.HeroOfCrowd)) { a.Score += 10; a.WhyKey = "c.dev.why.low_hype"; }
+                if ((lostPin || lostSub) && (p.Id == PerkCatalog.SecondWind || p.Id == PerkCatalog.Veteran)) { a.Score += 12; a.WhyKey = WhyFor(lostPin ? "lost_pin" : "lost_sub", a.Kind); }
+                if (lowHype && (p.Id == PerkCatalog.CrowdFavorite || p.Id == PerkCatalog.HeroOfCrowd)) { a.Score += 10; a.WhyKey = WhyFor("low_hype", a.Kind); }
                 if (injured && p.Id == PerkCatalog.IronJaw) { a.Score += 16; a.WhyKey = "c.dev.why.injured"; }
                 all.Add(a);
             }
@@ -70,8 +87,8 @@ namespace Game.Core.Ring
                 if (m.Action == MatchActionId.Dirty && role == RingPath.Face) continue;   // герою брудний прийом коштує ажіотажу
                 var a = new DevAdvice { Kind = AdviceKind.Move, Id = m.Id, Cost = m.Cost, Score = m.GimmickId != null ? 26 : 14 };
                 if (m.GimmickId != null) a.WhyKey = "c.dev.why.gimmick";
-                if (m.Action == MatchActionId.Dirty && role == RingPath.Heel) { a.Score += 8; a.WhyKey = RoleKey(role); }
-                if (lostSub && m.Action == MatchActionId.Submission) { a.Score += 6; a.WhyKey = "c.dev.why.lost_sub"; }
+                if (m.Action == MatchActionId.Dirty && role == RingPath.Heel) { a.Score += 8; a.WhyKey = RoleMoveKey(role); }
+                if (lostSub && m.Action == MatchActionId.Submission) { a.Score += 6; a.WhyKey = WhyFor("lost_sub", a.Kind); }
                 all.Add(a);
             }
 
@@ -80,8 +97,8 @@ namespace Game.Core.Ring
                 var attr = (RingAttr)i;
                 if (!s.CanBuyAttr(attr, out reason)) continue;
                 var a = new DevAdvice { Kind = AdviceKind.Attr, Attr = attr, Cost = Development.AttrCost, Score = 10 + (WrestlerStats.MaxAttr - s.Player.Get(attr)) };
-                if ((lostPin || lostSub) && attr == RingAttr.Stamina) { a.Score += 14; a.WhyKey = lostPin ? "c.dev.why.lost_pin" : "c.dev.why.lost_sub"; }
-                if (lowHype && attr == RingAttr.Charisma) { a.Score += 12; a.WhyKey = "c.dev.why.low_hype"; }
+                if ((lostPin || lostSub) && attr == RingAttr.Stamina) { a.Score += 14; a.WhyKey = WhyFor(lostPin ? "lost_pin" : "lost_sub", a.Kind); }
+                if (lowHype && attr == RingAttr.Charisma) { a.Score += 12; a.WhyKey = WhyFor("low_hype", a.Kind); }
                 all.Add(a);
             }
 
@@ -104,6 +121,10 @@ namespace Game.Core.Ring
                 int c = y.Score.CompareTo(x.Score);
                 return c != 0 ? c : all.IndexOf(x).CompareTo(all.IndexOf(y));
             });
+            // одне пояснення — одна порада: повтор (вища порада вже його сказала) — опис із каталогу; поради — нові об'єкти, стан не чіпаємо
+            var said = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var a in res)
+                if (a.WhyKey != null && !said.Add(a.WhyKey)) a.WhyKey = null;
             return res;
         }
     }
