@@ -34,6 +34,23 @@ namespace Game.Gameplay.Ring.UI
         /// <summary>Огляд вигляду (-ring-shots): згорнуті «Розвиток» і «Витрати» знімаються розгорнутими.</summary>
         public static bool ExpandForShots;
 
+        /// <summary>
+        /// Огляд <c>-ring-shot-dev-all</c> (рев'ю слоту 30): плити розвитку відкриваються з розгорнутим «Усе (N)», прокручуються до
+        /// повного списку, а рядок-підказка підвалу показує найдовшу підказку списку — кадр найгіршого випадку сталої висоти. Без
+        /// прапорця — як у грі: згорнуто, підказка лише при наведенні.
+        /// </summary>
+        public static bool DevAllForShots
+        {
+            get
+            {
+                if (!_devAllForShots.HasValue) _devAllForShots = RingLaunchArgs.Has("-ring-shot-dev-all");
+                return _devAllForShots.Value;
+            }
+        }
+        private static bool? _devAllForShots;
+        /// <summary>Найдовша підказка повного списку останньої побудови (лише для <see cref="DevAllForShots"/>).</summary>
+        private string _shotHint;
+
         protected CareerScreenView(RingUiContext ctx) : base(ctx)
         {
             if (RingStageHub.Has3D) Root.style.backgroundColor = Color.clear;
@@ -90,6 +107,7 @@ namespace Game.Gameplay.Ring.UI
             hint.style.alignSelf = Align.Stretch;
             hint.style.flexShrink = 0f;
             hint.style.overflow = Overflow.Hidden;
+            if (DevAllForShots && _shotHint != null) { hint.text = TextBreak.GlueDashes(_shotHint); hint.style.color = RingUi.Text; }
             foot.Add(hint);
         }
 
@@ -123,6 +141,7 @@ namespace Game.Gameplay.Ring.UI
             b.style.borderLeftWidth = 3f;
             if (!string.IsNullOrEmpty(hint))
             {
+                if (DevAllForShots && (_shotHint == null || hint.Length > _shotHint.Length)) _shotHint = hint;
                 PadFocus.Hover(b, () => { if (HintLine != null) { HintLine.text = TextBreak.GlueDashes(hint); HintLine.style.color = RingUi.Text; } },
                     () => { if (HintLine != null) HintLine.text = ""; });
                 // фокус без миші показує той самий опис (і причину недоступності), що й наведення (аудит P3 геймпад, 11.11.2026)
@@ -161,9 +180,9 @@ namespace Game.Gameplay.Ring.UI
         }
 
         /// <summary>Розвиток: атрибути, нові прийоми, перки — компактні кнопки, описи в рядку-підказці.</summary>
-        private bool _devAll;
+        private bool _devAll = DevAllForShots;
         /// <summary>«Усе (N)» щойно розгорнуто — плита прокрутить до початку повного списку (<see cref="ScrollToDevAll"/>).</summary>
-        private bool _devAllOpened;
+        private bool _devAllOpened = DevAllForShots;
         /// <summary>Початок повного списку, до якого прокрутити після розкладки; null — не прокручувати.</summary>
         protected VisualElement DevAllStart;
 
@@ -178,6 +197,7 @@ namespace Game.Gameplay.Ring.UI
         protected VisualElement DevelopmentPanel(Action changed, int maxRecs = 3, bool headerShowsPoints = false, VisualElement moreTo = null)
         {
             var card = Glass(8f);
+            _shotHint = null;
             string points = CareerScreenLines.DevPointsLine(T, C, headerShowsPoints);
             if (points != null) card.Add(Section(points));
 
