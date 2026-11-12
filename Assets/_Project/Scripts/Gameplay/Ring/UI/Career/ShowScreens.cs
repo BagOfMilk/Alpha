@@ -207,7 +207,7 @@ namespace Game.Gameplay.Ring.UI
                 float w = narrow ? _narrow[i] : _wide[i];
                 _els[i].style.right = right;
                 _els[i].style.width = w;
-                right += w + 14f;
+                right += w + CareerTileLayout.ShowRowGap;
             }
         }
     }
@@ -274,7 +274,7 @@ namespace Game.Gameplay.Ring.UI
                 wd.Accent = RingTheme.Signal;
                 wd.PadRankValue = 6;     // фокус без миші стає на «Вийти на ринг», не на відмову
                 wd.OnClick = () => { C.WithdrawFromShow(); Host.Save(); };
-                bar.Add(Root, wd, 300f, 230f);
+                bar.Add(Root, wd, CareerTileLayout.WithdrawTileW, CareerTileLayout.WithdrawTileWNarrow);
             }
             _bar.Fit(Root.layout.width);
         }
@@ -712,7 +712,7 @@ namespace Game.Gameplay.Ring.UI
                 skip.Accent = RingTheme.TextDim;
                 skip.PadRankValue = 6;
                 skip.OnClick = () => { C.SkipTitle(); Host.Save(); Refresh(); };
-                _bar.Add(Root, skip, 340f, 260f);
+                _bar.Add(Root, skip, CareerTileLayout.TitleSkipTileW, CareerTileLayout.TitleSkipTileWNarrow);
             }
             if (C.CanStartNextSeason)
                 _bar.Add(Root, new GoldPlate(T.Get("season.next"), C.CanStartTitleMatch ? "" : ArenaKit.ConfirmHint(T), OnConfirm, true),

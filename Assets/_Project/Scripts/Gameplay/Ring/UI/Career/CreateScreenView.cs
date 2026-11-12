@@ -74,8 +74,9 @@ namespace Game.Gameplay.Ring.UI
             foreach (var g in _v.Gimmicks)
             {
                 var gid = g.Def.Id;
-                var tile = AddTile((int)gid + 1, T.Get(g.Def.NameKey), AttrLines(g.BaseAttr),
+                var tile = AddTile((int)gid + 1, T.Get(g.Def.NameKey), "",
                     () => { _d.Gimmick = gid; Refresh(); }, T.Get(g.Def.NameKey + ".desc"));
+                tile.SetEffectParts(RingLabels.AttrBonusParts(T, g.BaseAttr));   // переноси лише між характеристиками
                 tile.Selected = gid == _d.Gimmick;
             }
             // підпис «РОЛЬ» у самому ряду — видно лише на вузькій панелі, де ролі йдуть другим рядом (шапка «РОЛЬ» тоді прихована)
@@ -129,9 +130,9 @@ namespace Game.Gameplay.Ring.UI
             float width = Root.layout.width;
             if (float.IsNaN(width) || width <= 0f) return;
             bool narrow = width < ArenaKit.NarrowWidth;
-            float gw = narrow ? ArenaKit.GoldWNarrow : ArenaKit.GoldW;
+            float gw = CareerTileLayout.CreateGoldWidth(width);   // повна плита лише на 21:9 — інакше плитки ґіміків завузькі
             _gold.style.width = gw;
-            float right = ArenaKit.Edge + gw + 14f;
+            float right = ArenaKit.Edge + gw + CareerTileLayout.GoldGap;
             _row.style.right = right;
             if (_head != null) _head.style.right = right;
             if (_reasonBox != null) _reasonBox.style.width = gw;
@@ -140,9 +141,14 @@ namespace Game.Gameplay.Ring.UI
             float lift = narrow ? ArenaKit.TileH + 12f : 0f;
             _row.style.height = ArenaKit.TileH + lift;
             _row.style.flexWrap = narrow ? Wrap.Wrap : Wrap.NoWrap;
+            // вузька плитка (16:9 — ~194, 4:3 — 195) — компактна, як на тижні: назва меншим кеглем, ключ на краї; на вузькій
+            // панелі ширина задана точно (ґіміки по чотири), а не часткою — та сама, що міряє охоронець CareerTextFitTests
+            float tileW = _tiles.Count > 0 ? CareerTileLayout.CreateTileWidth(width, _tiles.Count) : 0f;
+            bool compact = _tiles.Count > 0 && CareerTileLayout.Compact(tileW);
+            foreach (var t in _tiles) t.SetCompact(compact);
             foreach (var t in _tiles)
             {
-                t.style.flexBasis = narrow ? Length.Percent(23f) : new Length(0f);
+                t.style.flexBasis = narrow ? new Length(tileW) : new Length(0f);
                 t.style.flexGrow = narrow ? 0f : 1f;
                 t.style.marginBottom = narrow ? 12f : 0f;
             }
@@ -597,14 +603,6 @@ namespace Game.Gameplay.Ring.UI
         private string HairName(string hair)
         {
             return string.IsNullOrEmpty(hair) ? T.Get("c.look.hair.none") : T.Get("c.look.hair." + hair);
-        }
-
-        /// <summary>Ефект плитки гіміка: по характеристиці на рядок («Сила +2» / «Спритність −1»).</summary>
-        private string AttrLines(int[] a)
-        {
-            var parts = new List<string>();
-            for (int i = 0; i < a.Length; i++) if (a[i] != 0) parts.Add(RingLabels.AttrName(T, (RingAttr)i) + " " + Signed(a[i]));
-            return string.Join("\n", parts);
         }
 
         /// <summary>Показати героя на рингу таким, яким його збирають (тіло, зачіска, колір костюма).</summary>

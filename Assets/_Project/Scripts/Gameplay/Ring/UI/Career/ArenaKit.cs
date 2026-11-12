@@ -23,18 +23,18 @@ namespace Game.Gameplay.Ring.UI
         public static string ChooseHint(RingText t) { return t.Get(Menus.RingMenuInput.PadLast ? "m.hint.pad_choose" : "ui.hint.keys"); }
 
         // ---- розкладка (еталон 900; B03 §2: значення 1080p × 0,833) ----
-        public const float Edge = 80f;          // безпечні боки ACC-04
+        public const float Edge = CareerTileLayout.Edge;          // безпечні боки ACC-04
         public const float Top = 45f;
         public const float StripW = 410f, StripH = 106f;
         public const float SecondY = 162f;      // друга плита під стрічкою
         public const float RopesY = 668f;
         public const float HeaderY = 694f;
-        public const float RowY = 743f, TileH = 112f;
-        public const float GoldW = 273f, GoldWNarrow = 210f;
-        public const float NarrowWidth = 1450f;
+        public const float RowY = 743f, TileH = CareerTileLayout.TileH;
+        public const float GoldW = CareerTileLayout.GoldW, GoldWNarrow = CareerTileLayout.GoldWNarrow;
+        public const float NarrowWidth = CareerTileLayout.NarrowWidth;
         // Плитки ряду: вужчі за CompactTileW в один ряд (16:9 — ~183) — компактні; текст, що не вміщається в TileH, піднімає ряд
         // не більш ніж на TileGrowMax (кадри слоту 27, 09.11.2026: назви рвались посеред слова, шанси лягали під смугу).
-        public const float CompactTileW = 230f, TileGrowMax = 64f;
+        public const float CompactTileW = CareerTileLayout.CompactTileW, TileGrowMax = CareerTileLayout.TileGrowMax;
         // Шухляда тижня не налазить на афішу, доки під афішею лишається хоч стільки (далі — прокрутка); менше — до стрічки суперника.
         public const float DrawerMinRoom = 150f;
         // Низ екрана — відлік ЗНИЗУ: при «Розмірі інтерфейсу» 90–120 % логічна висота панелі 750–1000, а не 900
@@ -412,12 +412,14 @@ namespace Game.Gameplay.Ring.UI
     public sealed class ActionTile : VisualElement, IPadTarget
     {
         private readonly ArenaPlate _plate;
-        private readonly Label _title, _effect, _risk, _key;
+        private readonly Label _title, _titleProbe, _effect, _risk, _key;
+        private readonly Label[] _legend = new Label[3];
         private readonly CheckMark _check;
-        private readonly VisualElement _keyBox, _chances, _body, _head, _face;
+        private readonly VisualElement _keyBox, _chances, _legendRow, _parts, _body, _head, _face;
+        private readonly List<Label> _partLabels = new List<Label>();
         private readonly bool _enabled;
         private bool _compact;
-        private float _bodyTop = 10f;
+        private float _bodyTop = CareerTileLayout.BodyTop, _titleSize = CareerTileLayout.TitleSize;
         private bool _focus, _selected;
         public Action OnClick;
         /// <summary>Наведення мишею або фокус без миші: екран показує фокус плитки й опис у рядку-підказці.</summary>
@@ -453,21 +455,29 @@ namespace Game.Gameplay.Ring.UI
             _face.Add(_plate);
             var body = new VisualElement();
             body.style.position = Position.Absolute;
-            body.style.left = 18f; body.style.right = 22f; body.style.top = 10f; body.style.bottom = 8f;
+            body.style.left = CareerTileLayout.BodyLeft; body.style.right = CareerTileLayout.BodyRight;
+            body.style.top = CareerTileLayout.BodyTop; body.style.bottom = CareerTileLayout.BodyBottom;
             body.pickingMode = PickingMode.Ignore;
             _face.Add(body);
             _body = body;
             var head = ArenaKit.Row();
             _head = head;
             head.style.alignItems = Align.FlexStart;
-            _title = MenuKit.Display(title, 21f, RingTheme.Text, RingFontRole.Display800, 0.03f);
-            _title.style.whiteSpace = WhiteSpace.Normal;
-            _title.style.flexShrink = 1f; _title.style.flexGrow = 1f;
+            // Назва — завжди один рядок (ПМ 11.11.2026: «жодного розриву посеред слова; назва плитки — один рядок»): довша за
+            // місце — кегль меншає пропорційно, не нижче 15 (CareerTileLayout.FitTitle); охоронець CareerTextFitTests стежить,
+            // щоб кожна назва влазила на 15 у найвужчу плитку. Невидима проба — та сама назва базовим кеглем, її ширина й є мірою.
+            _title = MenuKit.Display(title, CareerTileLayout.TitleSize, RingTheme.Text, RingFontRole.Display800, CareerTileLayout.TitleTrack);
+            _title.style.flexShrink = 1f; _title.style.flexGrow = 1f; _title.style.minWidth = 0f;
+            _title.style.overflow = Overflow.Hidden;
             head.Add(_title);
+            _titleProbe = MenuKit.Display(title, CareerTileLayout.TitleSize, RingTheme.Text, RingFontRole.Display800, CareerTileLayout.TitleTrack);
+            _titleProbe.style.position = Position.Absolute;
+            _titleProbe.style.left = 0f; _titleProbe.style.top = 0f;
+            _titleProbe.style.opacity = 0f;
             _keyBox = new VisualElement();
-            _keyBox.style.width = 30f; _keyBox.style.height = 30f; _keyBox.style.flexShrink = 0f;
+            _keyBox.style.width = CareerTileLayout.KeyBox; _keyBox.style.height = CareerTileLayout.KeyBox; _keyBox.style.flexShrink = 0f;
             _keyBox.style.justifyContent = Justify.Center; _keyBox.style.alignItems = Align.Center;
-            _keyBox.style.marginLeft = 6f;
+            _keyBox.style.marginLeft = CareerTileLayout.KeyGap;
             _keyBox.pickingMode = PickingMode.Ignore;
             _key = MenuKit.Display(key > 0 ? key.ToString() : "", 21f, RingTheme.Bg, RingFontRole.Display900, 0f);
             _key.style.unityTextAlign = TextAnchor.MiddleCenter;
@@ -475,23 +485,53 @@ namespace Game.Gameplay.Ring.UI
             if (key > 0) head.Add(_keyBox);
             body.Add(head);
             _effect = MenuKit.Body(effect ?? "", BrandTokens.TypeMinInfo, RingTheme.TextDim);
-            _effect.style.marginTop = 4f;
+            _effect.style.marginTop = CareerTileLayout.LineGap;
             body.Add(_effect);
+            // ефект частинами (SetEffectParts): рядок із переносом лише між частинами, кожна — без переносу всередині
+            _parts = new VisualElement();
+            _parts.style.flexDirection = FlexDirection.Row;
+            _parts.style.flexWrap = Wrap.Wrap;
+            _parts.style.marginTop = CareerTileLayout.LineGap;
+            // проміжок — лівим відступом кожної частини, а сам рядок зсунуто на нього ліворуч: перша частина рядка стає до краю,
+            // і проміжок не їсть місця на краях (лише між частинами)
+            _parts.style.marginLeft = -CareerTileLayout.EffectPartGap;
+            _parts.style.flexShrink = 0f;
+            _parts.style.display = DisplayStyle.None;
+            _parts.pickingMode = PickingMode.Ignore;
+            body.Add(_parts);
             _risk = MenuKit.Body(!enabled && !string.IsNullOrEmpty(reason) ? reason : risk ?? "", BrandTokens.TypeMinInfo, RingTheme.Signal);
             _risk.style.display = string.IsNullOrEmpty(_risk.text) ? DisplayStyle.None : DisplayStyle.Flex;
             body.Add(_risk);
             // рядки тримають свою висоту: стиснуті flex-ом, вони малювали текст поза собою — назва вилазила над плиткою, рядок
             // тривоги — під неї (кадри слоту 27); скільки тексту насправді, каже NeededHeight
             head.style.flexShrink = 0f; _effect.style.flexShrink = 0f; _risk.style.flexShrink = 0f;
-            EventCallback<GeometryChangedEvent> changed = e => { if (OnContentChanged != null) OnContentChanged(); };
-            head.RegisterCallback(changed); _effect.RegisterCallback(changed); _risk.RegisterCallback(changed);
+            // Смуга шансів — у потоці під текстом, на всю ширину, а під нею легенда смуг («≤6 42%», «7–9 42%», «10+ 17%») кольорами
+            // сегментів (ПМ 11.11.2026: «смужка шансів іде після тексту в потоці, а не поверх»; ACC-02: число поруч зі смугою).
             _chances = new VisualElement();
-            _chances.style.position = Position.Absolute;
-            _chances.style.left = 18f; _chances.style.bottom = 10f; _chances.style.height = 7f; _chances.style.width = 120f;
+            _chances.style.marginTop = CareerTileLayout.ChancesGap;
+            _chances.style.height = CareerTileLayout.ChancesH; _chances.style.flexShrink = 0f;
             _chances.style.flexDirection = FlexDirection.Row;
             _chances.style.display = DisplayStyle.None;
             _chances.pickingMode = PickingMode.Ignore;
-            _face.Add(_chances);
+            body.Add(_chances);
+            _legendRow = new VisualElement();
+            _legendRow.style.flexDirection = FlexDirection.Row;
+            _legendRow.style.justifyContent = Justify.SpaceBetween;
+            _legendRow.style.marginTop = CareerTileLayout.LegendGap; _legendRow.style.flexShrink = 0f;
+            _legendRow.style.display = DisplayStyle.None;
+            _legendRow.pickingMode = PickingMode.Ignore;
+            for (int i = 0; i < 3; i++)
+            {
+                _legend[i] = MenuKit.Display("", BrandTokens.TypeMinInfo, RingTheme.Text, RingFontRole.Display700, 0f);
+                _legendRow.Add(_legend[i]);
+            }
+            body.Add(_legendRow);
+            _face.Add(_titleProbe);
+            EventCallback<GeometryChangedEvent> changed = e => { if (OnContentChanged != null) OnContentChanged(); };
+            head.RegisterCallback(changed); _effect.RegisterCallback(changed); _risk.RegisterCallback(changed); _legendRow.RegisterCallback(changed);
+            _parts.RegisterCallback(changed);
+            _title.RegisterCallback<GeometryChangedEvent>(e => FitTitle());
+            _titleProbe.RegisterCallback<GeometryChangedEvent>(e => FitTitle());
             _check = new CheckMark();   // галочка малюється: у display-шрифті немає U+2713 (перевірено fontTools 08.11.2026)
             _check.style.position = Position.Absolute;
             _check.style.right = 50f; _check.style.top = 14f;   // ліворуч від ключа: унизу лягала на рядок ефекту (кадр 4:3)
@@ -536,18 +576,20 @@ namespace Game.Gameplay.Ring.UI
         {
             if (_compact == on) return false;
             _compact = on;
-            _title.style.fontSize = on ? 17f : 21f;
-            _title.style.letterSpacing = new Length((on ? 17f : 21f) * 0.03f);
-            _body.style.left = on ? 12f : 18f;
-            _body.style.right = on ? 14f : 22f;
-            _bodyTop = on ? 14f : 10f;
+            float size = on ? CareerTileLayout.CompactTitleSize : CareerTileLayout.TitleSize;
+            SetTitleSize(size);
+            _titleProbe.style.fontSize = size;
+            _titleProbe.style.letterSpacing = new Length(size * CareerTileLayout.TitleTrack);
+            _body.style.left = on ? CareerTileLayout.CompactBodyLeft : CareerTileLayout.BodyLeft;
+            _body.style.right = on ? CareerTileLayout.CompactBodyRight : CareerTileLayout.BodyRight;
+            _bodyTop = on ? CareerTileLayout.CompactBodyTop : CareerTileLayout.BodyTop;
             _body.style.top = _bodyTop;
             _keyBox.RemoveFromHierarchy();
             if (on)
             {
                 _keyBox.style.position = Position.Absolute;
                 _keyBox.style.top = -11f; _keyBox.style.right = 14f;
-                _keyBox.style.width = 24f; _keyBox.style.height = 24f;
+                _keyBox.style.width = CareerTileLayout.CompactKeyBox; _keyBox.style.height = CareerTileLayout.CompactKeyBox;
                 _keyBox.style.marginLeft = 0f;
                 _key.style.fontSize = 17f;
                 _face.Add(_keyBox);
@@ -555,8 +597,8 @@ namespace Game.Gameplay.Ring.UI
             else
             {
                 _keyBox.style.position = Position.Relative;
-                _keyBox.style.width = 30f; _keyBox.style.height = 30f;
-                _keyBox.style.marginLeft = 6f;
+                _keyBox.style.width = CareerTileLayout.KeyBox; _keyBox.style.height = CareerTileLayout.KeyBox;
+                _keyBox.style.marginLeft = CareerTileLayout.KeyGap;
                 _key.style.fontSize = 21f;
                 _head.Add(_keyBox);
             }
@@ -570,10 +612,50 @@ namespace Game.Gameplay.Ring.UI
         public float NeededHeight()
         {
             float y = 0f;
-            if (!Bottom(_head, ref y) || !Bottom(_effect, ref y)) return 0f;
+            if (!Bottom(_head, ref y) || !Bottom(_parts.style.display.value != DisplayStyle.None ? _parts : _effect, ref y)) return 0f;
             if (_risk.style.display.value != DisplayStyle.None && !Bottom(_risk, ref y)) return 0f;
-            bool bar = _chances.style.display.value != DisplayStyle.None;
-            return _bodyTop + y + (bar ? 10f + 7f + 6f : 8f);
+            if (_legendRow.style.display.value != DisplayStyle.None && !Bottom(_legendRow, ref y)) return 0f;
+            return _bodyTop + y + CareerTileLayout.BodyBottom;
+        }
+
+        /// <summary>
+        /// Ефект частинами замість одного рядка (бонуси ґіміка «Сила +2», «Спритність −1»): частини стоять рядком і
+        /// переносяться лише між собою. Порожній список — назад до звичайного ефекту.
+        /// </summary>
+        public void SetEffectParts(IList<string> parts)
+        {
+            _parts.Clear();
+            _partLabels.Clear();
+            bool any = parts != null && parts.Count > 0;
+            if (any)
+                foreach (var p in parts)
+                {
+                    var l = MenuKit.Body(p ?? "", BrandTokens.TypeMinInfo, RingTheme.TextDim);
+                    l.style.whiteSpace = WhiteSpace.NoWrap;
+                    l.style.flexShrink = 0f;
+                    l.style.marginLeft = CareerTileLayout.EffectPartGap;
+                    _parts.Add(l);
+                    _partLabels.Add(l);
+                }
+            _parts.style.display = any ? DisplayStyle.Flex : DisplayStyle.None;
+            _effect.style.display = any ? DisplayStyle.None : DisplayStyle.Flex;
+            Sync();
+        }
+
+        /// <summary>Назва в один рядок: базовий кегль або менший — за шириною проби (див. <see cref="CareerTileLayout.FitTitle"/>).</summary>
+        private void FitTitle()
+        {
+            float baseSize = _compact ? CareerTileLayout.CompactTitleSize : CareerTileLayout.TitleSize;
+            float s = CareerTileLayout.FitTitle(baseSize, _titleProbe.layout.width, _title.layout.width);
+            if (float.IsNaN(s) || Math.Abs(s - _titleSize) < 0.01f) return;
+            SetTitleSize(s);
+        }
+
+        private void SetTitleSize(float s)
+        {
+            _titleSize = s;
+            _title.style.fontSize = s;
+            _title.style.letterSpacing = new Length(s * CareerTileLayout.TitleTrack);
         }
 
         private static bool Bottom(VisualElement e, ref float y)
@@ -584,8 +666,12 @@ namespace Game.Gameplay.Ring.UI
             return true;
         }
 
-        /// <summary>Смуга шансів 2d6 (частки з 36): промах — сигнал, частково — папір, успіх — золото (ACC-02: число в ефекті поруч).</summary>
-        public void SetChances(int miss36, int partial36, int strong36)
+        /// <summary>
+        /// Смуга шансів 2d6 (частки з 36): промах — сигнал, частково — папір, успіх — золото; під смугою — легенда тими ж
+        /// кольорами в тому ж порядку (<paramref name="missText"/> «≤6 42%», <paramref name="partialText"/> «7–9 42%»,
+        /// <paramref name="strongText"/> «10+ 17%»; ACC-02 — число поруч зі смугою, не лише колір).
+        /// </summary>
+        public void SetChances(int miss36, int partial36, int strong36, string missText, string partialText, string strongText)
         {
             _chances.Clear();
             int total = Math.Max(1, miss36 + partial36 + strong36);
@@ -593,6 +679,11 @@ namespace Game.Gameplay.Ring.UI
             Add3(partial36, total, RingTheme.Paper);
             Add3(strong36, total, RingTheme.Gold);
             _chances.style.display = DisplayStyle.Flex;
+            _legend[0].text = RingTheme.Caps(missText ?? "");
+            _legend[1].text = RingTheme.Caps(partialText ?? "");
+            _legend[2].text = RingTheme.Caps(strongText ?? "");
+            _legendRow.style.display = DisplayStyle.Flex;
+            Sync();
         }
 
         private void Add3(int part, int total, Color c)
@@ -622,8 +713,13 @@ namespace Game.Gameplay.Ring.UI
             Color text = !_enabled ? RingTheme.Disabled : darkText ? RingTheme.Bg : RingTheme.Text;
             _title.style.color = text;
             _effect.style.color = !_enabled ? RingTheme.Disabled : darkText ? RingTheme.Bg : RingTheme.TextDim;
+            foreach (var l in _partLabels) l.style.color = _effect.style.color;
             _keyBox.style.backgroundColor = !_enabled ? RingTheme.Disabled : darkText ? RingTheme.Bg : RingTheme.Gold;
             _key.style.color = darkText ? RingTheme.Gold : RingTheme.Bg;
+            // легенда шансів кольорами сегментів; на світлій заливці (фокус, вибір) — темна, інакше золото зникало б на золоті
+            _legend[0].style.color = darkText ? RingTheme.Bg : RingTheme.Signal;
+            _legend[1].style.color = darkText ? RingTheme.Bg : RingTheme.Paper;
+            _legend[2].style.color = darkText ? RingTheme.Bg : RingTheme.Gold;
             _check.style.display = _selected ? DisplayStyle.Flex : DisplayStyle.None;
             _check.Ink = darkText ? RingTheme.Bg : RingTheme.Text;
             _face.style.translate = new Translate(new Length(0f), new Length(_focus && _enabled && !MenuAnimator.Reduced ? -7f : 0f));
@@ -655,8 +751,10 @@ namespace Game.Gameplay.Ring.UI
     /// <summary>Золота плита головної дії (B03: «ПЕРЕЙТИ ДО ВЕЧОРА», «ДАЛІ», «ПОЧАТИ КАР'ЄРУ»): лівий край скошений, слово display Black, «ENTER».</summary>
     public sealed class GoldPlate : VisualElement, IPadTarget
     {
-        private const float WordSize = 36f, WordMin = 26f, WordTrack = 0.01f;   // 36 → не нижче 26 (У0, ПМ 09.11.2026)
-        private const float WordLeft = 40f, WordRight = 16f, WordTop = 12f, WordBottom = 6f;
+        // 36 → не нижче 26 (У0, ПМ 09.11.2026); ті самі числа міряє охоронець CareerTextFitTests
+        private const float WordSize = CareerTileLayout.WordSize, WordMin = CareerTileLayout.WordMin, WordTrack = CareerTileLayout.WordTrack;
+        private const float WordLeft = CareerTileLayout.WordLeft, WordRight = CareerTileLayout.WordRight;
+        private const float WordTop = CareerTileLayout.WordTop, WordBottom = CareerTileLayout.WordBottom;
         private readonly bool _enabled;
         private readonly ArenaPlate _plate;
         private readonly Label _word, _probe;

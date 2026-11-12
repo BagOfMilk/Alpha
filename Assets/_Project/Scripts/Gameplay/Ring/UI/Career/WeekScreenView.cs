@@ -95,19 +95,25 @@ namespace Game.Gameplay.Ring.UI
                 bool any = w.ActionsLeft > 0;
                 string spent = T.Get("c.hub.no_actions");
                 int cha = C.Player.Get(RingAttr.Charisma) - C.State.InjuryPenaltyFor(BodyZone.Head);
-                string chaOdds = Odds(cha);
                 int job = CareerRules.SideJobBase + 5 * Math.Max(0, C.Player.Get(RingAttr.Stamina));
                 AddTile(1, T.Get("week.action.0"), T.Format("c.week.pay.train", CareerRules.TrainingPoints), null, any, spent,
                     () => Do(C.Train(false)), T.Get("week.action.0.desc"));
                 bool coach = w.Money >= CareerRules.TrainerCost;
                 AddTile(2, T.Get("c.week.train_coach"), T.Format("c.week.pay.coach", CareerRules.TrainingPoints + CareerRules.TrainerExtraPoints, CareerRules.TrainerCost),
                     null, any && coach, any ? T.Format("c.hub.need_money", CareerRules.TrainerCost - w.Money) : spent, () => Do(C.Train(true)), T.Get("c.week.train_coach.desc"));
+                // травма на плитці — коротко: зона, мінус до кидків, тижні (≤ 2 рядки, ПМ 11.11.2026); про лікаря каже опис плитки
                 AddTile(3, T.Get("week.action.1"), w.CanRecover ? T.Format("c.week.pay.recover", CareerRules.RecoverZoneHeal) : T.Get("c.week.pay.healthy"),
                     InjuryWarn(w), any && w.CanRecover, any ? null : spent, () => Do(C.Recover(WorstZone(w), false)), T.Get("week.action.1.desc"));   // «ти цілий» уже в ефекті
-                var promo = AddTile(4, T.Get("week.action.2"), T.Format("c.week.pay.promo", chaOdds), null, any, spent, () => Do(C.Promo()), T.Get("week.action.2.desc"));
-                var back = AddTile(5, T.Get("week.action.3"), T.Format("c.week.pay.backstage", chaOdds), null, any, spent, () => Do(C.Backstage()), T.Get("week.action.3.desc"));
+                // ефект — без чисел: шанси йдуть смугою з легендою під нею (опис ≤ 2 рядки, смуга в потоці — ПМ 11.11.2026)
+                var promo = AddTile(4, T.Get("week.action.2"), T.Get("c.week.pay.promo"), null, any, spent, () => Do(C.Promo()), T.Get("week.action.2.desc"));
+                var back = AddTile(5, T.Get("week.action.3"), T.Get("c.week.pay.backstage"), null, any, spent, () => Do(C.Backstage()), T.Get("week.action.3.desc"));
                 var odds = TwoD6.ChancesOf36(cha);
-                if (any) { promo.SetChances(odds[0], odds[1], odds[2]); back.SetChances(odds[0], odds[1], odds[2]); }   // вимкнена плитка — без шансів
+                if (any)   // вимкнена плитка — без шансів
+                {
+                    string m = T.Format("c.odds.miss", Pct(odds[0])), pa = T.Format("c.odds.partial", Pct(odds[1])), st = T.Format("c.odds.strong", Pct(odds[2]));
+                    promo.SetChances(odds[0], odds[1], odds[2], m, pa, st);
+                    back.SetChances(odds[0], odds[1], odds[2], m, pa, st);
+                }
                 AddTile(6, T.Get("week.action.4"), T.Format("c.hub.pay.job", job), T.Format("c.hub.risk", Pct(Sum36AtMost(CareerRules.SideJobInjuryAtMost))),
                     any, spent, () => Do(C.SideJob()), T.Get("week.action.4.desc"));
             }
@@ -133,13 +139,12 @@ namespace Game.Gameplay.Ring.UI
             float gw = narrow ? ArenaKit.GoldWNarrow : ArenaKit.GoldW;
             _gold.style.width = gw;
             _row.style.right = ArenaKit.Edge + gw + 14f;
-            bool twoRows = narrow && _tiles.Count > 3;
+            bool twoRows = CareerTileLayout.WeekTwoRows(width, _tiles.Count);
             // Один ряд вузьких плиток (16:9: ~183 одиниці) — компактні плитки (назва 17, ключ на краї); тексту більше, ніж уміщає
             // TileH, — ряд росте вгору, а з ним шапка, канати й шухляда (кадри слоту 27, 09.11.2026: «ВІДНОВЛЕНН/Я», шанси під
             // смугою, рядок травми під плиткою). Щойно змінений режим — висота з наступного кадру, коли текст перерозкладено.
-            float rowW = width - ArenaKit.Edge - (ArenaKit.Edge + gw + 14f);
-            float tileW = _tiles.Count > 0 ? (rowW - 9f * _tiles.Count) / _tiles.Count : 0f;
-            bool compact = !twoRows && tileW < ArenaKit.CompactTileW;
+            float tileW = _tiles.Count > 0 ? CareerTileLayout.WeekTileWidth(width, _tiles.Count) : 0f;
+            bool compact = !twoRows && CareerTileLayout.Compact(tileW);
             bool relaid = false;
             float need = ArenaKit.TileH;
             foreach (var t in _tiles) relaid |= t.SetCompact(compact);
@@ -153,7 +158,7 @@ namespace Game.Gameplay.Ring.UI
             foreach (var t in _tiles)
             {
                 t.style.height = tileH;
-                t.style.flexBasis = twoRows ? Length.Percent(31f) : new Length(0f);
+                t.style.flexBasis = twoRows ? Length.Percent(CareerTileLayout.TwoRowBasis * 100f) : new Length(0f);   // + ріст 1 = (ряд − 27) / 3, як у моделі
                 t.style.marginBottom = twoRows ? 12f : 0f;
             }
             if (_ropes != null) _ropes.style.bottom = ArenaKit.RopesBottom + lift;
@@ -349,8 +354,9 @@ namespace Game.Gameplay.Ring.UI
             _hint = MenuKit.Body(_hintDefault, BrandTokens.TypeMinInfo, RingTheme.Text);
             _hint.style.marginLeft = 22f;
             _hint.style.flexShrink = 1f; _hint.style.flexGrow = 0f; _hint.style.minWidth = 0f;
-            // не більше двох рядків у висоту шапки (42): на вузькій панелі довгий опис не вилазить на канати й плитки
-            _hint.style.maxHeight = 40f;
+            // не більше двох ПОВНИХ рядків (40 зрізало другий рядок навпіл — аудит 11.11.2026): на вузькій панелі довгий опис
+            // не вилазить на канати й плитки; кожен опис плитки влазить у два рядки — стежить CareerTextFitTests
+            _hint.style.maxHeight = CareerTileLayout.HintMaxHeight;
             _hint.style.overflow = Overflow.Hidden;
             MenuKit.Underlay(_hint);
             row.Add(_hint);
@@ -455,12 +461,6 @@ namespace Game.Gameplay.Ring.UI
         // ---------------- шанси, дії, відгук ----------------
 
         /// <summary>«10+ 28 % · 7–9 44 %» для модифікатора кидка 2d6.</summary>
-        private string Odds(int mod)
-        {
-            var c = TwoD6.ChancesOf36(mod);
-            return T.Format("c.week.pay.odds", Pct(c[2]), Pct(c[1]), Pct(c[0]));   // і провал «≤6» (P3, 8c3f16b)
-        }
-
         private static int Pct(int of36) { return (int)Math.Round(of36 * 100.0 / 36.0); }
 
         private static int Sum36AtMost(int total)
@@ -475,6 +475,7 @@ namespace Game.Gameplay.Ring.UI
         /// 08.11.2026, P2-3, 8c3f16b: бот двічі травмувався й жодного разу не лікувався). У плитці — найгірша зона (місця на два
         /// рядки); null — травм немає.
         /// </summary>
+        /// <summary>Тривога травми найгіршої зони на плитці «Відновлення» (зона, мінус до кидків, тижнів лишилось); null — травм немає.</summary>
         private string InjuryWarn(WeekView w)
         {
             if (w.Injuries == null) return null;
@@ -484,7 +485,7 @@ namespace Game.Gameplay.Ring.UI
             var z = WorstZone(w);
             foreach (var i in w.Injuries)
                 if (i.Zone == z && i.WeeksLeft > 0)
-                    return T.Format("c.injury.warn", T.Get("bodyzone." + (int)i.Zone), C.State.InjuryPenaltyFor(i.Zone), i.WeeksLeft);
+                    return T.Format("c.injury.tile", T.Get("bodyzone." + (int)i.Zone), C.State.InjuryPenaltyFor(i.Zone), i.WeeksLeft);
             return null;
         }
 

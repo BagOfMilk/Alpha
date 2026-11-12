@@ -11,6 +11,20 @@ namespace Game.Gameplay.Ring.Models
         public static string PathMark(RingText t, RingPath p) { return t.Get("path." + FeudVars.PathName(p) + ".mark"); }
         public static string Var(RingText t, string name) { return t.Get("var." + name); }
 
+        /// <summary>
+        /// Бонуси характеристик окремими частинами: «Сила +2», «Спритність −1», «Витривалість +2» (плитка ґіміка на створенні
+        /// героя). Плитка кладе їх рядком із переносом, кожну без переносу всередині — тож рядок ламається лише між
+        /// характеристиками, а назва не відривається від числа (ПМ 11.11.2026: «жодного розриву посеред слова… опис — не більше
+        /// двох рядків»; три рядки через «\n» не влазили, а нерозривного пробілу у Fixel немає). Нульові пропускає. Ті самі
+        /// частини міряє охоронець CareerTextFitTests.
+        /// </summary>
+        public static string[] AttrBonusParts(RingText t, int[] a)
+        {
+            var parts = new System.Collections.Generic.List<string>();
+            for (int i = 0; i < a.Length; i++) if (a[i] != 0) parts.Add(AttrName(t, (RingAttr)i) + " " + RingChances.Signed(a[i]));
+            return parts.ToArray();
+        }
+
         public static string PlanName(RingText t, BookerPlan p)
         {
             switch (p)
