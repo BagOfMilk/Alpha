@@ -134,6 +134,31 @@ namespace Game.Gameplay.Ring.Models
         /// <summary>Плитка «Лишитися», ризик (сигнальним): відмова поспіль — довіра −1; null — перша.</summary>
         public static string DeclineRisk(RingText t, CareerSession c) { return DeclineOffends(c) ? t.Get("c.offer.decline.offend") : null; }
 
+        /// <summary>
+        /// Плитка «Пропустити титульний матч», опис (ПМ 12.11.2026, кадр слоту 28: плитка без наслідку): сезон закривається без
+        /// титульного матчу (<see cref="CareerSession.SkipTitle"/> ставить TitleDone).
+        /// </summary>
+        public static string SkipTitleEffect(RingText t) { return t.Get("c.season.title_skip.effect"); }
+
+        /// <summary>
+        /// Та сама плитка, ризик (сигнальним): чемпіон, що не захищає пояс, втрачає довіру букера — те саме правило, що в ядрі
+        /// (<see cref="CareerSession.SkipTitle"/>: TitleEligible і чемпіон → довіра −1); null — не чемпіон.
+        /// </summary>
+        public static string SkipTitleRisk(RingText t, CareerSession c)
+        {
+            var r = c.State.Report;
+            return r != null && r.TitleEligible && !r.TitleDone && c.IsChampion ? t.Get("c.season.title_skip.champion") : null;
+        }
+
+        /// <summary>
+        /// Рядок «Очок розвитку: N» над порадами розвитку. Шапка, що вже показує «ОЧКІВ N» (права колонка підсумку матчу), — без
+        /// нього (ПМ 12.11.2026, кадр 4:3 слоту 28: те саме число двічі); шухляда тижня й кінець сезону числа в шапці не мають.
+        /// </summary>
+        public static string DevPointsLine(RingText t, CareerSession c, bool headerShowsPoints)
+        {
+            return headerShowsPoints ? null : t.Format("dev.points", c.DevPoints);
+        }
+
         /// <summary>Кнопка костюма у «Витратах»: ціна — рівня федерації (<see cref="CareerSession.CostumePrice"/>), а не стала 60.</summary>
         public static string CostumeButton(RingText t, CareerSession c)
         {

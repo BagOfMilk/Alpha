@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Game.Gameplay.Ring.Models;
 using UnityEngine;
 
 namespace Game.Tests.EditMode
@@ -74,25 +75,59 @@ namespace Game.Tests.EditMode
 
         /// <summary>
         /// Перенос, як у рушія: за пробілами, жадібно. <paramref name="widestWord"/> — найширше слово (якщо воно ширше рядка, рушій
-        /// розірвав би його посеред слова).
+        /// розірвав би його посеред слова). Відрізок <c>&lt;nobr&gt;…&lt;/nobr&gt;</c> (TextBreak.GlueDashes) — одне слово, теги
+        /// без ширини.
         /// </summary>
         public int Lines(string s, float size, float width, float track, out float widestWord)
         {
+            return Wrap(s, size, width, track, out widestWord).Count;
+        }
+
+        /// <summary>Рядки після переносу (текст без тегів) — щоб перевірити, з чого починається кожен.</summary>
+        public List<string> Wrap(string s, float size, float width, float track, out float widestWord)
+        {
             widestWord = 0f;
-            if (string.IsNullOrEmpty(s)) return 0;
+            var lines = new List<string>();
+            if (string.IsNullOrEmpty(s)) return lines;
             float space = Width(" ", size, 0f) + track * size;
-            int lines = 1;
             float x = 0f;
-            foreach (var word in s.Split(' '))
+            var line = new System.Text.StringBuilder();
+            foreach (var word in Units(s))
             {
-                if (word.Length == 0) continue;
                 float w = Width(word, size, track);
                 if (w > widestWord) widestWord = w;
-                if (x <= 0f) { x = w; continue; }
-                if (x + space + w <= width) x += space + w;
-                else { lines++; x = w; }
+                if (line.Length == 0) { x = w; line.Append(word); continue; }
+                if (x + space + w <= width) { x += space + w; line.Append(' ').Append(word); }
+                else { lines.Add(line.ToString()); line.Clear().Append(word); x = w; }
             }
+            if (line.Length > 0) lines.Add(line.ToString());
+            if (lines.Count == 0) lines.Add("");
             return lines;
+        }
+
+        /// <summary>Одиниці переносу: слова за пробілами; <c>&lt;nobr&gt;слово —&lt;/nobr&gt;</c> — одна одиниця без тегів.</summary>
+        public static List<string> Units(string s)
+        {
+            var units = new List<string>();
+            System.Text.StringBuilder glued = null;
+            foreach (var word in s.Split(' '))
+            {
+                if (glued != null)
+                {
+                    glued.Append(' ').Append(word);
+                    if (word.EndsWith(TextBreak.Close, StringComparison.Ordinal)) { units.Add(TextBreak.Strip(glued.ToString())); glued = null; }
+                    continue;
+                }
+                if (word.StartsWith(TextBreak.Open, StringComparison.Ordinal))
+                {
+                    if (word.EndsWith(TextBreak.Close, StringComparison.Ordinal)) units.Add(TextBreak.Strip(word));
+                    else glued = new System.Text.StringBuilder(word);
+                    continue;
+                }
+                if (word.Length > 0) units.Add(word);
+            }
+            if (glued != null) units.Add(TextBreak.Strip(glued.ToString()));
+            return units;
         }
 
         /// <summary>

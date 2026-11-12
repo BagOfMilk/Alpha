@@ -205,9 +205,9 @@ namespace Game.Gameplay.Ring.UI
             t.OnHover = () =>
             {
                 foreach (var o in _tiles) o.Focused = o == t;
-                if (_hint != null) _hint.text = desc ?? "";
+                if (_hint != null) _hint.text = TextBreak.GlueDashes(desc) ?? "";
             };
-            t.OnUnhover = () => { t.Focused = false; if (_hint != null) _hint.text = _hintDefault; };
+            t.OnUnhover = () => { t.Focused = false; if (_hint != null) _hint.text = TextBreak.GlueDashes(_hintDefault); };
             _tiles.Add(t);
             _row.Add(t);
             return t;

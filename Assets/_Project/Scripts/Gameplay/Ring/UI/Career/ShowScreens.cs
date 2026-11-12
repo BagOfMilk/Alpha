@@ -668,7 +668,7 @@ namespace Game.Gameplay.Ring.UI
                 var scroll = new ScrollView(ScrollViewMode.Vertical);
                 scroll.style.maxHeight = 380f;
                 ArenaKit.ThinScroller(scroll);   // смуга в стилі «Арена» (кадри слоту 27)
-                var content = DevelopmentPanel(Refresh, 2);
+                var content = DevelopmentPanel(Refresh, 2, headerShowsPoints: true);   // «ОЧКІВ N» уже в шапці
                 content.style.backgroundColor = Color.clear;
                 content.style.borderTopWidth = 0f; content.style.borderBottomWidth = 0f; content.style.borderLeftWidth = 0f; content.style.borderRightWidth = 0f;
                 scroll.Add(content);
@@ -731,7 +731,8 @@ namespace Game.Gameplay.Ring.UI
                 case SeasonEndAction.TitleMatch: Gold(T.Get("c.season.title_go"), first); break;
                 case SeasonEndAction.AcceptOffer: Gold(_offer.AcceptText, first); break;
                 case SeasonEndAction.NextSeason: Gold(T.Get("season.next"), first); break;
-                case SeasonEndAction.SkipTitle: Tile(a, T.Get("c.season.title_skip"), "", null); break;
+                case SeasonEndAction.SkipTitle:
+                    Tile(a, T.Get("c.season.title_skip"), CareerScreenLines.SkipTitleEffect(T), CareerScreenLines.SkipTitleRisk(T, C)); break;
                 case SeasonEndAction.DeclineOffer:
                     // що буде — «повториться»; друга відмова поспіль коштує довіри — ризиком (сигнальним) під ним
                     Tile(a, _offer.DeclineText, CareerScreenLines.DeclineEffect(T), CareerScreenLines.DeclineRisk(T, C));

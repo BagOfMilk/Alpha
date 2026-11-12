@@ -268,7 +268,7 @@ namespace Game.Tests.EditMode
         private static void CheckLines(List<string> bad, string where, string s, float width, int maxLines)
         {
             float widest;
-            int lines = TextFont.Lines(s, Body, width, 0f, out widest);
+            int lines = TextFont.Lines(TextBreak.GlueDashes(s), Body, width, 0f, out widest);
             if (lines > maxLines) bad.Add(string.Format("{0}: «{1}» — {2} рядки у {3:0}", where, s, lines, width));
             if (widest > width) bad.Add(string.Format("{0}: у «{1}» слово ширше рядка", where, s));
             if (TextFont.Missing(s).Count > 0) bad.Add(where + ": у шрифті тексту немає «" + new string(TextFont.Missing(s).ToArray()) + "»");
@@ -379,7 +379,7 @@ namespace Game.Tests.EditMode
         private static float Para(string s, float size, float width, out int lines)
         {
             float widest;
-            lines = Math.Max(1, SemiFont.Lines(s, size, width, 0f, out widest));
+            lines = Math.Max(1, SemiFont.Lines(TextBreak.GlueDashes(s), size, width, 0f, out widest));
             return lines * SemiFont.LineHeight(size);
         }
 
@@ -457,6 +457,11 @@ namespace Game.Tests.EditMode
                 CheckTitle(bad, "кінець сезону " + p.Key, Ui("c.offer.decline"), sk, false);
                 var decline = new TileText(Ui("c.offer.decline"), new[] { Ui("c.offer.decline.again") }, new[] { Ui("c.offer.decline.offend") });
                 CheckBody(bad, "кінець сезону " + p.Key, decline, sk);
+                // «Пропустити титульний матч» (ПМ 12.11.2026): опис і ризик чемпіона — та сама висота плитки
+                var skip = new TileText(Ui("c.season.title_skip"), new[] { Ui("c.season.title_skip.effect") }, new[] { Ui("c.season.title_skip.champion") });
+                CheckBody(bad, "кінець сезону " + p.Key, skip, sk);
+                if (NeededHeight(skip, sk) > CareerTileLayout.TileH)
+                    bad.Add(string.Format("кінець сезону {0}: «Пропустити» потребує {1:0} > {2:0}", p.Key, NeededHeight(skip, sk), CareerTileLayout.TileH));
                 foreach (var t in new[] { decline })
                     if (NeededHeight(t, sk) > CareerTileLayout.TileH)
                         bad.Add(string.Format("кінець сезону {0}: «Лишитися» потребує {1:0} > {2:0}", p.Key, NeededHeight(t, sk), CareerTileLayout.TileH));
@@ -596,7 +601,7 @@ namespace Game.Tests.EditMode
             {
                 if (string.IsNullOrEmpty(s)) continue;
                 float widest;
-                int lines = TextFont.Lines(s, Body, width, 0f, out widest);
+                int lines = TextFont.Lines(TextBreak.GlueDashes(s), Body, width, 0f, out widest);
                 if (lines > CareerTileLayout.BodyMaxLines) bad.Add(string.Format("{0}: «{1}» — {2} рядки у {3:0} (плитка «{4}»)", where, s, lines, width, t.Title));
                 if (widest > width) bad.Add(string.Format("{0}: у «{1}» слово ширше рядка — {2:0} > {3:0}", where, s, widest, width));
                 if (TextFont.Missing(s).Count > 0) bad.Add(where + ": у шрифті тексту немає «" + new string(TextFont.Missing(s).ToArray()) + "»");
@@ -623,9 +628,9 @@ namespace Game.Tests.EditMode
             float lh = TextFont.LineHeight(Body);
             int effect = 0, risk = 0;
             float widest;
-            foreach (var s in t.Effects) effect = Math.Max(effect, Math.Max(1, TextFont.Lines(s, Body, width, 0f, out widest)));
+            foreach (var s in t.Effects) effect = Math.Max(effect, Math.Max(1, TextFont.Lines(TextBreak.GlueDashes(s), Body, width, 0f, out widest)));
             if (t.Parts != null) effect = Math.Max(effect, TextFont.PartLines(t.Parts, Body, width, CareerTileLayout.EffectPartGap, out widest));
-            if (risks) foreach (var s in t.Risks) risk = Math.Max(risk, TextFont.Lines(s, Body, width, 0f, out widest));
+            if (risks) foreach (var s in t.Risks) risk = Math.Max(risk, TextFont.Lines(TextBreak.GlueDashes(s), Body, width, 0f, out widest));
             float h = top + head + CareerTileLayout.LineGap + effect * lh + risk * lh;
             if (chances) h += CareerTileLayout.ChancesGap + CareerTileLayout.ChancesH + CareerTileLayout.LegendGap + LegendFont.LineHeight(Body);
             return h + CareerTileLayout.BodyBottom;

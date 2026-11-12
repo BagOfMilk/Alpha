@@ -67,10 +67,10 @@ namespace Game.Gameplay.Ring.UI
             b.style.borderLeftWidth = 3f;
             if (!string.IsNullOrEmpty(hint))
             {
-                PadFocus.Hover(b, () => { if (HintLine != null) { HintLine.text = hint; HintLine.style.color = RingUi.Text; } },
+                PadFocus.Hover(b, () => { if (HintLine != null) { HintLine.text = TextBreak.GlueDashes(hint); HintLine.style.color = RingUi.Text; } },
                     () => { if (HintLine != null) HintLine.text = ""; });
                 // фокус без миші показує той самий опис (і причину недоступності), що й наведення (аудит P3 геймпад, 11.11.2026)
-                PadMark.AddHot(b, on => { if (HintLine == null) return; HintLine.text = on ? hint : ""; if (on) HintLine.style.color = RingUi.Text; });
+                PadMark.AddHot(b, on => { if (HintLine == null) return; HintLine.text = on ? TextBreak.GlueDashes(hint) : ""; if (on) HintLine.style.color = RingUi.Text; });
             }
             return b;
         }
@@ -113,10 +113,11 @@ namespace Game.Gameplay.Ring.UI
         /// Рекомендації — від ядра «Кар'єри» (<c>DevelopmentAdvice.For</c>, P2-2, 11.11.2026): від ролі, ґіміка й того, чого бракувало
         /// в минулому матчі; очок багато — на одну більше. Рядки — <see cref="CareerScreenLines.DevRecs"/>.
         /// </summary>
-        protected VisualElement DevelopmentPanel(Action changed, int maxRecs = 3)
+        protected VisualElement DevelopmentPanel(Action changed, int maxRecs = 3, bool headerShowsPoints = false)
         {
             var card = Glass(8f);
-            card.Add(Section(T.Format("dev.points", C.DevPoints)));
+            string points = CareerScreenLines.DevPointsLine(T, C, headerShowsPoints);
+            if (points != null) card.Add(Section(points));
 
             string gimmick = C.Content.GimmickOf(C.State.Gimmick).Key;
             int all = 5;   // атрибути — завжди п'ять

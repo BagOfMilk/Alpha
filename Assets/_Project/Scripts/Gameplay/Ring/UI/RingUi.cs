@@ -382,8 +382,8 @@ namespace Game.Gameplay.Ring.UI
             b.style.borderLeftWidth = 3f;
             if (hint != null && !string.IsNullOrEmpty(hintText))
             {
-                PadFocus.Hover(b, () => { hint.text = hintText; hint.style.color = Text; }, () => hint.text = "");
-                PadMark.AddHot(b, on => { hint.text = on ? hintText : ""; if (on) hint.style.color = Text; });
+                PadFocus.Hover(b, () => { hint.text = TextBreak.GlueDashes(hintText); hint.style.color = Text; }, () => hint.text = "");
+                PadMark.AddHot(b, on => { hint.text = on ? TextBreak.GlueDashes(hintText) : ""; if (on) hint.style.color = Text; });
             }
             return b;
         }

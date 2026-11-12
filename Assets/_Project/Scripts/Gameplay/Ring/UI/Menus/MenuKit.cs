@@ -166,7 +166,7 @@ namespace Game.Gameplay.Ring.UI.Menus
         /// <summary>Речення й підказки — Fixel (Статут TYPE-02: ВЕЛИКІ лише для ≤2 слів).</summary>
         public static Label Body(string text, float size, Color color, bool bold = false)
         {
-            var l = new Label(text);
+            var l = new Label(TextBreak.GlueDashes(text));   // тире рядка не починає (TextBreak, ПМ 12.11.2026)
             RingFonts.Apply(l, bold ? RingFontRole.TextBold : RingFontRole.Text);
             l.style.fontSize = size;
             l.style.color = color;

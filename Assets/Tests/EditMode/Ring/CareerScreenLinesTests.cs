@@ -152,6 +152,54 @@ namespace Game.Tests.EditMode
         // ---------------- федерації (П5, запит ПМ 12.11.2026) ----------------
 
         /// <summary>Як CareerTransitionTests.CloseSeason: кінець сезону у федерації з популярністю, довірою й поясом; титул розіграно.</summary>
+        /// <summary>
+        /// «Пропустити титульний матч» — з наслідком (ПМ 12.11.2026, кадр слоту 28: порожня плитка): що буде — завжди; чемпіонові —
+        /// ризиком довіра −1, і саме стільки забирає ядро.
+        /// </summary>
+        [Test]
+        public void SkipTitle_Tile_SaysWhatHappens_AndTheChampionLosesTrust()
+        {
+            Assert.AreEqual(T.Get("c.season.title_skip.effect"), CareerScreenLines.SkipTitleEffect(T));
+            var s = AtSeasonEnd(3, 1, 3, CareerRules.OfferTrust);
+            s.State.Report.TitleEligible = true; s.State.Report.TitleDone = false;
+            Assert.IsNull(CareerScreenLines.SkipTitleRisk(T, s), "не чемпіон — довіри не втрачає");
+            int trust = s.Trust;
+            s.SkipTitle();
+            Assert.AreEqual(trust, s.Trust);
+
+            var c = AtSeasonEnd(4, 1, 3, CareerRules.OfferTrust, true);
+            c.State.Report.TitleEligible = true; c.State.Report.TitleDone = false;
+            Assert.IsTrue(c.IsChampion);
+            Assert.AreEqual(T.Get("c.season.title_skip.champion"), CareerScreenLines.SkipTitleRisk(T, c));
+            StringAssert.Contains("−1", CareerScreenLines.SkipTitleRisk(T, c));
+            trust = c.Trust;
+            c.SkipTitle();
+            Assert.AreEqual(trust - 1, c.Trust, "текст ризику — те саме правило, що в ядрі");
+            Assert.IsNull(CareerScreenLines.SkipTitleRisk(T, c), "після рішення ризику вже немає");
+        }
+
+        /// <summary>«Очок розвитку: N» — лише там, де шапка числа не має (ПМ 12.11.2026, 4:3: «ОЧКІВ 23» і той самий рядок під ним).</summary>
+        [Test]
+        public void DevPointsLine_OnlyWhereTheHeaderHasNoCount()
+        {
+            var s = CareerKit.NewHero(5);
+            s.Feud.State.DevPoints = 23;
+            Assert.IsNull(CareerScreenLines.DevPointsLine(T, s, true));
+            Assert.AreEqual(T.Format("dev.points", 23), CareerScreenLines.DevPointsLine(T, s, false));
+        }
+
+        /// <summary>Смуга провалу 2d6 читається однаково в описі дії й легенді шансів: «≤6» (ПМ 12.11.2026: опис промо казав «6−»).</summary>
+        [Test]
+        public void MissBand_ReadsLikeTheLegend_Everywhere()
+        {
+            StringAssert.StartsWith("≤6 ", T.Get("c.odds.miss"));
+            StringAssert.Contains("≤6 — ", T.Get("week.action.2.desc"));
+            var other = new Regex(@"(?<![\d≤])6\s?[−–-](?=\s|$)");
+            foreach (var file in new[] { "ui_uk.json", "strings_uk.json" })
+                foreach (var line in CareerKit.Read(file).Split('\n'))
+                    Assert.IsFalse(other.IsMatch(line), file + ": смуга провалу не «≤6» — " + line.Trim());
+        }
+
         private static CareerSession AtSeasonEnd(ulong seed, int tier, int pop, int trust, bool champion = false)
         {
             var s = CareerKit.NewHero(seed);
@@ -381,6 +429,16 @@ namespace Game.Tests.EditMode
             if (!week.Contains("CareerScreenLines.LivingLine(T, C)")) bad.Add("WeekScreenView: немає рядка житла й дороги");
             int div = create.IndexOf("CareerScreenLines.SetDivision(_d, CareerLooks.HeroBodies[Host.HeroBody]);"), hero = create.IndexOf("C.CreateHero(_d);");
             if (div < 0 || hero < 0 || div > hero) bad.Add("CreateScreenView: дивізіон не ставиться перед створенням героя");
+            // слот 28 (ПМ 12.11.2026): наслідок пропуску титулу; «Очок розвитку» — лише там, де шапка числа не має
+            if (!CodeLine(show, "Tile(a, T.Get(\"c.season.title_skip\"), CareerScreenLines.SkipTitleEffect(T), CareerScreenLines.SkipTitleRisk(T, C)); break;"))
+                bad.Add("ShowScreens: плитка пропуску титулу без наслідку з моделі");
+            if (!CodeLine(career, "string points = CareerScreenLines.DevPointsLine(T, C, headerShowsPoints);") || career.Contains("T.Format(\"dev.points\""))
+                bad.Add("CareerScreens: рядок очок розвитку повз модель");
+            int pointsHead = show.IndexOf("T.Get(\"c.hub.points\")");
+            int panelAfterHead = pointsHead < 0 ? -1 : show.IndexOf("DevelopmentPanel(", pointsHead);
+            if (pointsHead < 0 || panelAfterHead < 0 || !show.Substring(panelAfterHead).StartsWith("DevelopmentPanel(Refresh, 2, headerShowsPoints: true)"))
+                bad.Add("ShowScreens: під шапкою «ОЧКІВ N» — те саме число вдруге");
+            if (Regex.Matches(show + week, "headerShowsPoints: true").Count != 1) bad.Add("шапка з числом очок — лише на підсумку матчу");
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
     }

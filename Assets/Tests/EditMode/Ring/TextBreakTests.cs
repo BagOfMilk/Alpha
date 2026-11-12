@@ -1,0 +1,132 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Text.RegularExpressions;
+using Game.Core.Ring.Career;
+using Game.Gameplay.Ring.Models;
+using NUnit.Framework;
+using UnityEngine;
+
+namespace Game.Tests.EditMode
+{
+    /// <summary>
+    /// Правило переносу «тире рядка не починає» (ПМ 12.11.2026, кадр слоту 28: у рядку поразки «— удруге зал не підніме» тире стало
+    /// на початок другого рядка; нерозривного пробілу U+00A0 у Fixel немає). <see cref="TextBreak.GlueDashes"/> тримає слово перед
+    /// тире разом із ним (<c>&lt;nobr&gt;</c> UI Toolkit); <c>MenuKit.Body</c> і рядки-підказки екранів кличуть її. Модель переносу —
+    /// <see cref="TtfMetrics.Wrap"/> (жадібно за пробілами, як рушій; <c>&lt;nobr&gt;</c> — одне слово).
+    /// </summary>
+    public class TextBreakTests
+    {
+        private static TtfMetrics _regular, _semi;
+        private static TtfMetrics Regular { get { return _regular ?? (_regular = TtfMetrics.Load("ThirdParty", "Fonts", "Fixel", "FixelText-Regular.ttf")); } }
+        private static TtfMetrics Semi { get { return _semi ?? (_semi = TtfMetrics.Load("ThirdParty", "Fonts", "Fixel", "FixelText-SemiBold.ttf")); } }
+
+        /// <summary>Пункт на папері підсумку (ShowKit.Bullet): папір 410 − відступи 26 і 24 − квадрат 11 і просвіт 8.</summary>
+        private const float ResultBulletW = 410f - 26f - 24f - 11f - 8f;
+
+        private static bool StartsWithDash(string line)
+        {
+            return line.StartsWith("—", StringComparison.Ordinal) || line.StartsWith("–", StringComparison.Ordinal);
+        }
+
+        [Test]
+        public void GlueDashes_KeepsTheWordBeforeTheDash_WithIt()
+        {
+            Assert.AreEqual("Поразка дала <nobr>популярність —</nobr> удруге не підніме",
+                TextBreak.GlueDashes("Поразка дала популярність — удруге не підніме"));
+            Assert.AreEqual("<nobr>10+ —</nobr> ворожнеча +1; <nobr>7–9 —</nobr> одне з двох; <nobr>≤6 —</nobr> зірване промо.",
+                TextBreak.GlueDashes("10+ — ворожнеча +1; 7–9 — одне з двох; ≤6 — зірване промо."), "кожне окреме тире; діапазон «7–9» не чіпається");
+            Assert.AreEqual("<nobr>Програв –</nobr> але", TextBreak.GlueDashes("Програв – але"), "коротке тире, що стоїть окремо, — так само");
+            Assert.AreEqual("Діапазон 7–9 і 1-2", TextBreak.GlueDashes("Діапазон 7–9 і 1-2"), "без пробілів довкола — не тире-слово");
+            Assert.AreEqual("— так", TextBreak.GlueDashes("— так"), "тире на самому початку тексту нема до чого клеїти");
+            Assert.IsNull(TextBreak.GlueDashes(null));
+            Assert.AreEqual("", TextBreak.GlueDashes(""));
+
+            string s = "Пояс — у тебе, а зал — твій.";
+            string g = TextBreak.GlueDashes(s);
+            Assert.AreEqual(g, TextBreak.GlueDashes(g), "повторний виклик нічого не міняє");
+            Assert.AreEqual(s, TextBreak.Strip(g), "без тегів — той самий текст, що бачить гравець");
+            Assert.AreEqual(s.Split(' ').Length - 2, TtfMetrics.Units(g).Count, "слово з тире — одна одиниця переносу (два тире — дві склейки)");
+        }
+
+        /// <summary>
+        /// Рядок поразки з кадру слоту 28 на папері підсумку: без правила тире стає на початок рядка (вада відтворюється моделлю),
+        /// з правилом — ні.
+        /// </summary>
+        [Test]
+        public void LossLine_OnTheResultPaper_KeepsTheDashOnTheFirstLine()
+        {
+            string s = RingText.FromJson(CareerKit.Read("ui_uk.json")).Get("c.result.loss_pop.season");
+            StringAssert.Contains(" — ", s);
+            float widest;
+            var raw = Semi.Wrap(s, BrandTokens.TypeMinInfo, ResultBulletW, 0f, out widest);
+            Assert.IsTrue(raw.Exists(StartsWithDash), "без правила модель має відтворити ваду кадру: " + string.Join(" / ", raw));
+            var glued = Semi.Wrap(TextBreak.GlueDashes(s), BrandTokens.TypeMinInfo, ResultBulletW, 0f, out widest);
+            Assert.IsFalse(glued.Exists(StartsWithDash), string.Join(" / ", glued));
+            Assert.LessOrEqual(widest, ResultBulletW, "склеєне слово з тире вміщається в рядок");
+            Assert.AreEqual(s, string.Join(" ", glued), "той самий текст, лише інакше розбитий");
+        }
+
+        /// <summary>
+        /// Усі рядки текстів екранів із тире-словом (ui_uk.json, strings_uk.json): за будь-якої ширини від 120 до 720 і обох накреслень
+        /// тексту (15 і 17) жоден рядок, крім першого, не починається з тире.
+        /// </summary>
+        [Test]
+        public void EveryText_WithASpacedDash_NeverStartsALineWithIt()
+        {
+            var bad = new List<string>();
+            int checkedTexts = 0;
+            foreach (var file in new[] { "ui_uk.json", "strings_uk.json" })
+                foreach (var v in Values(CareerKit.Read(file)))
+                {
+                    if (v.IndexOf(" — ", StringComparison.Ordinal) < 0 && v.IndexOf(" – ", StringComparison.Ordinal) < 0) continue;
+                    checkedTexts++;
+                    string s = Regex.Replace(v, @"\{\d+(:[^}]*)?\}", "10");
+                    string g = TextBreak.GlueDashes(s);
+                    foreach (var font in new[] { Regular, Semi })
+                        foreach (var size in new[] { BrandTokens.TypeMinInfo, 17f })
+                            for (float w = 120f; w <= 720f; w += 3f)
+                            {
+                                float widest;
+                                var lines = font.Wrap(g, size, w, 0f, out widest);
+                                for (int i = 1; i < lines.Count; i++)
+                                    if (StartsWithDash(lines[i]) && bad.Count < 20)
+                                        bad.Add(string.Format(CultureInfo.InvariantCulture, "{0}: «{1}» — рядок {2} з тире ({3}, {4:0})", file, v, i + 1, size, w));
+                            }
+                }
+            Assert.Greater(checkedTexts, 20, "текстів із тире-словом — десятки; менше — розбір JSON зламався");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>Екрани ставлять текст через правило: мітка тексту (MenuKit.Body) і кожен рядок-підказка, що отримує опис.</summary>
+        [Test]
+        public void Sources_LabelsAndHints_GlueDashes()
+        {
+            string ui = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI");
+            string kit = File.ReadAllText(Path.Combine(ui, "Menus", "MenuKit.cs"));
+            StringAssert.Contains("new Label(TextBreak.GlueDashes(text))", kit, "MenuKit.Body");
+            var hintSet = new Regex(@"\b(_hint|HintLine|hint)\.text\s*=\s*([^;]*);");
+            int setters = 0;
+            foreach (var rel in new[] { Path.Combine("Career", "WeekScreenView.cs"), Path.Combine("Career", "CreateScreenView.cs"), "CareerScreens.cs", "RingUi.cs" })
+            {
+                string src = File.ReadAllText(Path.Combine(ui, rel));
+                foreach (Match m in hintSet.Matches(src))
+                {
+                    string rhs = m.Groups[2].Value.Trim();
+                    if (rhs.TrimEnd(')', ' ') == "\"\"") continue;   // прибрати підказку
+                    setters++;
+                    StringAssert.Contains("TextBreak.GlueDashes(", rhs, rel + ": " + m.Value);
+                }
+            }
+            Assert.GreaterOrEqual(setters, 7, "рядків-підказок з описом — сім (тиждень, створення ×2, кнопки екранів ×2, RingUi ×2)");
+        }
+
+        /// <summary>Значення рядків JSON-словника («ключ»: «значення»), з розекрануванням лапок і косих.</summary>
+        private static IEnumerable<string> Values(string json)
+        {
+            foreach (Match m in Regex.Matches(json, "\"(?:[^\"\\\\]|\\\\.)*\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\""))
+                yield return m.Groups[1].Value.Replace("\\\"", "\"").Replace("\\n", "\n").Replace("\\\\", "\\");
+        }
+    }
+}

@@ -224,7 +224,7 @@ namespace Game.Gameplay.Ring.UI
         private void SetHint(string text)
         {
             if (_hint == null) return;
-            _hint.text = text ?? "";
+            _hint.text = TextBreak.GlueDashes(text) ?? "";
             _hint.style.color = _hintWarn && text == _hintDefault ? RingTheme.Signal : RingTheme.Text;
             _hint.style.opacity = string.IsNullOrEmpty(text) ? 0f : 1f;
         }
