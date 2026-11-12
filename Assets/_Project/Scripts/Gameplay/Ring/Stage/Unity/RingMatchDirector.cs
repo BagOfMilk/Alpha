@@ -1454,6 +1454,10 @@ namespace Game.Gameplay.Ring.Stage
                 slotA = slotB - Rot(rotA, off);
                 slotA.y = A.Slot.position.y;
             }
+            // Обидва ще в позі попереднього кліпа ланцюга: таз першого кадру нового має лягти туди, де таз зараз, а не де слот
+            // його «думає» (Cover_Release_A: 0,83 м стрибком). Зсув — по кожному борцеві окремо, лише коли він живий у слоті.
+            if (liveA) slotA += ChainFix(A, ca, slotA, rotA, "A " + st.Clip);
+            if (liveB) slotB += ChainFix(B, cb, slotB, rotB, "B " + st.Clip);
             StopWalk(A);
             StopWalk(B);
             PlayInSlot(A, ca, 0f, slotA, rotA, ia.Loop);
@@ -1462,6 +1466,16 @@ namespace Game.Gameplay.Ring.Stage
                 Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] ланцюг: {0} (A {1}, B {2})", st.Clip, liveA ? "у слоті" : "від B", liveB ? "у слоті" : "від A"));
             if (st.Count) StartCoroutine(RefCount(ev, A, B, A.PosePos, st.RefClip));
             yield return PairTail(st, ev, idx, ca, cb, ia, 0f);
+        }
+
+        /// <summary>Зсув слота, що ставить таз першого кадру кліпа <paramref name="c"/> туди, де таз борця зараз (<see cref="RingClipTable.ChainNeedsShift"/>); інакше нуль.</summary>
+        private Vector3 ChainFix(RingActor a, AnimationClip c, Vector3 slot, float slotYaw, string what)
+        {
+            Vector3 gap = a.PosePos - SlotPoint(a, c, 0f, slot, slotYaw);
+            gap.y = 0f;
+            if (!RingClipTable.ChainNeedsShift(gap.magnitude)) return Vector3.zero;
+            if (Trace) Debug.Log("[Ринг] ланцюг: зсув слота " + what + " на " + gap.magnitude.ToString("0.00", CultureInfo.InvariantCulture) + " м (безшовний перехід)");
+            return gap;
         }
 
         /// <summary>

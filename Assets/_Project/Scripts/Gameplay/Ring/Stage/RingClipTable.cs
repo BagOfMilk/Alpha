@@ -518,6 +518,29 @@ namespace Game.Gameplay.Ring.Stage
         /// з колін (кікаут, стрибок, що не вдався) — у стійку з колін; обличчям донизу — підйом зі спини склейкою кадру (кліпа
         /// підйому з живота немає, <c>CLIP_NEEDS.md</c> §9); інакше — підйом зі спини.
         /// </summary>
+        /// <summary>
+        /// Кінцевий вузол кліпа, з якого в стійку тільки кліпом підйому: лежить (<c>lying_*</c>), на колінах (<c>kneel_up</c>)
+        /// чи під накриттям (<c>pinned_*</c>). null — вузол невідомий (стійка).
+        /// </summary>
+        public static bool StaysDown(string node)
+        {
+            return node != null && (node.StartsWith("lying", System.StringComparison.Ordinal) || node == "kneel_up"
+                || node.StartsWith("pinned", System.StringComparison.Ordinal));
+        }
+
+        /// <summary>Розрив тазу, менший за це, ланцюг не лікує, м: дихання петлі, а не стрибок (ПЛЕЙСХОЛДЕР).</summary>
+        public const float ChainGapMin = 0.08f;
+        /// <summary>Розрив тазу, більший за це, — не продовження пози, а інша розстановка: лишається як є, м (ПЛЕЙСХОЛДЕР).</summary>
+        public const float ChainGapMax = 1.5f;
+
+        /// <summary>
+        /// Безшовний ланцюг: наступний кліп стартує з тазом там, де борець є зараз. <paramref name="gap"/> — відстань від
+        /// тазу в слоті першого кадру нового кліпа до тазу борця зараз (у площині ринґу). Повертає, чи зсувати слот на цей
+        /// розрив: так — між <see cref="ChainGapMin"/> і <see cref="ChainGapMax"/>. Фаз-тест 8f: Cover_Release_A стрибав на
+        /// 0,83 м, бо корінь слота лишався, а таз першого кадру відпускання лежить не там, де таз петлі утримання.
+        /// </summary>
+        public static bool ChainNeedsShift(float gap) { return gap >= ChainGapMin && gap <= ChainGapMax; }
+
         private static StageStep StandUp(MatchSide who, string node, bool aside)
         {
             var up = StageStep.Solo(who, node == "kneel_up" ? KneelUp : "GetUp_Back", StageCam.Overview);
@@ -614,7 +637,9 @@ namespace Game.Gameplay.Ring.Stage
                 case MatchActionId.GetUp:
                     // З колін (після кікауту, стрибка, що не вдався) — у стійку з колін, а не підйомом зі спини.
                     // Обличчям донизу — підйом зі спини склейкою кадру (кліпа підйому з живота немає, CLIP_NEEDS §9).
-                    if (miss) list.Add(StageStep.Solo(a, "Idle_Tired_Loop", StageCam.Overview, true));
+                    // Невдалий підйом: хто лежить чи стоїть на колінах — лишається там (кліпа спроби лежачого немає); «Idle_Tired»
+                    // ставив його в стійку без підйому — телепорт після відліку (звіт 8f, кадри 05–06). Без кроків: поза не міняється.
+                    if (miss) { if (!StaysDown(ctx.ActorNode)) list.Add(StageStep.Solo(a, "Idle_Tired_Loop", StageCam.Overview, true)); }
                     else list.Add(StandUp(a, ctx.ActorNode, false));
                     break;
                 case MatchActionId.Pin:
