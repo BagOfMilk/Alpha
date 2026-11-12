@@ -63,7 +63,28 @@ namespace Game.Tests.EditMode
 
         private static string Caps(string s) { return s.ToUpperInvariant(); }
 
-        // ---------------- огляд слоту 30 ----------------
+        // ---------------- високі плити: фаска лише в куті (огляд слоту 30) ----------------
+
+        /// <summary>
+        /// Плити розвитку й шухляда тижня мають фаску 12° лише на висоту стрічки (<see cref="CareerTileLayout.PlateSlantCapH"/>):
+        /// вміст біля зрізаного кута відступає від прямого краю не менше, ніж фаска на його висоті — інакше він стоїть поза заливкою
+        /// (кадри 4:3 слоту 30: «ЗГОРНУТИ» підсумку над 3D-рефері). Підсумок — дзеркальна плита (зріз угорі ліворуч), кінець сезону
+        /// й шухляда — зріз унизу праворуч.
+        /// </summary>
+        [Test]
+        public void TallPlates_ContentNearTheChamferedCorner_StaysInsideTheFill()
+        {
+            Assert.That(CareerTileLayout.PlateChamfer, Is.InRange(20f, 25f), "фаска — tg 12° × висота стрічки (≈22,5)");
+            Assert.AreEqual(CareerTileLayout.PlateChamfer, CareerTileLayout.ChamferInset(0f), 1e-4f);
+            Assert.AreEqual(0f, CareerTileLayout.ChamferInset(CareerTileLayout.PlateSlantCapH), "нижче фаски край прямий");
+            Assert.GreaterOrEqual(CareerTileLayout.ResultDevPadLeft, CareerTileLayout.ChamferInset(CareerTileLayout.ResultDevPadTop),
+                "підсумок: шапка «РОЗВИТОК / ЗГОРНУТИ» біля зрізаного верхнього лівого кута");
+            Assert.GreaterOrEqual(CareerTileLayout.DevPadRight + CareerTileLayout.DevCardPad, CareerTileLayout.ChamferInset(CareerTileLayout.DevFootPadBottom),
+                "кінець сезону: підвал «Усе (N)» біля зрізаного нижнього правого кута");
+            Assert.GreaterOrEqual(CareerTileLayout.DrawerPadRight + CareerTileLayout.DevCardPad, CareerTileLayout.ChamferInset(CareerTileLayout.DevFootPadBottom),
+                "шухляда «Розвиток»: підвал «Усе (N)»");
+            Assert.GreaterOrEqual(CareerTileLayout.DrawerPadRight, CareerTileLayout.ChamferInset(10f), "шухляда «Витрати»: край прокрутки (відступ 10)");
+        }
 
         /// <summary>Шухляда тижня — над канатами (була на 214 при канатах 210–232: канат різав «▸ Усе (N)» на 4:3, огляд слоту 30).</summary>
         [Test]

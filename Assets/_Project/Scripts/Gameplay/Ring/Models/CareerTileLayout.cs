@@ -123,6 +123,18 @@ namespace Game.Gameplay.Ring.Models
             if (float.IsNaN(panelH) || panelH <= 0f) panelH = PanelH;   // до першої розкладки — еталон
             return Math.Max(0f, RopesTop(panelH) - DevRopeClear - top);
         }
+        /// <summary>
+        /// Висота фаски високих плит (плити розвитку, шухляда тижня) — висота стрічки: зріз 12° лише в куті, далі край прямий (ArenaPlate
+        /// SlantCapH). Зріз на всю висоту відступав на tg 12° × висота — у плити розвитку ~80 од., і заголовок «РОЗВИТОК / ЗГОРНУТИ»
+        /// підсумку стояв поза заливкою над 3D-рефері (кадри 4:3 слоту 30). Вміст біля зрізаного кута відступає щонайменше на
+        /// <see cref="PlateChamfer"/> — охоронець CareerTextFitTests.
+        /// </summary>
+        public const float PlateSlantCapH = 106f;
+        /// <summary>Глибина фаски: tg 12° × <see cref="PlateSlantCapH"/> (≈22,5).</summary>
+        public static float PlateChamfer { get { return SlantK * PlateSlantCapH; } }
+        /// <summary>Відступ краю фаски від прямого краю плити на відстані <paramref name="d"/> від зрізаного кута (по вертикалі).</summary>
+        public static float ChamferInset(float d) { return d >= PlateSlantCapH ? 0f : PlateChamfer * (1f - Math.Max(0f, d) / PlateSlantCapH); }
+
         // ---- шухляда тижня («Розвиток», «Витрати») ----
         /// <summary>
         /// Низ шухляди — над канатами (відлік знизу, як канати): була на 164 + 50 = 214 при канатах 210–232, і на 4:3 канат різав її

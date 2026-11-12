@@ -234,6 +234,13 @@ namespace Game.Gameplay.Ring.UI
         public bool Mirror;
         public bool Shadow = true;
         public bool SlantBoth;
+        /// <summary>
+        /// Висота зрізу. 0 — зріз на всю висоту плити (стрічки, плитки). Більше нуля — фаска 12° лише на цій висоті, далі край прямий:
+        /// у високої плити зріз на всю висоту відступав від краю на tg 12° × висота (~80 од. у плити розвитку), і заголовок
+        /// «РОЗВИТОК / ЗГОРНУТИ» підсумку матчу стояв поза заливкою просто над 3D (кадри 4:3 слоту 30). Плити розвитку й шухляда тижня
+        /// беруть висоту стрічки — <see cref="CareerTileLayout.PlateSlantCapH"/>: та сама фаска, що в кутах стрічок.
+        /// </summary>
+        public float SlantCapH;
 
         public ArenaPlate()
         {
@@ -250,6 +257,12 @@ namespace Game.Gameplay.Ring.UI
         private Vector2[] Shape(float x, float y, float w, float h, float k)
         {
             float o = k * h;
+            if (SlantCapH > 0f && h > SlantCapH && !SlantBoth)
+            {
+                float c = k * SlantCapH;
+                if (Mirror) return new[] { new Vector2(x + c, y), new Vector2(x + w, y), new Vector2(x + w, y + h), new Vector2(x, y + h), new Vector2(x, y + SlantCapH) };
+                return new[] { new Vector2(x, y), new Vector2(x + w, y), new Vector2(x + w, y + h - SlantCapH), new Vector2(x + w - c, y + h), new Vector2(x, y + h) };
+            }
             if (SlantBoth) return new[] { new Vector2(x + o, y), new Vector2(x + w, y), new Vector2(x + w - o, y + h), new Vector2(x, y + h) };
             if (Mirror) return new[] { new Vector2(x + o, y), new Vector2(x + w, y), new Vector2(x + w, y + h), new Vector2(x, y + h) };
             return new[] { new Vector2(x, y), new Vector2(x + w, y), new Vector2(x + w - o, y + h), new Vector2(x, y + h) };

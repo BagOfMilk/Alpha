@@ -545,7 +545,7 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Правки огляду слоту 30 (ПМ, 12.11.2026) стоять в екранах: шухляда — над
+        /// Правки огляду слоту 30 (ПМ, 12.11.2026) стоять в екранах: високі плити — щільні й з фаскою лише в куті, шухляда — над
         /// канатами з «Усе (N)» у підвалі, «Прийоми» створення на папері на вузькій панелі, тост налаштувань гасне при зміні
         /// вкладки, клин титулу підганяється під підпис.
         /// </summary>
@@ -560,6 +560,11 @@ namespace Game.Tests.EditMode
             string title = File.ReadAllText(Path.Combine(ui, "Menus", "TitleMenuView.cs"));
             string shapes = File.ReadAllText(Path.Combine(ui, "Menus", "MenuShapes.cs"));
             var bad = new List<string>();
+            const string cap = "SlantCapH = CareerTileLayout.PlateSlantCapH";
+            if (Regex.Matches(show, Regex.Escape(cap)).Count != 2) bad.Add("ShowScreens: плити розвитку підсумку й кінця сезону — не обидві з фаскою в куті");
+            if (Regex.Matches(week, Regex.Escape(cap)).Count != 1) bad.Add("WeekScreenView: шухляда без фаски в куті");
+            foreach (var plate in Regex.Matches(show + week, @"new ArenaPlate \{[^}]*" + Regex.Escape(cap)))
+                if (!((System.Text.RegularExpressions.Match)plate).Value.Contains("BrandTokens.AlphaPlate")) bad.Add("висока плита не щільна (AlphaPlate): " + ((System.Text.RegularExpressions.Match)plate).Value);
             if (week.Contains("HeaderBottom + 50f")) bad.Add("WeekScreenView: шухляда знову на старому низу (214, у канатах)");
             if (Regex.Matches(week, Regex.Escape("CareerTileLayout.DrawerBottom")).Count < 3) bad.Add("WeekScreenView: низ шухляди (створення й Fit) — не DrawerBottom");
             if (!week.Contains("DevelopmentPanel(Refresh, 2, moreTo: foot)")) bad.Add("WeekScreenView: «Усе (N)» шухляди не в підвалі");

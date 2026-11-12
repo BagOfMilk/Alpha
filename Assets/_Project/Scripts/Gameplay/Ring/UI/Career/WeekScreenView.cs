@@ -392,7 +392,8 @@ namespace Game.Gameplay.Ring.UI
             box.style.overflow = Overflow.Visible;
             box.style.flexDirection = FlexDirection.Column;
             box.pickingMode = PickingMode.Position;
-            box.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, 0.96f), Stripe = RingTheme.Gold, StripeW = 6f });
+            box.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaPlate), Stripe = RingTheme.Gold, StripeW = 6f,
+                SlantCapH = CareerTileLayout.PlateSlantCapH });
             // заголовок і рядок-підказка — над прокруткою: опис пункту й причина «чому недоступно» видні завжди, а не внизу
             // довгого списку (рев'ю 08.11.2026)
             // Рядок-підказка — праворуч від заголовка, а не під ним: порожній під заголовком він читався як зайва смуга й з'їдав

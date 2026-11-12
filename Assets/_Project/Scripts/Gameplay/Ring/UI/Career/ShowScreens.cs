@@ -650,7 +650,10 @@ namespace Game.Gameplay.Ring.UI
             var box = ArenaKit.Abs(null, ArenaKit.SecondY, ArenaKit.Edge, null, ArenaKit.StripW, null);
             box.style.overflow = Overflow.Visible;
             box.pickingMode = PickingMode.Position;
-            box.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaPanel), Stripe = RingTheme.Gold, Mirror = true });
+            // щільна (AlphaPlate) і з фаскою лише в куті: крізь 0,86 і поза скосом на всю висоту «ЗГОРНУТИ» тонуло в сорочці рефері (огляд
+            // слоту 30, 4:3)
+            box.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaPlate), Stripe = RingTheme.Gold, Mirror = true,
+                SlantCapH = CareerTileLayout.PlateSlantCapH });
             var col = new VisualElement();
             col.style.paddingLeft = CareerTileLayout.ResultDevPadLeft; col.style.paddingRight = CareerTileLayout.ResultDevPadRight;
             col.style.paddingTop = CareerTileLayout.ResultDevPadTop; col.style.paddingBottom = CareerTileLayout.ResultDevPadBottom;
@@ -933,7 +936,8 @@ namespace Game.Gameplay.Ring.UI
             box.style.flexDirection = FlexDirection.Column;
             box.style.overflow = Overflow.Visible;
             box.pickingMode = PickingMode.Position;
-            box.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, 0.96f), Stripe = RingTheme.Gold });
+            box.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaPlate), Stripe = RingTheme.Gold,
+                SlantCapH = CareerTileLayout.PlateSlantCapH });   // фаска лише в куті: підвал на всю ширину не виходить за заливку
             float right = CareerTileLayout.DevPadRight + CareerTileLayout.DevCardPad;   // число й підвал — на вертикалі порад картки
             var head = ArenaKit.Row();
             head.style.flexShrink = 0f;
