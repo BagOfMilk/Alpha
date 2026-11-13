@@ -206,16 +206,8 @@ namespace Game.Gameplay.Ring.UI
             return string.Join(", ", parts);
         }
 
-        protected string InjuryText(List<InjuryView> injuries)
-        {
-            var parts = new List<string>();
-            foreach (var i in injuries)
-            {
-                if (i.WeeksLeft > 0) parts.Add(T.Format("c.injury.weeks", T.Get("bodyzone." + (int)i.Zone), i.WeeksLeft));
-                else if (i.ZoneDamage > 0) parts.Add(T.Format("c.injury.dmg", T.Get("bodyzone." + (int)i.Zone), i.ZoneDamage));
-            }
-            return parts.Count == 0 ? T.Get("c.injury.none") : string.Join(" · ", parts);
-        }
+        /// <summary>Рядок тіла — <see cref="CareerScreenLines.InjuryText"/> (поріг травми зони з виду: у Хардкорника 4).</summary>
+        protected string InjuryText(List<InjuryView> injuries) { return CareerScreenLines.InjuryText(T, injuries); }
 
         /// <summary>Розвиток: атрибути, нові прийоми, перки — компактні кнопки, описи в рядку-підказці.</summary>
         private bool _devAll = DevAllForShots;
@@ -294,8 +286,7 @@ namespace Game.Gameplay.Ring.UI
                 bool can = C.CanBuyAttr(a, out reason);
                 int v = C.Player.Get(a);
                 var b = Small(RingLabels.AttrName(T, a) + " " + Signed(v) + " → " + Signed(v + 1), () => { C.BuyAttr(a); changed(); }, can, null,
-                    CareerScreenLines.WithReason(T.Format("dev.attr.buy", Development.AttrCost) + " — " + T.Get("c.dev.attr.why." + i),
-                        can ? null : T.Get("dev.reason." + reason)));
+                    CareerScreenLines.AttrBuyHint(T, C, a, can ? null : reason));   // ціна — та, що спише покупка (з сезону 4 витривалість дорожча)
                 RingUi.PadKey(b, "dev:attr:" + i);
                 b.style.marginRight = 4f;
                 attrs.Add(b);

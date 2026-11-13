@@ -405,6 +405,129 @@ namespace Game.Tests.EditMode
             return false;
         }
 
+        /// <summary>
+        /// Та сама сесія у свіжій копії через сейв, але в сезоні <paramref name="season"/>: надбавку старіння ставить Sync відновлення —
+        /// як у сейві гравця.
+        /// </summary>
+        private static CareerSession InSeason(CareerSession s, int season)
+        {
+            string blob = s.CaptureState(), from = "|season=" + s.State.Season + "|";
+            Assert.AreEqual(1, (blob.Length - blob.Replace(from, "").Length) / from.Length, "у зліпку один сезон");
+            var t = CareerKit.Fresh(s.State.Seed, s.Content);
+            t.RestoreState(blob.Replace(from, "|season=" + season + "|"));
+            Assert.AreEqual(season, t.State.Season);
+            return t;
+        }
+
+        /// <summary>
+        /// Злиття «Кар'єри» (74a7d4b1, тіло старіє, §5.5; ПМ 12.11.2026, п. А1): з сезону 4 витривалість дорожча — і в очках розвитку, і в
+        /// тренувань тренера. Екран показує ту ціну, що спише покупка, і той крок, що рахує тренування: стала <c>Development.AttrCost</c> /
+        /// <c>CareerRules.CoachProgressStep</c> казала «+1 (2 оч.)» і «2/3» там, де покупка списувала 3, а до +1 треба було 4 тренування.
+        /// </summary>
+        [Test]
+        public void Ageing_AttrAndCoachLines_ShowWhatThePurchaseCharges()
+        {
+            var s1 = CareerKit.NewHero(7);
+            var s4 = InSeason(s1, 4);
+            Assert.AreEqual(Development.AttrCost + 1, s4.AttrCost(RingAttr.Stamina), "передумова: сезон 4 — витривалість дорожча");
+            int stamina = System.Array.IndexOf(CareerRules.Coaches, RingAttr.Stamina), other = stamina == 0 ? 1 : 0;
+            Assert.GreaterOrEqual(stamina, 0, "тренер витривалості є");
+            Assert.AreEqual(CareerRules.CoachProgressStep + 1, s4.CoachStepFor(stamina), "передумова: тренер витривалості довший");
+
+            foreach (var s in new[] { s1, s4 })
+                for (int i = 0; i < 5; i++)
+                {
+                    var a = (RingAttr)i;
+                    string hint = CareerScreenLines.AttrBuyHint(T, s, a, null);
+                    NoMissingKey(hint, "підказка атрибута");
+                    Assert.AreEqual(T.Format("dev.attr.buy", s.AttrCost(a)) + " — " + T.Get("c.dev.attr.why." + i), hint, "сезон " + s.State.Season + ", " + a);
+                }
+            StringAssert.StartsWith(T.Format("dev.attr.buy", 3), CareerScreenLines.AttrBuyHint(T, s4, RingAttr.Stamina, null), "сезон 4: 3 оч.");
+            StringAssert.StartsWith(T.Format("dev.attr.buy", 2), CareerScreenLines.AttrBuyHint(T, s4, RingAttr.Strength, null), "сила — як і була");
+            StringAssert.StartsWith(T.Format("dev.attr.buy", 2), CareerScreenLines.AttrBuyHint(T, s1, RingAttr.Stamina, null), "сезон 1 — стара ціна");
+            string no = CareerScreenLines.AttrBuyHint(T, s4, RingAttr.Stamina, "points");
+            StringAssert.EndsWith(" · " + T.Get("dev.reason.points"), no, "купити не можна — чому");
+            StringAssert.StartsWith(T.Format("dev.attr.buy", 3), no);
+
+            // магазин тренерів: найнятий — прогрес із кроком цього тренера, ні — плата; підказка — крок цього тренера
+            string sName = RingLabels.AttrName(T, RingAttr.Stamina), oName = RingLabels.AttrName(T, CareerRules.Coaches[other]);
+            s4.State.Coach = stamina; s4.State.CoachProgress = 2;
+            Assert.AreEqual(T.Format("c.shop.coach.hired", sName, 2, CareerRules.CoachProgressStep + 1), CareerScreenLines.CoachButton(T, s4, stamina));
+            StringAssert.Contains("2/4", CareerScreenLines.CoachButton(T, s4, stamina), "сезон 4: до +1 витривалості — 4 тренування");
+            Assert.AreEqual(T.Format("c.shop.coach.desc", sName, CareerRules.CoachProgressStep + 1), CareerScreenLines.CoachHint(T, s4, stamina));
+            Assert.AreEqual(T.Format("c.shop.coach", oName, CareerRules.CoachWeeklyFee), CareerScreenLines.CoachButton(T, s4, other), "не найнятий — плата");
+            Assert.AreEqual(T.Format("c.shop.coach.desc", oName, CareerRules.CoachProgressStep), CareerScreenLines.CoachHint(T, s4, other), "інший тренер — як і був");
+            s1.State.Coach = stamina; s1.State.CoachProgress = 2;
+            StringAssert.Contains("2/3", CareerScreenLines.CoachButton(T, s1, stamina), "сезон 1 — стара ціна");
+            NoMissingKey(CareerScreenLines.CoachHint(T, s1, stamina), "підказка тренера");
+
+            // «Радимо зараз»: ціна атрибута в назві — з поради ядра, тобто та сама, що спише покупка
+            s4.Feud.State.DevPoints = 20;
+            foreach (var l in CareerScreenLines.DevRecs(T, s4, 9))
+                if (l.Advice.Kind == AdviceKind.Attr) StringAssert.EndsWith(" · " + s4.AttrCost(l.Advice.Attr), l.Title, l.Advice.Attr.ToString());
+        }
+
+        /// <summary>
+        /// Поріг травми зони (злиття «Кар'єри» a3fd3fd5, §5.2; ПМ 12.11.2026, п. А2): у Хардкорника травма приходить на 4-му ушкодженні,
+        /// тож рядок тіла пише «2/4», а не «2/3» — поріг береться з виду (<see cref="InjuryView.Threshold"/>), не зі сталої в рядку.
+        /// </summary>
+        [Test]
+        public void Injury_Line_CountsDamageAgainstTheZoneThreshold()
+        {
+            var plain = CareerKit.NewHero(6, Gimmick.Technician);
+            var hard = CareerKit.NewHero(6, Gimmick.Hardcore);
+            plain.State.ZoneDamage[(int)BodyZone.Head] = 2;
+            hard.State.ZoneDamage[(int)BodyZone.Head] = 2;
+            string head = T.Get("bodyzone." + (int)BodyZone.Head);
+            string p = CareerScreenLines.InjuryText(T, plain.GetWeekView().Card.Injuries);
+            string h = CareerScreenLines.InjuryText(T, hard.GetWeekView().Card.Injuries);
+            NoMissingKey(p, "рядок тіла");
+            NoMissingKey(h, "рядок тіла Хардкорника");
+            Assert.AreEqual(T.Format("c.injury.dmg", head, 2, CareerRules.InjuryAtZoneDamage), p);
+            Assert.AreEqual(T.Format("c.injury.dmg", head, 2, hard.InjuryAtZoneDamage), h);
+            StringAssert.Contains("2/3", p);
+            StringAssert.Contains("2/4", h, "Хардкорник терпить до 4");
+
+            Assert.AreEqual(T.Get("c.injury.none"), CareerScreenLines.InjuryText(T, new List<InjuryView>()), "ціле тіло");
+            var mixed = new List<InjuryView>
+            {
+                new InjuryView { Zone = BodyZone.Legs, WeeksLeft = 2, ZoneDamage = 0 },
+                new InjuryView { Zone = BodyZone.Body, ZoneDamage = 1, Threshold = 4 },
+                new InjuryView { Zone = BodyZone.Head },
+            };
+            Assert.AreEqual(T.Format("c.injury.weeks", T.Get("bodyzone." + (int)BodyZone.Legs), 2) + " · "
+                + T.Format("c.injury.dmg", T.Get("bodyzone." + (int)BodyZone.Body), 1, 4), CareerScreenLines.InjuryText(T, mixed), "ціла зона — без рядка");
+        }
+
+        /// <summary>
+        /// Ціни старіння й поріг травми в екранах — з сесії й виду (ПМ 12.11.2026, п. А1–А2): у коді екранів кар'єри (не в коментарях)
+        /// немає сталих <c>Development.AttrCost</c> і <c>CareerRules.CoachProgressStep</c>, рядок тіла збирає лише <see cref="CareerScreenLines"/>.
+        /// </summary>
+        [Test]
+        public void Sources_AgeingPricesAndInjuryThreshold_ComeFromTheSession()
+        {
+            string ui = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI");
+            var files = new List<string>(Directory.GetFiles(Path.Combine(ui, "Career"), "*.cs")) { Path.Combine(ui, "CareerScreens.cs") };
+            var bad = new List<string>();
+            var stale = new Regex(@"Development\.AttrCost\b|CareerRules\.CoachProgressStep\b|""c\.injury\.dmg""");
+            foreach (var f in files)
+                foreach (var line in File.ReadAllText(f).Split('\n'))
+                {
+                    string code = line.Trim();
+                    if (code.StartsWith("//")) continue;
+                    int cut = code.IndexOf("//", System.StringComparison.Ordinal);
+                    if (cut >= 0) code = code.Substring(0, cut);
+                    if (stale.IsMatch(code)) bad.Add(Path.GetFileName(f) + ": " + code);
+                }
+            string week = File.ReadAllText(Path.Combine(ui, "Career", "WeekScreenView.cs"));
+            string career = File.ReadAllText(Path.Combine(ui, "CareerScreens.cs"));
+            if (!week.Contains("CareerScreenLines.CoachButton(T, C, k)") || !week.Contains("CareerScreenLines.CoachHint(T, C, k)"))
+                bad.Add("WeekScreenView: тренер не з CoachButton / CoachHint");
+            if (!career.Contains("CareerScreenLines.AttrBuyHint(T, C, a, can ? null : reason)")) bad.Add("CareerScreens: підказка атрибута не з AttrBuyHint");
+            if (!career.Contains("return CareerScreenLines.InjuryText(T, injuries);")) bad.Add("CareerScreens: рядок тіла не з InjuryText");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
         /// <summary>Екрани беруть рядки з <see cref="CareerScreenLines"/>, а не рахують по-своєму (старий вибір порад, «Акт 0»).</summary>
         [Test]
         public void Sources_ScreensUseTheLines()
@@ -857,7 +980,9 @@ namespace Game.Tests.EditMode
             if (!dialog.Contains("MenuShapes.Trapezoid(") || !dialog.Contains("card.Add(col);")) bad.Add("MenuDialog: діалог без підкладки (правка 3)");
             if (pause.Contains("MenuKit.Footer(") || !pause.Contains("_col.Add(_footer);")) bad.Add("PauseOverlay: підказка клавіш знову внизу, на плитках тижня (правка 4)");
             if (!create.Contains("CareerTileLayout.CreateAttrRowNarrowH") || !create.Contains("CareerTileLayout.CreatePaperPadBottomNarrow")) bad.Add("CreateScreenView: афіша на вузькій панелі не компактна (правка 5)");
-            if (Regex.Matches(career, Regex.Escape("CareerScreenLines.WithReason(")).Count < 2) bad.Add("CareerScreens: «опис. · причина» (правка 6)");
+            // правка 6: підказка атрибута — через AttrBuyHint (усередині WithReason; ціна старіння, ПМ 12.11.2026, п. А1)
+            if (Regex.Matches(career, Regex.Escape("CareerScreenLines.WithReason(")).Count + Regex.Matches(career, Regex.Escape("CareerScreenLines.AttrBuyHint(")).Count < 2)
+                bad.Add("CareerScreens: «опис. · причина» (правка 6)");
             if (Regex.Matches(show, Regex.Escape("KeepDevScroll(scroll, ")).Count != 2 || Regex.Matches(show, Regex.Escape("RememberDevScroll();")).Count != 2)
                 bad.Add("ShowScreens: плити розвитку не тримають прокрутку при перебудові (правка 8)");
             Assert.IsEmpty(bad, string.Join("\n", bad));

@@ -477,9 +477,9 @@ namespace Game.Gameplay.Ring.UI
             {
                 int k = i;
                 bool hired = st.Coach == i;
-                string name = RingLabels.AttrName(T, CareerRules.Coaches[i]);
-                row.Add(ShopBtn("coach:" + i, hired ? T.Format("c.shop.coach.hired", name, st.CoachProgress, CareerRules.CoachProgressStep) : T.Format("c.shop.coach", name, CareerRules.CoachWeeklyFee),
-                    () => C.HireCoach(hired ? -1 : k), hired || C.Money >= CareerRules.CoachWeeklyFee, T.Format("c.shop.coach.desc", name, CareerRules.CoachProgressStep)));
+                // крок — цього тренера (C.CoachStepFor): тренер витривалості з сезону 4 довший, стала з правил тут збрехала б (ПМ 12.11.2026)
+                row.Add(ShopBtn("coach:" + i, CareerScreenLines.CoachButton(T, C, k),
+                    () => C.HireCoach(hired ? -1 : k), hired || C.Money >= CareerRules.CoachWeeklyFee, CareerScreenLines.CoachHint(T, C, k)));
             }
             BodyZone worst = BodyZone.Body; int score = -1;
             for (int z = 0; z < 3; z++) { int sc = st.Injury[z] * 10 + st.ZoneDamage[z]; if (sc > score) { score = sc; worst = (BodyZone)z; } }

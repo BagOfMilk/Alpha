@@ -171,6 +171,51 @@ namespace Game.Gameplay.Ring.Models
             return c.State.CostumeBought ? t.Get("c.shop.costume.owned") : t.Format("c.shop.costume", c.CostumePrice);
         }
 
+        /// <summary>
+        /// Кнопка тренера <paramref name="coach"/> (індекс <see cref="CareerRules.Coaches"/>): найнятий — прогрес із кроком цього тренера
+        /// (<see cref="CareerSession.CoachStepFor"/>: витривалість з сезону 4 довша, §5.5), ні — плата за тиждень. Крок — той, що списує
+        /// тренування: стала <see cref="CareerRules.CoachProgressStep"/> з сезону 4 показувала 2/3 там, де до +1 треба 4.
+        /// </summary>
+        public static string CoachButton(RingText t, CareerSession c, int coach)
+        {
+            string name = RingLabels.AttrName(t, CareerRules.Coaches[coach]);
+            return c.State.Coach == coach
+                ? t.Format("c.shop.coach.hired", name, c.State.CoachProgress, c.CoachStepFor(coach))
+                : t.Format("c.shop.coach", name, CareerRules.CoachWeeklyFee);
+        }
+
+        /// <summary>Підказка тренера: скільки тренувань на +1 — крок цього тренера (<see cref="CareerSession.CoachStepFor"/>).</summary>
+        public static string CoachHint(RingText t, CareerSession c, int coach)
+        {
+            return t.Format("c.shop.coach.desc", RingLabels.AttrName(t, CareerRules.Coaches[coach]), c.CoachStepFor(coach));
+        }
+
+        /// <summary>
+        /// Підказка кнопки атрибута в повному списку розвитку: ціна — та, що спише покупка (<see cref="CareerSession.AttrCost"/>:
+        /// витривалість з сезону 4 дорожча, §5.5), навіщо атрибут і, якщо купити не можна, чому (<paramref name="reason"/> — код
+        /// <c>dev.reason.*</c>, null — можна).
+        /// </summary>
+        public static string AttrBuyHint(RingText t, CareerSession c, RingAttr a, string reason)
+        {
+            return WithReason(t.Format("dev.attr.buy", c.AttrCost(a)) + " — " + t.Get("c.dev.attr.why." + (int)a),
+                string.IsNullOrEmpty(reason) ? null : t.Get("dev.reason." + reason));
+        }
+
+        /// <summary>
+        /// Рядок тіла: травмовані зони — скільки тижнів лишилось, ушкоджені — скільки до травми з порогом зони (<see cref="InjuryView.Threshold"/>:
+        /// 3, у Хардкорника 4 — «2/3» там збрехало б), ціле — «Тіло ціле».
+        /// </summary>
+        public static string InjuryText(RingText t, List<InjuryView> injuries)
+        {
+            var parts = new List<string>();
+            foreach (var i in injuries)
+            {
+                if (i.WeeksLeft > 0) parts.Add(t.Format("c.injury.weeks", t.Get("bodyzone." + (int)i.Zone), i.WeeksLeft));
+                else if (i.ZoneDamage > 0) parts.Add(t.Format("c.injury.dmg", t.Get("bodyzone." + (int)i.Zone), i.ZoneDamage, i.Threshold));
+            }
+            return parts.Count == 0 ? t.Get("c.injury.none") : string.Join(" · ", parts);
+        }
+
         /// <summary>Рядок «Витрат»: життя й дорога цієї федерації за тиждень (<see cref="CareerSession.WeeklyCost"/>, наприкінці тижня).</summary>
         public static string LivingLine(RingText t, CareerSession c) { return t.Format("c.shop.living", c.WeeklyCost); }
 
