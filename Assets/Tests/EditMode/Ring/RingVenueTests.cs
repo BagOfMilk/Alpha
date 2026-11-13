@@ -358,6 +358,74 @@ namespace Game.Tests.EditMode
             }
         }
 
+        [TestCase("gym")]
+        [TestCase("hall")]
+        [TestCase("arena")]
+        public void CornerSpot_HeroCorner_IsFreeAndNearTheCorner(string venue)
+        {
+            // Менеджерка в кутку героя (рішення власника 12.11.2026, № 8): біля північно-західного кута, на підлозі поза
+            // платформою, не на сходах, столах, стільцях, глядачах і операторах, не на шляху виходу й поза смугою пари.
+            var v = Load(venue);
+            var pair = v.PlanOutside();
+            float x, z;
+            Assert.IsTrue(v.CornerSpot(pair, -1f, 1f, out x, out z), venue + ": біля кута героя немає вільного місця");
+            TestContext.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0}: місце ({1:0.00}; {2:0.00}), смуга пари — бік {3}", venue, x, z, pair.Side));
+            Assert.Less(x, 0f, "захід");
+            Assert.Greater(z, 0f, "північ");
+            float dx = x + v.Plat, dz = z - v.Plat;
+            Assert.LessOrEqual(Math.Sqrt(dx * dx + dz * dz), 2.0, venue + ": далеко від кута");
+            Assert.GreaterOrEqual(Math.Max(Math.Abs(x), Math.Abs(z)), v.Plat + RingVenue.CornerOutMin - 1e-3f, "на платформі");
+            Assert.AreEqual(0f, v.TopDisc(x, z, RingVenue.CornerBody), "у перешкоді");
+            Assert.GreaterOrEqual(RingVenue.PathDist(v.PathPoints(), x, z), RingVenue.CornerPathClear, "на шляху виходу");
+            Assert.IsFalse(v.NearSoft(x, z, RingVenue.CornerBody), "на операторі");
+            float x0, z0, x1, z1;
+            pair.Rect(v.Plat, RingVenue.CornerPairPad - 1e-3f, out x0, out z0, out x1, out z1);
+            Assert.IsFalse(x >= x0 && x <= x1 && z >= z0 && z <= z1, "у смузі пари");
+        }
+
+        [TestCase("gym")]
+        [TestCase("hall")]
+        [TestCase("arena")]
+        public void PathPoints_EndAtTheEntranceSteps(string venue)
+        {
+            var v = Load(venue);
+            var path = v.PathPoints();
+            Assert.GreaterOrEqual(path.Count, 3, venue + ": шлях виходу з якорів");
+            var last = path[path.Count - 1];
+            float sx, sy, sz;
+            bool any = false;
+            foreach (var n in v.AnchorNames)
+                if (n.StartsWith("anchor_steps_", StringComparison.Ordinal) && v.TryAnchor(n, out sx, out sy, out sz)
+                    && Math.Abs(sx - last[0]) < 1e-4f && Math.Abs(sz - last[1]) < 1e-4f) any = true;
+            Assert.IsTrue(any, venue + ": шлях кінчається на сходах");
+        }
+
+        [Test]
+        public void CornerSpot_MovesAwayFromObstacle_AndGivesUpWhenAllTaken()
+        {
+            var v = RingVenue.Parse(null);
+            var pair = new RingVenue.OutsideSpot { Side = "E", OutX = 1f, AlongZ = 1f, Dist = v.Plat + RingVenue.PairOut, HalfLength = 2f, Outer = RingVenue.BandOut };
+            float x, z;
+            Assert.IsTrue(v.CornerSpot(pair, -1f, 1f, out x, out z));
+            Assert.AreEqual(-(v.Plat + RingVenue.CornerOutMin), x, 1e-3f, "найкраще — біля самого кута, впритул до спідниці");
+            Assert.AreEqual(v.Plat, z, 1e-3f);
+            // Стіл на найкращому місці — місце відходить і не зачіпає стола.
+            v.MarkDisc(x, z, 0.4f, 0.9f);
+            float x2, z2;
+            Assert.IsTrue(v.CornerSpot(pair, -1f, 1f, out x2, out z2));
+            Assert.AreEqual(0f, v.TopDisc(x2, z2, RingVenue.CornerBody), "у перешкоді");
+            // Уся підлога біля кута зайнята — місця немає (сцена тоді нікого не ставить і пише в журнал).
+            v.MarkBox(-v.Plat - 2f, -v.Plat - 2f, v.Plat + 2f, v.Plat + 2f, 1.0f);
+            Assert.IsFalse(v.CornerSpot(pair, -1f, 1f, out x2, out z2));
+            // Смуга пари на заході — місце не в ній.
+            var w = RingVenue.Parse(null);
+            var west = new RingVenue.OutsideSpot { Side = "W", OutX = -1f, AlongZ = 1f, Dist = w.Plat + RingVenue.PairOut, HalfLength = 2f, Outer = RingVenue.BandOut };
+            Assert.IsTrue(w.CornerSpot(west, -1f, 1f, out x, out z));
+            float x0, z0, x1, z1;
+            west.Rect(w.Plat, RingVenue.CornerPairPad - 1e-3f, out x0, out z0, out x1, out z1);
+            Assert.IsFalse(x >= x0 && x <= x1 && z >= z0 && z <= z1, "у смузі пари");
+        }
+
         [Test]
         public void OutsideCamera_StaysOnTheFloorSideOfTheBarrier()
         {

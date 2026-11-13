@@ -455,6 +455,13 @@ namespace Game.Gameplay.Ring.Stage
             if (o.Ok) Debug.Log(msg);
             else Debug.LogWarning(msg + string.Format(CultureInfo.InvariantCulture, " — ВІЛЬНОЇ СМУГИ НЕМАЄ (найвища перешкода {0:0.00} м у ({1:0.00}; {2:0.00}))",
                 o.Blocked, o.BlockedX, o.BlockedZ));
+            // Кут героя — північно-західний (свій кут у кліпах Move_Corner_*): там на великих шоу стоїть менеджерка.
+            float mx, mz;
+            _cornerOk = venue.CornerSpot(o, -1f, 1f, out mx, out mz);
+            _corner = new Vector3(mx, venue.GroundAt(mx, mz), mz);
+            _cornerYaw = YawTo(_corner, new Vector3(-venue.PostLine, 0f, venue.PostLine) * 0.5f);
+            if (_cornerOk) Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] 3D: менеджер у кутку героя — ({0:0.00}; {1:0.00}), курс {2:0}°", mx, mz, _cornerYaw));
+            else Debug.LogWarning("[Ринг] 3D: біля кута героя вільного місця немає — менеджерки в кутку не буде");
         }
 
         private void BuildCamera()
@@ -564,10 +571,10 @@ namespace Game.Gameplay.Ring.Stage
             });
             RingDress.Apply(_player.Model, assets.kitMale, new[] { new RingDress.Piece("hair_short01", new Color(0.12f, 0.08f, 0.05f)) });
             // Борода набору Alpha скроєна під іншу голову: на голові cast вона висить пластиною під підборіддям і при закинутій
-            // голові читається «щелепою як у скелета» (власник, 09.11.2026; кадр hall p8ed 018). Прибрати її чи ні — рішення
-            // власника; до нього -ring-diag-nobeard знімає бороду лише в оглядах — «до/після» в одній збірці.
+            // голові читається «щелепою як у скелета» (власник, 09.11.2026; кадр hall p8ed 018). Рішення власника 12.11.2026 (№ 2,
+            // «Так, усі 11»): у Молота за замовчуванням бороди немає; -ring-diag-beard повертає її лише в оглядах — кадр «до».
             var rivalDress = new List<RingDress.Piece> { new RingDress.Piece("hair_short04", new Color(0.55f, 0.42f, 0.26f)) };
-            if (!RingLaunchArgs.Has("-ring-diag-nobeard")) rivalDress.Add(new RingDress.Piece("beard_short", new Color(0.5f, 0.38f, 0.24f)));
+            if (RingLaunchArgs.Has("-ring-diag-beard")) rivalDress.Add(new RingDress.Piece("beard_short", new Color(0.5f, 0.38f, 0.24f)));
             RingDress.Apply(_rival.Model, assets.kitMale, rivalDress);
             if (assets.mic != null)
             {
@@ -1319,34 +1326,24 @@ namespace Game.Gameplay.Ring.Stage
             return a;
         }
 
-        /// <summary>Сцена закулісся: хто на місці Ліни (подія — гість), парковка — холодна лампа.</summary>
+        /// <summary>Постать із таблиці людей кар'єри (<see cref="BackstageCast"/>): у сорочці, штанях і взутті або в борцівському.</summary>
+        private RingActor MakePerson(string name, BackstageCast.Person p)
+        {
+            if (p == null) return null;
+            return p.Dressed ? MakeDressed(name, p.Body, p.Rgb, p.Hair, RingTheme.Rgb((uint)p.Rgb)) : Rebuild(name, p.Body, p.Rgb, p.Hair, 1f);
+        }
+
+        /// <summary>
+        /// Сцена закулісся: хто на місці букера (подія — гість, <see cref="BackstageCast.GuestSpeaker"/>; зрада напарника — гість
+        /// поруч із букером), парковка — холодна лампа. Подія без гостя (мішаний матч, поворот) — говорить букер федерації.
+        /// </summary>
         public void SetBackstageScene(string sceneId)
         {
             if (_show == null || !_show.InBackstage) return;
-            string body = null, hair = ""; int rgb = 0x5A6A78; bool dress = true;
-            switch (sceneId)
-            {
-                case "ev_parking": { var l = CareerLooks.ForNpc("baron"); body = l.Body; rgb = l.Rgb; hair = l.Hair; break; }
-                case "ev_friend": { var l = CareerLooks.ForNpc("stalevyi"); body = l.Body; rgb = l.Rgb; hair = l.Hair; dress = false; break; }
-                case "ev_interview": body = "body_f_south_asian"; hair = "hair_bob02"; rgb = 0x3B5BA0; break;
-                case "ev_contract": body = "body_m_east_asian"; hair = "hair_short02"; rgb = 0x202024; break;
-            }
-            RingActor guest = null;
-            if (body != null)
-            {
-                guest = Rebuild("Гість", body, rgb, hair, 1f);
-                if (guest != null && dress)
-                {
-                    bool f = body.StartsWith("body_f_");
-                    var c = new Color(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f);
-                    RingDress.Apply(guest.Model, f ? assets.kitFemale : assets.kitMale, new[]
-                    {
-                        new RingDress.Piece("shirt", c), new RingDress.Piece("trousers", new Color(0.12f, 0.12f, 0.13f)),
-                        new RingDress.Piece("shoes", new Color(0.08f, 0.06f, 0.05f)),
-                    });
-                }
-            }
-            _show.SetGuest(guest, sceneId ?? "", sceneId == "ev_parking");
+            string speaker = BackstageCast.GuestSpeaker(sceneId);
+            var guest = MakePerson("Гість", BackstageCast.Guest(speaker));
+            if (speaker != null && guest == null) Debug.LogWarning("[Ринг] закулісся: немає постаті гостя «" + speaker + "» сцени " + sceneId);
+            _show.SetGuest(guest, sceneId ?? "", BackstageCast.Parking(sceneId), speaker, BackstageCast.GuestWithBooker(sceneId));
         }
 
         public void ShowBackstage()
@@ -1355,11 +1352,71 @@ namespace Game.Gameplay.Ring.Stage
             _mode = RingStageMode.Idle;
             if (_director != null) _director.EndMatch();
             HideMic();
-            // Букер — Ліна Ворон (сцени закулісся): жіноче тіло набору у власних матеріалах FBX.
-            int bi = Array.FindIndex(assets.bodies, b => b != null && b.name == "body_f_mediterranean");
-            _show.ShowBackstage(bi >= 0 ? assets.bodies[bi] : assets.bodyRef, bi >= 0 ? assets.kitFemale : assets.kitMale);
+            // Букер — той, кого назвала кар'єра (SetCareerCast; за замовчуванням Ліна Ворон).
+            _show.ShowBackstage();
+            EnsureBooker();
             if (_sound != null) { _sound.MusicOff(); _sound.Crowd(-1); }
         }
+
+        // ============================ люди кар'єри поза рингом ============================
+
+        private string _castBooker = BackstageCast.DefaultBooker;
+        private bool _castManager;
+        private RingActor _manager;
+        private bool _managerShown, _cornerOk;
+        private Vector3 _corner;
+        private float _cornerYaw;
+
+        public void SetCareerCast(string bookerId, bool manager)
+        {
+            _castBooker = string.IsNullOrEmpty(bookerId) ? BackstageCast.DefaultBooker : bookerId;
+            _castManager = manager;
+            if (_show != null && _show.InBackstage) EnsureBooker();
+        }
+
+        /// <summary>У роздягальні — постать букера федерації кар'єри (№ 10 рішень 12.11.2026); та сама — без перебудови.</summary>
+        private void EnsureBooker()
+        {
+            if (_show == null || _show.BookerId == _castBooker) return;
+            var p = BackstageCast.Booker(_castBooker);
+            var a = MakePerson("Букер", p);
+            if (a == null) return;
+            _show.SetBooker(a, _castBooker);
+            Debug.Log("[Ринг] закулісся: букер — " + _castBooker + " (" + p.Body + ")");
+        }
+
+        /// <summary>
+        /// Менеджерка Марта Ріос у кутку героя (№ 8 рішень 12.11.2026): найнята (<see cref="SetCareerCast"/>), велике шоу,
+        /// на рингу (не закулісся і не «герой сам»), біля кута є вільне місце (<see cref="RingVenue.CornerSpot"/>). Стоїть на
+        /// підлозі обличчям до рингу.
+        /// </summary>
+        private void SyncManager(float dt)
+        {
+            bool want = _castManager && _cornerOk && _fx != null && _fx.Big && !_heroOnly && (_show == null || !_show.InBackstage);
+            if (want && _manager == null)
+            {
+                _manager = MakePerson("Менеджерка", BackstageCast.Manager);
+                if (_manager == null) { _cornerOk = false; return; }
+                _managerShown = false;
+            }
+            if (_manager == null) return;
+            if (want != _managerShown)
+            {
+                _managerShown = want;
+                _manager.Model.SetActive(want);
+                if (want) Place(_manager, _corner, _cornerYaw, "Ref_Idle_Loop");
+            }
+            if (want) _manager.Tick(dt);
+        }
+
+        /// <summary>Менеджерка в кутку зараз видна (огляд).</summary>
+        public bool ManagerShown { get { return _managerShown; } }
+
+        /// <summary>Місце менеджерки в кутку героя (огляд); false — вільного місця немає.</summary>
+        public bool ManagerSpot(out Vector3 at) { at = _corner; return _cornerOk; }
+
+        /// <summary>Постать менеджерки (огляд облич і кадри); null — ще не з'являлась.</summary>
+        public RingActor Manager { get { return _manager; } }
 
         // ============================ камера ============================
 
@@ -1436,6 +1493,7 @@ namespace Game.Gameplay.Ring.Stage
                 Watch.Tick(_watchShow, Time.deltaTime, !_camInit || _show.CamCut);
             }
             if (_show != null) _show.TickBooker(Time.deltaTime);
+            SyncManager(Time.deltaTime);
             if (_cam == null) return;
             _shotAge += dt;
             if (_mode == RingStageMode.Match && _director != null && _director.IsBusy) _camTime[(int)_shot] += dt;
