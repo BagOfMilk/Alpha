@@ -24,11 +24,6 @@
         /// <summary>Пороги штрафу ушкодження: «виснажений» (−1) і «на межі» (−2); зсуваються DamageThresholdShift.</summary>
         public const int ExhaustedDamage = 6;
         public const int EdgeDamage = 10;
-        /// <summary>
-        /// Стеля зсуву порогів: поріг «на межі» не вище <see cref="MaxDamage"/>, інакше він недосяжний. «Залізна щелепа» (+2)
-        /// разом із підсиленням букера (+1) чи ґіміком «Хардкорник» давали 13 — борець ставав невразливим до штрафу −2.
-        /// </summary>
-        public const int MaxThresholdShift = MaxDamage - EdgeDamage;
 
         public const int BaseReversalTokens = 2;
         /// <summary>
