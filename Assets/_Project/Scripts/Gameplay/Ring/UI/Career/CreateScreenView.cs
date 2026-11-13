@@ -100,7 +100,8 @@ namespace Game.Gameplay.Ring.UI
             foreach (var g in _v.Gimmicks)
             {
                 var gid = g.Def.Id;
-                var tile = AddTile((int)gid + 1, T.Get(g.Def.NameKey), "",
+                // назва ґіміка — за тілом на екрані, як роль (ПМ 13.11.2026: «Силачка, Летунка…», RingLabels.GimmickName)
+                var tile = AddTile((int)gid + 1, RingLabels.GimmickName(T, g.Def.Key, HeroForms.ShowsHeroine(T)), "",
                     () => { _d.Gimmick = gid; Refresh(); }, T.Get(g.Def.NameKey + ".desc"));
                 tile.SetEffectParts(RingLabels.AttrBonusParts(T, g.BaseAttr));   // переноси лише між характеристиками
                 tile.Selected = gid == _d.Gimmick;
@@ -247,7 +248,7 @@ namespace Game.Gameplay.Ring.UI
             var tag = ArenaKit.Row();
             ArenaKit.Place(tag, null, 10f, 34f, null);
             // пробіл після «·» — на початку наступного напису: кінцевий пробіл напис не малює (кадри слоту 27, 09.11.2026)
-            tag.Add(ArenaKit.Tag(T.Get("gimmick." + C.Content.GimmickOf(_d.Gimmick).Key) + " ·", RingTheme.TextDim));
+            tag.Add(ArenaKit.Tag(RingLabels.GimmickName(T, C.Content.GimmickOf(_d.Gimmick).Key, HeroForms.ShowsHeroine(T)) + " ·", RingTheme.TextDim));
             tag.Add(ArenaKit.Tag(" " + RingLabels.PathName(T, path, HeroForms.ShowsHeroine(T)), ArenaKit.RoleText(path)));   // рід — за тілом на екрані
             box.Add(tag);
 
@@ -434,19 +435,27 @@ namespace Game.Gameplay.Ring.UI
             box.Add(new PaperSheet { Torn = true });
             var col = new VisualElement();
             col.pickingMode = PickingMode.Ignore;
-            col.style.paddingLeft = 26f; col.style.paddingRight = 22f; col.style.paddingTop = 16f; col.style.paddingBottom = CareerTileLayout.CreatePaperPadBottom;
+            col.style.paddingLeft = CareerTileLayout.CreatePosterPadLeft; col.style.paddingRight = CareerTileLayout.CreatePosterPadRight;
+            col.style.paddingTop = 16f; col.style.paddingBottom = CareerTileLayout.CreatePaperPadBottom;
             _posterCol = col;
             _attrRows.Clear();
             col.Add(MenuKit.Display(T.Get("c.hub.create.poster"), 24f, RingTheme.Bg, RingFontRole.Display800, 0.04f));
 
             var head = ArenaKit.Row();
             head.style.marginTop = 8f;
-            var gname = ArenaKit.Big(T.Get("gimmick." + C.Content.GimmickOf(_d.Gimmick).Key), 52f, RingTheme.Bg);
-            gname.style.flexShrink = 1f;
+            string gimmickName = RingLabels.GimmickName(T, C.Content.GimmickOf(_d.Gimmick).Key, HeroForms.ShowsHeroine(T));
+            // розпірка: невидимий рядок на базовому кеглі тримає висоту — менший кегль не підтягує характеристики вгору
+            var strut = ArenaKit.Big(gimmickName, CareerTileLayout.PosterNameSize, RingTheme.Bg);
+            strut.style.width = 0f; strut.style.flexShrink = 0f; strut.style.overflow = Overflow.Hidden; strut.style.opacity = 0f;
+            head.Add(strut);
+            var gname = ArenaKit.Big(gimmickName, CareerTileLayout.PosterNameSize, RingTheme.Bg);
+            gname.style.flexShrink = 0f;   // природна ширина — для FitPosterName
             head.Add(gname);
             head.Add(ArenaKit.Spacer());
-            head.Add(RolePlate(path, roleColor));
+            var plate = RolePlate(path, roleColor);
+            head.Add(plate);
             col.Add(head);
+            FitPosterName(head, gname, plate);
 
             string roleKey = _d.Role == CareerRole.Hero ? "role.hero.desc" : "role.villain.desc";
             var desc = MenuKit.Body(T.Get(roleKey), BrandTokens.TypeBody, RingTheme.Bg);
@@ -481,6 +490,28 @@ namespace Game.Gameplay.Ring.UI
             return box;
         }
 
+        /// <summary>
+        /// Назва ґіміка в один рядок до плити ролі (жіночі назви довші — ПМ 13.11.2026): після розкладки кегль за
+        /// <see cref="CareerTileLayout.FitPosterName"/>; ширина лінійна за кеглем, тож природна на 52 — з поточної.
+        /// </summary>
+        private static void FitPosterName(VisualElement head, Label gname, VisualElement plate)
+        {
+            float cur = CareerTileLayout.PosterNameSize;
+            EventCallback<GeometryChangedEvent> fit = e =>
+            {
+                float w = gname.layout.width, row = head.layout.width, p = plate.layout.width;
+                if (float.IsNaN(w) || float.IsNaN(row) || float.IsNaN(p) || w <= 0f) return;
+                float s = CareerTileLayout.FitPosterName(w * CareerTileLayout.PosterNameSize / cur, row - p - CareerTileLayout.PosterNameGap);
+                if (float.IsNaN(s) || Math.Abs(s - cur) < 0.5f) return;
+                cur = s;
+                gname.style.fontSize = s;
+                gname.style.letterSpacing = new Length(s * CareerTileLayout.PosterNameTrack);
+            };
+            // і рядок, і сама назва: ширина назви може змінитись без зміни рядка (рев'ю 13.11.2026); поріг 0,5 не дає зациклитись
+            head.RegisterCallback(fit);
+            gname.RegisterCallback(fit);
+        }
+
         private VisualElement RolePlate(RingPath path, Color roleColor)
         {
             var plate = new VisualElement();
@@ -490,8 +521,9 @@ namespace Game.Gameplay.Ring.UI
             plate.style.justifyContent = Justify.Center;
             plate.pickingMode = PickingMode.Ignore;
             plate.Add(new ArenaPlate { Fill = roleColor, Shadow = false, Mirror = true });
-            var l = MenuKit.Display(RingLabels.PathName(T, path, HeroForms.ShowsHeroine(T)), 26f, RingTheme.Text, RingFontRole.Display900, 0.04f);
-            l.style.marginLeft = 24f; l.style.marginRight = 22f;
+            var l = MenuKit.Display(RingLabels.PathName(T, path, HeroForms.ShowsHeroine(T)), CareerTileLayout.RolePlateWordSize, RingTheme.Text,
+                RingFontRole.Display900, CareerTileLayout.RolePlateWordTrack);
+            l.style.marginLeft = CareerTileLayout.RolePlatePadLeft; l.style.marginRight = CareerTileLayout.RolePlatePadRight;
             plate.Add(l);
             return plate;
         }

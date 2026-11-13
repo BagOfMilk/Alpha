@@ -562,6 +562,86 @@ namespace Game.Tests.EditMode
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
 
+        /// <summary>
+        /// Назва ґіміка за статтю борця на одному екрані (ПМ 13.11.2026, <see cref="RingLabels.GimmickName"/> 7d1510f4): героїня-Силачка
+        /// проти суперника-Силача — стрічка героя бере рід героя (<see cref="HeroForms.ShowsHeroine"/>), стрічка суперника — свій
+        /// (<c>NpcDef.Female</c>); форми героїні (<see cref="HeroForms.Apply(RingText, bool, bool)"/>) назви суперника не підміняють.
+        /// І навпаки: герой проти суперниці. Вирази — ті самі, що в екранах (їх тримає скан нижче).
+        /// </summary>
+        [Test]
+        public void GimmickName_HeroineAndMaleRival_OnOneScreen_EachInTheirOwnSex()
+        {
+            var t = RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json"));   // свій текст: Apply міняє його
+            var content = CareerKit.Content();
+            NpcDef man = null, woman = null;
+            foreach (var n in content.Roster)
+            {
+                if (!n.Female && man == null && RingLabels.GimmickName(t, content.GimmickOf(n.Gimmick).Key, true) != RingLabels.GimmickName(t, content.GimmickOf(n.Gimmick).Key, false)) man = n;
+                if (n.Female && woman == null && RingLabels.GimmickName(t, content.GimmickOf(n.Gimmick).Key, true) != RingLabels.GimmickName(t, content.GimmickOf(n.Gimmick).Key, false)) woman = n;
+            }
+            Assert.IsNotNull(man, "у ростері є суперник-чоловік із ґіміком двох родів");
+
+            // героїня (Силачка) проти суперника-чоловіка
+            HeroForms.Apply(t, true, false);
+            Assert.IsTrue(HeroForms.ShowsHeroine(t));
+            Assert.AreEqual("Силачка", RingLabels.GimmickName(t, content.GimmickOf(Gimmick.Strongman).Key, HeroForms.ShowsHeroine(t)), "стрічка героїні");
+            Assert.AreEqual(t.Get("path.face.fem"), RingLabels.PathName(t, RingPath.Face, HeroForms.ShowsHeroine(t)));
+            string rival = RingLabels.GimmickName(t, content.GimmickOf(man.Gimmick).Key, man.Female);
+            Assert.AreEqual(t.Get("gimmick." + content.GimmickOf(man.Gimmick).Key), rival, "суперник героїні — у своєму, чоловічому роді");
+            Assert.AreEqual(t.Get("path." + (man.Path == RingPath.Face ? "face" : "heel")), RingLabels.PathName(t, man.Path, man.Female));
+            Assert.AreNotEqual(RingLabels.GimmickName(t, content.GimmickOf(man.Gimmick).Key, true), rival);
+
+            // герой проти суперниці
+            HeroForms.Apply(t, false, true);
+            Assert.IsFalse(HeroForms.ShowsHeroine(t));
+            Assert.AreEqual("Силач", RingLabels.GimmickName(t, content.GimmickOf(Gimmick.Strongman).Key, HeroForms.ShowsHeroine(t)), "стрічка героя");
+            Assert.IsNotNull(woman, "у ростері є суперниця з ґіміком двох родів — інакше половина тесту мовчки не перевіряється");
+            Assert.AreEqual(t.Get("gimmick." + content.GimmickOf(woman.Gimmick).Key + ".fem"),
+                    RingLabels.GimmickName(t, content.GimmickOf(woman.Gimmick).Key, woman.Female), "суперниця — у жіночому роді");
+            foreach (var g in content.Gimmicks)
+            {
+                NoMissingKey(RingLabels.GimmickName(t, g.Key, true), "жіноча назва " + g.Key);
+                NoMissingKey(RingLabels.GimmickName(t, g.Key, false), "назва " + g.Key);
+            }
+        }
+
+        /// <summary>
+        /// Назву ґіміка на екранах кар'єри (ПМ 13.11.2026) дає лише <see cref="RingLabels.GimmickName"/> зі статтю борця: у коді (не в
+        /// коментарях) усіх екранів <c>UI/**</c> і рядків <c>CareerScreenLines</c> немає ключа <c>"gimmick.…"</c> (зі склеюванням, сталого
+        /// чи інтерпольованого) і <c>Get(… Def.NameKey)</c> / <c>GimmickOf(…).NameKey</c> повз неї (опис <c>NameKey + ".desc"</c> — без
+        /// роду, його можна). Герой — <c>HeroForms.ShowsHeroine</c> (на створенні — за тілом на екрані), суперник — <c>npc.Female</c>.
+        /// </summary>
+        [Test]
+        public void Sources_CareerScreens_GimmickNameTakesTheWrestlersSex()
+        {
+            string ui = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI");
+            // рев'ю 13.11.2026: скан — усі екрани UI/** (а не лише Career/ і CareerScreens.cs) і рядки моделі; ловить і сталий ключ,
+            // і інтерпольований, і склеювання в змінну
+            var files = new List<string>(Directory.GetFiles(ui, "*.cs", SearchOption.AllDirectories))
+                { Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "Models", "CareerScreenLines.cs") };
+            Assert.That(files.Exists(f => Path.GetFileName(f) == "CareerScreens.cs") && files.Exists(f => Path.GetFileName(f) == "ShowScreens.cs"),
+                "скан не бачить екранів кар'єри");
+            var bypass = new Regex(@"""gimmick\.|\.Get\(\s*[\w.()]*Def\.NameKey\s*\)|GimmickOf\([^)]*\)\.NameKey");
+            var bad = new List<string>();
+            foreach (var f in files)
+                foreach (var line in File.ReadAllText(f).Split('\n'))
+                {
+                    string code = line.Trim();
+                    if (code.StartsWith("//")) continue;
+                    int cut = code.IndexOf("//", System.StringComparison.Ordinal);
+                    if (cut >= 0) code = code.Substring(0, cut);
+                    if (bypass.IsMatch(code)) bad.Add(Path.GetFileName(f) + ": " + code + " — назва ґіміка без статі борця");
+                }
+            string show = File.ReadAllText(Path.Combine(ui, "Career", "ShowScreens.cs"));
+            string create = File.ReadAllText(Path.Combine(ui, "Career", "CreateScreenView.cs"));
+            if (!show.Contains("RingLabels.GimmickName(t, c.Content.GimmickOf(v.Gimmick).Key, HeroForms.ShowsHeroine(t))")) bad.Add("ShowScreens: ґімік героя не за статтю героя");
+            if (!show.Contains("RingLabels.GimmickName(t, c.Content.GimmickOf(npc.Gimmick).Key, npc.Female)")) bad.Add("ShowScreens: ґімік суперника не за статтю суперника");
+            if (!create.Contains("RingLabels.GimmickName(T, g.Def.Key, HeroForms.ShowsHeroine(T))")) bad.Add("CreateScreenView: плитки ґіміків не за тілом на екрані");
+            if (Regex.Matches(create, Regex.Escape("RingLabels.GimmickName(T, C.Content.GimmickOf(_d.Gimmick).Key, HeroForms.ShowsHeroine(T))")).Count != 2)
+                bad.Add("CreateScreenView: стрічка й афіша — не обидві за тілом на екрані");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
         /// <summary>Екрани беруть рядки з <see cref="CareerScreenLines"/>, а не рахують по-своєму (старий вибір порад, «Акт 0»).</summary>
         [Test]
         public void Sources_ScreensUseTheLines()

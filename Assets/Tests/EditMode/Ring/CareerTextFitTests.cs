@@ -367,24 +367,29 @@ namespace Game.Tests.EditMode
         /// 5–8 з <c>onCreationScreen = false</c> до У0 власника не показуються, злиття «Кар'єри» a3fd3fd5), з бонусами характеристик тією
         /// самою функцією, що й гра, і дві ролі. Розкладка восьми — окремий пункт (Б4) після У0.
         /// </summary>
-        private static List<TileText> CreateTiles()
+        private static List<TileText> CreateTiles(bool female = false)
         {
             var all = new List<TileText>();
             foreach (var gv in CareerKit.NewAtCreate(1).GetCreationView().Gimmicks)
             {
                 var g = gv.Def;
-                all.Add(new TileText(Ui(g.NameKey), new[] { "" }, new string[0]) { Parts = RingLabels.AttrBonusParts(T, g.Attr) });
+                // назва — за тілом на екрані (ПМ 13.11.2026, RingLabels.GimmickName): «ТЕХНІКИНЯ», «ШОУВУМЕН» довші за чоловічі
+                all.Add(new TileText(RingLabels.GimmickName(T, g.Key, female), new[] { "" }, new string[0]) { Parts = RingLabels.AttrBonusParts(T, g.Attr) });
             }
-            all.Add(new TileText(Ui("role.hero"), new[] { "" }, new string[0]));
-            all.Add(new TileText(Ui("role.villain"), new[] { "" }, new string[0]));
+            // ролі героїні — «.f» (HeroForms підставляє їх на екрані створення за тілом)
+            all.Add(new TileText(Ui(female ? "role.hero.f" : "role.hero"), new[] { "" }, new string[0]));
+            all.Add(new TileText(Ui(female ? "role.villain.f" : "role.villain"), new[] { "" }, new string[0]));
             return all;
         }
+
+        /// <summary>Плитки створення обох родів (герой і героїня): кількість та сама, назви — свого роду.</summary>
+        private static IEnumerable<List<TileText>> CreateTilesBothSexes() { yield return CreateTiles(false); yield return CreateTiles(true); }
 
         [Test]
         public void Create_Tiles_TitleOneLine_BodyTwoLines_FitFixedHeight_OnEveryPanel()
         {
             var bad = new List<string>();
-            var tiles = CreateTiles();
+            foreach (var tiles in CreateTilesBothSexes())
             foreach (var p in Panels)
             {
                 float tileW = CareerTileLayout.CreateTileWidth(p.Value, tiles.Count);
@@ -414,8 +419,10 @@ namespace Game.Tests.EditMode
         {
             var bad = new List<string>();
             var tiles = CreateTiles();
+            tiles.AddRange(CreateTiles(true));   // назви героїні — та сама ширина плитки (кількість плиток рахує екран, не цей список)
+            int onScreen = CreateTiles().Count;
             var widths = new List<KeyValuePair<string, float>>();
-            foreach (var p in Panels) widths.Add(new KeyValuePair<string, float>(p.Key, CareerTileLayout.CreateTileWidth(p.Value, tiles.Count)));
+            foreach (var p in Panels) widths.Add(new KeyValuePair<string, float>(p.Key, CareerTileLayout.CreateTileWidth(p.Value, onScreen)));
             // обидва стани розкладки, навіть якщо жодна панель зі списку не дає компактної плитки
             widths.Add(new KeyValuePair<string, float>("компактна", CareerTileLayout.CompactTileW - 1f));
             widths.Add(new KeyValuePair<string, float>("некомпактна", CareerTileLayout.CompactTileW));
@@ -452,6 +459,79 @@ namespace Game.Tests.EditMode
                         bad.Add(string.Format("{0} (плитка {1:0}): назва «{2}» на кеглі {3:0} сягає {4:0}, галочка — від {5:0}", p.Key, w, title, size, right, checkL));
                 }
             }
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Назва ґіміка обох родів (ПМ 13.11.2026, RingLabels.GimmickName) на афіші створення: велика назва (display Black 52, розрядка
+        /// 0,01) і плашка ролі (display Black 26, розрядка 0,04, поля 24 і 22) в одному рядку колонки афіші (стрічка 410 без полів 26
+        /// і 22), з проміжком 8. Жіночі назви на 52 не влазили (ТЕХНІКИНЯ + ЛИХОДІЙКА) — кегль назви меншає тією самою функцією, що й
+        /// на екрані (CareerTileLayout.FitPosterName, не нижче токена TypeTitle 28): на ньому назва мусить влізти. Усі вісім ґіміків —
+        /// і ті, що з'являться на екрані після Б4. Чоловічі назви ґіміків, що вже на екрані, лишаються на 52 (вигляд не змінився).
+        /// </summary>
+        [Test]
+        public void Create_PosterHead_GimmickNameAndRolePlate_FitOneLine_BothSexes()
+        {
+            var bad = new List<string>();
+            float row = CareerTileLayout.StripW - CareerTileLayout.CreatePosterPadLeft - CareerTileLayout.CreatePosterPadRight;
+            var onScreen = new HashSet<string>();
+            foreach (var g in CareerKit.NewAtCreate(1).GetCreationView().Gimmicks) onScreen.Add(g.Def.Key);
+            Assert.That(onScreen.Count, Is.GreaterThanOrEqualTo(4), "екран створення без ґіміків — охоронець нічого не міряє");
+            int shrunk = 0;
+            foreach (var g in CareerKit.Content().Gimmicks)
+                foreach (bool female in new[] { false, true })
+                    foreach (var path in new[] { RingPath.Face, RingPath.Heel })
+                    {
+                        string name = Caps(RingLabels.GimmickName(T, g.Key, female)), role = Caps(RingLabels.PathName(T, path, female));
+                        float plate = WordFont.Width(role, CareerTileLayout.RolePlateWordSize, CareerTileLayout.RolePlateWordTrack)
+                            + CareerTileLayout.RolePlatePadLeft + CareerTileLayout.RolePlatePadRight + RenderSlack;
+                        float avail = row - plate - CareerTileLayout.PosterNameGap;
+                        float natural = WordFont.Width(name, CareerTileLayout.PosterNameSize, CareerTileLayout.PosterNameTrack) + RenderSlack;
+                        float size = CareerTileLayout.FitPosterName(natural, avail);
+                        // екран міряє справжню ширину й масштабує її лінійно (FitPosterName у CreateScreenView) — і тест так само
+                        float fitted = natural * size / CareerTileLayout.PosterNameSize;
+                        if (fitted > avail)
+                            bad.Add(string.Format("афіша: «{0}» + «{1}» — {2:0} > {3:0} навіть на {4:0}", name, role, fitted, avail, size));
+                        if (size < CareerTileLayout.PosterNameSize) shrunk++;
+                        // чоловічі назви ґіміків, що вже є на екрані, — тим самим кеглем 52, що й до родових назв (вигляд не змінився)
+                        if (!female && onScreen.Contains(g.Key) && size < CareerTileLayout.PosterNameSize)
+                            bad.Add(string.Format("афіша: «{0}» + «{1}» стиснуто до {2:0} — чоловіча назва мала влазити на 52", name, role, size));
+                        if (WordFont.Missing(name).Count > 0) bad.Add("афіша: у шрифті немає гліфів «" + name + "»");
+                    }
+            Assert.That(shrunk, Is.GreaterThan(0), "жодна назва не стискається — міра афіші, певно, не та (ТЕХНІКИНЯ + ЛИХОДІЙКА на 52 не влазить)");
+            // екран рахує тією самою функцією, а не своєю: інакше охоронець міряв би не те, що на афіші
+            string create = System.IO.File.ReadAllText(System.IO.Path.Combine(UnityEngine.Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI", "Career", "CreateScreenView.cs"));
+            if (!create.Contains("FitPosterName(head, gname, plate);") || !create.Contains("CareerTileLayout.FitPosterName(w * CareerTileLayout.PosterNameSize / cur,"))
+                bad.Add("CreateScreenView: назва на афіші не вміщається CareerTileLayout.FitPosterName");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Мітки стрічок обох родів (ПМ 13.11.2026): «ҐІМІК · ШЛЯХ» (display Bold 15, розрядка 0,12). Створення — поруч із підписом
+        /// «ІМ'Я НА РИНГУ» (24 ліворуч, 34 праворуч, проміжок 14) — там нічого не стискається, тож мітка мусить влізти. Стрічки героя
+        /// й суперника стискають ім'я до 40 і лише тоді ховають ґімік (FitNameAndTag) — мітка з ґіміком влазить поруч з ім'ям 40.
+        /// </summary>
+        [Test]
+        public void Strips_GimmickTag_FitsBothSexes()
+        {
+            var bad = new List<string>();
+            float tagSize = BrandTokens.TypeLabel, track = 0.12f;
+            float label = LegendFont.Width(Caps(Ui("c.create.name")), tagSize, track);
+            foreach (var g in CareerKit.Content().Gimmicks)
+                foreach (bool female in new[] { false, true })
+                    foreach (var path in new[] { RingPath.Face, RingPath.Heel, RingPath.Rebel })
+                    {
+                        string gn = Caps(RingLabels.GimmickName(T, g.Key, female)), pn = Caps(RingLabels.PathName(T, path, female));
+                        float heroTag = LegendFont.Width(gn + " ·", tagSize, track) + LegendFont.Width(" " + pn, tagSize, track) + RenderSlack;
+                        if (path != RingPath.Rebel && 24f + label + 14f + heroTag + 34f > CareerTileLayout.StripW)
+                            bad.Add(string.Format("створення: «{0} · {1}» — {2:0} поруч із підписом {3:0} у {4:0}", gn, pn, heroTag, label, CareerTileLayout.StripW));
+                        if (24f + 40f + 14f + heroTag + 34f > CareerTileLayout.StripW)
+                            bad.Add(string.Format("стрічка героя: «{0} · {1}» — {2:0}", gn, pn, heroTag));
+                        float rivalTag = LegendFont.Width(pn, tagSize, track) + LegendFont.Width(" · " + gn, tagSize, track) + RenderSlack;
+                        if (40f + rivalTag + 14f + 40f + 24f > CareerTileLayout.StripW)
+                            bad.Add(string.Format("стрічка суперника: «{0} · {1}» — {2:0}", pn, gn, rivalTag));
+                        if (LegendFont.Missing(gn).Count > 0) bad.Add("мітка: у шрифті немає гліфів «" + gn + "»");
+                    }
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
 

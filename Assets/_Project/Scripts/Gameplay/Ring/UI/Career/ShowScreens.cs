@@ -28,7 +28,8 @@ namespace Game.Gameplay.Ring.UI
             ArenaKit.Place(tag, null, 12f, 34f, null);
             // пробіл після «·» — на початку наступного напису: кінцевий пробіл напис не малює («ЛЕТУН ·ГЕРОЙ» проти «ГЕРОЙ · ЛЕТУН»
             // суперника — кадри слоту 27, 09.11.2026)
-            var gimmick = ArenaKit.Tag(t.Get("gimmick." + c.Content.GimmickOf(v.Gimmick).Key) + " ·", RingTheme.TextDim);
+            // назва ґіміка — за статтю героя, як шлях (ПМ 13.11.2026, RingLabels.GimmickName 7d1510f4: героїня бачила себе «Силачем»)
+            var gimmick = ArenaKit.Tag(RingLabels.GimmickName(t, c.Content.GimmickOf(v.Gimmick).Key, HeroForms.ShowsHeroine(t)) + " ·", RingTheme.TextDim);
             tag.Add(gimmick);
             tag.Add(ArenaKit.Tag(" " + RingLabels.PathName(t, v.Role, HeroForms.ShowsHeroine(t)), ArenaKit.RoleText(v.Role)));
             if (v.IsChampion) tag.Add(ArenaKit.Tag(" · " + t.Get("c.champion"), RingTheme.Gold));
@@ -113,7 +114,7 @@ namespace Game.Gameplay.Ring.UI
             var tag = ArenaKit.Row();
             ArenaKit.Place(tag, 40f, 12f, null, null);
             tag.Add(ArenaKit.Tag(RingLabels.PathName(t, npc.Path, npc.Female), ArenaKit.RoleText(npc.Path)));   // рід суперника — свій (P2-6)
-            var rg = ArenaKit.Tag(" · " + t.Get("gimmick." + c.Content.GimmickOf(npc.Gimmick).Key), RingTheme.TextDim);
+            var rg = ArenaKit.Tag(" · " + RingLabels.GimmickName(t, c.Content.GimmickOf(npc.Gimmick).Key, npc.Female), RingTheme.TextDim);   // рід суперника — свій
             tag.Add(rg);
             box.Add(tag);
             ArenaKit.FitNameAndTag(box, nl, tag, rg, false, 40f, 26f);

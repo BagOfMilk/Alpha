@@ -170,6 +170,27 @@ namespace Game.Gameplay.Ring.Models
             get { return 5f * (CreateAttrRowH - CreateAttrRowNarrowH) + (CreatePaperPadBottom - CreatePaperPadBottomNarrow); }
         }
 
+        /// <summary>
+        /// Афіша створення: бічні відступи паперу й рядок «назва ґіміка — плита ролі». Назва — display Black 52 з розрядкою 0,01;
+        /// плита ролі — слово 26 з розрядкою 0,04 і полями 24 + 22. Жіночі назви довші (ТЕХНІКИНЯ, ШОУВУМЕН — ПМ 13.11.2026,
+        /// <c>RingLabels.GimmickName</c>) і на 52 наїжджали на плиту ЛИХОДІЙКА — кегль назви меншає (<see cref="FitPosterName"/>).
+        /// </summary>
+        public const float CreatePosterPadLeft = 26f, CreatePosterPadRight = 22f;
+        public const float PosterNameSize = 52f, PosterNameTrack = 0.01f, PosterNameGap = 8f;
+        /// <summary>Нижня межа кегля назви — заголовний кегль токенів: назва лишається заголовком афіші, а не підписом.</summary>
+        public const float PosterNameMinSize = BrandTokens.TypeTitle;
+        public const float RolePlateWordSize = 26f, RolePlateWordTrack = 0.04f, RolePlatePadLeft = 24f, RolePlatePadRight = 22f;
+
+        /// <summary>
+        /// Кегль назви ґіміка на афіші: <see cref="PosterNameSize"/>, якщо назва влазить до плити ролі, інакше менший пропорційно,
+        /// не нижче <see cref="PosterNameMinSize"/>. <paramref name="naturalAtBase"/> — ширина назви на базовому кеглі (розрядка
+        /// пропорційна кеглю, тож ширина лінійна); <paramref name="available"/> — місце до плити без проміжку. NaN — розкладки ще немає.
+        /// </summary>
+        public static float FitPosterName(float naturalAtBase, float available)
+        {
+            return FitOneLine(PosterNameSize, PosterNameMinSize, naturalAtBase, available);
+        }
+
         /// <summary>Шухляда: відступи прокрутки (лівий — від смужки 6), рядок «Розвиток» і підказка — у шапці над прокруткою.</summary>
         public const float DrawerPadLeft = 18f, DrawerPadRight = 24f, DrawerScrollPadBottom = 4f;
 
@@ -303,10 +324,16 @@ namespace Game.Gameplay.Ring.Models
         /// </summary>
         public static float FitTitle(float baseSize, float naturalAtBase, float available)
         {
+            return FitOneLine(baseSize, TitleMinSize, naturalAtBase, available);
+        }
+
+        /// <summary>Один рядок: базовий кегль або менший пропорційно (ціле число), не нижче <paramref name="minSize"/>.</summary>
+        public static float FitOneLine(float baseSize, float minSize, float naturalAtBase, float available)
+        {
             if (float.IsNaN(naturalAtBase) || float.IsNaN(available) || naturalAtBase <= 0f || available <= 0f) return float.NaN;
             if (naturalAtBase <= available) return baseSize;
             float s = (float)Math.Floor(baseSize * available / naturalAtBase);
-            return Math.Max(TitleMinSize, Math.Min(baseSize, s));
+            return Math.Max(minSize, Math.Min(baseSize, s));
         }
 
         /// <summary>Місце під слово золотої плити: ширина й висота без відступів.</summary>
