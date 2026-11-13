@@ -42,6 +42,43 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(plat, v.Plat, 1e-3f, "край платформи");
         }
 
+        [TestCase("gym", 2.24f)]
+        [TestCase("hall", 2.34f)]
+        [TestCase("arena", 2.44f)]
+        public void TopRope_ComesFromAnchors(string venue, float top)
+        {
+            Assert.AreEqual(top, RingVenue.Parse(Text(venue, "anchors"), venue).TopRopeY, 1e-3f, "верхній канат");
+        }
+
+        [TestCase("gym")]
+        [TestCase("hall")]
+        [TestCase("arena")]
+        public void CamOverRopes_SightToFeetClearsTopRope(string venue)
+        {
+            // Середній план бою (RingStage3D, StageCam.Close): камера на (1,3; мат + 2,75; −7,4) від пари; пара в центрі й біля
+            // ближніх канатів. Лінія до стоп після підйому — над верхнім канатом там, де входить у квадрат канатів.
+            var v = RingVenue.Parse(Text(venue, "anchors"), venue);
+            foreach (float pz in new[] { 0f, -1.5f, 1.5f })
+                foreach (float px in new[] { -1.2f, 0f, 1.2f })
+                {
+                    float cx = px + 1.3f, cz = pz - 7.4f, cy0 = v.MatY + 2.75f;
+                    float cy = v.CamYOverRopes(cx, cy0, cz, px, pz);
+                    Assert.GreaterOrEqual(cy, cy0, "камера не опускається");
+                    float t = (-v.RopeLine - cz) / (pz - cz);
+                    float h = cy + (v.MatY + 0.05f - cy) * t;
+                    Assert.GreaterOrEqual(h, v.TopRopeY + 0.079f, string.Format("{0}: пара ({1}; {2}), камера {3:0.00}", venue, px, pz, cy));
+                }
+        }
+
+        [Test]
+        public void CamOverRopes_InsideRingOrHighCam_Unchanged()
+        {
+            var v = RingVenue.Parse(Text("arena", "anchors"), "arena");
+            Assert.AreEqual(1.9f, v.CamYOverRopes(1.0f, 1.9f, -1.5f, 0f, 0f), 1e-5f, "камера в канатах");
+            Assert.AreEqual(9.0f, v.CamYOverRopes(0f, 9.0f, -8.2f, 0f, 0f), 1e-5f, "висока камера");
+            Assert.AreEqual(2.0f, v.CamYOverRopes(0f, 2.0f, -8.2f, 0f, -4.0f), 1e-5f, "борець за канатами");
+        }
+
         [Test]
         public void Gym_RingHalf_MatchesStageConstant()
         {
