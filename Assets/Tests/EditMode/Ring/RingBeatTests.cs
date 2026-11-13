@@ -485,7 +485,7 @@ namespace Game.Tests.EditMode
         {
             var ev = Events();
             var L = Lengths();
-            foreach (var key in new[] { null, "armbar", "leg_lock", "spider_lock" })
+            foreach (var key in new[] { null, "armbar", "leg_lock", "spider_lock", "crossface", "bear_hug" })
                 foreach (var held in new[] { null, RingClipTable.HeldArmbar, RingClipTable.HeldLegLock })
                     foreach (var t in new[] { RollTier.Miss, RollTier.Partial, RollTier.Strong })
                     {
@@ -556,10 +556,16 @@ namespace Game.Tests.EditMode
                 var last = steps.LastOrDefault(s => s.Kind == StageStepKind.Pair);   // як режисер: остання зіграна пара
                 return last == null ? null : RingClipTable.HeldByNode(N[last.Clip + "_A"][1]);
             };
-            foreach (var key in new[] { "armbar", "leg_lock", "spider_lock" })
+            // Больові ґіміків 5–8 без своїх кліпів — на лікоть, вхід із позначкою підстановки (не загальна пара таблиці: інакше
+            // «терпіти» слідом починалося б з пози стоячи).
+            foreach (var kv in new Dictionary<string, string> { { "armbar", RingClipTable.HeldArmbar }, { "leg_lock", RingClipTable.HeldLegLock },
+                { "spider_lock", RingClipTable.HeldLegLock }, { "crossface", RingClipTable.HeldArmbar }, { "bear_hug", RingClipTable.HeldArmbar } })
             {
-                var sub = RingClipTable.Plan(new MatchEvent { Kind = MatchEventKind.Action, Action = MatchActionId.Submission, Tier = RollTier.Partial, Actor = P, MoveKey = key });
-                Assert.AreEqual(key == "armbar" ? RingClipTable.HeldArmbar : RingClipTable.HeldLegLock, heldAfter(sub), key);
+                var sub = RingClipTable.Plan(new MatchEvent { Kind = MatchEventKind.Action, Action = MatchActionId.Submission, Tier = RollTier.Partial, Actor = P, MoveKey = kv.Key });
+                Assert.AreEqual(kv.Value, heldAfter(sub), kv.Key);
+                bool standIn = kv.Key == "crossface" || kv.Key == "bear_hug";
+                Assert.AreEqual(standIn, sub.Any(s => s.IsStandIn), "підстановка больового позначена: " + kv.Key);
+                Assert.AreEqual(standIn, RingClipTable.IsHoldStandIn(kv.Key), kv.Key);
             }
             var meteor = RingClipTable.Plan(new MatchEvent { Kind = MatchEventKind.Action, Action = MatchActionId.Finisher, Tier = RollTier.Strong, Actor = P, MoveKey = "meteor", Staging = MoveStaging.Corner });
             Assert.AreEqual(RingClipTable.HeldPin, heldAfter(meteor), "«Метеор» 10+ — у накритті, далі відлік");

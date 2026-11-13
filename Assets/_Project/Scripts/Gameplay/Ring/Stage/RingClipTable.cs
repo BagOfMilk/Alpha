@@ -241,9 +241,11 @@ namespace Game.Gameplay.Ring.Stage
         }
 
         /// <summary>
-        /// 24 прийоми каталогу <c>career_moves.json</c> → наявні кліпи (центр рингу). Прийоми з власним ланцюгом кліпів P1–P2
+        /// 40 прийомів каталогу <c>career_moves.json</c> → наявні кліпи (центр рингу). Прийоми з власним ланцюгом кліпів P1–P2
         /// (больові, стрибки, канати, кут, таран) план будує окремо (<see cref="PlanMove"/>); тут для них лише «є в таблиці» й
-        /// ознака підписного.
+        /// ознака підписного. Прийоми ґіміків 5–8 (блок «Кар'єри» в кінці каталогу, 12.11.2026): власних кліпів немає, крім удару
+        /// головою й серії ударів із захвату голови, — решта підстановкою з позначкою «бракує» (запит — <c>CLIP_NEEDS.md</c> §11).
+        /// Фінішери 5–8 — кожен на своєму кліпі (охоронець <c>FinisherShowTests</c>), не на кліпах фінішерів 1–4.
         /// </summary>
         private static readonly Dictionary<string, MoveClips> Moves = new Dictionary<string, MoveClips>
         {
@@ -271,6 +273,34 @@ namespace Game.Gameplay.Ring.Stage
             { "meteor",          new MoveClips(null, null, StageCam.Big) },
             { "iron_clamp",      new MoveClips("Chain_Headlock_Crank", "Chain_Headlock_Crank", StageCam.Close, null, false, "бракує больового фінішера — затиск голови") },
             { "grand_finale",    new MoveClips("Center_Clothesline_Flip", "Center_Clothesline_Flip", StageCam.Big) },
+            // ---- ґіміки 5–8 (Кар'єра, a3fd3fd5): Бувалий, Хардкорник, Самородок, Силач ----
+            { "arm_drag",        new MoveClips("Chain_ArmWringer", "Bodyslam", StageCam.Big, null, false, "бракує перекиду за руку — викручування руки, на 10+ боді-слем") },
+            { "crossface",       new MoveClips(null, null, StageCam.Close) },
+            { "old_school",      new MoveClips("Chain_Headlock_Punches", "Center_RunningElbow", StageCam.Big, null, false, "бракує «Старої школи» — удари з захвату голови, на 10+ лікоть", true) },
+            { "last_lesson",     new MoveClips("Center_Clothesline", "Center_Clothesline", StageCam.Big, null, false, "бракує фінішера «Останній урок» — ларіат") },
+            { "headbutt",        new MoveClips("Center_Headbutt", "Center_Headbutt", StageCam.Close) },
+            { "clubbing_blow",   new MoveClips("Chain_FrontFacelock_Clubs", "Chain_FrontFacelock_Clubs", StageCam.Close) },
+            { "floor_slam",      new MoveClips("Bodyslam", "Bodyslam", StageCam.Big, null, false, "бракує кидка «Об підлогу» — боді-слем", true) },
+            { "scar_maker",      new MoveClips("Center_RunningKnee", "Center_RunningKnee", StageCam.Big, null, false, "бракує фінішера «Шрам» — удар коліном") },
+            { "chop",            new MoveClips("Forearm_Strike", "Center_ForearmShiver", StageCam.Close, null, false, "бракує чопа в груди — удар передпліччям") },
+            { "body_drop",       new MoveClips("Bodyslam", "Bodyslam", StageCam.Big, null, false, "бракує кидка через плече — боді-слем") },
+            { "upstart",         new MoveClips("Center_RunningKnee", "Center_Clothesline_Flip", StageCam.Big, null, false, "бракує «Вискочки» — удар коліном, на 10+ ларіат із перекидом", true) },
+            { "first_break",     new MoveClips("Center_ShoulderTackle", "Center_ShoulderTackle", StageCam.Big, null, false, "бракує фінішера «Перший прорив» — таран") },
+            { "military_press",  new MoveClips("Bodyslam", "Bodyslam", StageCam.Big, null, false, "бракує жиму над головою — боді-слем") },
+            { "bear_hug",        new MoveClips(null, null, StageCam.Close) },
+            { "anvil",           new MoveClips("Bodyslam", "Center_ShoulderBlock_Heavy", StageCam.Big, null, false, "бракує «Ковадла» — боді-слем, на 10+ важкий таран", true) },
+            { "titan_press",     new MoveClips("Bodyslam", "Bodyslam", StageCam.Big, null, false, "бракує фінішера «Титанів жим» — боді-слем") },
+        };
+
+        /// <summary>
+        /// Больові ґіміків 5–8 без власних кліпів: грають ланцюгом больового на лікоть (на маті, як і решта больових ядра), з
+        /// позначкою підстановки на вході. «Ведмежі обійми» — стоячи; ядро кладе жертву перед больовим завжди, тож до кліпа
+        /// (і до рішення «Кар'єри», чи цей больовий стоячи) — на маті.
+        /// </summary>
+        private static readonly Dictionary<string, string> HoldStandIns = new Dictionary<string, string>
+        {
+            { "crossface", "бракує кросфейсу — больовий на лікоть" },
+            { "bear_hug",  "бракує ведмежих обіймів — больовий на лікоть на маті" },
         };
 
         /// <summary>Чи знає таблиця цей прийом (охоронець: усі прийоми каталогу мають кліпи).</summary>
@@ -414,8 +444,17 @@ namespace Game.Gameplay.Ring.Stage
 
         // ============================ больовий (P1-2) ============================
 
-        /// <summary>Родина больового за прийомом: на лікоть — armbar, решта (на ногу, «павук», без ключа) — на ногу.</summary>
-        public static string HoldFamily(string moveKey) { return moveKey == "armbar" ? "Armbar" : "LegLock"; }
+        /// <summary>
+        /// Родина больового за прийомом: на лікоть — armbar і больові ґіміків 5–8 без своїх кліпів (<see cref="HoldStandIns"/>),
+        /// решта (на ногу, «павук», без ключа) — на ногу.
+        /// </summary>
+        public static string HoldFamily(string moveKey)
+        {
+            return moveKey == "armbar" || (moveKey != null && HoldStandIns.ContainsKey(moveKey)) ? "Armbar" : "LegLock";
+        }
+
+        /// <summary>Больові, що грають чужою родиною (вхід несе позначку підстановки): ключі <see cref="HoldStandIns"/>.</summary>
+        public static bool IsHoldStandIn(string moveKey) { return moveKey != null && HoldStandIns.ContainsKey(moveKey); }
 
         private static string HeldOf(string family) { return family == "Armbar" ? HeldArmbar : HeldLegLock; }
 
@@ -438,8 +477,10 @@ namespace Game.Gameplay.Ring.Stage
                 return;
             }
             // Вхід на лікоть — з будь-якої пози (у маніфесті «з вузла» —): склейкою кадру; на ногу — з лежачого на спині.
+            string standIn;
+            HoldStandIns.TryGetValue(ev.MoveKey ?? "", out standIn);
             list.Add(new StageStep { Kind = StageStepKind.Pair, Actor = a, Clip = k + "_Enter", Cam = StageCam.Low,
-                CutIn = k == "Armbar" || ctx.VictimNode == StageStep.LyingFront, ByRoots = k == "Armbar" });
+                CutIn = k == "Armbar" || ctx.VictimNode == StageStep.LyingFront, ByRoots = k == "Armbar", Note = standIn });
         }
 
         /// <summary>
@@ -668,6 +709,8 @@ namespace Game.Gameplay.Ring.Stage
                 case "armbar":
                 case "leg_lock":
                 case "spider_lock":
+                case "crossface":
+                case "bear_hug":
                     if (ev.Action != MatchActionId.Submission) return false;
                     AddSubmissionEnter(list, ev, a, ctx);
                     return true;
