@@ -56,6 +56,22 @@ namespace Game.Gameplay.Ring.UI
 
         private GimmickView Current { get { foreach (var g in _v.Gimmicks) if (g.Def.Id == _d.Gimmick) return g; return _v.Gimmicks[0]; } }
 
+        /// <summary>Огляд (RingMenuShots, слот 32): ґіміки, що на екрані, — у порядку плиток.</summary>
+        internal List<Gimmick> GimmicksForShots()
+        {
+            var l = new List<Gimmick>();
+            foreach (var g in _v.Gimmicks) l.Add(g.Def.Id);
+            return l;
+        }
+
+        /// <summary>Огляд: ґімік і роль — як клавіші 1–6 (<see cref="OnDigit"/>), і перебудова.</summary>
+        internal void SetForShots(Gimmick g, CareerRole r)
+        {
+            _d.Gimmick = g;
+            _d.Role = r;
+            Refresh();
+        }
+
         private int MoveCount() { int n = 0; foreach (var m in Current.StartMoves) n++; return n; }
 
         /// <summary>Стартові прийоми ґіміка одним рядком через « · » (MenuKit.Body тримає «·» при слові перед ним — TextBreak).</summary>

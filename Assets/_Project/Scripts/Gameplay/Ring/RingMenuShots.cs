@@ -1,4 +1,6 @@
+using System;
 using System.Collections;
+using Game.Core.Ring.Career;
 using Game.Gameplay.Ring.Models;
 using Game.Gameplay.Ring.UI.Menus;
 using UnityEngine;
@@ -81,6 +83,98 @@ namespace Game.Gameplay.Ring
                 yield return null;
             }
         }
+
+        /// <summary>
+        /// Сцена огляду (<c>-ring-menu-scene &lt;назва&gt;</c>, слот 32, ПМ 13.11.2026) замість повного туру: «Продовжити» з сейву
+        /// огляду (нова кар'єра на створенні — або <c>-ring-menu-load &lt;файл&gt;</c>) і кадри одного місця.
+        /// <c>create</c> — афіша створення: кожен ґімік екрана × роль × стать (назва за статтю, кегль назви за місцем до плити ролі);
+        /// <c>week</c> — тиждень із сейву: стрічки (стать, зона тіла, чемпіон), шухляда розвитку з підказками атрибутів (ціна),
+        /// крамниця з підказками тренерів (крок), далі картка шоу (суперник, рядок тіла). Стан кар'єри бот не чіпає — лише фокус.
+        /// </summary>
+        public static IEnumerator Scene(RingGameBootstrap h, string scene)
+        {
+            UI.CareerScreenView.ExpandForShots = scene == "week";   // тиждень відкривається з шухлядою (є очки — «Розвиток»)
+            float guard = 0f;
+            while (!(h.CurrentView is TitleMenuView) && guard < 10f) { guard += Time.unscaledDeltaTime; yield return null; }
+            yield return Wait(1.2f);
+            Nav(h, RingAction.Confirm);                   // «Продовжити» — фокус титулу, коли є сейв
+            guard = 0f;
+            while ((h.OnTitle || h.CurrentLoading != null || h.Wipe.Busy) && guard < 25f) { guard += Time.unscaledDeltaTime; yield return null; }
+            yield return Wait(1.2f);
+            if (h.OnTitle) Debug.LogError("[Ринг] сцена огляду: «Продовжити» не відкрило гру");
+            else if (scene == "create") yield return CreatePosters(h);
+            else if (scene == "week") yield return WeekScene(h);
+            else Debug.LogError("[Ринг] -ring-menu-scene: невідома сцена '" + scene + "' (create, week)");
+            UI.CareerScreenView.ExpandForShots = false;
+            Debug.Log("[Ринг] сцена огляду " + scene + ": кадри в " + h.MenuShotsDir);
+            h.ExitAfterShots();
+        }
+
+        /// <summary>Афіша створення: чоловік і героїня × ґіміки екрана × Герой / Лиходій — кадр на кожне поєднання.</summary>
+        private static IEnumerator CreatePosters(RingGameBootstrap h)
+        {
+            var create = h.CurrentView as UI.CreateScreenView;
+            if (create == null) { Debug.LogError("[Ринг] сцена create: після «Продовжити» не створення, а " + Name(h)); yield break; }
+            int femaleBody = Array.FindIndex(CareerLooks.HeroBodies, CareerLooks.IsFemaleBody);
+            foreach (bool female in new[] { false, true })
+            {
+                h.HeroBody = female ? femaleBody : 0;   // на створенні тіло одразу міняє форми звертання (HeroForms)
+                foreach (var g in create.GimmicksForShots())
+                    foreach (var r in new[] { CareerRole.Hero, CareerRole.Villain })
+                    {
+                        create.SetForShots(g, r);
+                        yield return Wait(0.4f);
+                        yield return Snap(h, "poster_" + (female ? "f" : "m") + "_" + g + "_" + r);
+                    }
+            }
+        }
+
+        /// <summary>Тиждень із сейву: стрічки, підказки розвитку й крамниці фокусом без миші, картка шоу.</summary>
+        private static IEnumerator WeekScene(RingGameBootstrap h)
+        {
+            var week = h.CurrentView as UI.WeekScreenView;
+            if (week == null) { Debug.LogError("[Ринг] сцена week: після «Продовжити» не тиждень, а " + Name(h)); yield break; }
+            yield return Snap(h, "week");
+            // розвиток (з -ring-shot-dev-all — «Усе» розгорнуто): фокус на кожному атрибуті — підказка з ціною, яку спише покупка
+            for (int i = 0; i < 5; i++)
+            {
+                int k = i;
+                var t = week.PadForShots(key => key == "dev:attr:" + k);
+                if (t == null) { if (i == 0) Debug.LogWarning("[Ринг] сцена week: атрибутів у шухляді немає (без очок розвитку чи без -ring-shot-dev-all)"); break; }
+                t.PadHot(true);
+                yield return Wait(0.25f);
+                yield return Snap(h, "week_dev_attr_" + i);
+                t.PadHot(false);
+            }
+            // крамниця: вкладка «Витрати», фокус на кожному тренері — підказка з кроком цього тренера
+            string shop = UI.RingTheme.Caps(h.TextForShots.Get("c.hub.shop"));
+            var tab = week.PadForShots(key => key.StartsWith("tab:", StringComparison.Ordinal) && UI.RingTheme.Caps(key.Substring(4)) == shop);
+            if (tab == null) Debug.LogError("[Ринг] сцена week: немає вкладки «" + shop + "»");
+            else
+            {
+                if (week.PadForShots(key => key.StartsWith("shop:coach:", StringComparison.Ordinal)) == null) tab.PadActivate();
+                yield return Wait(0.5f);
+                yield return Snap(h, "week_shop");
+                for (int i = 0; i < CareerRules.Coaches.Length; i++)
+                {
+                    int k = i;
+                    var t = week.PadForShots(key => key == "shop:coach:" + k);
+                    if (t == null) { Debug.LogError("[Ринг] сцена week: немає тренера " + k + " у крамниці"); break; }
+                    t.PadHot(true);
+                    yield return Wait(0.25f);
+                    yield return Snap(h, "week_shop_coach_" + i);
+                    t.PadHot(false);
+                }
+            }
+            // картка шоу: «Почати шоу» з тижня (той самий виклик, що Enter) — суперник, рядок тіла, «переріс щабель»
+            h.CurrentView.OnConfirm();
+            float guard = 0f;
+            while (h.CurrentView is UI.WeekScreenView && guard < 5f) { guard += Time.unscaledDeltaTime; yield return null; }
+            yield return Wait(1.0f);
+            yield return Snap(h, "after_week_" + Name(h));
+        }
+
+        private static string Name(RingGameBootstrap h) { return h.CurrentView == null ? "null" : h.CurrentView.GetType().Name; }
 
         public static IEnumerator Run(RingGameBootstrap h)
         {

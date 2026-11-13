@@ -59,6 +59,27 @@ namespace Game.Gameplay.Ring.UI
         /// <summary>Екрани кар'єри B03 v2 проходяться без миші (P3 геймпад, 11.11.2026): усі дії — цілі фокусу.</summary>
         protected override bool PadTargets { get { return true; } }
 
+        /// <summary>
+        /// Огляд (RingMenuShots, слот 32): ціль фокусу без миші, чий ключ задовольняє <paramref name="match"/> («dev:attr:4»,
+        /// «shop:coach:1», вкладка «tab:…»); null — на екрані такої немає. Бот кличе <see cref="IPadTarget.PadHot"/> /
+        /// <see cref="IPadTarget.PadActivate"/> — той самий підсвіт і рядок-підказка, що фокус без миші й наведення.
+        /// </summary>
+        internal IPadTarget PadForShots(Func<string, bool> match) { return FindPad(Root, match); }
+
+        private static IPadTarget FindPad(VisualElement e, Func<string, bool> match)
+        {
+            if (e == null) return null;
+            var t = e as IPadTarget ?? PadMark.Of(e);
+            if (t != null && t.PadKey != null && match(t.PadKey)) return t;
+            int n = e.childCount;
+            for (int i = 0; i < n; i++)
+            {
+                var r = FindPad(e[i], match);
+                if (r != null) return r;
+            }
+            return null;
+        }
+
         protected VisualElement Glass(float pad = 10f)
         {
             var c = RingUi.Card(pad);

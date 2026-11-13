@@ -20,6 +20,13 @@ namespace Game.Gameplay.Ring
     public sealed partial class RingGameBootstrap : IMenuHost
     {
         private const string MenuShotsArg = "-ring-menu-shots";
+        /// <summary>
+        /// Слот 32 (ПМ 13.11.2026): <c>-ring-menu-scene create|week</c> — замість повного туру одна сцена (<see cref="MenuShots.Scene"/>);
+        /// <c>-ring-menu-load &lt;файл&gt;</c> — сейв огляду з файлу (стан і «тіло|зачіска», як у грі) замість нової кар'єри.
+        /// Лише разом з <c>-ring-menu-shots</c>: сейв огляду — свій (ring_menu_bot.txt), сейв гравця не чіпається.
+        /// </summary>
+        private const string MenuSceneArg = "-ring-menu-scene", MenuLoadArg = "-ring-menu-load";
+        private string _menuScene, _menuLoad;
 
         private RingSettingsRuntime _settings;
         private RingMenuInput _menuInput;
@@ -121,6 +128,8 @@ namespace Game.Gameplay.Ring
             {
                 Application.runInBackground = true;
                 System.IO.Directory.CreateDirectory(_menuShotsDir);
+                _menuScene = ReadArg(MenuSceneArg);
+                _menuLoad = ReadArg(MenuLoadArg);
             }
         }
 
@@ -152,7 +161,7 @@ namespace Game.Gameplay.Ring
             StepLoading();
             yield return null;
             MigrateSave();
-            if (_menuShotsDir != null) WriteBotSave(true);
+            if (_menuShotsDir != null) { if (_menuLoad != null) WriteShotSaveFrom(_menuLoad); else WriteBotSave(true); }
             _career = CareerSession.New(_content, new SeededDiceRoller(_seed), _seed);
             _seed += 1;
             StepLoading();
@@ -181,7 +190,7 @@ namespace Game.Gameplay.Ring
                 stage.BeginIntro(_text.Get("c.game.title"), _text.Get("c.game.sub"));
             }
             if (!quick) RingMenuServices.Music(MenuMusic.Login);
-            if (_menuShotsDir != null) StartCoroutine(MenuShots.Run(this));
+            if (_menuShotsDir != null) StartCoroutine(_menuScene != null ? MenuShots.Scene(this, _menuScene) : MenuShots.Run(this));
         }
 
         /// <summary>Вхід у гру після «Продовжити» / «Нова кар'єра»: справжні кроки, далі розріз у гру.</summary>
@@ -541,6 +550,24 @@ namespace Game.Gameplay.Ring
             catch (Exception ex) { Debug.LogWarning("[Ринг] огляд меню: сейв не записано: " + ex.Message); }
         }
 
+        /// <summary>Сейв огляду з файлу (<c>-ring-menu-load</c>): ті самі рядки — у сейв огляду меню. Немає файлу — лог і нова кар'єра.</summary>
+        private void WriteShotSaveFrom(string path)
+        {
+            try
+            {
+                var lines = System.IO.File.ReadAllLines(path);
+                RingSaveFile.Delete(SavePath);
+                RingSaveFile.Write(SavePath, lines);
+                _saveSummary = null;
+                Debug.Log("[Ринг] огляд меню: сейв з " + path);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("[Ринг] огляд меню: сейв " + path + " не прочитано (" + ex.Message + ") — нова кар'єра");
+                WriteBotSave(true);
+            }
+        }
+
         // ---------------- для огляду меню ----------------
 
         internal string MenuShotsDir { get { return _menuShotsDir; } }
@@ -551,6 +578,8 @@ namespace Game.Gameplay.Ring
         internal PauseOverlay CurrentPause { get { return _pause; } }
         /// <summary>Огляд: стан кар'єри для кадрів, яких бот сам не дістане (травма на плитці «Відновлення»); тур повертає все назад.</summary>
         internal CareerSession CareerForShots { get { return _career; } }
+        /// <summary>Огляд: текст гри (назви вкладок для пошуку цілі фокусу).</summary>
+        internal RingText TextForShots { get { return _text; } }
         internal void OpenPauseForShots() { ShowPause(); }
         /// <summary>Огляд: той самий шлях, що Esc у грі (спершу <see cref="RingScreenView.OnBack"/>, потім пауза).</summary>
         internal void EscForShots() { OpenPause(); }
