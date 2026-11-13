@@ -2080,7 +2080,6 @@ namespace Game.Gameplay.Ring.Stage
             // Ракурси: обраний бік, далі з відхилом ±25°, далі протилежний бік (біля канатів з боку камери промінь до колін
             // різав канат — кіноплан не вміщався у 1–2 фінішерах сезону, і лишалась звичайна камера; п. 3 пакета — «кожен
             // фінішер»). Для кожного ракурсу — спершу з рефері під смугою слова, потім без нього.
-            var shot = new RingCine.Shot();
             float baseYaw = yawCam;
             // Порядок ракурсів: спершу ті, де рефері позаду пари (≥ 0,3 м), далі збоку, і лише потім — перед нею (сезон
             // 08.11.2026: запасний протилежний бік ставив рефері на 0,9 м перед парою — третина кадру).
@@ -2096,37 +2095,48 @@ namespace Game.Gameplay.Ring.Stage
             var refPts = new List<Vector3>();
             var Rf = _s.Referee;
             RingCine.Body(refPts, new Vector3(Rf.PosePos.x, Rf.Slot.position.y, Rf.PosePos.z), _s.BodyScale(Rf));
-            RingCine.Shot firstOk = new RingCine.Shot(), firstNotBlocking = new RingCine.Shot();
-            float yawFirstOk = baseYaw, yawNotBlocking = baseYaw;
-            bool clearFound = false;
-            string refView = null;
-            foreach (float dyaw in order)
+            // Пошук плану одного щабля: Clear → NotBlocking → (якщо anyOk) перший, що вмістився.
+            RingCine.Shot Pick(List<Vector3> withRef, List<Vector3> bare, Func<Vector3, bool> okF, float[] pitches, bool anyOk,
+                out float yawOut, out string viewOut)
             {
-                foreach (var set in new[] { ptsRef, pts })
+                RingCine.Shot firstOk = new RingCine.Shot(), firstNb = new RingCine.Shot();
+                float yawOk = baseYaw, yawNb = baseYaw;
+                string viewOk = null;
+                foreach (float dyaw in order)
+                    foreach (var set in new[] { withRef, bare })
+                        foreach (float pitch in pitches)
+                        {
+                            var s = RingCine.FrameAny(set, baseYaw + dyaw, pitch, new[] { 34f, 38f, 42f, 46f }, _s.CamAspect, 0.27f, 0.78f, 0.08f, okF);
+                            if (!s.Ok) continue;
+                            var rc = RingCine.Referee(s, pts, refPts, _s.CamAspect);
+                            if (rc.Clear) { yawOut = baseYaw + dyaw; viewOut = rc.View.ToString(); return s; }
+                            if (!firstOk.Ok) { firstOk = s; yawOk = baseYaw + dyaw; viewOk = rc.View.ToString(); }
+                            if (rc.NotBlocking && !firstNb.Ok) { firstNb = s; yawNb = baseYaw + dyaw; }
+                        }
+                if (firstNb.Ok)
                 {
-                    foreach (float pitch in new[] { 18f, 22f, 26f, 30f })
-                    {
-                        var s = RingCine.FrameAny(set, baseYaw + dyaw, pitch, new[] { 34f, 38f, 42f, 46f }, _s.CamAspect, 0.27f, 0.78f, 0.08f, ok);
-                        if (!s.Ok) continue;
-                        var rc = RingCine.Referee(s, pts, refPts, _s.CamAspect);
-                        if (!firstOk.Ok) { firstOk = s; yawFirstOk = baseYaw + dyaw; refView = rc.View.ToString(); }
-                        if (rc.Clear) { shot = s; yawCam = baseYaw + dyaw; refView = rc.View.ToString(); clearFound = true; break; }
-                        if (rc.NotBlocking && !firstNotBlocking.Ok) { firstNotBlocking = s; yawNotBlocking = baseYaw + dyaw; }
-                    }
-                    if (clearFound) break;
+                    yawOut = yawNb;
+                    viewOut = RingCine.Referee(firstNb, pts, refPts, _s.CamAspect).View.ToString();
+                    return firstNb;
                 }
-                if (clearFound) break;
+                yawOut = yawOk; viewOut = viewOk;
+                return anyOk ? firstOk : new RingCine.Shot();
             }
-            if (!clearFound)
-            {
-                if (firstNotBlocking.Ok)
-                {
-                    shot = firstNotBlocking; yawCam = yawNotBlocking;
-                    refView = RingCine.Referee(shot, pts, refPts, _s.CamAspect).View.ToString();
-                }
-                else if (firstOk.Ok) { shot = firstOk; yawCam = yawFirstOk; }
-            }
-            if (shot.Ok && Trace) Debug.Log("[Ринг] фінішер: рефері на кіноплані — " + refView);
+            // Після фінішера пара лежить на маті: спершу план, де мат під обома теж чистий від канатів і над нижньою панеллю
+            // (огляд слоту 31, h1080 073–074: після приземлення пару перетинали канати переднього плану й накривала плита
+            // журналу). Цей щабель бере лише план, де рефері не закриває пару; інакше — як раніше, канат нижче колін.
+            var floor = new[] { aC + Vector3.up * 0.15f, pB + Vector3.up * 0.15f };
+            Func<Vector3, bool> okFloor = p => ok(p) && RopeClear(p, floor[0]) && RopeClear(p, floor[1]);
+            var ptsFloor = new List<Vector3>(pts) { floor[0], floor[1] };
+            var ptsFloorRef = new List<Vector3>(ptsFloor) { refHead };
+            float yawPick;
+            string refView;
+            var shot = Pick(ptsFloorRef, ptsFloor, okFloor, new[] { 22f, 26f, 30f, 34f, 38f }, false, out yawPick, out refView);
+            bool onFloor = shot.Ok;
+            if (!shot.Ok) shot = Pick(ptsRef, pts, ok, new[] { 18f, 22f, 26f, 30f }, true, out yawPick, out refView);
+            if (shot.Ok) yawCam = yawPick;
+            if (shot.Ok && Trace)
+                Debug.Log("[Ринг] фінішер: рефері на кіноплані — " + refView + (onFloor ? "; мат під парою в кадрі" : "; канат нижче колін (мат не вмістився)"));
             if (shot.Ok) _s.Cine(shot.Pos, shot.Look, shot.Fov, true);
             else Debug.LogWarning("[Ринг] 3D: кіноплан фінішера не вмістився — лишається " + _plan.Clip);
             // Обраний ракурс міг виявитись «з боку рефері» (запасні кути): тоді він між камерою і парою й закриває пів кадру

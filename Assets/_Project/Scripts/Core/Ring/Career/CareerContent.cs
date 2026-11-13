@@ -362,10 +362,15 @@ namespace Game.Core.Ring.Career
                 string where = "закулісна сцена " + sc.Id;
                 var effects = new List<FeudEffect>();
                 var conds = new List<FeudCondition>(sc.Requires);
-                string own = null;
-                foreach (var cd in sc.Requires) if (cd.Kind == ConditionKind.Career && cd.Key == "booker" && !cd.Negate) own = cd.Target;
+                string own = SceneBooker(sc);
+                var guards = sc.Kind == BackstageKind.Event ? BranchBookerGuards(sc.Promo) : null;
                 foreach (var n in sc.Promo.Nodes)
                 {
+                    // подія буває в будь-якій федерації: букер конкретної федерації говорить лише там, де умова (сцени чи гілки) — його федерація
+                    string here;
+                    if (guards != null && n.Type == PromoNodeType.Line && IsFederationBooker(n.Speaker)
+                        && (guards.TryGetValue(n.Id, out here) ? here : own) != n.Speaker)
+                        throw new FormatException(where + "/" + n.Id + ": репліка букера '" + n.Speaker + "' без умови його федерації (booker, tier чи гілка за букером)");
                     if (n.Type == PromoNodeType.Line && n.Speaker != null && FindNpc(n.Speaker) == null
                         && Array.IndexOf(ExtraSpeakers, n.Speaker) < 0)
                         throw new FormatException(where + "/" + n.Id + ": невідомий мовець '" + n.Speaker + "'");
@@ -393,6 +398,57 @@ namespace Game.Core.Ring.Career
                         throw new FormatException(where + ": умова seen_before — немає сцени '" + cd.Target + "'");
                 }
             }
+        }
+
+        /// <summary>
+        /// Букер федерації, де сцена буває: з умови booker; інакше — якщо умови tier лишають одну федерацію, її букер; інакше null.
+        /// </summary>
+        public string SceneBooker(BackstageScene sc)
+        {
+            int lo = 1, hi = Federations.Count;
+            foreach (var cd in sc.Requires)
+            {
+                if (cd.Kind != ConditionKind.Career) continue;
+                if (cd.Key == "booker" && !cd.Negate) return cd.Target;
+                if (cd.Key == "tier") { if (cd.Negate) hi = Math.Min(hi, cd.Min - 1); else lo = Math.Max(lo, cd.Min); }
+            }
+            return lo == hi ? Federation(lo).Booker : null;
+        }
+
+        /// <summary>
+        /// Вузли, до яких ведуть лише випадки гілок з умовою «букер федерації = X» (усі — з тим самим X): вузол → X. Старт, перехід
+        /// рядка, варіант вибору, кидок і запасна гілка (next) — переходи без букера.
+        /// </summary>
+        internal static Dictionary<string, string> BranchBookerGuards(PromoDef p)
+        {
+            var into = new Dictionary<string, List<string>>();
+            Action<string, string> edge = (to, guard) =>
+            {
+                if (to == null) return;
+                List<string> l;
+                if (!into.TryGetValue(to, out l)) into[to] = l = new List<string>();
+                l.Add(guard);
+            };
+            edge(p.Start, null);
+            foreach (var n in p.Nodes)
+            {
+                if (n.Type != PromoNodeType.Branch) { foreach (var t in n.Targets()) edge(t, null); continue; }
+                foreach (var cs in n.Cases)
+                {
+                    string g = null;
+                    foreach (var cd in cs.Requires) if (cd.Kind == ConditionKind.Career && cd.Key == "booker" && !cd.Negate) { g = cd.Target; break; }
+                    edge(cs.Next, g);
+                }
+                edge(n.Next, null);
+            }
+            var guards = new Dictionary<string, string>();
+            foreach (var kv in into)
+            {
+                bool same = kv.Value[0] != null;
+                foreach (var x in kv.Value) if (x != kv.Value[0]) same = false;
+                if (same) guards[kv.Key] = kv.Value[0];
+            }
+            return guards;
         }
 
         /// <summary>Мовець — букер якоїсь федерації.</summary>
