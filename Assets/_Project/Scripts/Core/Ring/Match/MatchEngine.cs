@@ -305,7 +305,7 @@ namespace Game.Core.Ring.Match
         /// <summary>Штраф ушкодження 0/1/2 з урахуванням зсуву порогів.</summary>
         public int Threshold(Fighter f)
         {
-            int shift = Mods(f.Side).DamageThresholdShift;
+            int shift = Math.Min(Mods(f.Side).DamageThresholdShift, MatchRules.MaxThresholdShift);
             if (f.Damage >= MatchRules.EdgeDamage + shift) return 2;
             if (f.Damage >= MatchRules.ExhaustedDamage + shift) return 1;
             return 0;

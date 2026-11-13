@@ -550,6 +550,18 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void DamageThresholdShift_IsCapped_SoEdgeStaysReachable()
+        {
+            // «Залізна щелепа» (+2) і ще +1 (підсилення букера чи ґімік) — поріг «на межі» лишається на MaxDamage, а не 13.
+            var e = PinReady(s => s.RivalMods.DamageThresholdShift = MatchRules.MaxThresholdShift + 1);
+            e.State.Rival.Damage = MatchRules.MaxDamage;
+            Assert.AreEqual(MatchRules.DefenseBase - 2, e.Describe(MatchActionId.Pin).Modifier);
+            e.State.Rival.Damage = MatchRules.ExhaustedDamage + MatchRules.MaxThresholdShift;
+            Assert.AreEqual(MatchRules.DefenseBase - 1, e.Describe(MatchActionId.Pin).Modifier);
+            Assert.LessOrEqual(MatchRules.EdgeDamage + MatchRules.MaxThresholdShift, MatchRules.MaxDamage);
+        }
+
+        [Test]
         public void Perk_KickOutBonus_AndStamina()
         {
             var e = PinReady(s => { s.RivalMods.KickOutBonus = 1; s.Rival.Set(RingAttr.Stamina, 2); });

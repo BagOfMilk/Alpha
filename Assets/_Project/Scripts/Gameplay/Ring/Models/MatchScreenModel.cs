@@ -242,7 +242,8 @@ namespace Game.Gameplay.Ring.Models
         {
             var f = _e.State.Get(side);
             var mods = side == MatchSide.Player ? _e.Setup.PlayerMods : _e.Setup.RivalMods;
-            int shift = mods == null ? 0 : mods.DamageThresholdShift;
+            // Та сама стеля, що в MatchEngine.Threshold, — табло не обіцяє поріг, якого рушій не рахує.
+            int shift = mods == null ? 0 : Math.Min(mods.DamageThresholdShift, MatchRules.MaxThresholdShift);
             int pen = _e.Threshold(f);
             var c = new FighterCardModel
             {
