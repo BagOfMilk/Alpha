@@ -427,16 +427,18 @@ namespace Game.Gameplay.Ring.Stage
         private static void AddSubmissionEnter(List<StageStep> list, MatchEvent ev, MatchSide a, PlanContext ctx)
         {
             string k = HoldFamily(ev.MoveKey);
+            // Больовий на маті — план утримання (StageCam.Low → HoldShot сцени: згори 35–45°, обидва борці й рефері в кадрі),
+            // а не середній план на рівні пояса, що різав лежачих (запит «Изучение», 12.11.2026).
             if (ev.Tier == RollTier.Miss)
             {
-                list.Add(new StageStep { Kind = StageStepKind.Pair, Actor = a, Clip = "LegLock_Enter_Fail", Cam = StageCam.Close,
+                list.Add(new StageStep { Kind = StageStepKind.Pair, Actor = a, Clip = "LegLock_Enter_Fail", Cam = StageCam.Low,
                     CutIn = ctx.VictimNode == StageStep.LyingFront,
                     Note = k == "Armbar" ? "бракує невдачі больового на лікоть над лежачим (Armbar_Enter_Fail кінчається обома в стійці) — кліп невдачі на ногу" : null });
                 list.Add(new StageStep { Kind = StageStepKind.Solo, Actor = a, Clip = KneelUp, Cam = StageCam.Overview, Aside = true });
                 return;
             }
             // Вхід на лікоть — з будь-якої пози (у маніфесті «з вузла» —): склейкою кадру; на ногу — з лежачого на спині.
-            list.Add(new StageStep { Kind = StageStepKind.Pair, Actor = a, Clip = k + "_Enter", Cam = StageCam.Close,
+            list.Add(new StageStep { Kind = StageStepKind.Pair, Actor = a, Clip = k + "_Enter", Cam = StageCam.Low,
                 CutIn = k == "Armbar" || ctx.VictimNode == StageStep.LyingFront, ByRoots = k == "Armbar" });
         }
 
@@ -453,19 +455,19 @@ namespace Game.Gameplay.Ring.Stage
             switch (ev.Tier)
             {
                 case RollTier.Strong:
-                    list.Add(new StageStep { Kind = StageStepKind.Pair, Actor = a, Clip = k + "_Hold_Partial_Loop", Cam = StageCam.Close, RefClip = ask, Chain = chain, Dur = 1.6f, Aside = true,
+                    list.Add(new StageStep { Kind = StageStepKind.Pair, Actor = a, Clip = k + "_Hold_Partial_Loop", Cam = StageCam.Low, RefClip = ask, Chain = chain, Dur = 1.6f, Aside = true,
                         Note = "больовий: тримає неповно" });
-                    list.Add(new StageStep { Kind = StageStepKind.Pair, Actor = a, Clip = k + "_Escape", Cam = StageCam.Close, Chain = true });
+                    list.Add(new StageStep { Kind = StageStepKind.Pair, Actor = a, Clip = k + "_Escape", Cam = StageCam.Low, Chain = true });
                     break;
                 case RollTier.Partial:
-                    list.Add(new StageStep { Kind = StageStepKind.Pair, Actor = a, Clip = k + "_Crank", Cam = StageCam.Close, RefClip = ask, Chain = chain, Aside = true });
-                    list.Add(new StageStep { Kind = StageStepKind.Pair, Actor = a, Clip = k + "_Reach", Cam = StageCam.Close, Chain = true });
-                    list.Add(new StageStep { Kind = StageStepKind.Pair, Actor = a, Clip = k + "_Escape", Cam = StageCam.Close, Chain = true, Aside = true });
+                    list.Add(new StageStep { Kind = StageStepKind.Pair, Actor = a, Clip = k + "_Crank", Cam = StageCam.Low, RefClip = ask, Chain = chain, Aside = true });
+                    list.Add(new StageStep { Kind = StageStepKind.Pair, Actor = a, Clip = k + "_Reach", Cam = StageCam.Low, Chain = true });
+                    list.Add(new StageStep { Kind = StageStepKind.Pair, Actor = a, Clip = k + "_Escape", Cam = StageCam.Low, Chain = true, Aside = true });
                     break;
                 default:
-                    list.Add(new StageStep { Kind = StageStepKind.Pair, Actor = a, Clip = IsSignature(ev.MoveKey) ? k + "_Crank_Hype" : k + "_Crank", Cam = StageCam.Close,
+                    list.Add(new StageStep { Kind = StageStepKind.Pair, Actor = a, Clip = IsSignature(ev.MoveKey) ? k + "_Crank_Hype" : k + "_Crank", Cam = StageCam.Low,
                         RefClip = ask, Chain = chain, Aside = true });
-                    list.Add(new StageStep { Kind = StageStepKind.Pair, Actor = a, Clip = k + "_Tap", Cam = StageCam.Close, Chain = true });
+                    list.Add(new StageStep { Kind = StageStepKind.Pair, Actor = a, Clip = k + "_Tap", Cam = StageCam.Low, Chain = true });
                     break;
             }
             list.Add(new StageStep { Kind = StageStepKind.Solo, Actor = a, Clip = KneelUp, Cam = StageCam.Overview, Aside = true });
