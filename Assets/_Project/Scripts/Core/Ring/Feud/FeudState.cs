@@ -50,6 +50,12 @@ namespace Game.Core.Ring
 
         /// <summary>Ажіотаж фіналу, з якого матч дає популярність (П5: 7 на місцевій і регіональній, 8 вище). Не зберігається.</summary>
         public int AudienceHypeAt = 7;
+
+        /// <summary>
+        /// Тіло старіє (§5.5): надбавка до ціни витривалості в очках розвитку (<see cref="Development.AttrCostFor"/>). Не зберігається й
+        /// губиться на <see cref="Clone"/> (як і <see cref="AudienceCap"/>): її ставить кар'єра за сезоном. Через копію не купувати.
+        /// </summary>
+        public int StaminaSurcharge;
         public int Heat { get { return _heat; } set { _heat = FeudVars.Clamp(FeudVars.Heat, value); } }
         public int Momentum { get { return _momentum; } set { _momentum = FeudVars.Clamp(FeudVars.Momentum, value); } }
         public int Trust { get { return _trust; } set { _trust = FeudVars.Clamp(FeudVars.Trust, value); } }

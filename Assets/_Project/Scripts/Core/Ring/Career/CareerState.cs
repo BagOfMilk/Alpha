@@ -158,6 +158,11 @@ namespace Game.Core.Ring.Career
 
         public readonly int[] Injury = new int[3];
         public readonly int[] ZoneDamage = new int[3];
+        /// <summary>
+        /// Сліди травм (§5.5): скільки разів зона травмувалась за кар'єру, разом із поточною травмою. Записуються з сезону 1, діють
+        /// з сезону 4 (<see cref="Ageing"/>). У зліпку — «scars», необов'язково (старі зліпки — нулі).
+        /// </summary>
+        public readonly int[] Scars = new int[3];
 
         public int ActionsLeft;
         public bool Strained;
@@ -322,7 +327,7 @@ namespace Game.Core.Ring.Career
             var mv = new List<string>();
             foreach (var m in Moves) mv.Add(Esc(m));
             sb.Append("|moves=").Append(string.Join(",", mv));
-            sb.Append("|inj=").Append(Ints(Injury)).Append("|zd=").Append(Ints(ZoneDamage));
+            sb.Append("|inj=").Append(Ints(Injury)).Append("|zd=").Append(Ints(ZoneDamage)).Append("|scars=").Append(Ints(Scars));
             sb.Append("|actions=").Append(ActionsLeft).Append("|strained=").Append(b(Strained)).Append("|promochoice=").Append(b(PromoChoicePending));
             sb.Append("|hypebonus=").Append(NextHypeBonus).Append("|rivalboost=").Append(RivalBoost);
             sb.Append("|done=").Append(Ints(ActionsDone)).Append("|tally=").Append(Ints(ActionTally));
@@ -462,6 +467,8 @@ namespace Game.Core.Ring.Career
             LateRole = kv.TryGetValue("late", out v) ? ParseLateRole(v, LateRole.None) : LateRole.None;
             // роль на наступний сезон — з 12.11.2026 (рев'ю ПМ): у старих зліпках її немає — та сама, що діє
             NextLateRole = kv.TryGetValue("latenext", out v) ? ParseLateRole(v, LateRole) : LateRole;
+            // сліди травм (§5.5) — з 13.11.2026: у старих зліпках їх немає — зони чисті
+            if (kv.TryGetValue("scars", out v)) Fill(Scars, v);
         }
 
         /// <summary>Пояс зі зліпка до 11.11.2026 (один на федерацію): сесія розкладе його по дивізіонах. Не зберігається.</summary>

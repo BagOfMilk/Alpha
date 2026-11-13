@@ -53,6 +53,10 @@ namespace Game.Core.Ring.Career
         public int Threshold = CareerRules.InjuryAtZoneDamage;
         /// <summary>Тижнів до загоєння травми (0 — здорова).</summary>
         public int WeeksLeft;
+        /// <summary>Сліди (§5.5): скільки разів зона травмувалась, разом із поточною травмою.</summary>
+        public int Scars;
+        /// <summary>На скільки тижнів довша травма цієї зони через слід — нова (здорова зона) чи поточна (0 — сліду немає чи до сезону 4).</summary>
+        public int ScarWeeks;
     }
 
     /// <summary>Картка вечора (TRPG_DESIGN §3, §8): суперник, місце в картці, план букера, умови, гонорар.</summary>
@@ -176,6 +180,8 @@ namespace Game.Core.Ring.Career
         public LateRole LateRole;
         /// <summary>Пізня роль, обрана на наступний сезон (у кінці сезону — може відрізнятися від нинішньої).</summary>
         public LateRole NextLateRole;
+        /// <summary>Тіло старіє (§5.5): на скільки очок дорожча витривалість цього сезону (0 — до сезону 4). Для «Меню».</summary>
+        public int StaminaSurcharge;
         public int[] Attr = new int[5];
         public int Money;
         public int Popularity;

@@ -156,6 +156,8 @@ namespace Game.Core.Ring.Career
         {
             Feud.State.AudienceCap = Federation.Ceiling;
             Feud.State.AudienceHypeAt = Federation.PopularityHype;
+            // тіло старіє (§5.5): надбавка за сезоном — тут, бо Sync кличуть створення, новий сезон, відновлення й перехід федерації
+            Feud.State.StaminaSurcharge = Ageing.StaminaSurcharge(State.Season);
             Feud.LateRole = State.LateRole;
             // ґімік (§5.2) — у матчі ворожнечі й реванші так само, як пізня роль (умова ПМ 12.11.2026, п. 4)
             Feud.PlayerGimmick = State.Gimmick;
@@ -585,7 +587,11 @@ namespace Game.Core.Ring.Career
         {
             var l = new List<InjuryView>();
             for (int z = 0; z < 3; z++)
-                l.Add(new InjuryView { Zone = (BodyZone)z, ZoneDamage = State.ZoneDamage[z], WeeksLeft = State.Injury[z], Threshold = InjuryAtZoneDamage });
+                l.Add(new InjuryView
+                {
+                    Zone = (BodyZone)z, ZoneDamage = State.ZoneDamage[z], WeeksLeft = State.Injury[z], Threshold = InjuryAtZoneDamage,
+                    Scars = State.Scars[z], ScarWeeks = Ageing.ScarWeeks(State.Season, State.Injury[z] > 0 ? State.Scars[z] - 1 : State.Scars[z])
+                });
             return l;
         }
 
@@ -641,7 +647,7 @@ namespace Game.Core.Ring.Career
             if (State.Coach >= 0)
             {
                 var a = CareerRules.Coaches[State.Coach];
-                if (++State.CoachProgress >= CareerRules.CoachProgressStep && Player.Get(a) < WrestlerStats.MaxAttr)
+                if (++State.CoachProgress >= CoachStepFor(State.Coach) && Player.Get(a) < WrestlerStats.MaxAttr)
                 {
                     State.CoachProgress = 0;
                     Player.Set(a, Player.Get(a) + 1);
@@ -1098,6 +1104,10 @@ namespace Game.Core.Ring.Career
             State.ZoneDamage[zone] = 0;
             int span = CareerRules.MaxInjuryWeeks - CareerRules.MinInjuryWeeks + 1;
             State.Injury[zone] = CareerRules.MinInjuryWeeks + ShowBooker.Mix(State.Seed, State.Season * 100 + State.Week, 11 + zone) % span;
+            // слід (§5.5): зона травмувалась раніше — з сезону 4 нова травма довша; лічильник — до інкременту (умова ПМ), сліди — з сезону 1.
+            // Порядок: слід, потім страховка (−1, не менше тижня) — страховка діє на вже довшу травму.
+            State.Injury[zone] += Ageing.ScarWeeks(State.Season, State.Scars[zone]);
+            State.Scars[zone]++;
             if (State.InsuredSeason == State.Season) State.Injury[zone] = Math.Max(1, State.Injury[zone] - 1);
             return true;
         }
@@ -1117,6 +1127,19 @@ namespace Game.Core.Ring.Career
 
         // Розвиток — на тижні, на підсумку шоу (одразу після матчу, 06.11.2026) і наприкінці сезону.
         private bool CanDevelop { get { return (Stage == CareerStage.Week && _bs == null) || Stage == CareerStage.SeasonEnd || (Stage == CareerStage.Show && State.Phase == ShowPhase.Result); } }
+
+        /// <summary>Ціна +1 до атрибута зараз (витривалість з сезону 4 дорожча, §5.5) — для порад і екранів.</summary>
+        public int AttrCost(RingAttr a) { return Development.AttrCostFor(Feud.State, a); }
+
+        /// <summary>
+        /// Тренувань із тренером <paramref name="coach"/> (індекс <see cref="CareerRules.Coaches"/>) на +1 до його атрибута: тренер
+        /// витривалості з сезону 4 — довше на надбавку старіння (§5.5). Для тренування й магазину тренерів.
+        /// </summary>
+        public int CoachStepFor(int coach)
+        {
+            bool stamina = coach >= 0 && coach < CareerRules.Coaches.Length && CareerRules.Coaches[coach] == RingAttr.Stamina;
+            return CareerRules.CoachProgressStep + (stamina ? Ageing.StaminaSurcharge(State.Season) : 0);
+        }
 
         public bool CanBuyAttr(RingAttr a, out string reason)
         {
@@ -1173,7 +1196,7 @@ namespace Game.Core.Ring.Career
                 RingName = State.RingName, Costume = State.Costume, Gimmick = State.Gimmick, Role = CurrentRole, Money = State.Money,
                 Popularity = Popularity, Trust = Trust, DevPoints = DevPoints, IsChampion = IsChampion, Season = State.Season,
                 Week = State.Week, TitlesWon = State.TitlesWon, FiredCount = State.FiredCount, FeudResolved = State.FeudResolved,
-                LateRole = State.LateRole, NextLateRole = State.NextLateRole
+                LateRole = State.LateRole, NextLateRole = State.NextLateRole, StaminaSurcharge = Feud.State.StaminaSurcharge
             };
             for (int i = 0; i < 5; i++) v.Attr[i] = Player.Get((RingAttr)i);
             foreach (var id in State.Moves) v.Moves.Add(Content.Moves.Get(id));
@@ -1446,13 +1469,27 @@ namespace Game.Core.Ring.Career
                     if (fx.Kind == MatchEffectKind.Damage && fx.Who == MatchSide.Player && fx.Amount > 0)
                         pts[(int)ZoneOfRivalAction(ev.Action)] += fx.Amount;
             }
-            if (wasInjured && e.State.Player.Damage >= CareerRules.InjuryWorsenDamage)
-                for (int z = 0; z < 3; z++)
-                    if (State.Injury[z] > 0) State.Injury[z] = Math.Min(CareerRules.MaxInjuryWeeks, State.Injury[z] + 1);
+            if (wasInjured && e.State.Player.Damage >= CareerRules.InjuryWorsenDamage) WorsenInjuries();
             for (int z = 0; z < 3; z++)
             {
                 int d = pts[z] / CareerRules.ZonePointsDivisor;
                 if (d > 0 && AddZoneDamage(z, d) && r.InjuredZone < 0) { r.InjuredZone = z; r.InjuryWeeks = State.Injury[z]; }
+            }
+        }
+
+        /// <summary>
+        /// Виступ травмованим з важким ушкодженням (§6.3): наявні травми затягуються на тиждень до стелі зони —
+        /// <see cref="CareerRules.MaxInjuryWeeks"/>, а травма зі слідом (зона травмувалась і до неї; поточна вже в
+        /// <see cref="CareerState.Scars"/>) — на <see cref="Ageing.ScarExtraWeeks"/> довше. Погіршення травму не вкорочує ніколи.
+        /// internal — для тестів.
+        /// </summary>
+        internal void WorsenInjuries()
+        {
+            for (int z = 0; z < 3; z++)
+            {
+                if (State.Injury[z] <= 0) continue;
+                int cap = CareerRules.MaxInjuryWeeks + Ageing.ScarWeeks(State.Season, State.Scars[z] - 1);
+                State.Injury[z] = Math.Max(State.Injury[z], Math.Min(cap, State.Injury[z] + 1));
             }
         }
 

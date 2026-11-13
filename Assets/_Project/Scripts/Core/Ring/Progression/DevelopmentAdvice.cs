@@ -96,7 +96,7 @@ namespace Game.Core.Ring
             {
                 var attr = (RingAttr)i;
                 if (!s.CanBuyAttr(attr, out reason)) continue;
-                var a = new DevAdvice { Kind = AdviceKind.Attr, Attr = attr, Cost = Development.AttrCost, Score = 10 + (WrestlerStats.MaxAttr - s.Player.Get(attr)) };
+                var a = new DevAdvice { Kind = AdviceKind.Attr, Attr = attr, Cost = s.AttrCost(attr), Score = 10 + (WrestlerStats.MaxAttr - s.Player.Get(attr)) };
                 if ((lostPin || lostSub) && attr == RingAttr.Stamina) { a.Score += 14; a.WhyKey = WhyFor(lostPin ? "lost_pin" : "lost_sub", a.Kind); }
                 if (lowHype && attr == RingAttr.Charisma) { a.Score += 12; a.WhyKey = WhyFor("low_hype", a.Kind); }
                 all.Add(a);
