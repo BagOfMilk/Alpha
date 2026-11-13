@@ -156,20 +156,23 @@ namespace Game.Core.Ring.Career
         {
             Feud.State.AudienceCap = Federation.Ceiling;
             Feud.State.AudienceHypeAt = Federation.PopularityHype;
-            Feud.State.LateRole = State.LateRole;
+            Feud.LateRole = State.LateRole;
             // промо ворожнечі з Молотом іде й у федераціях 2–4: «booker» у них — букер цієї федерації (рев'ю ПМ 12.11.2026)
             Feud.BookerVoice = Federation.Booker;
         }
 
-        /// <summary>Обрати пізню роль (§5.3) — на екрані кінця сезону, з першого: одна на раз, змінити можна в кінці кожного сезону.</summary>
+        /// <summary>
+        /// Обрати пізню роль (§5.3) — на екрані кінця сезону, з першого: одна на раз, змінити можна в кінці кожного сезону. Обрана діє
+        /// з наступного сезону (рішення ПМ 12.11.2026, власник — «Так, усі 11», №11): кінець сезону триває й до титульного чи
+        /// прощального матчу, і заміна посеред нього давала б Ікону на титул, а Зірку — на весь наступний сезон.
+        /// </summary>
         public bool CanChooseLateRole { get { return Stage == CareerStage.SeasonEnd; } }
 
-        /// <summary>Пізня роль (або <see cref="LateRole.None"/> — без неї). false — не кінець сезону.</summary>
+        /// <summary>Пізня роль на наступний сезон (або <see cref="LateRole.None"/> — без неї). false — не кінець сезону.</summary>
         public bool ChooseLateRole(LateRole role)
         {
-            if (!CanChooseLateRole) return false;
-            State.LateRole = role;
-            Feud.State.LateRole = role;
+            if (!CanChooseLateRole || !Enum.IsDefined(typeof(LateRole), role)) return false;
+            State.NextLateRole = role;
             return true;
         }
 
@@ -198,6 +201,9 @@ namespace Game.Core.Ring.Career
             {
                 int m = 0;
                 foreach (var n in BookingPool()) m = Math.Max(m, FeudLevel(n.Id));
+                // ворожнеча з Молотом, поки не розв'язана, — теж ворожнеча (§5.3), навіть коли його немає в пулі: у героїні (він — у
+                // чоловічому дивізіоні) і у федераціях 2–4, куди ворожнеча переходить (рев'ю ПМ 12.11.2026)
+                if (!State.FeudResolved) m = Math.Max(m, Feud.State.Heat);
                 return m;
             }
         }
@@ -1107,7 +1113,7 @@ namespace Game.Core.Ring.Career
                 RingName = State.RingName, Costume = State.Costume, Gimmick = State.Gimmick, Role = CurrentRole, Money = State.Money,
                 Popularity = Popularity, Trust = Trust, DevPoints = DevPoints, IsChampion = IsChampion, Season = State.Season,
                 Week = State.Week, TitlesWon = State.TitlesWon, FiredCount = State.FiredCount, FeudResolved = State.FeudResolved,
-                LateRole = State.LateRole
+                LateRole = State.LateRole, NextLateRole = State.NextLateRole
             };
             for (int i = 0; i < 5; i++) v.Attr[i] = Player.Get((RingAttr)i);
             foreach (var id in State.Moves) v.Moves.Add(Content.Moves.Get(id));
@@ -1812,6 +1818,9 @@ namespace Game.Core.Ring.Career
             Array.Clear(State.SeasonRecord, 0, State.SeasonRecord.Length);
             State.SeasonPopStart = Popularity;
             State.Season++; State.Week = 1;
+            // пізня роль, обрана в кінці сезону, починає діяти тепер
+            State.LateRole = State.NextLateRole;
+            SyncFederationRules();
             if (State.ContractExclusive && State.Season > State.ContractEndSeason)
             {
                 // строк пастки скінчився — контракт продовжується як чесний

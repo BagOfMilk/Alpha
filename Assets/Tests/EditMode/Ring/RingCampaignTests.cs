@@ -220,5 +220,24 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(first.Plan, m.Setup.Plan);
             Assert.AreEqual(first.Stipulations, m.Setup.Stipulations);
         }
+
+        [Test]
+        public void TheLateRole_GoesIntoTheFeudMatch_AndIntoTheRematch_ButNotIntoTheFeudSave()
+        {
+            var c = RingCampaignDriver.NewCampaign(4);
+            RingCampaignDriver.ToFinalMatchPrep(c);
+            var plain = c.State.BuildMatchSetup(c.Script);
+            string saved = c.State.CaptureState();
+            c.LateRole = LateRole.Legend;
+            Assert.AreEqual(saved, c.State.CaptureState(), "пізня роль — стан кар'єри, не ворожнечі (ставить кар'єра)");
+            var m = c.StartMatch();
+            Assert.AreEqual(plain.PlayerMods.ExtraReversalTokens + LateRoles.LegendReversalTokens, m.Setup.PlayerMods.ExtraReversalTokens);
+            MatchAutoplay.Run(m, true);
+            c.FinishMatch();
+            c.OpenDevelopment();
+            var again = c.StartRematch();
+            Assert.AreEqual(plain.PlayerMods.ExtraReversalTokens + LateRoles.LegendReversalTokens, again.Setup.PlayerMods.ExtraReversalTokens,
+                "реванш — з тією самою роллю (раніше роль лежала в стані ворожнечі, і знімок до матчу її губив)");
+        }
     }
 }

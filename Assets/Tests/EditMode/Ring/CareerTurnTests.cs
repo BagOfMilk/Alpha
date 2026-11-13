@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Game.Core.Ring;
 using Game.Core.Ring.Career;
+using Game.Core.Ring.Match;
 using NUnit.Framework;
 
 namespace Game.Tests.EditMode
@@ -60,6 +61,21 @@ namespace Game.Tests.EditMode
             }
             path.Add(r.Current.Id);
             return path;
+        }
+
+        /// <summary>Від тижня — до старту наступного матчу (звичайне шоу чи велике шоу ворожнечі): рушій на старті.</summary>
+        private static MatchEngine NextMatch(CareerSession s)
+        {
+            if (s.Stage == CareerStage.Week) s.EndWeek();
+            Assert.AreEqual(CareerStage.Show, s.Stage);
+            if (!s.State.IsFeudShow) return s.StartShow();
+            var rep = new CareerRunReport();
+            for (int guard = 0; !(s.State.Phase == ShowPhase.Feud && s.Feud.Stage == RingStage.MatchPrep); guard++)
+            {
+                Assert.Less(guard, 400);
+                CareerBot.Step(s, 0, rep);
+            }
+            return s.StartFeudMatch();
         }
 
         private static WeekActionResult ChooseAndFinish(CareerSession s, string option)
@@ -211,6 +227,47 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(RingPath.Heel, res.TurnedTo);
             Assert.AreEqual(trust, s.Trust, "букер такого не планував — довіри немає");
             Assert.AreEqual(hype + 1, s.State.NextHypeBonus, "зал чекає нового тебе — ажіотаж на старті наступного матчу");
+
+            // і справді на старті матчу: та сама сесія без цього +1 — на один ажіотаж менше
+            s.EndWeek();
+            var without = CareerKit.Fresh(22, C);
+            without.RestoreState(s.CaptureState());
+            without.State.NextHypeBonus -= 1;
+            var e = NextMatch(s);
+            var e0 = NextMatch(without);
+            Assert.Less(e0.State.Hype, MatchRules.MaxHype, "замір не впирається в стелю");
+            Assert.AreEqual(e0.State.Hype + 1, e.State.Hype, "ажіотаж повороту — на старті наступного матчу");
+            CareerBot.PlayMatch(s, 0, new CareerRunReport());
+            s.FinishMatch();
+            Assert.AreEqual(0, s.State.NextHypeBonus, "один матч — і бонус витрачено");
+        }
+
+        [Test]
+        public void TurnScene_TheHammerFeud_CountsAsAFeud_ForTheHeroine_AndInTheUpperFederations()
+        {
+            // героїня: Молот — у чоловічому дивізіоні, його немає в пулі суперників, але ворожнеча з ним — є (§5.3, рев'ю ПМ 12.11.2026)
+            var h = CareerKit.NewAtCreate(31);
+            var d = CareerKit.Draft(Gimmick.Showman); d.Female = true;
+            h.CreateHero(d);
+            Assert.IsTrue(h.State.Female);
+            Assert.IsFalse(h.BookingPool().Any(n => n.Id == CareerContent.HammerId), "Молота в пулі героїні немає");
+            foreach (var n in h.BookingPool()) h.State.SetNpcFeud(n.Id, 0);
+            h.Feud.State.Heat = 3;
+            Assert.AreEqual(3, h.MaxFeudLevel, "ворожнеча з Молотом — теж ворожнеча");
+            h.State.FeudResolved = true;
+            Assert.AreEqual(0, h.MaxFeudLevel, "розв'язана — вже ні");
+
+            // герой у федерації 2: ворожнеча з Молотом перейшла разом із ним, і поворот приходить
+            for (int tier = 2; tier <= C.Federations.Count; tier++)
+            {
+                var s = HeroBeforeTurn(tier, 0, (ulong)(40 + tier));
+                Assert.AreEqual(0, s.MaxFeudLevel);
+                Assert.AreNotEqual("ev_turn", s.Backstage().SceneId, "федерація " + tier + ": без ворожнечі — ні");
+                s = HeroBeforeTurn(tier, 0, (ulong)(40 + tier));
+                s.Feud.State.Heat = 3;
+                Assert.AreEqual(3, s.MaxFeudLevel, "федерація " + tier);
+                Assert.AreEqual("ev_turn", s.Backstage().SceneId, "федерація " + tier + ": жар Молота 3 — поворот");
+            }
         }
 
         [Test]
@@ -242,6 +299,8 @@ namespace Game.Tests.EditMode
             ToChoice(s.CurrentBackstage);
             ChooseAndFinish(s, "turn");
             Assert.AreEqual(RingPath.Heel, s.GetCareerView().Role, "картка героя показує нову роль");
+            var e = NextMatch(s);
+            Assert.AreEqual(RingPath.Heel, e.Setup.PlayerRole, "і в матчі грає нова роль");
         }
 
         // ---------------- завантажувач ----------------
