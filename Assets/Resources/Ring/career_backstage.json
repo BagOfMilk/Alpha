@@ -1466,7 +1466,15 @@
    ],
    "fromWeek": 2,
    "spread": 3,
-   "once": true
+   "once": true,
+   "arc": true,
+   "requires": [
+    {
+     "career": "tier",
+     "min": 2,
+     "not": true
+    }
+   ]
   },
   {
    "id": "ev_mixed",
@@ -3786,10 +3794,16 @@
    "fromWeek": 2,
    "spread": 2,
    "once": true,
+   "arc": true,
    "requires": [
     {
      "career": "seen_before",
      "target": "ev_friend"
+    },
+    {
+     "career": "tier",
+     "min": 2,
+     "not": true
     }
    ]
   },
@@ -3831,6 +3845,10 @@
          "career": "injure",
          "target": "random",
          "add": 1
+        },
+        {
+         "career": "opponent",
+         "target": "stalevyi"
         }
        ],
        "next": "n4",
@@ -3848,6 +3866,10 @@
         {
          "var": "trust",
          "add": -1
+        },
+        {
+         "career": "opponent",
+         "target": "stalevyi"
         }
        ],
        "next": "n5"
@@ -3895,6 +3917,7 @@
    "fromWeek": 2,
    "spread": 2,
    "once": true,
+   "arc": true,
    "requires": [
     {
      "flag": "veteran_partner"

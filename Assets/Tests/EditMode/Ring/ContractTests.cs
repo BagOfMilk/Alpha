@@ -78,12 +78,22 @@ namespace Game.Tests.EditMode
         {
             var s = CareerKit.NewHero(seed);
             s.State.Week = 4;
+            SeenBeforeManager(s);
+            return s;
+        }
+
+        /// <summary>
+        /// Події цього сезону, що стоять у файлі до ev_manager, уже були; сцени дуги («arc») перевіряються першими (рев'ю ПМ 927b86c),
+        /// тож і вони — теж, інакше «Друг у лазареті» перехопив би менеджерку.
+        /// </summary>
+        private static void SeenBeforeManager(CareerSession s)
+        {
+            bool before = true;
             foreach (var sc in s.Content.Backstage.Scenes)
             {
-                if (sc.Id == "ev_manager") break;
-                if (sc.Kind == BackstageKind.Event) s.State.BackstageSeen.Add(s.State.Season + ":" + sc.Id);
+                if (sc.Id == "ev_manager") before = false;
+                if (sc.Kind == BackstageKind.Event && (before || sc.Arc)) s.State.BackstageSeen.Add(s.State.Season + ":" + sc.Id);
             }
-            return s;
         }
 
         /// <summary>Пройти сцену менеджерки з вибором <paramref name="choice"/> (hire / later / refuse).</summary>
@@ -108,11 +118,7 @@ namespace Game.Tests.EditMode
         private static void ToNextSeasonBeforeManagerScene(CareerSession s)
         {
             s.State.Season++; s.State.Week = 4; s.State.ActionsLeft = 3;
-            foreach (var sc in s.Content.Backstage.Scenes)
-            {
-                if (sc.Id == "ev_manager") break;
-                if (sc.Kind == BackstageKind.Event) s.State.BackstageSeen.Add(s.State.Season + ":" + sc.Id);
-            }
+            SeenBeforeManager(s);
             s.Feud.State.Audience = CareerRules.ManagerPopularity;
         }
 

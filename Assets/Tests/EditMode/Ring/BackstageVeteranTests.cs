@@ -266,6 +266,242 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(Betrayal, WouldOpen(t));
         }
 
+        // ---------------- черга й розплата (рев'ю ПМ 927b86c) ----------------
+
+        /// <summary>Пройти відкриту сцену: у виборі — перший відкритий з <paramref name="prefer"/>, інакше перший відкритий; кидки — як випадуть.</summary>
+        private static WeekActionResult PlayPreferring(CareerSession s, params string[] prefer)
+        {
+            var r = s.CurrentBackstage;
+            for (int guard = 0; !r.IsFinished; guard++)
+            {
+                Assert.Less(guard, 200);
+                switch (r.Current.Type)
+                {
+                    case PromoNodeType.Line: r.Advance(); break;
+                    case PromoNodeType.Choice:
+                        var open = r.AvailableOptions().Where(v => !v.Locked).Select(v => v.Option.Id).ToList();
+                        r.Choose(prefer.FirstOrDefault(open.Contains) ?? open[0]);
+                        break;
+                    case PromoNodeType.Check:
+                        s.BackstageRollCheck();
+                        if (r.AwaitingRewards) r.ChooseRewards(r.Current.Rewards.Take(r.RewardsToPick).Select(x => x.Id).ToList());
+                        break;
+                }
+            }
+            return s.FinishBackstage();
+        }
+
+        /// <summary>
+        /// Природна досяжність (рев'ю ПМ 927b86c): жодної підготовки стану — герой федерації 1 щотижня бере «Закулісся» раз, решту
+        /// дня тренується, від пропозицій вищих федерацій відмовляється. Щосезонні події (інтерв'ю, парковка, контракт, менеджерка,
+        /// поворот) стоять у файлі раніше, але сцени дуги їх випереджають: друг — у сезоні 1, ветеран — у сезоні 2, зрада — у сезоні 3,
+        /// і на найближчому звичайному шоу після зради — матч-розплата зі Сталевим.
+        /// </summary>
+        [Test]
+        public void Arc_ComesNaturally_TheBackstageOnceAWeek_VeteranInSeason2_BetrayalInSeason3_ThenThePayback()
+        {
+            foreach (ulong seed in new ulong[] { 11, 12, 13, 14, 15 })
+            {
+                var s = CareerKit.NewHero(seed);
+                var at = new Dictionary<string, int>();
+                var rep = new CareerRunReport();
+                bool betrayed = false, checkedPayback = false;
+                int shows = 0, guard = 0;
+                string lastShow = null;
+                while (s.State.Season <= 4 && guard++ < 4000)
+                {
+                    if (s.Stage == CareerStage.Week)
+                    {
+                        var r = s.Backstage();
+                        if (r.Ok && r.NeedsScene)
+                        {
+                            if (!at.ContainsKey(r.SceneId)) at[r.SceneId] = s.State.Season;
+                            PlayPreferring(s, "time", "word", "booker");
+                            if (r.SceneId == Betrayal) betrayed = true;
+                        }
+                        for (int i = 0; i < 3 && s.State.ActionsLeft > 0; i++) if (!s.Train(false).Ok) break;
+                        s.EndWeek();
+                    }
+                    else if (s.Stage == CareerStage.SeasonEnd)
+                    {
+                        if (s.CanStartTitleMatch) s.SkipTitle();
+                        else if (s.OfferAvailable) s.DeclineOffer();
+                        else s.StartNextSeason();
+                    }
+                    else
+                    {
+                        string key = s.State.Season + ":" + s.State.Week;
+                        if (s.Stage == CareerStage.Show && key != lastShow)
+                        {
+                            lastShow = key; shows++;
+                            bool ordinary = !s.State.IsBig && !s.State.IsTitle && !s.State.IsFeudShow;
+                            if (betrayed && !checkedPayback && ordinary)
+                            {
+                                Assert.AreEqual(Stalevyi, s.State.Opponent, "seed " + seed + ": найближче звичайне шоу після зради — розплата (" + key + ")");
+                                checkedPayback = true;
+                            }
+                        }
+                        CareerBot.Step(s, 0, rep);
+                    }
+                }
+                Assert.Less(guard, 4000);
+                string seen = string.Join(",", at.Select(kv => kv.Key + "@" + kv.Value));
+                Assert.AreEqual(1, s.State.Federation, "seed " + seed + ": герой лишився у федерації 1");
+                Assert.AreEqual(1, at.ContainsKey(Friend) ? at[Friend] : -1, "seed " + seed + ": друг у лазареті — сезон 1; " + seen);
+                Assert.AreEqual(2, at.ContainsKey(Veteran) ? at[Veteran] : -1, "seed " + seed + ": ветеран — сезон 2; " + seen);
+                Assert.AreEqual(3, at.ContainsKey(Betrayal) ? at[Betrayal] : -1, "seed " + seed + ": зрада — сезон 3; " + seen);
+                Assert.IsTrue(checkedPayback, "seed " + seed + ": матч-розплата відбувся");
+                Assert.Greater(at.Count, 3, "seed " + seed + ": щосезонні події теж трапляються: " + seen);
+            }
+        }
+
+        [Test]
+        public void ArcScenes_GoFirst_SeasonalEventsEarlierInTheFile_DoNotTakeTheirTurn()
+        {
+            var s = CareerKit.NewHero(51);
+            s.State.Money = 100;
+            Ready(s, 1, Friend);
+            Play(s, Friend, null, "time");
+            // сезон 2, тиждень 4: дозріло все, нічого цього сезону ще не було
+            s.State.Season = 2; s.State.Week = 4; s.State.ActionsLeft = CareerRules.ActionsPerWeek; s.State.ActionsDone.Clear();
+            var earlier = s.Content.Backstage.Scenes.TakeWhile(sc => sc.Id != Veteran).Where(sc => sc.Kind == BackstageKind.Event && !sc.Arc).ToList();
+            Assert.Greater(earlier.Count, 3, "у файлі перед ветераном — щосезонні події");
+            Assert.AreEqual(Veteran, WouldOpen(s), "дозріла сцена дуги — першою, хоч у файлі вона нижче");
+            Play(s, Veteran, null, "word");
+            var next = WouldOpen(s);
+            Assert.IsTrue(earlier.Any(sc => sc.Id == next), "після сцени дуги — щосезонна подія за порядком файлу, а не " + next);
+            foreach (var id in new[] { Friend, Veteran, Betrayal }) Assert.IsTrue(s.Content.Backstage.Find(id).Arc, id + ": сцена дуги");
+            Assert.IsFalse(s.Content.Backstage.Scenes.Any(sc => sc.Arc && !new[] { Friend, Veteran, Betrayal }.Contains(sc.Id)), "дуга — лише Сталевого");
+        }
+
+        [Test]
+        public void Betrayal_FightOrBooker_PutsStalevyiOnThisWeeksCard_LetLeavesTheCard()
+        {
+            var s = Arc(CareerKit.NewHero(52), "pay", "word");
+            Ready(s, 3, Betrayal);
+            s.BookShow();
+            Assert.IsFalse(s.State.IsBig || s.State.IsTitle || s.State.IsFeudShow, "тиждень " + s.State.Week + " — звичайне шоу");
+            string other = s.BookingPool().First(n => n.Id != Stalevyi && n.Id != CareerContent.HammerId).Id;
+            Assert.IsTrue(s.ForceOpponent(other));
+            var npc = s.Content.FindNpc(Stalevyi);
+
+            foreach (var choice in new[] { "fight", "booker" })
+            {
+                var t = Clone(s);
+                var r = Play(t, Betrayal, null, choice);
+                Assert.AreEqual(Stalevyi, t.State.Opponent, choice + ": картку переписано — матч-розплата цього тижня");
+                Assert.IsTrue(r.OpponentChanged, choice);
+                Assert.AreEqual("", t.State.PendingOpponent, choice + ": обіцянку виконано");
+                // план і умови — ті, що склав би букер для Сталевого вже після сцени (довіра −1, ворожнеча +1/+2)
+                Assert.AreEqual(ShowBooker.PlanFor(npc, t.Popularity, t.Trust, t.PopularityFloor, t.PopularityCeiling), t.State.Plan, choice + ": план");
+                Assert.AreEqual(ShowBooker.StipulationsFor(t.FeudLevel(Stalevyi)), t.State.Stip, choice + ": умови матчу — за ворожнечею");
+                Assert.AreEqual(Stalevyi, t.GetShowCard().Opponent.Id, choice + ": картка тижня");
+            }
+            var let = Clone(s);
+            var rl = Play(let, Betrayal, null, "let");
+            Assert.AreEqual(other, let.State.Opponent, "відпустив — картка та сама");
+            Assert.IsFalse(rl.OpponentChanged);
+            Assert.AreEqual("", let.State.PendingOpponent);
+
+            // ворожнеча зі Сталевим уже гаряча: після сцени вона ≥ NoDqFeudLevel, і розплата йде без дискваліфікацій,
+            // хоча матч з попереднім суперником (ворожнеча 0) був звичайним — умови перераховано разом із суперником
+            var hot = Clone(s);
+            hot.State.SetNpcFeud(Stalevyi, CareerRules.NoDqFeudLevel - 1);
+            Assert.AreEqual(MatchStipulations.None, hot.State.Stip, "з попереднім суперником — звичайний матч");
+            Play(hot, Betrayal, null, "booker");
+            Assert.AreEqual(Stalevyi, hot.State.Opponent);
+            Assert.AreEqual(MatchStipulations.NoDq, hot.State.Stip, "розплата — без дискваліфікацій");
+        }
+
+        [Test]
+        public void Betrayal_OnTheBigShowWeek_ThePaybackWaitsForTheNextOrdinaryShow_ThroughTheSave()
+        {
+            var s = Arc(CareerKit.NewHero(53), "pay", "word");
+            Ready(s, 3, Betrayal);
+            s.State.Week = CareerRules.BigShowEvery;
+            s.BookShow();
+            Assert.IsTrue(s.State.IsBig, "тиждень великого шоу");
+            string card = s.State.Opponent;
+            var r = Play(s, Betrayal, null, "fight");
+            Assert.AreEqual(card, s.State.Opponent, "картку великого шоу (і ворожнечі з Молотом) не переписано");
+            Assert.IsFalse(r.OpponentChanged);
+            Assert.AreEqual(Stalevyi, s.State.PendingOpponent, "розплата чекає на звичайне шоу");
+
+            var t = Clone(s);
+            Assert.AreEqual(Stalevyi, t.State.PendingOpponent, "обіцянка — у сейві");
+            t.State.Season = 4; t.State.Week = 1;
+            t.BookShow();
+            Assert.IsFalse(t.State.IsBig);
+            Assert.AreEqual(Stalevyi, t.State.Opponent, "наступне звичайне шоу — проти Сталевого");
+            Assert.AreEqual("", t.State.PendingOpponent);
+            t.State.Week = 2;
+            t.BookShow();
+            Assert.AreEqual("", t.State.PendingOpponent, "обіцянка — одна: далі картку складає букер як завжди");
+
+            var moved = Clone(s);
+            moved.EnterFederation(2, s.Content.Federation(2).Floor, 1);
+            moved.State.Season = 4; moved.State.Week = 1;
+            moved.BookShow();
+            Assert.AreNotEqual(Stalevyi, moved.State.Opponent, "у федерації 2 Сталевого немає");
+            Assert.AreEqual("", moved.State.PendingOpponent, "на першому звичайному шоу нової федерації обіцянку знято");
+
+            var old = CareerKit.Fresh(s.State.Seed, s.Content);
+            old.RestoreState(System.Text.RegularExpressions.Regex.Replace(s.CaptureState(), @"\|popp=[^|]*", ""));
+            Assert.AreEqual("", old.State.PendingOpponent, "старий сейв без обіцянки читається");
+        }
+
+        [Test]
+        public void FriendAndVeteran_OnlyInFederation1_LikeTheBetrayal_TheArcDoesNotBreakHalfway()
+        {
+            var high = CareerKit.NewHero(54);
+            high.EnterFederation(2, high.Content.Federation(2).Floor, 1);
+            Ready(high, 1, Friend);
+            Assert.AreNotEqual(Friend, WouldOpen(high), "друга в лазареті у федерації 2 немає: Сталевий — з місцевої");
+
+            var s = CareerKit.NewHero(55);
+            s.State.Money = 100;
+            Ready(s, 1, Friend);
+            Play(s, Friend, null, "time");
+            var moved = Clone(s);
+            moved.EnterFederation(2, s.Content.Federation(2).Floor, 1);
+            Ready(moved, 2, Veteran);
+            Assert.AreNotEqual(Veteran, WouldOpen(moved), "герой пішов у федерацію 2 — ветеран не повертається, напарництва без зради не буде");
+            Ready(s, 2, Veteran);
+            Assert.AreEqual(Veteran, WouldOpen(s), "у федерації 1 — повертається");
+
+            foreach (var sc in s.Content.Backstage.Scenes.Where(x => x.Arc))
+                Assert.IsTrue(sc.Requires.Any(c => c.Kind == ConditionKind.Career && c.Key == "tier" && c.Min == 2 && c.Negate),
+                    sc.Id + ": сцена дуги — лише федерація 1");
+        }
+
+        [Test]
+        public void Loader_ArcOnlyForBackstageEvents_OpponentNeedsARosterNpc_WithoutAdd()
+        {
+            Func<string, Dictionary<string, object>> o = MiniJson.ParseObject;
+            Assert.Throws<FormatException>(() => FeudEffect.FromJson(o("{\"career\":\"opponent\"}"), "t"), "без цілі");
+            Assert.Throws<FormatException>(() => FeudEffect.FromJson(o("{\"career\":\"opponent\",\"target\":\"stalevyi\",\"add\":1}"), "t"), "з add");
+            Assert.AreEqual(Stalevyi, FeudEffect.FromJson(o("{\"career\":\"opponent\",\"target\":\"stalevyi\"}"), "t").Target);
+
+            string bs = CareerKit.Read("career_backstage.json");
+            Func<string, CareerContent> load = j => CareerContent.Load(CareerKit.Read("feud_hammer.json"), CareerKit.Read("career_moves.json"),
+                CareerKit.Read("career_gimmicks.json"), CareerKit.Read("career_roster.json"), j);
+            Assert.IsNotNull(load(bs));
+            const string pay = "\"career\": \"opponent\",\r\n         \"target\": \"stalevyi\"";
+            string payLf = pay.Replace("\r\n", "\n");
+            string real = bs.Contains(pay) ? pay : payLf;
+            Assert.AreEqual(2, bs.Split(new[] { real }, StringSplitOptions.None).Length - 1, "розплата — у двох варіантах зради");
+            StringAssert.Contains("opponent", Assert.Throws<FormatException>(() => load(bs.Replace(real, real.Replace("stalevyi", "nobody")))).Message);
+            StringAssert.Contains("opponent", Assert.Throws<FormatException>(() => load(bs.Replace(real, real.Replace("stalevyi", CareerContent.HammerId)))).Message);
+
+            const string once = "\"id\": \"booker_talk\",";
+            Assert.AreEqual(1, bs.Split(new[] { once }, StringSplitOptions.None).Length - 1);
+            StringAssert.Contains("arc", Assert.Throws<FormatException>(() => BackstageContent.Load(bs.Replace(once, once + " \"arc\": true,"))).Message,
+                "розмова з букером — не сцена дуги");
+            const string mixed = "\"id\": \"ev_mixed\",";
+            StringAssert.Contains("arc", Assert.Throws<FormatException>(() => BackstageContent.Load(bs.Replace(mixed, mixed + " \"arc\": true,"))).Message,
+                "подія, що відкривається сама, — не сцена дуги");
+        }
+
         // ---------------- завантажувач ----------------
 
         [Test]

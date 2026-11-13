@@ -44,6 +44,9 @@ namespace Game.Core.Ring
         /// </summary>
         public LateRole LateRole;
 
+        /// <summary>Ґімік борця (§5.2) — поправки матчу ворожнечі й реваншу. Як і пізню роль, ставить кар'єра; null — без ґіміка.</summary>
+        public Career.Gimmick? PlayerGimmick;
+
         private string _bookerVoice;
 
         /// <summary>
@@ -183,7 +186,7 @@ namespace Game.Core.Ring
             Require(RingStage.MatchPrep);
             State.PrepareMatch(CurrentMatchDef);
             _preMatchState = State.CaptureState();
-            CurrentMatch = new MatchEngine(State.BuildMatchSetup(Script, LateRole), Dice);
+            CurrentMatch = new MatchEngine(State.BuildMatchSetup(Script, LateRole, PlayerGimmick), Dice);
             IsRematch = false;
             Stage = RingStage.Match;
             return CurrentMatch;
@@ -283,7 +286,7 @@ namespace Game.Core.Ring
             s.RestoreState(_preMatchState);
             foreach (var p in State.Perks) s.Perks.Add(p);
             s.Player = State.Player.Clone();
-            CurrentMatch = new MatchEngine(s.BuildMatchSetup(Script, LateRole), Dice);
+            CurrentMatch = new MatchEngine(s.BuildMatchSetup(Script, LateRole, PlayerGimmick), Dice);
             IsRematch = true;
             RematchResult = null;
             Stage = RingStage.Match;

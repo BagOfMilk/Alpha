@@ -108,10 +108,19 @@ namespace Game.Core.Ring
             return true;
         }
 
+        /// <summary>
+        /// Ціна +1 до атрибута для цього стану: <see cref="AttrCost"/>, а витривалість — з надбавкою старіння
+        /// (<see cref="FeudState.StaminaSurcharge"/>, §5.5). Єдине джерело ціни для кар'єри, кампанії й екранів.
+        /// </summary>
+        public static int AttrCostFor(FeudState s, RingAttr a)
+        {
+            return AttrCost + (a == RingAttr.Stamina ? Math.Max(0, s.StaminaSurcharge) : 0);
+        }
+
         public static bool CanBuyAttr(FeudState s, RingAttr a, out string reason)
         {
             if (s.Player.Get(a) >= WrestlerStats.MaxAttr) { reason = "max"; return false; }
-            if (s.DevPoints < AttrCost) { reason = "points"; return false; }
+            if (s.DevPoints < AttrCostFor(s, a)) { reason = "points"; return false; }
             reason = null;
             return true;
         }
@@ -120,7 +129,7 @@ namespace Game.Core.Ring
         {
             string reason;
             if (!CanBuyAttr(s, a, out reason)) return false;
-            s.DevPoints -= AttrCost;
+            s.DevPoints -= AttrCostFor(s, a);
             s.Player.Set(a, s.Player.Get(a) + 1);
             return true;
         }

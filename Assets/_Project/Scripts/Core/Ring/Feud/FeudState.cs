@@ -50,6 +50,12 @@ namespace Game.Core.Ring
 
         /// <summary>Ажіотаж фіналу, з якого матч дає популярність (П5: 7 на місцевій і регіональній, 8 вище). Не зберігається.</summary>
         public int AudienceHypeAt = 7;
+
+        /// <summary>
+        /// Тіло старіє (§5.5): надбавка до ціни витривалості в очках розвитку (<see cref="Development.AttrCostFor"/>). Не зберігається й
+        /// губиться на <see cref="Clone"/> (як і <see cref="AudienceCap"/>): її ставить кар'єра за сезоном. Через копію не купувати.
+        /// </summary>
+        public int StaminaSurcharge;
         public int Heat { get { return _heat; } set { _heat = FeudVars.Clamp(FeudVars.Heat, value); } }
         public int Momentum { get { return _momentum; } set { _momentum = FeudVars.Clamp(FeudVars.Momentum, value); } }
         public int Trust { get { return _trust; } set { _trust = FeudVars.Clamp(FeudVars.Trust, value); } }
@@ -286,12 +292,15 @@ namespace Game.Core.Ring
         /// MatchSetup зі стану (gdd §1, §3, §6): імпульс старту = імпульс ворожнечі + перк; ажіотаж старту = 1 + Heat + перк
         /// (нагороди промо вже вкладені в Heat/Momentum своїми ефектами), 0–10; роль = домінантний шлях.
         /// Напарник — прапор HasAlly (умову «повага ≥ 1» ставить сам граф: варіант з ally вимагає var locker).
+        /// Ґімік борця (§5.2) — як пізня роль: його ставить кар'єра (null — без ґіміка, окрема ворожнеча); вбудований перк ґіміка вже
+        /// серед <see cref="Perks"/>.
         /// </summary>
-        public MatchSetup BuildMatchSetup(FeudScript script, LateRole lateRole = LateRole.None)
+        public MatchSetup BuildMatchSetup(FeudScript script, LateRole lateRole = LateRole.None, Career.Gimmick? gimmick = null)
         {
             if (script == null) throw new ArgumentNullException(nameof(script));
             var mods = Development.ToModifiers(Perks);
             LateRoles.ApplyTo(mods, lateRole);
+            if (gimmick.HasValue) GimmickRules.ApplyTo(mods, gimmick.Value);
             return new MatchSetup
             {
                 Player = Player.Clone(),

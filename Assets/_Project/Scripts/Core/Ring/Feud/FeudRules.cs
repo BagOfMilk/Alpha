@@ -85,8 +85,9 @@ namespace Game.Core.Ring
         /// <summary>Ефекти: money(add), injure(target зона head/body/legs/random, add — ушкодження), npc_feud(target NPC | opponent |
         /// last_opponent, add), hype(add — ажіотаж старту наступного матчу), boost(add — імпульс суперника), plan(target — план
         /// наступного шоу), actions(add — дії тижня), dev(add — очки розвитку), manager(add 1 — найняти, −1 — звільнити, §6.4),
-        /// turn(target face/heel — поворот ролі, §5.3: очки героя й лиходія міняються місцями, без add).</summary>
-        public static readonly string[] Effects = { "money", "injure", "npc_feud", "hype", "boost", "plan", "actions", "dev", "manager", "turn" };
+        /// turn(target face/heel — поворот ролі, §5.3: очки героя й лиходія міняються місцями, без add), opponent(target NPC — суперник
+        /// найближчого звичайного шоу: цього тижня, якщо можна, інакше наступного; не велике, не титул, не Молот; без add).</summary>
+        public static readonly string[] Effects = { "money", "injure", "npc_feud", "hype", "boost", "plan", "actions", "dev", "manager", "turn", "opponent" };
 
         public static bool IsCondition(string n) { return Array.IndexOf(Conditions, n) >= 0; }
         public static bool IsEffect(string n) { return Array.IndexOf(Effects, n) >= 0; }
@@ -196,7 +197,7 @@ namespace Game.Core.Ring
                 e.Kind = EffectKind.Career; e.Key = JsonRead.Str(o, "career", where); e.Amount = JsonRead.Int(o, "add", where, 0);
                 e.Target = JsonRead.Str(o, "target", where, false);
                 if (!CareerFx.IsEffect(e.Key)) throw new FormatException(where + ": невідомий ефект кар'єри '" + e.Key + "'");
-                if ((e.Key == "injure" || e.Key == "npc_feud" || e.Key == "plan") && e.Target == null)
+                if ((e.Key == "injure" || e.Key == "npc_feud" || e.Key == "plan" || e.Key == "opponent") && e.Target == null)
                     throw new FormatException(where + ": ефект " + e.Key + " потребує target");
                 if (e.Key == "injure" && Array.IndexOf(new[] { "head", "body", "legs", "random" }, e.Target) < 0)
                     throw new FormatException(where + ": невідома зона '" + e.Target + "'");
@@ -206,7 +207,9 @@ namespace Game.Core.Ring
                 if (e.Key == "turn" && (!FeudVars.TryPath(e.Target, out tp) || tp == RingPath.Rebel))
                     throw new FormatException(where + ": поворот потребує target face/heel");
                 if (e.Key == "turn" && e.Amount != 0) throw new FormatException(where + ": поворот без add");
-                if (e.Key != "plan" && e.Key != "npc_feud" && e.Key != "turn" && e.Amount == 0) throw new FormatException(where + ": ефект " + e.Key + " без add");
+                if (e.Key == "opponent" && e.Amount != 0) throw new FormatException(where + ": суперник шоу — без add");
+                if (e.Key != "plan" && e.Key != "npc_feud" && e.Key != "turn" && e.Key != "opponent" && e.Amount == 0)
+                    throw new FormatException(where + ": ефект " + e.Key + " без add");
             }
             else if (JsonRead.Has(o, "var"))
             {

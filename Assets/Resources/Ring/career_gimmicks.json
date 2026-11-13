@@ -71,6 +71,84 @@
    ],
    "signature": "spotlight_blow",
    "finisherMove": "grand_finale"
+  },
+  {
+   "id": "veteran",
+   "name": "gimmick.veteran",
+   "finisher": "technique",
+   "attr": {
+    "strength": 0,
+    "agility": 0,
+    "technique": 2,
+    "stamina": 0,
+    "charisma": 1
+   },
+   "moves": [
+    "arm_drag",
+    "crossface"
+   ],
+   "signature": "old_school",
+   "finisherMove": "last_lesson",
+   "onCreationScreen": false
+  },
+  {
+   "id": "hardcore",
+   "name": "gimmick.hardcore",
+   "finisher": "strength",
+   "attr": {
+    "strength": 1,
+    "agility": 0,
+    "technique": 0,
+    "stamina": 2,
+    "charisma": 0
+   },
+   "moves": [
+    "headbutt",
+    "clubbing_blow"
+   ],
+   "signature": "floor_slam",
+   "finisherMove": "scar_maker",
+   "onCreationScreen": false
+  },
+  {
+   "id": "rookie",
+   "name": "gimmick.rookie",
+   "finisher": "strength",
+   "attr": {
+    "strength": 0,
+    "agility": 0,
+    "technique": 0,
+    "stamina": 0,
+    "charisma": 0
+   },
+   "moves": [
+    "chop",
+    "body_drop"
+   ],
+   "signature": "upstart",
+   "finisherMove": "first_break",
+   "onCreationScreen": false,
+   "freePoints": 2,
+   "startMoves": 0
+  },
+  {
+   "id": "strongman",
+   "name": "gimmick.strongman",
+   "finisher": "strength",
+   "attr": {
+    "strength": 3,
+    "agility": -1,
+    "technique": 0,
+    "stamina": 0,
+    "charisma": 0
+   },
+   "moves": [
+    "military_press",
+    "bear_hug"
+   ],
+   "signature": "anvil",
+   "finisherMove": "titan_press",
+   "onCreationScreen": false
   }
  ]
 }
