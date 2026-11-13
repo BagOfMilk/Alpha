@@ -203,6 +203,8 @@ namespace Game.Core.Ring.Career
         public ShowPhase Phase;
         public string Opponent = "";
         public string LastOpponent = "";
+        /// <summary>Суперник, обіцяний сценою на найближче звичайне шоу (ефект «opponent»); "" — обіцянки немає. У сейві — «popp».</summary>
+        public string PendingOpponent = "";
         public BookerPlan Plan;
         public MatchStipulations Stip;
         public CardPosition Position;
@@ -331,7 +333,7 @@ namespace Game.Core.Ring.Career
             foreach (var kv in Belts) belts.Add(kv.Key + ":" + Esc(kv.Value));
             sb.Append("|belts=").Append(string.Join(",", belts));
             sb.Append("|fed=").Append(Federation).Append("|fem=").Append(FemaleKnown ? b(Female) : "");
-            sb.Append("|phase=").Append((int)Phase).Append("|opp=").Append(Esc(Opponent)).Append("|lastopp=").Append(Esc(LastOpponent));
+            sb.Append("|phase=").Append((int)Phase).Append("|opp=").Append(Esc(Opponent)).Append("|lastopp=").Append(Esc(LastOpponent)).Append("|popp=").Append(Esc(PendingOpponent));
             sb.Append("|plan=").Append((int)Plan).Append("|stip=").Append((int)Stip).Append("|pos=").Append((int)Position);
             sb.Append("|big=").Append(b(IsBig)).Append("|title=").Append(b(IsTitle)).Append("|feudshow=").Append(b(IsFeudShow));
             sb.Append("|showpromo=").Append(b(ShowPromoDone)).Append("|showpromotier=").Append(ShowPromoTier);
@@ -401,6 +403,8 @@ namespace Game.Core.Ring.Career
             }
             else if (kv.TryGetValue("belt", out v)) OldBelt = Uri.UnescapeDataString(v);
             Phase = (ShowPhase)I("phase"); Opponent = S("opp"); LastOpponent = S("lastopp");
+            // обіцяний суперник (рев'ю ПМ 927b86c) з'явився пізніше за перші зліпки: без ключа обіцянки немає
+            PendingOpponent = kv.TryGetValue("popp", out v) ? Uri.UnescapeDataString(v) : "";
             Plan = (BookerPlan)I("plan"); Stip = (MatchStipulations)I("stip"); Position = (CardPosition)I("pos");
             IsBig = B("big"); IsTitle = B("title"); IsFeudShow = B("feudshow");
             ShowPromoDone = B("showpromo"); ShowPromoTier = I("showpromotier");

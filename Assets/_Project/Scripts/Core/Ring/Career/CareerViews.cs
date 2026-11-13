@@ -141,6 +141,8 @@ namespace Game.Core.Ring.Career
         public int ActionsDelta;
         /// <summary>Сцена змінила план найближчого шоу.</summary>
         public bool PlanChanged;
+        /// <summary>Сцена переписала картку: суперник найближчого шоу — обіцяний нею (ефект «opponent», матч-розплата).</summary>
+        public bool OpponentChanged;
         /// <summary>Сцена повернула роль (§5.3): нова роль; null — повороту не було.</summary>
         public RingPath? TurnedTo;
     }

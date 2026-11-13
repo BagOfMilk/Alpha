@@ -387,6 +387,8 @@ namespace Game.Core.Ring.Career
                         throw new FormatException(where + ": ефекти plan/stip/ally належать ворожнечі; у сценах — career:plan");
                     if (e.Kind == EffectKind.Career && e.Key == "npc_feud" && e.Target != "opponent" && e.Target != "last_opponent" && FindNpc(e.Target) == null)
                         throw new FormatException(where + ": ворожнеча з невідомим NPC '" + e.Target + "'");
+                    if (e.Kind == EffectKind.Career && e.Key == "opponent" && (FindNpc(e.Target) == null || e.Target == HammerId))
+                        throw new FormatException(where + ": ефект opponent — NPC ростеру (не Молот: у нього своя ворожнеча), а не '" + e.Target + "'");
                 }
                 foreach (var cd in conds)
                 {

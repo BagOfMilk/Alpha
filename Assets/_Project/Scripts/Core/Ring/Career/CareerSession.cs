@@ -349,8 +349,11 @@ namespace Game.Core.Ring.Career
             BookShow();
         }
 
-        /// <summary>Букер складає картку наступного шоу (на початку тижня: гравець бачить суперника й діє під нього).</summary>
-        private void BookShow()
+        /// <summary>
+        /// Букер складає картку наступного шоу (на початку тижня: гравець бачить суперника й діє під нього). internal — для тестів
+        /// картки (обіцяний сценою суперник на великому тижні й на наступному звичайному).
+        /// </summary>
+        internal void BookShow()
         {
             State.IsBig = State.IsBigWeek(State.Week);
             State.IsTitle = false;
@@ -378,6 +381,30 @@ namespace Game.Core.Ring.Career
                 State.Stip = ShowBooker.StipulationsFor(lv(opp.Id));
             }
             State.Opponent = opp.Id;
+            ApplyPendingOpponent();
+        }
+
+        /// <summary>
+        /// Суперник, якого пообіцяла сцена (ефект кар'єри «opponent»; зрада Сталевого — матч-розплата, рев'ю ПМ 927b86c), стає суперником
+        /// найближчого звичайного шоу: цього тижня, поки триває тиждень, інакше — на наступному звичайному. Велике шоу, титульний матч і
+        /// шоу ворожнечі з Молотом не чіпаються — обіцянка чекає. Такого NPC немає в пулі федерації (герой перейшов в іншу) — обіцянка
+        /// знімається. true — картку переписано (або суперник уже той самий).
+        /// </summary>
+        private bool ApplyPendingOpponent()
+        {
+            if (string.IsNullOrEmpty(State.PendingOpponent) || Stage != CareerStage.Week) return false;
+            if (State.IsBig || State.IsTitle || State.IsFeudShow) return false;
+            NpcDef npc = null;
+            foreach (var n in BookingPool()) if (n.Id == State.PendingOpponent) npc = n;
+            State.PendingOpponent = "";
+            if (npc == null) return false;
+            if (State.Opponent != npc.Id)
+            {
+                State.Opponent = npc.Id;
+                State.Plan = ShowBooker.PlanFor(npc, Popularity, Trust, PopularityFloor, PopularityCeiling);
+                State.Stip = ShowBooker.StipulationsFor(FeudLevel(npc.Id));
+            }
+            return true;
         }
 
         public WeekView GetWeekView()
@@ -822,13 +849,16 @@ namespace Game.Core.Ring.Career
                 ForcedBackstageScene = null;
                 if (forced != null) return forced;
             }
-            foreach (var sc in all)
-            {
-                if (sc.Kind != BackstageKind.Event || sc.Auto != BackstageAuto.None) continue;
-                if (BackstageSeenThisSeason(sc.Id) || State.Season < sc.MinSeason || State.Week < BackstageDueWeek(sc)) continue;
-                if (sc.Once && BackstageSeenEver(sc.Id)) continue;
-                if (SceneHolds(sc)) return sc;
-            }
+            // сюжетні сцени дуги — першими (рев'ю ПМ 927b86c): щосезонні події, що стоять у файлі раніше, не перехоплюють дозрілу сцену
+            // дуги; між собою й серед решти — порядок файлу
+            foreach (bool arc in new[] { true, false })
+                foreach (var sc in all)
+                {
+                    if (sc.Kind != BackstageKind.Event || sc.Auto != BackstageAuto.None || sc.Arc != arc) continue;
+                    if (BackstageSeenThisSeason(sc.Id) || State.Season < sc.MinSeason || State.Week < BackstageDueWeek(sc)) continue;
+                    if (sc.Once && BackstageSeenEver(sc.Id)) continue;
+                    if (SceneHolds(sc)) return sc;
+                }
             // розмова з букером: спершу та, чиї умови виконано (свій букер федерації); запасна без умов — коли жодна не підходить
             BackstageScene fallback = null;
             foreach (var sc in all)
@@ -996,6 +1026,10 @@ namespace Game.Core.Ring.Career
                 case "turn":
                     RingPath to;
                     if (FeudVars.TryPath(e.Target, out to) && Turn(to)) r.TurnedTo = to;
+                    break;
+                case "opponent":
+                    State.PendingOpponent = e.Target;
+                    if (ApplyPendingOpponent()) r.OpponentChanged = true;
                     break;
             }
         }

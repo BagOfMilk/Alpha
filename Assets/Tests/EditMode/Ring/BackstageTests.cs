@@ -52,7 +52,10 @@ namespace Game.Tests.EditMode
             return r.SceneId;
         }
 
-        /// <summary>Сесія, де першою відкриється подія id: попередні події цього сезону вже були, тиждень — останній (усе дозріло).</summary>
+        /// <summary>
+        /// Сесія, де першою відкриється подія id: попередні події цього сезону вже були, тиждень — останній (усе дозріло). Сцени дуги
+        /// («arc») перевіряються раніше за решту (рев'ю ПМ 927b86c), тож і вони цього сезону вже були — крім самої id.
+        /// </summary>
         private static CareerSession HeroForEvent(CareerContent c, string id, ulong seed = 1)
         {
             int season = Math.Max(1, c.Backstage.Find(id).MinSeason);
@@ -62,7 +65,15 @@ namespace Game.Tests.EditMode
                 if (e == id) break;
                 s.State.BackstageSeen.Add(season + ":" + e);
             }
+            ArcSeen(s, season, id);
             return s;
+        }
+
+        /// <summary>Сцени дуги цього сезону вже були (крім <paramref name="except"/>): вони йдуть першими й інакше перехопили б подію тесту.</summary>
+        private static void ArcSeen(CareerSession s, int season, string except = null)
+        {
+            foreach (var sc in s.Content.Backstage.Scenes)
+                if (sc.Arc && sc.Id != except) s.State.BackstageSeen.Add(season + ":" + sc.Id);
         }
 
         /// <summary>Пройти сцену за сценарієм виборів (id варіантів по черзі; далі — перший доступний); кидки — заданий ступінь.</summary>
