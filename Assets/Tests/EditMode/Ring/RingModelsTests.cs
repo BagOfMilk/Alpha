@@ -72,6 +72,33 @@ namespace Game.Tests.EditMode
             foreach (var kv in ui) Assert.IsFalse(string.IsNullOrWhiteSpace((string)kv.Value), "порожнє значення: " + kv.Key);
         }
 
+        /// <summary>
+        /// Назва ґіміка за статтю борця — кожен із восьми, обидві форми з текстом. Підстановка форм героїні (HeroForms.Apply)
+        /// назву суперника-чоловіка не чіпає: рід дає лише прапорець <c>female</c>.
+        /// </summary>
+        [Test]
+        public void GimmickName_ByTheWrestlersSex_EveryGimmickHasBothForms_HeroFormsDoNotTouchIt()
+        {
+            var t = LoadText();
+            var gimmicks = CareerKit.Content().Gimmicks;
+            Assert.AreEqual(8, gimmicks.Count);
+            var male = new Dictionary<string, string>();
+            foreach (var g in gimmicks)
+            {
+                string m = RingLabels.GimmickName(t, g.Key, false), f = RingLabels.GimmickName(t, g.Key, true);
+                AssertClean(m, g.Key);
+                AssertClean(f, g.Key + ".fem");
+                Assert.AreEqual(t.Get("gimmick." + g.Key), m, "чоловіча форма — та сама, що досі на екранах");
+                male[g.Key] = m;
+            }
+            Assert.AreEqual("Силачка", RingLabels.GimmickName(t, "strongman", true));
+            Assert.AreEqual("Монстр", RingLabels.GimmickName(t, "monster", true), "Монстр — спільного роду");
+            HeroForms.Apply(t, true, true);
+            Assert.IsTrue(HeroForms.ShowsHeroine(t));
+            foreach (var g in gimmicks)
+                Assert.AreEqual(male[g.Key], RingLabels.GimmickName(t, g.Key, false), "суперник героїні лишається в чоловічому роді: " + g.Key);
+        }
+
         [Test]
         public void Labels_EveryEnumValueHasAText()
         {
