@@ -450,6 +450,75 @@ namespace Game.Tests.EditMode
             Assert.AreEqual("", old.State.PendingOpponent, "старий сейв без обіцянки читається");
         }
 
+        /// <summary>
+        /// Рев'ю ПМ 74a7d4b1: розплата — справжнім ходом, без прямого BookShow. Тиждень великого шоу — останній у сезоні
+        /// (<see cref="CareerRules.WeeksPerSeason"/>), тож обіцянка проходить шоу з Молотом, ContinueFromShow → кінець сезону →
+        /// StartNextSeason і стає на тиждень 1. Раніше StartWeek складав картку ще на етапі SeasonEnd, і охорона «лише на тижні»
+        /// пропускала обіцянку.
+        /// </summary>
+        [Test]
+        public void Betrayal_OnTheBigShowWeek_ThePaybackComesThroughTheShowAndTheNewSeason_WithoutADirectBooking()
+        {
+            var s = Arc(CareerKit.NewHero(53), "pay", "word");
+            Ready(s, 3, Betrayal);
+            s.State.Week = CareerRules.BigShowEvery;
+            s.BookShow();   // лише підготовка: картка великого тижня (Ready переставив тиждень)
+            Assert.IsTrue(s.State.IsBig);
+            Assert.AreEqual(CareerRules.WeeksInSeason(3), s.State.Week, "передумова: велике шоу — останній тиждень сезону");
+            Play(s, Betrayal, null, "fight");
+            Assert.AreEqual(Stalevyi, s.State.PendingOpponent);
+
+            var rep = new CareerRunReport();
+            for (int guard = 0; s.Stage != CareerStage.SeasonEnd; guard++)
+            {
+                Assert.Less(guard, 200, "бот не дійшов до кінця сезону");
+                CareerBot.Step(s, 0, rep);
+                Assert.AreEqual(Stalevyi, s.State.PendingOpponent, "до звичайного шоу обіцянка чекає");
+            }
+            if (s.CanStartTitleMatch) s.SkipTitle();
+            if (s.OfferAvailable) s.DeclineOffer();   // лишитися у федерації 1, де Сталевий є
+            Assert.AreEqual(1, s.State.Federation);
+            s.StartNextSeason();
+            Assert.AreEqual(4, s.State.Season);
+            Assert.AreEqual(1, s.State.Week);
+            Assert.IsFalse(s.State.IsBig);
+            Assert.AreEqual(Stalevyi, s.State.Opponent, "перше звичайне шоу нового сезону — проти Сталевого");
+            Assert.AreEqual("", s.State.PendingOpponent, "обіцянку виконано");
+            Assert.AreEqual(Stalevyi, s.GetWeekView().Card.Opponent.Id, "картка тижня показує розплату");
+        }
+
+        /// <summary>
+        /// Обіцянка, що лишилась у сейві посеред звичайного тижня (так її лишала збірка до виправлення), стає на наступне шоу:
+        /// ContinueFromShow → новий тиждень. Посеред тижня картку вона не переписує — це робить лише початок тижня чи сцена.
+        /// </summary>
+        [Test]
+        public void ALeftoverPromiseInAMidWeekSave_TakesTheNextWeeksShow_ThroughContinueFromShow()
+        {
+            const int season = 4;
+            var s = CareerKit.NewHero(57);
+            s.State.Season = season; s.State.Week = 2; s.State.ActionsLeft = CareerRules.ActionsPerWeek; s.State.ActionsDone.Clear();
+            foreach (var sc in s.Content.Backstage.Scenes)   // події сезону вже були: бот не зіграє іншу сцену з «opponent»
+                if (sc.Kind == BackstageKind.Event) s.State.BackstageSeen.Add(season + ":" + sc.Id);
+            s.BookShow();
+            Assert.IsFalse(s.State.IsBig);
+            string card = s.State.Opponent;
+            Assert.AreNotEqual(Stalevyi, card, "передумова: букер поставив іншого");
+            s.State.PendingOpponent = Stalevyi;
+
+            var t = Clone(s);
+            Assert.AreEqual(Stalevyi, t.State.PendingOpponent, "обіцянка — у сейві");
+            Assert.AreEqual(card, t.State.Opponent, "відновлення посеред тижня картку не переписує");
+            var rep = new CareerRunReport();
+            for (int guard = 0; !(t.Stage == CareerStage.Week && t.State.Week == 3); guard++)
+            {
+                Assert.Less(guard, 200, "бот не дійшов до тижня 3");
+                CareerBot.Step(t, 0, rep);
+            }
+            Assert.IsFalse(t.State.IsBig);
+            Assert.AreEqual(Stalevyi, t.State.Opponent, "наступне шоу — проти Сталевого");
+            Assert.AreEqual("", t.State.PendingOpponent);
+        }
+
         [Test]
         public void FriendAndVeteran_OnlyInFederation1_LikeTheBetrayal_TheArcDoesNotBreakHalfway()
         {
