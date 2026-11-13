@@ -389,6 +389,8 @@ namespace Game.Core.Ring.Career
                         throw new FormatException(where + ": умова ворожнечі з невідомим NPC '" + cd.Target + "'");
                     if (cd.Kind == ConditionKind.Career && cd.Key == "booker" && !IsFederationBooker(cd.Target))
                         throw new FormatException(where + ": умова booker — '" + cd.Target + "' не букер жодної федерації");
+                    if (cd.Kind == ConditionKind.Career && cd.Key == "seen_before" && Backstage.Find(cd.Target) == null)
+                        throw new FormatException(where + ": умова seen_before — немає сцени '" + cd.Target + "'");
                 }
             }
         }

@@ -200,16 +200,23 @@ namespace Game.Gameplay.Ring.UI
             p.Add(BarLine(c.Damage, c.DamageMax, c.Penalty > 0 ? RingUi.Bad : RingUi.Warn, 8f, Ctx.Text.Get("match.card.short.damage"), c.Damage + "/" + c.DamageMax));
             p.Add(BarLine(c.Momentum, c.MomentumMax, accent, 6f, Ctx.Text.Get("match.card.short.impulse"), c.Momentum + "/" + c.MomentumMax));
 
-            string extra = "";
-            if (c.PenaltyText.Length > 0) extra += c.PenaltyText;
-            if (c.WarningsText.Length > 0) extra += (extra.Length > 0 ? "  " : "") + c.WarningsText;
-            if (c.Tokens > 0) extra += (extra.Length > 0 ? "  " : "") + c.TokensText;
-            if (extra.Length > 0)
+            // Підвал плашки: штраф, попередження й жетони — окремими підписами у своєму кольорі, що переносяться цілими.
+            // Раніше — один рядок, увесь червоний при штрафі, і на 4:3 він рвався посередині: «Жетони / реверсу: 2» (слот 31, 12.11.2026).
+            var foot = RingUi.Row();
+            foot.style.flexWrap = Wrap.Wrap;
+            foot.style.marginTop = 3f;
+            System.Action<string, Color> addFoot = (text, col) =>
             {
-                var l = RingUi.Lbl(extra, 12f, c.PenaltyText.Length > 0 ? RingUi.Bad : RingUi.Warn);
-                l.style.marginTop = 3f;
-                p.Add(l);
-            }
+                if (text.Length == 0) return;
+                var l = RingUi.Lbl(text, 12f, col);
+                l.style.marginRight = 10f;
+                l.style.flexShrink = 1f;
+                foot.Add(l);
+            };
+            addFoot(c.PenaltyText, RingUi.Bad);
+            addFoot(c.WarningsText, RingUi.Warn);
+            if (c.Tokens > 0) addFoot(c.TokensText, RingUi.Warn);
+            if (foot.childCount > 0) p.Add(foot);
             return p;
         }
 

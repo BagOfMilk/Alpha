@@ -2090,19 +2090,43 @@ namespace Game.Gameplay.Ring.Stage
             Func<float, int> tier = dy => { float dp = Vector3.Dot(rR, Rot(baseYaw + dy, Vector3.forward)); return dp >= 0.3f ? 0 : dp >= -0.3f ? 1 : 2; };
             var order = new List<float>();
             for (int tr = 0; tr < 3; tr++) foreach (float d in all) if (tier(d) == tr) order.Add(d);   // стабільно в межах щабля
+            // Два проходи за рефері на екрані («Изучение», cedfbff — RingCine.Referee): спершу перший план, де рефері поза кадром,
+            // за парою чи збоку (Clear); якщо такого немає — де він хоч не закриває пару (NotBlocking); і лише потім, як раніше,
+            // перший план, що вмістився. Порядок кандидатів той самий: ракурс → набір точок (з головою рефері, без) → нахил.
+            var refPts = new List<Vector3>();
+            var Rf = _s.Referee;
+            RingCine.Body(refPts, new Vector3(Rf.PosePos.x, Rf.Slot.position.y, Rf.PosePos.z), _s.BodyScale(Rf));
+            RingCine.Shot firstOk = new RingCine.Shot(), firstNotBlocking = new RingCine.Shot();
+            float yawFirstOk = baseYaw, yawNotBlocking = baseYaw;
+            bool clearFound = false;
+            string refView = null;
             foreach (float dyaw in order)
             {
                 foreach (var set in new[] { ptsRef, pts })
                 {
                     foreach (float pitch in new[] { 18f, 22f, 26f, 30f })
                     {
-                        shot = RingCine.FrameAny(set, baseYaw + dyaw, pitch, new[] { 34f, 38f, 42f, 46f }, _s.CamAspect, 0.27f, 0.78f, 0.08f, ok);
-                        if (shot.Ok) break;
+                        var s = RingCine.FrameAny(set, baseYaw + dyaw, pitch, new[] { 34f, 38f, 42f, 46f }, _s.CamAspect, 0.27f, 0.78f, 0.08f, ok);
+                        if (!s.Ok) continue;
+                        var rc = RingCine.Referee(s, pts, refPts, _s.CamAspect);
+                        if (!firstOk.Ok) { firstOk = s; yawFirstOk = baseYaw + dyaw; refView = rc.View.ToString(); }
+                        if (rc.Clear) { shot = s; yawCam = baseYaw + dyaw; refView = rc.View.ToString(); clearFound = true; break; }
+                        if (rc.NotBlocking && !firstNotBlocking.Ok) { firstNotBlocking = s; yawNotBlocking = baseYaw + dyaw; }
                     }
-                    if (shot.Ok) break;
+                    if (clearFound) break;
                 }
-                if (shot.Ok) { yawCam = baseYaw + dyaw; break; }
+                if (clearFound) break;
             }
+            if (!clearFound)
+            {
+                if (firstNotBlocking.Ok)
+                {
+                    shot = firstNotBlocking; yawCam = yawNotBlocking;
+                    refView = RingCine.Referee(shot, pts, refPts, _s.CamAspect).View.ToString();
+                }
+                else if (firstOk.Ok) { shot = firstOk; yawCam = yawFirstOk; }
+            }
+            if (shot.Ok && Trace) Debug.Log("[Ринг] фінішер: рефері на кіноплані — " + refView);
             if (shot.Ok) _s.Cine(shot.Pos, shot.Look, shot.Fov, true);
             else Debug.LogWarning("[Ринг] 3D: кіноплан фінішера не вмістився — лишається " + _plan.Clip);
             // Обраний ракурс міг виявитись «з боку рефері» (запасні кути): тоді він між камерою і парою й закриває пів кадру

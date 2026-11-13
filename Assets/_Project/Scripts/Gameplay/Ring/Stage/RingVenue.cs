@@ -60,6 +60,8 @@ namespace Game.Gameplay.Ring.Stage
 
         public string Id = "gym";
         public float MatY = 1.0f, Plat = 2.438f, RopeLine = 2.138f, PostLine = 2.218f;
+        /// <summary>Висота верхнього каната (якір <c>anchor_rope_NE_3</c>; спортзал — 2,24, зал — 2,34, арена — 2,44).</summary>
+        public float TopRopeY = 2.24f;
         /// <summary>Край бійцівського квадрата (всередині канатів): лінія каната − 0,10 (як у режисера).</summary>
         public float RingHalf { get { return RopeLine - 0.10f; } }
 
@@ -91,11 +93,31 @@ namespace Game.Gameplay.Ring.Stage
             float[] a;
             if (v._anchors.TryGetValue("anchor_center", out a)) v.MatY = a[1];
             if (v._anchors.TryGetValue("anchor_rope_NE_1", out a)) v.RopeLine = a[0];
+            v.TopRopeY = v._anchors.TryGetValue("anchor_rope_NE_3", out a) ? a[1] : v.MatY + 1.24f;
             if (v._anchors.TryGetValue("anchor_rope_mid_E_1", out a)) v.PostLine = a[0];
             if (v._anchors.TryGetValue("anchor_apron_E", out a)) v.Plat = a[0] + ApronIn;
             v._ext = Math.Max(7.0f, v.Plat + 4.0f);
             v.ResetFloor();
             return v;
+        }
+
+        /// <summary>
+        /// Найнижча висота камери (<paramref name="camX"/>, <paramref name="camZ"/>), з якої лінія до стоп борця
+        /// (<paramref name="footX"/>, <paramref name="footZ"/> на маті) проходить над верхнім канатом із запасом
+        /// <paramref name="clear"/>, — щоб канат не перетинав постать у кадрі (огляд 8e: канати на передньому плані, arena demo
+        /// 005–027). Камера в канатах або борець за ними — <paramref name="camY"/> без змін; вниз не опускає ніколи.
+        /// </summary>
+        public float CamYOverRopes(float camX, float camY, float camZ, float footX, float footZ, float clear = 0.08f)
+        {
+            float r = RopeLine;
+            if (Math.Max(Math.Abs(camX), Math.Abs(camZ)) <= r || Math.Max(Math.Abs(footX), Math.Abs(footZ)) > r) return camY;
+            // Параметр t (0 — камера, 1 — стопа), де лінія входить у квадрат канатів: найпізніший вхід за двома осями.
+            float t = 0f;
+            if (Math.Abs(camX) > r) t = Math.Max(t, (Math.Sign(camX) * r - camX) / (footX - camX));
+            if (Math.Abs(camZ) > r) t = Math.Max(t, (Math.Sign(camZ) * r - camZ) / (footZ - camZ));
+            if (t <= 0f || t >= 1f) return camY;
+            float foot = MatY + 0.05f, need = (TopRopeY + clear - foot * t) / (1f - t);
+            return Math.Max(camY, need);
         }
 
         private static bool F(string s, out float f)
