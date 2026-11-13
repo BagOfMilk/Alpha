@@ -123,7 +123,7 @@ namespace Game.Tests.EditMode
                     Assert.IsTrue(ok.Contains(m.Action), id + ": лише наявні дії (без weapon — він легальний лише без DQ)");
                     // у звичайному матчі dirty — попередження й мінус ажіотажу, три — DQ: ґімік карав би сам себе (умова ПМ)
                     if (gi == Gimmick.Hardcore)
-                        Assert.That(m.Action, Is.AnyOf(MatchActionId.Strike, MatchActionId.Throw, MatchActionId.TopRope, MatchActionId.Finisher), id);
+                        Assert.That(new[] { MatchActionId.Strike, MatchActionId.Throw, MatchActionId.TopRope, MatchActionId.Finisher }, Has.Member(m.Action), id);   // Has.Member: у Unity NUnit 3.5 (новіші обмеження не компілюються)
                 }
                 Assert.AreEqual(MoveKind.Gimmick, c.Moves.Get(g.GimmickMoves[0]).Kind);
                 Assert.Greater(c.Moves.Get(g.GimmickMoves[0]).Cost, 0, "ґімік-прийом вивчається за очки");
