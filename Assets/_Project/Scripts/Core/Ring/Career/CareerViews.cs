@@ -164,6 +164,8 @@ namespace Game.Core.Ring.Career
         public RingPath Role;
         /// <summary>Пізня роль (§5.3).</summary>
         public LateRole LateRole;
+        /// <summary>Пізня роль, обрана на наступний сезон (у кінці сезону — може відрізнятися від нинішньої).</summary>
+        public LateRole NextLateRole;
         public int[] Attr = new int[5];
         public int Money;
         public int Popularity;

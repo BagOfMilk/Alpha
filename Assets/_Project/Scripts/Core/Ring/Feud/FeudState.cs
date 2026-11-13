@@ -282,19 +282,16 @@ namespace Game.Core.Ring
 
         // ---------- збирання матчу ----------
 
-        /// <summary>Пізня роль борця (§5.3) — поправки матчу ворожнечі. Не зберігається: ставить кар'єра зі свого стану.</summary>
-        public LateRole LateRole;
-
         /// <summary>
         /// MatchSetup зі стану (gdd §1, §3, §6): імпульс старту = імпульс ворожнечі + перк; ажіотаж старту = 1 + Heat + перк
         /// (нагороди промо вже вкладені в Heat/Momentum своїми ефектами), 0–10; роль = домінантний шлях.
         /// Напарник — прапор HasAlly (умову «повага ≥ 1» ставить сам граф: варіант з ally вимагає var locker).
         /// </summary>
-        public MatchSetup BuildMatchSetup(FeudScript script)
+        public MatchSetup BuildMatchSetup(FeudScript script, LateRole lateRole = LateRole.None)
         {
             if (script == null) throw new ArgumentNullException(nameof(script));
             var mods = Development.ToModifiers(Perks);
-            LateRoles.ApplyTo(mods, LateRole);
+            LateRoles.ApplyTo(mods, lateRole);
             return new MatchSetup
             {
                 Player = Player.Clone(),

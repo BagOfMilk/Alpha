@@ -38,6 +38,12 @@ namespace Game.Core.Ring
         public int StepIndex { get; private set; }
         public PromoRunner CurrentPromoRunner { get; private set; }
 
+        /// <summary>
+        /// Пізня роль борця (§5.3) — поправки матчу ворожнечі й реваншу. Не зберігається: ставить кар'єра зі свого стану (раніше лежала
+        /// у FeudState, і копія стану її губила — рев'ю ПМ 12.11.2026).
+        /// </summary>
+        public LateRole LateRole;
+
         private string _bookerVoice;
 
         /// <summary>
@@ -177,7 +183,7 @@ namespace Game.Core.Ring
             Require(RingStage.MatchPrep);
             State.PrepareMatch(CurrentMatchDef);
             _preMatchState = State.CaptureState();
-            CurrentMatch = new MatchEngine(State.BuildMatchSetup(Script), Dice);
+            CurrentMatch = new MatchEngine(State.BuildMatchSetup(Script, LateRole), Dice);
             IsRematch = false;
             Stage = RingStage.Match;
             return CurrentMatch;
@@ -277,7 +283,7 @@ namespace Game.Core.Ring
             s.RestoreState(_preMatchState);
             foreach (var p in State.Perks) s.Perks.Add(p);
             s.Player = State.Player.Clone();
-            CurrentMatch = new MatchEngine(s.BuildMatchSetup(Script), Dice);
+            CurrentMatch = new MatchEngine(s.BuildMatchSetup(Script, LateRole), Dice);
             IsRematch = true;
             RematchResult = null;
             Stage = RingStage.Match;

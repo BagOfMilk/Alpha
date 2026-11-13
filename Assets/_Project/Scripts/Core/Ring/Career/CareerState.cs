@@ -267,6 +267,8 @@ namespace Game.Core.Ring.Career
         public bool Manager;
         /// <summary>Пізня роль (§5.3): з кінця першого сезону, одна на раз.</summary>
         public LateRole LateRole;
+        /// <summary>Пізня роль, обрана в кінці сезону на наступний (рев'ю ПМ 12.11.2026): стає <see cref="LateRole"/> на старті сезону.</summary>
+        public LateRole NextLateRole;
         public int TitlesWon;
         public bool FeudResolved;
         /// <summary>Очки розвитку на початок поточного матчу (для підсумку).</summary>
@@ -297,6 +299,14 @@ namespace Game.Core.Ring.Career
         // ---------- зліпок ----------
 
         private static string Esc(string s) { return Uri.EscapeDataString(s ?? ""); }
+        /// <summary>Пізня роль зі зліпка: не число чи невідоме значення — <paramref name="fallback"/> (рев'ю ПМ 12.11.2026).</summary>
+        private static LateRole ParseLateRole(string v, LateRole fallback)
+        {
+            int n;
+            if (!int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out n) || !Enum.IsDefined(typeof(LateRole), n)) return fallback;
+            return (LateRole)n;
+        }
+
         private static string Ints(int[] a) { return string.Join(",", Array.ConvertAll(a, x => x.ToString(CultureInfo.InvariantCulture))); }
         private static string Ints(List<int> a) { return Ints(a.ToArray()); }
 
@@ -346,7 +356,7 @@ namespace Game.Core.Ring.Career
               .Append("|fwres=").Append(FarewellResult).Append("|closed=").Append(Ints(ct));
             sb.Append("|excl=").Append(b(ContractExclusive)).Append("|exend=").Append(ContractEndSeason).Append("|expen=").Append(ContractPenalty)
               .Append("|offread=").Append(OfferRead).Append("|pendex=").Append(b(PendingExclusive)).Append("|pendadv=").Append(PendingAdvance)
-              .Append("|manager=").Append(b(Manager)).Append("|late=").Append((int)LateRole);
+              .Append("|manager=").Append(b(Manager)).Append("|late=").Append((int)LateRole).Append("|latenext=").Append((int)NextLateRole);
         }
 
         internal void Restore(Dictionary<string, string> kv)
@@ -442,7 +452,9 @@ namespace Game.Core.Ring.Career
             PendingAdvance = kv.TryGetValue("pendadv", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
             Manager = kv.TryGetValue("manager", out v) && v == "1";
             // пізні ролі додано 12.11.2026: старі зліпки — ролі немає
-            LateRole = kv.TryGetValue("late", out v) ? (LateRole)int.Parse(v, CultureInfo.InvariantCulture) : LateRole.None;
+            LateRole = kv.TryGetValue("late", out v) ? ParseLateRole(v, LateRole.None) : LateRole.None;
+            // роль на наступний сезон — з 12.11.2026 (рев'ю ПМ): у старих зліпках її немає — та сама, що діє
+            NextLateRole = kv.TryGetValue("latenext", out v) ? ParseLateRole(v, LateRole) : LateRole;
         }
 
         /// <summary>Пояс зі зліпка до 11.11.2026 (один на федерацію): сесія розкладе його по дивізіонах. Не зберігається.</summary>
