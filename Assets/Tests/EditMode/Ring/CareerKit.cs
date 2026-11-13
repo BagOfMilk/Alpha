@@ -90,9 +90,21 @@ namespace Game.Tests.EditMode
         public static CareerSession NewHero(ulong seed, Gimmick g = Gimmick.Monster, CareerRole role = CareerRole.Hero, RingAttr free = RingAttr.Strength)
         {
             var s = NewAtCreate(seed);
-            s.CreateHero(Draft(g, role, free));
+            s.CreateHero(Draft(g, role, FreeFor(s.Content, g, free)));
             return s;
         }
+
+        /// <summary>Вільний бал — у <paramref name="free"/>, а якщо там основа ґіміка вже на стелі (Силач: сила 3) — у наступний атрибут.</summary>
+        public static RingAttr FreeFor(CareerContent c, Gimmick g, RingAttr free)
+        {
+            var b = c.GimmickOf(g).Attr;
+            int f = (int)free;
+            while (b[f] >= WrestlerStats.MaxAttr) f = (f + 1) % 5;
+            return (RingAttr)f;
+        }
+
+        /// <summary>Скільки ґіміків у переліку (замість жорсткої «4», умова ПМ 12.11.2026).</summary>
+        public static readonly int GimmickCount = Enum.GetValues(typeof(Gimmick)).Length;
 
         /// <summary>Підібрати значення Seed, коли потрібна інша сесія з тим самим зерном кубика і вмістом (для відновлення).</summary>
         public static CareerSession Fresh(ulong seed, CareerContent content)
@@ -152,7 +164,7 @@ namespace Game.Tests.EditMode
             {
                 case CareerStage.Title: s.StartNewGame(); break;
                 case CareerStage.Create:
-                    var gim = (Gimmick)(variant % 4);
+                    var gim = (Gimmick)(variant % CareerKit.GimmickCount);
                     var baseAttr = s.Content.GimmickOf(gim).Attr;
                     int free = variant % 5;
                     while (baseAttr[free] >= WrestlerStats.MaxAttr) free = (free + 1) % 5;

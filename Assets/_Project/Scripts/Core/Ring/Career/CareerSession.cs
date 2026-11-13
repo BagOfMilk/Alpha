@@ -157,6 +157,8 @@ namespace Game.Core.Ring.Career
             Feud.State.AudienceCap = Federation.Ceiling;
             Feud.State.AudienceHypeAt = Federation.PopularityHype;
             Feud.LateRole = State.LateRole;
+            // ґімік (§5.2) — у матчі ворожнечі й реванші так само, як пізня роль (умова ПМ 12.11.2026, п. 4)
+            Feud.PlayerGimmick = State.Gimmick;
             // промо ворожнечі з Молотом іде й у федераціях 2–4: «booker» у них — букер цієї федерації (рев'ю ПМ 12.11.2026)
             Feud.BookerVoice = Federation.Booker;
         }
@@ -271,19 +273,22 @@ namespace Game.Core.Ring.Career
             var v = new CreationView { CostumeCount = CostumeCount, MaxNameLength = MaxNameLength };
             foreach (var g in Content.Gimmicks)
             {
-                var gv = new GimmickView { Def = g, BaseAttr = (int[])g.Attr.Clone() };
+                // ґіміки 5–8 — на екран створення після У0 власника (onCreationScreen у даних; рішення ПМ 12.11.2026)
+                if (!g.OnCreationScreen) continue;
+                var gv = new GimmickView { Def = g, BaseAttr = (int[])g.Attr.Clone(), FreePoints = g.FreePoints };
                 foreach (var id in StartMoveIds(g)) gv.StartMoves.Add(Content.Moves.Get(id));
                 v.Gimmicks.Add(gv);
             }
             return v;
         }
 
-        /// <summary>Стартовий набір: 6 базових + 2 ґімік + коронний + фінішер (§5.4).</summary>
+        /// <summary>Стартовий набір: 6 базових + ґімік-прийоми (2; у Новачка — жодного, «мало прийомів») + коронний + фінішер (§5.4).</summary>
         private List<string> StartMoveIds(GimmickDef g)
         {
             var ids = new List<string>();
             foreach (var m in Content.Moves.All) if (m.Kind == MoveKind.Basic) ids.Add(m.Id);
-            ids.AddRange(g.GimmickMoves);
+            int n = g.StartGimmickMoves < 0 ? g.GimmickMoves.Length : Math.Min(g.StartGimmickMoves, g.GimmickMoves.Length);
+            for (int i = 0; i < n; i++) ids.Add(g.GimmickMoves[i]);
             ids.Add(g.SignatureMove);
             ids.Add(g.FinisherMove);
             return ids;
@@ -298,9 +303,19 @@ namespace Game.Core.Ring.Career
             if (name.Length == 0) { reason = "name"; return false; }
             if (name.Length > MaxNameLength) { reason = "name_long"; return false; }
             if (d.CostumeColor < 0 || d.CostumeColor >= CostumeCount) { reason = "costume"; return false; }
-            var g = Content.GimmickOf(d.Gimmick);
-            if (g.Attr[(int)d.FreePoint] + 1 > WrestlerStats.MaxAttr) { reason = "attr_max"; return false; }
+            var g = Content.FindGimmick(d.Gimmick);
+            if (g == null) { reason = "gimmick"; return false; }
+            foreach (int a in AttrsWithFreePoints(g, d)) if (a > WrestlerStats.MaxAttr) { reason = "attr_max"; return false; }
             return true;
+        }
+
+        /// <summary>Основа ґіміка з вільними балами: перший — у FreePoint, другий (лише в ґіміка з двома) — у FreePoint2, без нього — туди ж.</summary>
+        private static int[] AttrsWithFreePoints(GimmickDef g, CharacterDraft d)
+        {
+            var a = (int[])g.Attr.Clone();
+            a[(int)d.FreePoint]++;
+            if (g.FreePoints >= 2) a[(int)(d.FreePoint2 ?? d.FreePoint)]++;
+            return a;
         }
 
         /// <summary>Створити борця й почати кар'єру з тижня 1 сезону 1.</summary>
@@ -310,8 +325,11 @@ namespace Game.Core.Ring.Career
             if (!CanCreate(d, out reason)) throw new InvalidOperationException("Створення неможливе: " + reason);
             var g = Content.GimmickOf(d.Gimmick);
             var stats = new WrestlerStats("player", "w.player.name") { FinisherAttr = g.FinisherAttr };
-            for (int i = 0; i < 5; i++) stats.Set((RingAttr)i, g.Attr[i] + (i == (int)d.FreePoint ? 1 : 0));
+            var attrs = AttrsWithFreePoints(g, d);
+            for (int i = 0; i < 5; i++) stats.Set((RingAttr)i, attrs[i]);
             Feud.State.Player = stats;
+            // перк, вбудований у ґімік (Ветеран — перк «Ветеран»): від старту, без очок; купити вдруге не можна (умова ПМ, п. 4)
+            foreach (var p in GimmickRules.BuiltInPerks(d.Gimmick)) Feud.State.Perks.Add(p);
             Feud.State.AddPath(d.Role == CareerRole.Hero ? RingPath.Face : RingPath.Heel, 1);
 
             State.RingName = d.RingName.Trim();
@@ -450,8 +468,12 @@ namespace Game.Core.Ring.Career
             foreach (var id in State.Moves) { var m = Content.Moves.Find(id); if (m != null && m.Kind == MoveKind.Learn) learned++; }
             // Перки — за ціною (вінець за 3 очки сильніший за перк за 1): кожні RivalPerksPerStep очок ціни — одиниця.
             int perkCost = 0;
-            foreach (var id in Feud.State.Perks) { var pd = PerkCatalog.Find(id); perkCost += pd != null ? pd.Cost : 1; }
-            int units = Math.Max(0, bought - 1) + perkCost / CareerRules.RivalPerksPerStep + learned;
+            foreach (var id in Feud.State.Perks)
+            {
+                if (GimmickRules.IsBuiltInPerk(State.Gimmick, id)) continue;   // перк ґіміка — від старту, не ріст (суперники від нього не сильнішають)
+                var pd = PerkCatalog.Find(id); perkCost += pd != null ? pd.Cost : 1;
+            }
+            int units = Math.Max(0, bought - g.FreePoints) + perkCost / CareerRules.RivalPerksPerStep + learned;
             // Опукло: перші одиниці росту (вільний бал, перший перк) майже не роблять гравця сильнішим — суперник ще не росте;
             // далі — щабель на кожні ~1,6 одиниці (замір 06.11.2026: лінійно — другий сезон 40–45 %, третій 47–60 %).
             return Math.Max(0, (CareerRules.RivalGrowthNum * units - CareerRules.RivalGrowthOffset) / CareerRules.RivalGrowthDen);
@@ -562,7 +584,8 @@ namespace Game.Core.Ring.Career
         private List<InjuryView> InjuryViews()
         {
             var l = new List<InjuryView>();
-            for (int z = 0; z < 3; z++) l.Add(new InjuryView { Zone = (BodyZone)z, ZoneDamage = State.ZoneDamage[z], WeeksLeft = State.Injury[z] });
+            for (int z = 0; z < 3; z++)
+                l.Add(new InjuryView { Zone = (BodyZone)z, ZoneDamage = State.ZoneDamage[z], WeeksLeft = State.Injury[z], Threshold = InjuryAtZoneDamage });
             return l;
         }
 
@@ -1063,12 +1086,15 @@ namespace Game.Core.Ring.Career
             return Done(r);
         }
 
-        /// <summary>Нарахувати ушкодження зони; на порозі — травма 1–4 тижні. true, якщо виникла нова травма.</summary>
-        private bool AddZoneDamage(int zone, int amount)
+        /// <summary>Поріг травми зони: накопичене ушкодження, з якого починається травма (у Хардкорника вищий, §5.2).</summary>
+        public int InjuryAtZoneDamage { get { return GimmickRules.InjuryAtZoneDamage(State.Gimmick); } }
+
+        /// <summary>Нарахувати ушкодження зони; на порозі — травма 1–4 тижні. true, якщо виникла нова травма. internal — для тестів порогу.</summary>
+        internal bool AddZoneDamage(int zone, int amount)
         {
             if (amount <= 0 || State.Injury[zone] > 0) return false;
             State.ZoneDamage[zone] += amount;
-            if (State.ZoneDamage[zone] < CareerRules.InjuryAtZoneDamage) return false;
+            if (State.ZoneDamage[zone] < InjuryAtZoneDamage) return false;
             State.ZoneDamage[zone] = 0;
             int span = CareerRules.MaxInjuryWeeks - CareerRules.MinInjuryWeeks + 1;
             State.Injury[zone] = CareerRules.MinInjuryWeeks + ShowBooker.Mix(State.Seed, State.Season * 100 + State.Week, 11 + zone) % span;
@@ -1184,7 +1210,8 @@ namespace Game.Core.Ring.Career
             var npc = Content.FindNpc(State.Opponent);
             var mods = Development.ToModifiers(Feud.State.Perks);
             LateRoles.ApplyTo(mods, State.LateRole);
-            var rivalMods = new MatchModifiers();
+            GimmickRules.ApplyTo(mods, State.Gimmick);
+            var rivalMods = GimmickRules.ForRival(npc.Gimmick);   // ґімік NPC (§5.2): щаблі сили вечора додає Strengthened
             int hype = 1 + FeudLevel(npc.Id) + mods.StartHypeBonus + State.NextHypeBonus + (State.CostumeBought ? CareerRules.CostumeHype : 0)
                        + (State.IsInjured ? CareerRules.InjuredShowHype : 0);
             var setup = new MatchSetup
@@ -1209,18 +1236,21 @@ namespace Game.Core.Ring.Career
             RequireShow(ShowPhase.Feud);
             int steps = RivalStepsNow();
             var e = Feud.StartMatch();
+            var hammerNpc = Content.FindNpc(CareerContent.HammerId);
             e.Setup.HopeSpotEnabled = true;
             e.Setup.PlayerFinisher = Content.FinisherShow(State.Gimmick);
-            e.Setup.RivalFinisher = Content.FinisherShow(Content.FindNpc(CareerContent.HammerId).Gimmick);
-            // Молот росте від матчу до матчу ворожнечі (сила за місцем у картці: велике шоу — мейн-івент).
+            e.Setup.RivalFinisher = Content.FinisherShow(hammerNpc.Gimmick);
+            // Молот росте від матчу до матчу ворожнечі (сила за місцем у картці: велике шоу — мейн-івент); його ґімік (§5.2) — як у
+            // будь-якого NPC-суперника.
             var hammer = e.State.Rival.Stats.Clone();
-            var over = new MatchModifiers();
+            var over = GimmickRules.ForRival(hammerNpc.Gimmick);
             ShowBooker.Strengthen(hammer, steps, over);
             e.State.Rival.Stats = hammer;
             // Понад межу атрибутів — витримка: рушій уже створено, тож жетони додаються одразу, решта — через модифікатори.
             var rm = e.Setup.RivalMods ?? (e.Setup.RivalMods = new MatchModifiers());
             rm.KickOutBonus += over.KickOutBonus;
             rm.DamageThresholdShift += over.DamageThresholdShift;
+            rm.ReadsRival |= over.ReadsRival;
             e.State.Rival.ReversalTokens += over.ExtraReversalTokens;
             e.State.Rival.Momentum = Math.Min(MatchRules.MaxMomentum, e.State.Rival.Momentum + over.StartMomentumBonus);
             // костюм рівня федерації — і на великому шоу ворожнечі (П5: раніше лише в StartShow)
@@ -1365,6 +1395,8 @@ namespace Game.Core.Ring.Career
                 Feud.State.Audience = Math.Min(CareerRules.MaxPopularity, Feud.State.Audience + 1);
                 Feud.State.DevPoints += 1;
             }
+            // Новачок швидко росте (§5.2): очки розвитку за кожен зіграний матч
+            Feud.State.DevPoints += GimmickRules.DevPerMatch(State.Gimmick);
             ApplyBodyDamage(e, r, wasInjured, res);
             ApplyOpponentFeud(res, feudMatch);
             if (State.IsTitle) ApplyTitle(res, r);

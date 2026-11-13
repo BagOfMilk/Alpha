@@ -10,6 +10,10 @@ namespace Game.Core.Ring.Career
         public CareerRole Role;
         /// <summary>Атрибут, у який іде +1 вільний бал (межі −1…+3).</summary>
         public RingAttr FreePoint;
+        /// <summary>
+        /// Другий вільний бал — лише в ґіміка з двома (<see cref="GimmickDef.FreePoints"/>, Новачок). null — туди ж, що й перший.
+        /// </summary>
+        public RingAttr? FreePoint2;
         public string RingName = "";
         /// <summary>Індекс кольору костюма (0…<see cref="CareerSession.CostumeCount"/>−1) — лише вигляд.</summary>
         public int CostumeColor;
@@ -26,6 +30,8 @@ namespace Game.Core.Ring.Career
         /// <summary>Атрибути ґіміка до вільного балу (RingAttr за індексом).</summary>
         public int[] BaseAttr;
         public List<MoveDef> StartMoves = new List<MoveDef>();
+        /// <summary>Вільних балів у цього ґіміка (Новачок — 2).</summary>
+        public int FreePoints = 1;
     }
 
     public sealed class CreationView
@@ -41,8 +47,10 @@ namespace Game.Core.Ring.Career
     public sealed class InjuryView
     {
         public BodyZone Zone;
-        /// <summary>Накопичене ушкодження зони 0–3 (3 = травма).</summary>
+        /// <summary>Накопичене ушкодження зони від 0 до <see cref="Threshold"/> (поріг = травма).</summary>
         public int ZoneDamage;
+        /// <summary>Поріг травми зони (3; у Хардкорника — 4, §5.2 «терпіти біль»).</summary>
+        public int Threshold = CareerRules.InjuryAtZoneDamage;
         /// <summary>Тижнів до загоєння травми (0 — здорова).</summary>
         public int WeeksLeft;
     }

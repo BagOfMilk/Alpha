@@ -368,7 +368,10 @@ namespace Game.Core.Ring.Career
             Func<string, string> S = k => Uri.UnescapeDataString(Need(kv, k));
             Seed = ulong.Parse(Need(kv, "seed"), CultureInfo.InvariantCulture);
             Season = I("season"); Week = I("week"); Money = I("money");
-            RingName = S("name"); Costume = I("costume"); Gimmick = (Gimmick)I("gimmick"); Role = (CareerRole)I("role");
+            RingName = S("name"); Costume = I("costume"); Role = (CareerRole)I("role");
+            int gimmick = I("gimmick");   // номери ґіміків 0–7 сталі (сейви); невідомий — зліпок новішої гри чи пошкоджений
+            if (!Enum.IsDefined(typeof(Gimmick), gimmick)) throw new FormatException("невідомий ґімік у зліпку кар'єри: " + gimmick);
+            Gimmick = (Gimmick)gimmick;
             Moves.Clear();
             foreach (var m in Need(kv, "moves").Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)) Moves.Add(Uri.UnescapeDataString(m));
             Fill(Injury, Need(kv, "inj")); Fill(ZoneDamage, Need(kv, "zd"));
