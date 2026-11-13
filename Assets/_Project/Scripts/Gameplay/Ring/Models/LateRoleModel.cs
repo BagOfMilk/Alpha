@@ -7,7 +7,8 @@ namespace Game.Gameplay.Ring.Models
 {
     /// <summary>
     /// Вибір пізньої ролі на екрані кінця сезону (TRPG_DESIGN §5.3): рядок на кожну роль — назва, що дає, чи обрана зараз — і «без
-    /// пізньої ролі». Кнопка кличе <see cref="Choose"/> (<see cref="CareerSession.ChooseLateRole"/>). Поза кінцем сезону — лише рядок
+    /// пізньої ролі». Кнопка кличе <see cref="Choose"/> (<see cref="CareerSession.ChooseLateRole"/>); обрана діє з наступного сезону
+    /// (позначка Selected — обрана на наступний, <see cref="NextText"/> — коли вона інша, ніж нинішня). Поза кінцем сезону — лише рядок
     /// нинішньої ролі (<see cref="CurrentText"/>) для хабу. Розкладка й кольори — справа екрана («Меню»), показ — через У0.
     /// </summary>
     public sealed class LateRoleModel
@@ -51,16 +52,25 @@ namespace Game.Gameplay.Ring.Models
         {
             string key = LateRoles.Key(r);
             string desc = r == LateRole.Icon ? _t.Format(key + ".desc", LateRoles.IconStartHype)
-                : r == LateRole.Legend ? _t.Format(key + ".desc", LateRoles.LegendReversalTokens)
                 : r == LateRole.OffRingStar ? _t.Format(key + ".desc", LateRoles.StarPromoMoneyStrong, LateRoles.StarPromoMoneyPartial)
                 : _t.Get(key + ".desc");
-            return new Row { Role = r, Name = _t.Get(key), Description = desc, Selected = _s.State.LateRole == r };
+            return new Row { Role = r, Name = _t.Get(key), Description = desc, Selected = _s.State.NextLateRole == r };
         }
 
         /// <summary>Рядок хабу «Пізня роль: Ікона»; null — ролі немає.</summary>
         public string CurrentText
         {
             get { return _s.State.LateRole == LateRole.None ? null : _t.Format("c.late.current", _t.Get(LateRoles.Key(_s.State.LateRole))); }
+        }
+
+        /// <summary>Рядок блоку вибору «З наступного сезону: Легенда» — коли обрана на наступний сезон інша, ніж діє; інакше null.</summary>
+        public string NextText
+        {
+            get
+            {
+                var n = _s.State.NextLateRole;
+                return n == _s.State.LateRole ? null : _t.Format("c.late.next", _t.Get(LateRoles.Key(n)));
+            }
         }
 
         public bool Choose(LateRole r) { return _s.ChooseLateRole(r); }

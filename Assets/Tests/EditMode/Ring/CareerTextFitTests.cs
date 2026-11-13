@@ -584,8 +584,8 @@ namespace Game.Tests.EditMode
 
         /// <summary>
         /// №11: останній крок кінця сезону — пропозиція вже вирішена (ключі з підказками й найдовший рядок стану), під нею «Пізня роль»:
-        /// кнопки ролей (CareerScreens.Small, текст 13: поля 8 і 8, смужка 4 і рамка 1, проміжок 4) переносяться в рядки, під ними — обрана
-        /// словами найдовшим описом. Папір не сягає канатів.
+        /// заголовок — чинна роль, кнопки ролей (CareerScreens.Small, текст 13: поля 8 і 8, смужка 4 і рамка 1, проміжок 4) переносяться в
+        /// рядки, під ними — «З наступного сезону: …» найдовшим описом. Папір не сягає канатів.
         /// </summary>
         [Test]
         public void SeasonEnd_Paper_WithTheLateRole_StaysAboveTheRopes()
@@ -604,7 +604,9 @@ namespace Game.Tests.EditMode
                 string.Format(Ui("c.offer.farewell.ok.f"), fed), string.Format(Ui("c.offer.farewell.bad"), fed, fed)), BrandTokens.TypeMinInfo, col);
             h += Math.Max(none, Math.Max(declined, moved));
             // блок пізньої ролі
-            h += 18f + Para(Ui("c.late.title"), BrandTokens.TypeBody, col);
+            // заголовок — чинна роль (043f2706: «Пізня роль: Зірка поза рингом» найдовша), без ролі — «Пізня роль»
+            h += 18f + Para(Longest(Ui("c.late.title"), Ui("c.late.current", Ui("c.late.icon")), Ui("c.late.current", Ui("c.late.legend")),
+                Ui("c.late.current", Ui("c.late.star"))), BrandTokens.TypeBody, col);
             var names = new[] { Ui("c.late.icon"), Ui("c.late.legend"), Ui("c.late.star"), Ui("c.late.none") };
             int rows = 1;
             float x = 0f;
@@ -615,11 +617,12 @@ namespace Game.Tests.EditMode
                 x += w;
             }
             h += 6f + rows * RecButtonH;
-            string from = Ui("c.late.from_next");
+            // рядок під кнопками (CareerScreenLines.LateRoleNote): «З наступного сезону: роль. Що дає.», та сама — що дає, без ролі — правило
             string note = Longest(Ui("c.late.hint"),
-                Ui("c.late.icon") + ": " + Ui("c.late.icon.desc", 9) + ". " + from,
-                Ui("c.late.legend") + ": " + Ui("c.late.legend.desc", 9) + ". " + from,
-                Ui("c.late.star") + ": " + Ui("c.late.star.desc", 999, 999) + ". " + from);
+                Ui("c.late.next", Ui("c.late.icon")) + ". " + Ui("c.late.icon.desc", 9) + ".",
+                Ui("c.late.next", Ui("c.late.legend")) + ". " + Ui("c.late.legend.desc") + ".",
+                Ui("c.late.next", Ui("c.late.star")) + ". " + Ui("c.late.star.desc", 999, 999) + ".",
+                Ui("c.late.next", Ui("c.late.none")) + ".");
             h += 2f + Para(note, BrandTokens.TypeMinInfo, col);
             h += PaperPadB;
             Assert.LessOrEqual(rows, 2, "кнопки ролей — щонайбільше два рядки");

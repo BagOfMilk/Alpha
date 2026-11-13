@@ -878,13 +878,14 @@ namespace Game.Gameplay.Ring.UI
 
         /// <summary>
         /// №11 (§5.3): вибір пізньої ролі — на останньому кроці кінця сезону, перед «Новим сезоном». Кнопки ролей одним рядком (обрана —
-        /// із золотою смужкою), під ними — обрана словами й «діє з наступного сезону» (<see cref="CareerScreenLines.LateRoleNote"/>).
+        /// із золотою смужкою — обрана на НАСТУПНИЙ сезон), чинна — у заголовку (<see cref="CareerScreenLines.LateRoleTitle"/>), під
+        /// кнопками — «З наступного сезону: …», коли обрана інша, ніж чинна (<see cref="CareerScreenLines.LateRoleNote"/>).
         /// </summary>
         private void LateRoleBlock(VisualElement col)
         {
             var m = new LateRoleModel(C, T);
             col.Add(ShowKit.Rule());
-            col.Add(MenuKit.Body(m.TitleText, BrandTokens.TypeBody, RingTheme.Bg, true));
+            col.Add(MenuKit.Body(CareerScreenLines.LateRoleTitle(m), BrandTokens.TypeBody, RingTheme.Bg, true));
             var chips = ArenaKit.Row();
             chips.style.flexWrap = Wrap.Wrap;
             chips.style.marginTop = 6f;

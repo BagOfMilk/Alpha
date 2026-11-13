@@ -758,8 +758,10 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// №11: пізня роль — на останньому кроці кінця сезону (лише «Новий сезон»): не поряд із титульним шансом і контрактом. Рядок під
-        /// кнопками каже обрану словами й «діє з наступного сезону»; без ролі — як працює вибір.
+        /// №11: пізня роль — на останньому кроці кінця сезону (лише «Новий сезон»): не поряд із титульним шансом і контрактом.
+        /// 043f2706: позначка обраної — роль на НАСТУПНИЙ сезон. Заголовок блоку — чинна роль (без ролі — «Пізня роль»), рядок під
+        /// кнопками — «З наступного сезону: …», лише коли обрана інша, ніж чинна; та сама — що вона дає; без ролі — як працює вибір.
+        /// Обрана на наступний ніде не видає себе за чинну: ні в заголовку, ні в рядку хабу.
         /// </summary>
         [Test]
         public void LateRole_Block_OnTheLastStep_SaysTheChoice()
@@ -769,17 +771,47 @@ namespace Game.Tests.EditMode
             s.DeclineOffer();
             Assert.IsTrue(CareerScreenLines.LateRoleShown(s, CareerScreenLines.SeasonEndActions(s)));
             var m = new LateRoleModel(s, T);
+            Assert.AreEqual(T.Get("c.late.title"), CareerScreenLines.LateRoleTitle(m), "чинної ролі немає — просто заголовок");
             Assert.AreEqual(m.HintText, CareerScreenLines.LateRoleNote(T, m), "без ролі — як працює вибір");
+
+            // перший сезон: обрала Ікону на наступний — заголовок не каже «Пізня роль: Ікона», рядок каже «з наступного сезону»
             Assert.IsTrue(m.Choose(LateRole.Icon));
             m = new LateRoleModel(s, T);
+            Assert.AreEqual(T.Get("c.late.title"), CareerScreenLines.LateRoleTitle(m), "обрана на наступний — не чинна");
+            Assert.IsNull(m.CurrentText, "у хабі ролі ще немає");
+            string next = T.Format("c.late.next", T.Get("c.late.icon"));
             string note = CareerScreenLines.LateRoleNote(T, m);
             NoMissingKey(note, "рядок пізньої ролі");
-            StringAssert.StartsWith(T.Get("c.late.icon") + ": ", note);
-            StringAssert.EndsWith(T.Get("c.late.from_next"), note);
+            StringAssert.StartsWith(next + ". ", note);
+            StringAssert.Contains(T.Format("c.late.icon.desc", LateRoles.IconStartHype), note);
+            StringAssert.EndsWith(".", note);
             StringAssert.DoesNotContain("..", note);
+
+            // новий сезон Іконою: у кінці наступного сезону Ікона — чинна (заголовок), та сама обрана — що вона дає, без «з наступного»
+            s.State.LateRole = LateRole.Icon;
+            m = new LateRoleModel(s, T);
+            string current = T.Format("c.late.current", T.Get("c.late.icon"));
+            Assert.AreEqual(current, CareerScreenLines.LateRoleTitle(m));
+            Assert.IsNull(m.NextText);
+            note = CareerScreenLines.LateRoleNote(T, m);
+            StringAssert.DoesNotContain(T.Format("c.late.next", ""), note);
+            Assert.AreEqual(T.Format("c.late.icon.desc", LateRoles.IconStartHype) + ".", note, "та сама — що вона дає, з крапкою");
+
+            // передумала на «Зірку»: чинна лишається Іконою — і в заголовку, і в хабі; рядок — про наступний сезон
             Assert.IsTrue(m.Choose(LateRole.OffRingStar));
-            StringAssert.EndsWith(T.Get("c.late.from_next"), CareerScreenLines.LateRoleNote(T, new LateRoleModel(s, T)), "опис без крапки — крапку додано");
-            Assert.AreEqual(T.Format("c.late.current", T.Get("c.late.star")), new LateRoleModel(s, T).CurrentText, "у хабі — рядок нинішньої ролі");
+            m = new LateRoleModel(s, T);
+            Assert.AreEqual(current, CareerScreenLines.LateRoleTitle(m), "золота смужка «Зірки» — не чинна роль");
+            Assert.AreEqual(current, m.CurrentText, "у хабі — рядок нинішньої ролі, не обраної");
+            note = CareerScreenLines.LateRoleNote(T, m);
+            StringAssert.StartsWith(T.Format("c.late.next", T.Get("c.late.star")) + ". ", note);
+            StringAssert.EndsWith(".", note, "опис без крапки — крапку додано");
+            StringAssert.DoesNotContain("..", note);
+
+            // відмовилась від ролі: «З наступного сезону: Без пізньої ролі.» — без опису, що повторює назву
+            Assert.IsTrue(m.Choose(LateRole.None));
+            m = new LateRoleModel(s, T);
+            Assert.AreEqual(T.Format("c.late.next", T.Get("c.late.none")) + ".", CareerScreenLines.LateRoleNote(T, m));
+            Assert.AreEqual(current, CareerScreenLines.LateRoleTitle(m));
 
             var t = AtSeasonEnd(5, 1, 3, CareerRules.OfferTrust);
             t.State.Report.TitleEligible = true; t.State.Report.TitleDone = false;

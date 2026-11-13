@@ -276,7 +276,7 @@ namespace Game.Gameplay.Ring.Models
 
         /// <summary>
         /// №11: блок «Пізня роль» на папері кінця сезону — лише на останньому кроці («Новий сезон»): після титульного шансу й рішення про
-        /// пропозицію наступним іде новий сезон, тож «діє з наступного сезону» — правда, і папір не тримає разом контракт і пізню роль.
+        /// пропозицію наступним іде новий сезон, тож «з наступного сезону» — правда, і папір не тримає разом контракт і пізню роль.
         /// </summary>
         public static bool LateRoleShown(CareerSession c, List<SeasonEndAction> actions)
         {
@@ -284,19 +284,36 @@ namespace Game.Gameplay.Ring.Models
         }
 
         /// <summary>
-        /// №11: рядок під вибором пізньої ролі — обрана словами («Ікона: +1 ажіотажу на старті кожного матчу. Діє з наступного сезону.»);
-        /// без ролі — як працює вибір (<c>c.late.hint</c>). Обрану видно й без кольору смужки кнопки.
+        /// №11 (043f2706: позначка Selected — роль на НАСТУПНИЙ сезон): заголовок блоку «Пізня роль» — чинна роль
+        /// (<see cref="LateRoleModel.CurrentText"/>, «Пізня роль: Ікона»), без ролі — просто «Пізня роль». Так золота смужка кнопки
+        /// (обрана на наступний) не видає себе за чинну: чинна названа окремо, над кнопками.
+        /// </summary>
+        public static string LateRoleTitle(LateRoleModel m)
+        {
+            return m.CurrentText ?? m.TitleText;
+        }
+
+        /// <summary>
+        /// №11: рядок під вибором пізньої ролі. Обрана на наступний сезон інша, ніж чинна, — «З наступного сезону: Легенда. Додатковий
+        /// жетон реверсу в кожному матчі.» (<see cref="LateRoleModel.NextText"/> і опис; «без ролі» — без опису, він повторює назву).
+        /// Та сама, що чинна, — що вона дає; без ролі взагалі — як працює вибір (<c>c.late.hint</c>). Обрану видно й без кольору смужки.
         /// </summary>
         public static string LateRoleNote(RingText t, LateRoleModel m)
         {
+            LateRoleModel.Row sel = null;
             foreach (var r in m.Rows)
-                if (r.Selected && r.Role != LateRole.None)
-                {
-                    string d = r.Description.TrimEnd();
-                    if (!d.EndsWith(".", StringComparison.Ordinal)) d += ".";
-                    return r.Name + ": " + d + " " + t.Get("c.late.from_next");
-                }
-            return m.HintText;
+                if (r.Selected) { sel = r; break; }
+            string next = m.NextText;
+            if (next != null)
+                return sel == null || sel.Role == LateRole.None ? next + "." : next + ". " + Sentence(sel.Description);
+            if (sel == null || sel.Role == LateRole.None) return m.HintText;
+            return Sentence(sel.Description);
+        }
+
+        private static string Sentence(string s)
+        {
+            s = s.TrimEnd();
+            return s.EndsWith(".", StringComparison.Ordinal) ? s : s + ".";
         }
 
         /// <summary>Чернетка героя перед створенням: дивізіон (P2-6) — зі статі тіла (body_f_* — жіночий), суперники своєї статі.</summary>
