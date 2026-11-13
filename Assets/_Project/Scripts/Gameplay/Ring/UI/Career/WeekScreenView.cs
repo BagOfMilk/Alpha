@@ -28,6 +28,8 @@ namespace Game.Gameplay.Ring.UI
         private readonly List<int> _tileKeys = new List<int>();   // ключ плитки (цифра) поруч із _tiles — для огляду меню
         private Label _hint;
         private VisualElement _row, _gold, _weekPlate, _last, _ropes, _header, _drawer, _poster;
+        /// <summary>На афіші є наліпка форми суперника, що звисає з її низу (межа шухляди — від наліпки).</summary>
+        private bool _posterSticker;
         private string _hintDefault = "";
         private bool _hintWarn;
         private ScrollView _drawerScroll;
@@ -68,6 +70,7 @@ namespace Game.Gameplay.Ring.UI
             _weekPlate = WeekPlate(v);
             Root.Add(_weekPlate);
             Root.Add(ShowKit.RivalStrip(C, T, w.Card.Opponent, w.Card.OpponentFeudLevel, true));
+            _posterSticker = false;
             _poster = Poster(w.Card, w.IsBigShowWeek);
             _poster.RegisterCallback<GeometryChangedEvent>(e => Fit());   // висота афіші відома лише після розкладки (межа шухляди)
             Root.Add(_poster);
@@ -97,11 +100,12 @@ namespace Game.Gameplay.Ring.UI
                 string spent = T.Get("c.hub.no_actions");
                 int cha = C.Player.Get(RingAttr.Charisma) - C.State.InjuryPenaltyFor(BodyZone.Head);
                 int job = CareerRules.SideJobBase + 5 * Math.Max(0, C.Player.Get(RingAttr.Stamina));
-                AddTile(1, T.Get("week.action.0"), T.Format("c.week.pay.train", CareerRules.TrainingPoints), null, any, spent,
+                // №11: зірка поза рингом тренується раз на тиждень — обидві плитки тренування вимкнені з причиною (§5.3)
+                string trainWhy = CareerScreenLines.TrainReason(T, w, false), coachWhy = CareerScreenLines.TrainReason(T, w, true);
+                AddTile(1, T.Get("week.action.0"), T.Format("c.week.pay.train", CareerRules.TrainingPoints), null, trainWhy == null, trainWhy,
                     () => Do(C.Train(false)), T.Get("week.action.0.desc"));
-                bool coach = w.Money >= CareerRules.TrainerCost;
                 AddTile(2, T.Get("c.week.train_coach"), T.Format("c.week.pay.coach", CareerRules.TrainingPoints + CareerRules.TrainerExtraPoints, CareerRules.TrainerCost),
-                    null, any && coach, any ? T.Format("c.hub.need_money", CareerRules.TrainerCost - w.Money) : spent, () => Do(C.Train(true)), T.Get("c.week.train_coach.desc"));
+                    null, coachWhy == null, coachWhy, () => Do(C.Train(true)), T.Get("c.week.train_coach.desc"));
                 // травма на плитці — коротко: зона, мінус до кидків, тижні (≤ 2 рядки, ПМ 11.11.2026); про лікаря каже опис плитки
                 AddTile(3, T.Get("week.action.1"), w.CanRecover ? T.Format("c.week.pay.recover", CareerRules.RecoverZoneHeal) : T.Get("c.week.pay.healthy"),
                     InjuryWarn(w), any && w.CanRecover, any ? null : spent, () => Do(C.Recover(WorstZone(w), false)), T.Get("week.action.1.desc"));   // «ти цілий» уже в ефекті
@@ -115,8 +119,10 @@ namespace Game.Gameplay.Ring.UI
                     promo.SetChances(odds[0], odds[1], odds[2], m, pa, st);
                     back.SetChances(odds[0], odds[1], odds[2], m, pa, st);
                 }
+                // №8: під виключним правом підробіток заборонено (§6.4) — плитка вимкнена з причиною
+                string jobWhy = CareerScreenLines.SideJobReason(T, w, C.ExclusiveActive);
                 AddTile(6, T.Get("week.action.4"), T.Format("c.hub.pay.job", job), T.Format("c.hub.risk", Pct(Sum36AtMost(CareerRules.SideJobInjuryAtMost))),
-                    any, spent, () => Do(C.SideJob()), T.Get("week.action.4.desc"));
+                    jobWhy == null, jobWhy, () => Do(C.SideJob()), T.Get("week.action.4.desc"));
             }
             Root.Add(_row);
 
@@ -176,7 +182,7 @@ namespace Game.Gameplay.Ring.UI
                 bool posterReady = _poster != null && !float.IsNaN(_poster.layout.height) && _poster.layout.height > 0f;
                 if (posterReady && !float.IsNaN(height))
                 {
-                    float room = bottomY - (_poster.layout.y + _poster.layout.height) - 12f;
+                    float room = CareerTileLayout.DrawerRoomUnderPoster(bottomY, _poster.layout.y + _poster.layout.height, _posterSticker);
                     if (room < ArenaKit.DrawerMinRoom) room = bottomY - (ArenaKit.Top + ArenaKit.StripH + 12f);
                     if (room > 120f) _drawer.style.maxHeight = room;
                 }
@@ -293,15 +299,23 @@ namespace Game.Gameplay.Ring.UI
             col.Add(MenuKit.Body(plan, BrandTokens.TypeMinInfo, RingTheme.Bg, true));
             if (c.PromoHypeBonus != 0) col.Add(Bullet(T.Format("c.card.promo_bonus", Signed(c.PromoHypeBonus))));
             if (c.IsRematch) col.Add(Bullet(T.Get("c.hub.rematch")));
+            string outgrown = CareerScreenLines.OutgrownLine(T, c);   // №7: переріс щабель — букер ставить легший матч
+            if (outgrown != null) col.Add(Bullet(outgrown));
             // P2-4 (8c3f16b): до росту гравця — нейтральний рядок «за місцем у картці», без червоної наліпки
             if (c.Opponent != null && c.RivalSteps > 0 && !ShowKit.RivalInForm(C)) col.Add(Bullet(ShowKit.RivalStepsText(T, c)));
+            // №8 і №11: що тримає цей тиждень — пастка контракту (гонорар урізаний, без виїзних і підробітку) і пізня роль
+            string exclusive = new SeasonOfferModel(C, T).ExclusiveText;
+            if (exclusive != null) col.Add(Bullet(exclusive));
+            string late = new LateRoleModel(C, T).CurrentText;
+            if (late != null) col.Add(Bullet(late));
             box.Add(col);
             if (c.Opponent != null && c.RivalSteps > 0 && ShowKit.RivalInForm(C))
             {
                 var st = new Sticker(T.Format("c.hub.form", c.RivalSteps));
                 st.style.position = Position.Absolute;
-                st.style.left = 26f; st.style.bottom = -26f;
+                st.style.left = 26f; st.style.bottom = -CareerTileLayout.PosterStickerHang;
                 box.Add(st);
+                _posterSticker = true;
             }
             return box;
         }
@@ -379,8 +393,13 @@ namespace Game.Gameplay.Ring.UI
             row.Add(_hint);
             SetHint(_hintDefault);
             row.Add(ArenaKit.Spacer());
-            row.Add(new TabPlate(T.Get("dev.title"), w.DevPoints, _dev, () => { _dev = !_dev; if (_dev) _shop = false; _drawerScroll = null; _drawerOffset = Vector2.zero; Refresh(); }, w.DevPoints > 0));
-            row.Add(new TabPlate(T.Get("c.hub.shop"), ShopAvailable(), _shop, () => { _shop = !_shop; if (_shop) _dev = false; _drawerScroll = null; _drawerOffset = Vector2.zero; Refresh(); }, false));
+            // вкладки не стискаються: на 4:3 підказка дії в два рядки тиснула їх, і цифри «0»/«4» лягали на скіс (m4x3 050, слот 31);
+            // стискається лише підказка (flexShrink 1, minWidth 0)
+            var devTab = new TabPlate(T.Get("dev.title"), w.DevPoints, _dev, () => { _dev = !_dev; if (_dev) _shop = false; _drawerScroll = null; _drawerOffset = Vector2.zero; Refresh(); }, w.DevPoints > 0);
+            var shopTab = new TabPlate(T.Get("c.hub.shop"), ShopAvailable(), _shop, () => { _shop = !_shop; if (_shop) _dev = false; _drawerScroll = null; _drawerOffset = Vector2.zero; Refresh(); }, false);
+            devTab.style.flexShrink = 0f; shopTab.style.flexShrink = 0f;
+            row.Add(devTab);
+            row.Add(shopTab);
             return row;
         }
 
@@ -468,7 +487,11 @@ namespace Game.Gameplay.Ring.UI
             row.Add(ShopBtn("insurance", st.InsuredSeason == st.Season ? T.Get("c.shop.insurance.owned") : T.Format("c.shop.insurance", CareerRules.InsuranceCost),
                 () => C.BuyInsurance(), C.CanBuyInsurance, T.Get("c.shop.insurance.desc")));
             row.Add(ShopBtn("away", st.AwayShow ? T.Get("c.shop.away.on") : T.Format("c.shop.away", CareerRules.AwayTravelCost), () => C.GoAway(), C.CanGoAway,
-                T.Get("c.shop.away.desc")));
+                CareerScreenLines.AwayHint(T, C)));   // №8: під виключним правом — з причиною, чому вимкнено
+            // №8: менеджерку можна звільнити (ядро «Кар'єри», FireManager); посеред сцени закулісся — ні
+            if (CareerScreenLines.FireManagerShown(C))
+                row.Add(ShopBtn("manager", T.Get("c.shop.manager.fire"), () => C.FireManager(), !C.GetWeekView().BackstageOpen,
+                    CareerScreenLines.FireManagerHint(T)));
             card.Add(row);
             // житло й дорога цієї федерації — списуються наприкінці тижня; у вищій федерації дорожче (C.WeeklyCost)
             var living = MenuKit.Body(CareerScreenLines.LivingLine(T, C), BrandTokens.TypeMinInfo, RingTheme.TextDim);
@@ -557,6 +580,8 @@ namespace Game.Gameplay.Ring.UI
             if (r.ActionsDelta != 0) parts.Add(T.Format("c.delta.actions", Signed(r.ActionsDelta)));
             if (r.PlanChanged) parts.Add(T.Get("c.delta.plan"));
             if (r.CoachRaised) parts.Add(T.Get("c.delta.coach"));
+            string turn = CareerScreenLines.TurnLine(T, r, HeroForms.ShowsHeroine(T));   // №11: сцена повернула роль
+            if (turn != null) parts.Add(turn);
             if (r.NeedsChoice) parts.Add(T.Get("c.week.promo_choice"));
             string s = string.Join(" · ", parts);
             if (!string.IsNullOrEmpty(r.RumorKey)) s += "\n" + T.Get(r.RumorKey);
@@ -573,14 +598,15 @@ namespace Game.Gameplay.Ring.UI
                 return;
             }
             if (w.ActionsLeft <= 0) return;
+            // клавіші — ті самі умови, що й плитки (вимкнена плитка цифрою не натискається)
             switch (n)
             {
-                case 1: Do(C.Train(false)); break;
-                case 2: if (w.Money >= CareerRules.TrainerCost) Do(C.Train(true)); break;
+                case 1: if (CareerScreenLines.TrainReason(T, w, false) == null) Do(C.Train(false)); break;
+                case 2: if (CareerScreenLines.TrainReason(T, w, true) == null) Do(C.Train(true)); break;
                 case 3: if (w.CanRecover) Do(C.Recover(WorstZone(w), false)); break;
                 case 4: Do(C.Promo()); break;
                 case 5: Do(C.Backstage()); break;
-                case 6: Do(C.SideJob()); break;
+                case 6: if (CareerScreenLines.SideJobReason(T, w, C.ExclusiveActive) == null) Do(C.SideJob()); break;
             }
         }
 

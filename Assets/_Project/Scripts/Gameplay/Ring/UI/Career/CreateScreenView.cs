@@ -29,7 +29,9 @@ namespace Game.Gameplay.Ring.UI
         /// росла вгору над канатами, лягала на рядки ТЕХНІКА / ВИТРИВАЛІСТЬ / ХАРИЗМА — рядок вільного бала не видно (огляд слоту 30,
         /// ПМ). Тепер там відкриті «Прийоми» стають на папір замість опису ролі, а характеристики лишаються видимі (<see cref="Fit"/>).
         /// </summary>
-        private VisualElement _desc, _paperMoves, _movesCard;
+        private VisualElement _desc, _paperMoves, _movesCard, _posterCol;
+        /// <summary>Рядки характеристик афіші — Fit робить їх нижчими на вузькій панелі (<see cref="CareerTileLayout.CreateAttrRowNarrowH"/>).</summary>
+        private readonly List<VisualElement> _attrRows = new List<VisualElement>();
         private string _hintDefault = "";
         private TextField _nameField;
         private int _focusNameAfter = -1;
@@ -122,6 +124,9 @@ namespace Game.Gameplay.Ring.UI
                 tile.Accent = rc;
                 tile.SelectColor = rc;
                 tile.SelectDarkText = false;
+                // «ГЕРОЙ» вибраний — темна плитка з кобальтовим краєм, а не суцільний кобальт поруч із золотом (власник 12.11.2026,
+                // №4, «Так, усі 11»); «ЛИХОДІЙ» — як був (кармін у палітрі «Арена»)
+                tile.SelectAsEdge = r == CareerRole.Hero;
                 tile.Selected = r == _d.Role;
                 tile.Sync();
             }
@@ -208,6 +213,10 @@ namespace Game.Gameplay.Ring.UI
             if (_desc != null) _desc.style.display = paper ? DisplayStyle.None : DisplayStyle.Flex;
             if (_paperMoves != null) _paperMoves.style.display = paper ? DisplayStyle.Flex : DisplayStyle.None;
             if (_movesCard != null) _movesCard.style.display = paper ? DisplayStyle.None : DisplayStyle.Flex;
+            // папір росте згори, вкладка «Прийоми» стоїть над канатами — на вузькій панелі афіша компактніша, інакше рваний низ
+            // заходив на вкладку (огляд слоту 31, h4x3 014)
+            foreach (var r in _attrRows) r.style.height = narrow ? CareerTileLayout.CreateAttrRowNarrowH : CareerTileLayout.CreateAttrRowH;
+            if (_posterCol != null) _posterCol.style.paddingBottom = narrow ? CareerTileLayout.CreatePaperPadBottomNarrow : CareerTileLayout.CreatePaperPadBottom;
         }
 
         private ActionTile AddTile(int key, string title, string effect, Action act, string desc)
@@ -425,7 +434,9 @@ namespace Game.Gameplay.Ring.UI
             box.Add(new PaperSheet { Torn = true });
             var col = new VisualElement();
             col.pickingMode = PickingMode.Ignore;
-            col.style.paddingLeft = 26f; col.style.paddingRight = 22f; col.style.paddingTop = 16f; col.style.paddingBottom = 24f;
+            col.style.paddingLeft = 26f; col.style.paddingRight = 22f; col.style.paddingTop = 16f; col.style.paddingBottom = CareerTileLayout.CreatePaperPadBottom;
+            _posterCol = col;
+            _attrRows.Clear();
             col.Add(MenuKit.Display(T.Get("c.hub.create.poster"), 24f, RingTheme.Bg, RingFontRole.Display800, 0.04f));
 
             var head = ArenaKit.Row();
@@ -465,7 +476,7 @@ namespace Game.Gameplay.Ring.UI
             col.Add(hr);
 
             var baseAttr = Current.BaseAttr;
-            for (int i = 0; i < 5; i++) col.Add(AttrRow(i, baseAttr[i]));
+            for (int i = 0; i < 5; i++) { var ar = AttrRow(i, baseAttr[i]); _attrRows.Add(ar); col.Add(ar); }
             box.Add(col);
             return box;
         }
@@ -494,7 +505,7 @@ namespace Game.Gameplay.Ring.UI
             int shown = baseValue + (sel ? 1 : 0);
 
             var row = ArenaKit.Row();
-            row.style.height = 38f;
+            row.style.height = CareerTileLayout.CreateAttrRowH;   // на вузькій панелі — нижчий (Fit)
             row.style.marginLeft = -6f; row.style.paddingLeft = 6f;
             row.style.marginRight = -6f; row.style.paddingRight = 6f;
             row.pickingMode = PickingMode.Position;

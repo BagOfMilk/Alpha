@@ -251,8 +251,8 @@ namespace Game.Tests.EditMode
                 "титульний шанс — першим, пропозиція чекає");
             Assert.IsFalse(CareerScreenLines.OfferShown(s, new SeasonOfferModel(s, T)), "до кінця титульного шансу пропозиції на папері немає");
             s.SkipTitle();
-            CollectionAssert.AreEqual(new[] { SeasonEndAction.AcceptOffer, SeasonEndAction.DeclineOffer }, CareerScreenLines.SeasonEndActions(s),
-                "обидва ключі — рішення, «Новий сезон» лише після нього");
+            CollectionAssert.AreEqual(new[] { SeasonEndAction.AcceptOffer, SeasonEndAction.DeclineOffer, SeasonEndAction.ReadContract },
+                CareerScreenLines.SeasonEndActions(s), "обидва ключі — рішення (і дрібний шрифт до нього), «Новий сезон» лише після нього");
             var o = new SeasonOfferModel(s, T);
             Assert.IsTrue(CareerScreenLines.OfferShown(s, o));
             Assert.IsTrue(o.ShowKeys);
@@ -305,7 +305,8 @@ namespace Game.Tests.EditMode
         public void Farewell_Card_HasItsHeading_AndTheNote()
         {
             var s = AtSeasonEnd(7, 1, 3, CareerRules.OfferTrust - CareerRules.OfferChampionTrustBonus, champion: true);
-            CollectionAssert.AreEqual(new[] { SeasonEndAction.AcceptOffer, SeasonEndAction.DeclineOffer }, CareerScreenLines.SeasonEndActions(s));
+            CollectionAssert.AreEqual(new[] { SeasonEndAction.AcceptOffer, SeasonEndAction.DeclineOffer, SeasonEndAction.ReadContract },
+                CareerScreenLines.SeasonEndActions(s));
             Assert.AreEqual(T.Get("c.offer.farewell"), new SeasonOfferModel(s, T).StatusText, "чемпіона попереджено про прощальний матч");
             s.AcceptOffer();
             Assert.AreEqual(CareerStage.Show, s.Stage);
@@ -502,8 +503,9 @@ namespace Game.Tests.EditMode
                 if (!body.Contains("CareerTileLayout.DevPlateMaxH(")) bad.Add("DevPlate №" + n + ": плита без межі до канатів");
                 if (body.Contains("scroll.style.maxHeight = 370f")) bad.Add("DevPlate №" + n + ": стара стала висота прокрутки кінця сезону");
                 if (!body.Contains("scroll.style.minHeight = CareerTileLayout.DevScrollMinH;")) bad.Add("DevPlate №" + n + ": найменша прокрутка не з моделі");
-                int to = body.IndexOf("ScrollToDevAll(scroll);");
-                if (to < footAdd) bad.Add("DevPlate №" + n + ": після підвалу немає прокрутки до щойно розгорнутого списку");
+                // щойно розгорнутий «Усе» — до початку списку (ScrollToDevAll), інакше — та сама прокрутка після перебудови (огляд слоту 31)
+                int to = body.IndexOf("KeepDevScroll(scroll, ");
+                if (to < footAdd) bad.Add("DevPlate №" + n + ": після підвалу немає прокрутки до щойно розгорнутого списку чи до колишнього місця");
             }
             if (n != 2) bad.Add("DevPlate: плит розвитку на екранах показу — дві, знайдено " + n);
             // межа від справжньої висоти панелі — і при зміні розміру (кінець сезону), і при зміні верху на вузькій панелі (підсумок)
@@ -576,6 +578,256 @@ namespace Game.Tests.EditMode
             if (!title.Contains("CareerTileLayout.FitTitleWedge(")) bad.Add("TitleMenuView: клин не підганяється під підпис");
             if (Regex.Matches(title, @"RegisterCallback<GeometryChangedEvent>\(e => FitWedge\(\)\)").Count < 2) bad.Add("TitleMenuView: FitWedge не на зміні геометрії підпису й панелі");
             if (!shapes.Contains("CareerTileLayout.WedgeTaper") || shapes.Contains("ww * 0.62f")) bad.Add("MenuBackdrop: звуження клина — не з CareerTileLayout.WedgeTaper");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        // ---------------- пакет «Так, усі 11» (власник, 12.11.2026) і правки огляду слоту 31 ----------------
+
+        /// <summary>
+        /// №4: вибір плитки — заливкою (лиходій, ґіміки) чи краєм (герой: темна плитка з кобальтовим краєм і смужкою, а не кобальтова
+        /// заливка). Фокус завжди золотий, вимкнена — без країв.
+        /// </summary>
+        [Test]
+        public void TileLook_SelectAsEdge_KeepsTheTileDark()
+        {
+            var edge = CareerTileLayout.Look(true, false, true, true, false);
+            Assert.AreEqual(TileFill.Panel, edge.Fill, "герой обраний — плитка темна");
+            Assert.AreEqual(TileEdge.Select, edge.Stripe, "смужка — кольору вибору");
+            Assert.AreEqual(TileEdge.Select, edge.Outline, "край — кольору вибору");
+            Assert.IsFalse(edge.DarkText, "на темній плитці текст світлий");
+
+            var fill = CareerTileLayout.Look(true, false, true, false, true);
+            Assert.AreEqual(TileFill.Select, fill.Fill, "лиходій обраний — заливка, як було");
+            Assert.AreEqual(TileEdge.None, fill.Stripe);
+            Assert.AreEqual(TileEdge.None, fill.Outline);
+            Assert.IsTrue(fill.DarkText, "темний текст на світлій заливці вибору — як просила плитка");
+
+            var focus = CareerTileLayout.Look(true, true, true, true, false);
+            Assert.AreEqual(TileFill.Gold, focus.Fill, "фокус — золото й поверх вибору краєм");
+            Assert.AreEqual(TileEdge.Focus, focus.Outline);
+            Assert.IsTrue(focus.DarkText);
+
+            var plain = CareerTileLayout.Look(true, false, false, true, false);
+            Assert.AreEqual(TileFill.Panel, plain.Fill);
+            Assert.AreEqual(TileEdge.Accent, plain.Stripe, "не обрана — смужка акценту");
+            Assert.AreEqual(TileEdge.None, plain.Outline);
+
+            var off = CareerTileLayout.Look(false, true, true, true, true);
+            Assert.AreEqual(TileFill.Disabled, off.Fill);
+            Assert.AreEqual(TileEdge.None, off.Outline, "вимкнена — без рамки фокуса й вибору");
+            Assert.IsFalse(off.DarkText);
+        }
+
+        /// <summary>Правка 1 слоту 31: шухляда тижня рахує місце від низу наліпки «У ФОРМІ», а не від афіші (наліпка звисає на 26).</summary>
+        [Test]
+        public void DrawerRoom_CountsTheStickerHang()
+        {
+            float plain = CareerTileLayout.DrawerRoomUnderPoster(800f, 400f, false);
+            float sticker = CareerTileLayout.DrawerRoomUnderPoster(800f, 400f, true);
+            Assert.AreEqual(800f - 400f - CareerTileLayout.DrawerPosterGap, plain, 1e-4f);
+            Assert.AreEqual(plain - CareerTileLayout.PosterStickerHang, sticker, 1e-4f, "наліпка забирає своє місце");
+        }
+
+        /// <summary>Правка 6 слоту 31: «опис · причина» — без крапки перед роздільником; без причини — опис як є.</summary>
+        [Test]
+        public void WithReason_DropsThePeriodBeforeTheSeparator()
+        {
+            Assert.AreEqual("Ажіотаж на старті +1 · Ранг шляху замалий", CareerScreenLines.WithReason("Ажіотаж на старті +1.", "Ранг шляху замалий"));
+            Assert.AreEqual("Без крапки · причина", CareerScreenLines.WithReason("Без крапки", "причина"));
+            Assert.AreEqual("Трикрапка... · причина", CareerScreenLines.WithReason("Трикрапка...", "причина"), "трикрапку не ріжемо");
+            Assert.AreEqual("Опис.", CareerScreenLines.WithReason("Опис.", null));
+            Assert.AreEqual("причина", CareerScreenLines.WithReason("", "причина"));
+            string rank = T.Get("dev.reason.rank");
+            NoMissingKey(rank, "dev.reason.rank");
+            var bad = new List<string>();
+            foreach (var p in PerkCatalog.All)
+            {
+                string line = CareerScreenLines.WithReason(RingLabels.PerkDesc(T, p.Id), rank);
+                if (line.Contains(". ·")) bad.Add(p.Id + ": " + line);
+            }
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>№7: «переріс щабель» — лише коли ядро так каже; ключ має жіночу форму (героїня «переросла»).</summary>
+        [Test]
+        public void Outgrown_Line_FromTheCard()
+        {
+            Assert.IsNull(CareerScreenLines.OutgrownLine(T, new ShowCardView()));
+            Assert.IsNull(CareerScreenLines.OutgrownLine(T, null));
+            string line = CareerScreenLines.OutgrownLine(T, new ShowCardView { IsOutgrown = true });
+            NoMissingKey(line, "c.hub.outgrown");
+            Assert.AreEqual(T.Get("c.hub.outgrown"), line);
+            var t = MiniJson.ParseObject(CareerKit.Read("ui_uk.json"));
+            Assert.IsTrue(t.ContainsKey("c.hub.outgrown.f"), "героїня — «переросла»");
+            StringAssert.Contains("ереросла", (string)t["c.hub.outgrown.f"]);
+        }
+
+        /// <summary>
+        /// №11 і №8: плитки тижня вимкнені з причиною — зірка поза рингом уже тренувалась (обидва тренування), виключне право (підробіток);
+        /// дій немає — «дії вичерпано» першим. Причини — ті самі ключі, що повертає ядро (week.reason.star_training / .exclusive).
+        /// </summary>
+        [Test]
+        public void WeekTiles_SayWhyTheyAreOff()
+        {
+            var w = new WeekView { ActionsLeft = 2, Money = 999 };
+            Assert.IsNull(CareerScreenLines.TrainReason(T, w, false));
+            Assert.IsNull(CareerScreenLines.TrainReason(T, w, true));
+            Assert.IsNull(CareerScreenLines.SideJobReason(T, w, false));
+            w.StarTrainingUsed = true;
+            Assert.AreEqual(T.Get("c.week.reason.star"), CareerScreenLines.TrainReason(T, w, false));
+            Assert.AreEqual(T.Get("c.week.reason.star"), CareerScreenLines.TrainReason(T, w, true), "з тренером — те саме тренування");
+            w.StarTrainingUsed = false; w.Money = CareerRules.TrainerCost - 3;
+            Assert.AreEqual(T.Format("c.hub.need_money", 3), CareerScreenLines.TrainReason(T, w, true));
+            Assert.IsNull(CareerScreenLines.TrainReason(T, w, false), "без тренера гроші не потрібні");
+            Assert.AreEqual(T.Get("c.week.reason.exclusive"), CareerScreenLines.SideJobReason(T, w, true));
+            w.ActionsLeft = 0; w.StarTrainingUsed = true;
+            Assert.AreEqual(T.Get("c.hub.no_actions"), CareerScreenLines.TrainReason(T, w, false), "дій немає — це головне");
+            Assert.AreEqual(T.Get("c.hub.no_actions"), CareerScreenLines.SideJobReason(T, w, true));
+            // повні причини ядра — у відгуку дії (ResultText: week.reason.{Reason}); на плитці — короткі
+            foreach (var k in new[] { "week.reason.star_training", "week.reason.exclusive", "c.week.reason.star", "c.week.reason.exclusive", "c.hub.no_actions" })
+                NoMissingKey(T.Get(k), k);
+        }
+
+        /// <summary>
+        /// №8: частка менеджерки в підсумку вечора — ставка до частки, частка окремо, і сума рядка дорівнює числу праворуч (TotalFee);
+        /// без менеджерки — як було. Кнопка звільнення й підказка «Виїзного шоу» під виключним правом.
+        /// </summary>
+        [Test]
+        public void Manager_FeeLine_AndShop()
+        {
+            var r = new ShowResult { Fee = 51, ManagerCut = 9, FeeWinBonus = 10, FeeHypeBonus = 5 };
+            Assert.AreEqual(T.Format("c.hub.fee_split", 60, 15) + " · " + T.Format("c.result.manager", 9), CareerScreenLines.FeeSplitLine(T, r));
+            Assert.AreEqual(66, r.TotalFee, "ставка 60 + бонуси 15 − частка 9 = 66 — число праворуч");
+            var plain = new ShowResult { Fee = 60, FeeWinBonus = 15 };
+            Assert.AreEqual(T.Format("c.hub.fee_split", 60, 15), CareerScreenLines.FeeSplitLine(T, plain));
+
+            var s = CareerKit.NewHero(11);
+            Assert.IsFalse(CareerScreenLines.FireManagerShown(s));
+            s.State.Manager = true;
+            Assert.IsTrue(CareerScreenLines.FireManagerShown(s));
+            string hint = CareerScreenLines.FireManagerHint(T);
+            NoMissingKey(hint, "c.shop.manager.fire.desc");
+            StringAssert.Contains(CareerRules.ManagerFeePercent + " %", hint);
+            NoMissingKey(T.Get("c.shop.manager.fire"), "c.shop.manager.fire");
+            Assert.AreEqual(T.Get("c.shop.away.desc"), CareerScreenLines.AwayHint(T, s));
+            s.State.ContractExclusive = true; s.State.ContractEndSeason = s.State.Season;
+            Assert.IsTrue(s.ExclusiveActive);
+            Assert.AreEqual(CareerScreenLines.WithReason(T.Get("c.shop.away.desc"), T.Get("week.reason.exclusive")), CareerScreenLines.AwayHint(T, s));
+            Assert.IsFalse(s.CanGoAway, "підказка каже те саме, що ядро");
+        }
+
+        /// <summary>№11: поворот ролі в рядку відгуку — у роді героя (героїня — «Лиходійка»); без повороту — нічого.</summary>
+        [Test]
+        public void Turn_Line_InTheHerosForm()
+        {
+            Assert.IsNull(CareerScreenLines.TurnLine(T, new WeekActionResult(), false));
+            Assert.IsNull(CareerScreenLines.TurnLine(T, null, false));
+            var r = new WeekActionResult { TurnedTo = RingPath.Heel };
+            Assert.AreEqual(T.Format("c.delta.turn", T.Get("path.heel")), CareerScreenLines.TurnLine(T, r, false));
+            Assert.AreEqual(T.Format("c.delta.turn", T.Get("path.heel.fem")), CareerScreenLines.TurnLine(T, r, true));
+            NoMissingKey(CareerScreenLines.TurnLine(T, r, true), "c.delta.turn");
+        }
+
+        /// <summary>
+        /// №8: «Прочитати дрібний шрифт» — у ряду кінця сезону поряд із рішенням, раз на пропозицію: після читання зникає, з менеджеркою
+        /// його немає (вона читає сама). Рядки контракту на папері — аванс, дрібний шрифт — з ключами.
+        /// </summary>
+        [Test]
+        public void ReadContract_Action_OncePerOffer_NotWithTheManager()
+        {
+            var s = AtSeasonEnd(3, 1, 3, CareerRules.OfferTrust);
+            CollectionAssert.AreEqual(new[] { SeasonEndAction.AcceptOffer, SeasonEndAction.DeclineOffer, SeasonEndAction.ReadContract },
+                CareerScreenLines.SeasonEndActions(s));
+            var o = new SeasonOfferModel(s, T);
+            Assert.IsTrue(o.ShowContract);
+            NoMissingKey(o.AdvanceText, "аванс");
+            NoMissingKey(o.FinePrintText, "дрібний шрифт");
+            NoMissingKey(o.ReadText, "c.offer.read");
+            NoMissingKey(o.ReadChanceText, "c.offer.read.chance");
+            Assert.AreEqual(T.Get("c.offer.fine.unread"), o.FinePrintText, "до читання — «ще не прочитано»");
+            o.Read();
+            CollectionAssert.AreEqual(new[] { SeasonEndAction.AcceptOffer, SeasonEndAction.DeclineOffer }, CareerScreenLines.SeasonEndActions(s),
+                "прочитано — плитки більше немає");
+            Assert.AreNotEqual(T.Get("c.offer.fine.unread"), new SeasonOfferModel(s, T).FinePrintText, "на папері — що видно");
+
+            var m = AtSeasonEnd(4, 1, 3, CareerRules.OfferTrust);
+            m.State.Manager = true;
+            CollectionAssert.AreEqual(new[] { SeasonEndAction.AcceptOffer, SeasonEndAction.DeclineOffer }, CareerScreenLines.SeasonEndActions(m),
+                "з менеджеркою читати не треба");
+            NoMissingKey(new SeasonOfferModel(m, T).ManagerNote, "c.offer.fine.manager");
+        }
+
+        /// <summary>
+        /// №11: пізня роль — на останньому кроці кінця сезону (лише «Новий сезон»): не поряд із титульним шансом і контрактом. Рядок під
+        /// кнопками каже обрану словами й «діє з наступного сезону»; без ролі — як працює вибір.
+        /// </summary>
+        [Test]
+        public void LateRole_Block_OnTheLastStep_SaysTheChoice()
+        {
+            var s = AtSeasonEnd(3, 1, 3, CareerRules.OfferTrust);
+            Assert.IsFalse(CareerScreenLines.LateRoleShown(s, CareerScreenLines.SeasonEndActions(s)), "поки пропозиція — не тут");
+            s.DeclineOffer();
+            Assert.IsTrue(CareerScreenLines.LateRoleShown(s, CareerScreenLines.SeasonEndActions(s)));
+            var m = new LateRoleModel(s, T);
+            Assert.AreEqual(m.HintText, CareerScreenLines.LateRoleNote(T, m), "без ролі — як працює вибір");
+            Assert.IsTrue(m.Choose(LateRole.Icon));
+            m = new LateRoleModel(s, T);
+            string note = CareerScreenLines.LateRoleNote(T, m);
+            NoMissingKey(note, "рядок пізньої ролі");
+            StringAssert.StartsWith(T.Get("c.late.icon") + ": ", note);
+            StringAssert.EndsWith(T.Get("c.late.from_next"), note);
+            StringAssert.DoesNotContain("..", note);
+            Assert.IsTrue(m.Choose(LateRole.OffRingStar));
+            StringAssert.EndsWith(T.Get("c.late.from_next"), CareerScreenLines.LateRoleNote(T, new LateRoleModel(s, T)), "опис без крапки — крапку додано");
+            Assert.AreEqual(T.Format("c.late.current", T.Get("c.late.star")), new LateRoleModel(s, T).CurrentText, "у хабі — рядок нинішньої ролі");
+
+            var t = AtSeasonEnd(5, 1, 3, CareerRules.OfferTrust);
+            t.State.Report.TitleEligible = true; t.State.Report.TitleDone = false;
+            Assert.IsFalse(CareerScreenLines.LateRoleShown(t, CareerScreenLines.SeasonEndActions(t)), "поки титульний шанс — не тут");
+        }
+
+        /// <summary>Пакет №4–№11 і правки огляду слоту 31 вбудовано в екрани (скан джерел).</summary>
+        [Test]
+        public void Sources_Package11_AndSlot31_AreWired()
+        {
+            string ui = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI");
+            string show = File.ReadAllText(Path.Combine(ui, "Career", "ShowScreens.cs"));
+            string week = File.ReadAllText(Path.Combine(ui, "Career", "WeekScreenView.cs"));
+            string create = File.ReadAllText(Path.Combine(ui, "Career", "CreateScreenView.cs"));
+            string kit = File.ReadAllText(Path.Combine(ui, "Career", "ArenaKit.cs"));
+            string career = File.ReadAllText(Path.Combine(ui, "CareerScreens.cs"));
+            string dialog = File.ReadAllText(Path.Combine(ui, "Menus", "MenuDialog.cs"));
+            string pause = File.ReadAllText(Path.Combine(ui, "Menus", "PauseOverlay.cs"));
+            var bad = new List<string>();
+            // №4
+            if (!kit.Contains("CareerTileLayout.Look(")) bad.Add("ArenaKit: плитка не бере вигляд із CareerTileLayout.Look");
+            if (!CodeLine(create, "tile.SelectAsEdge = r == CareerRole.Hero;")) bad.Add("CreateScreenView: герой не обирається краєм");
+            // №7
+            if (!CodeLine(week, "string outgrown = CareerScreenLines.OutgrownLine(T, c);")) bad.Add("WeekScreenView: афіша без «переріс щабель»");
+            if (!CodeLine(show, "string outgrown = CareerScreenLines.OutgrownLine(T, c);")) bad.Add("ShowScreens: картка шоу без «переріс щабель»");
+            // №8
+            if (!week.Contains("new SeasonOfferModel(C, T).ExclusiveText")) bad.Add("WeekScreenView: хаб без рядка виключного права");
+            if (Regex.Matches(week, Regex.Escape("CareerScreenLines.SideJobReason(")).Count < 2) bad.Add("WeekScreenView: підробіток (плитка й клавіша 6) без причини");
+            if (!week.Contains("CareerScreenLines.FireManagerShown(C)") || !week.Contains("C.FireManager()")) bad.Add("WeekScreenView: немає «Звільнити менеджерку»");
+            if (!week.Contains("CareerScreenLines.AwayHint(T, C)")) bad.Add("WeekScreenView: «Виїзне шоу» без причини виключного права");
+            if (!show.Contains("CareerScreenLines.FeeSplitLine(T, r)")) bad.Add("ShowScreens: гонорар без частки менеджерки");
+            if (!show.Contains("case SeasonEndAction.ReadContract: _offer.Read(); break;")) bad.Add("ShowScreens: «Прочитати дрібний шрифт» нічого не робить");
+            foreach (var part in new[] { "o.AdvanceText", "o.FinePrintText, o.FinePrintWarns", "o.ManagerNote", "o.PenaltyText" })
+                if (!show.Contains(part)) bad.Add("ShowScreens: на папері немає " + part);
+            // №11
+            if (Regex.Matches(week, Regex.Escape("CareerScreenLines.TrainReason(")).Count < 4) bad.Add("WeekScreenView: тренування (плитки й клавіші 1–2) без причини зірки");
+            if (!week.Contains("new LateRoleModel(C, T).CurrentText")) bad.Add("WeekScreenView: хаб без рядка пізньої ролі");
+            if (!week.Contains("CareerScreenLines.TurnLine(T, r, HeroForms.ShowsHeroine(T))")) bad.Add("WeekScreenView: відгук без повороту ролі");
+            if (!show.Contains("if (CareerScreenLines.LateRoleShown(C, CareerScreenLines.SeasonEndActions(C))) LateRoleBlock(col);")) bad.Add("ShowScreens: немає вибору пізньої ролі");
+            // правки слоту 31
+            if (!week.Contains("CareerTileLayout.DrawerRoomUnderPoster(")) bad.Add("WeekScreenView: шухляда не рахує наліпку (правка 1)");
+            if (Regex.Matches(week, @"Tab\.style\.flexShrink = 0f").Count < 2) bad.Add("WeekScreenView: вкладки «Розвиток / Витрати» стискаються (правка 2)");
+            if (!dialog.Contains("MenuShapes.Trapezoid(") || !dialog.Contains("card.Add(col);")) bad.Add("MenuDialog: діалог без підкладки (правка 3)");
+            if (pause.Contains("MenuKit.Footer(") || !pause.Contains("_col.Add(_footer);")) bad.Add("PauseOverlay: підказка клавіш знову внизу, на плитках тижня (правка 4)");
+            if (!create.Contains("CareerTileLayout.CreateAttrRowNarrowH") || !create.Contains("CareerTileLayout.CreatePaperPadBottomNarrow")) bad.Add("CreateScreenView: афіша на вузькій панелі не компактна (правка 5)");
+            if (Regex.Matches(career, Regex.Escape("CareerScreenLines.WithReason(")).Count < 2) bad.Add("CareerScreens: «опис. · причина» (правка 6)");
+            if (Regex.Matches(show, Regex.Escape("KeepDevScroll(scroll, ")).Count != 2 || Regex.Matches(show, Regex.Escape("RememberDevScroll();")).Count != 2)
+                bad.Add("ShowScreens: плити розвитку не тримають прокрутку при перебудові (правка 8)");
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
 

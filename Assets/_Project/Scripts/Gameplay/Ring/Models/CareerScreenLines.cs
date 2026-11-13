@@ -99,7 +99,13 @@ namespace Game.Gameplay.Ring.Models
         {
             var l = new List<SeasonEndAction>();
             if (c.CanStartTitleMatch) { l.Add(SeasonEndAction.TitleMatch); l.Add(SeasonEndAction.SkipTitle); }
-            else if (c.OfferAvailable) { l.Add(SeasonEndAction.AcceptOffer); l.Add(SeasonEndAction.DeclineOffer); }
+            else if (c.OfferAvailable)
+            {
+                l.Add(SeasonEndAction.AcceptOffer); l.Add(SeasonEndAction.DeclineOffer);
+                // №8 (§6.4): дрібний шрифт — прочитати до рішення; раз на пропозицію, без менеджерки (вона читає сама)
+                var k = c.GetOfferContract();
+                if (k != null && k.CanRead) l.Add(SeasonEndAction.ReadContract);
+            }
             else if (c.CanStartNextSeason) l.Add(SeasonEndAction.NextSeason);
             return l;
         }
@@ -194,10 +200,109 @@ namespace Game.Gameplay.Ring.Models
             return t.Format("c.card.farewell.note", to == null ? "" : t.Get(to.NameKey), CareerRules.FarewellTrust);
         }
 
+        /// <summary>
+        /// Опис і причина недоступності одним рядком підказки: «опис · причина». Кінцева крапка опису перед роздільником знімається
+        /// (огляд слоту 31: «…ажіотажу. · Ранг шляху замалий»). Без причини — опис як є.
+        /// </summary>
+        public static string WithReason(string desc, string reason)
+        {
+            if (string.IsNullOrEmpty(reason)) return desc;
+            if (string.IsNullOrEmpty(desc)) return reason;
+            string d = desc.TrimEnd();
+            if (d.EndsWith(".", StringComparison.Ordinal) && !d.EndsWith("..", StringComparison.Ordinal)) d = d.Substring(0, d.Length - 1);
+            return d + " · " + reason;
+        }
+
+        // ---------------- пакет «Так, усі 11» (власник, 12.11.2026): №7, №8, №11 ----------------
+
+        /// <summary>
+        /// №7: рядок афіші «переріс щабель» (<see cref="ShowCardView.IsOutgrown"/>: виріс, а підвищення ще не було — букер ставить
+        /// слабшого суперника). Реванш має свій рядок, тож разом не буває (ядро ставить IsOutgrown лише без реваншу). null — ні.
+        /// </summary>
+        public static string OutgrownLine(RingText t, ShowCardView c) { return c != null && c.IsOutgrown ? t.Get("c.hub.outgrown") : null; }
+
+        /// <summary>
+        /// №11: чому плитка «Тренування» (чи «З тренером») вимкнена: дій тижня немає; зірка поза рингом уже тренувалась цього тижня
+        /// (<see cref="WeekView.StarTrainingUsed"/>, §5.3); тренеру бракує грошей. null — плитка доступна. На плитці — коротко
+        /// (<c>c.week.reason.star</c>, ≤ 2 рядки на найвужчій): повна причина ядра (<c>week.reason.star_training</c>) — у відгуку дії.
+        /// </summary>
+        public static string TrainReason(RingText t, WeekView w, bool withCoach)
+        {
+            if (w.ActionsLeft <= 0) return t.Get("c.hub.no_actions");
+            if (w.StarTrainingUsed) return t.Get("c.week.reason.star");
+            if (withCoach && w.Money < CareerRules.TrainerCost) return t.Format("c.hub.need_money", CareerRules.TrainerCost - w.Money);
+            return null;
+        }
+
+        /// <summary>
+        /// №8: чому плитка «Підробіток» вимкнена: дій немає чи тримає виключне право (§6.4). null — доступна. На плитці — коротко
+        /// (<c>c.week.reason.exclusive</c>); повна причина (<c>week.reason.exclusive</c>) — у відгуку дії й у підказці «Виїзного шоу».
+        /// </summary>
+        public static string SideJobReason(RingText t, WeekView w, bool exclusive)
+        {
+            if (w.ActionsLeft <= 0) return t.Get("c.hub.no_actions");
+            return exclusive ? t.Get("c.week.reason.exclusive") : null;
+        }
+
+        /// <summary>№8: підказка «Виїзного шоу» у «Витратах» — під виключним правом із причиною, чому кнопка вимкнена.</summary>
+        public static string AwayHint(RingText t, CareerSession c)
+        {
+            string desc = t.Get("c.shop.away.desc");
+            return c.ExclusiveActive && !c.State.AwayShow ? WithReason(desc, t.Get("week.reason.exclusive")) : desc;
+        }
+
+        /// <summary>№8: кнопка «Звільнити менеджерку» у «Витратах» — лише коли вона є.</summary>
+        public static bool FireManagerShown(CareerSession c) { return c.HasManager; }
+
+        /// <summary>№8: що робить менеджерка й що буде після звільнення (частка — <see cref="CareerRules.ManagerFeePercent"/>).</summary>
+        public static string FireManagerHint(RingText t) { return t.Format("c.shop.manager.fire.desc", CareerRules.ManagerFeePercent); }
+
+        /// <summary>
+        /// №8: рядок гонорару в підсумку вечора. Ядро вже відняло частку менеджерки від ставки (<see cref="ShowResult.Fee"/> — після
+        /// частки), тож ставка тут — до частки, а частка — окремо: «ставка 60 + бонуси 20 · менеджерка −12», і сума збігається з
+        /// числом праворуч (<see cref="ShowResult.TotalFee"/>).
+        /// </summary>
+        public static string FeeSplitLine(RingText t, ShowResult r)
+        {
+            string s = t.Format("c.hub.fee_split", r.Fee + r.ManagerCut, r.FeeWinBonus + r.FeeHypeBonus);
+            return r.ManagerCut > 0 ? s + " · " + t.Format("c.result.manager", r.ManagerCut) : s;
+        }
+
+        /// <summary>№11: поворот ролі після сцени закулісся (§5.3) у рядку відгуку дії: «поворот ролі: Лиходійка». null — не було.</summary>
+        public static string TurnLine(RingText t, WeekActionResult r, bool female)
+        {
+            return r != null && r.TurnedTo.HasValue ? t.Format("c.delta.turn", RingLabels.PathName(t, r.TurnedTo.Value, female)) : null;
+        }
+
+        /// <summary>
+        /// №11: блок «Пізня роль» на папері кінця сезону — лише на останньому кроці («Новий сезон»): після титульного шансу й рішення про
+        /// пропозицію наступним іде новий сезон, тож «діє з наступного сезону» — правда, і папір не тримає разом контракт і пізню роль.
+        /// </summary>
+        public static bool LateRoleShown(CareerSession c, List<SeasonEndAction> actions)
+        {
+            return c.CanChooseLateRole && actions.Count == 1 && actions[0] == SeasonEndAction.NextSeason;
+        }
+
+        /// <summary>
+        /// №11: рядок під вибором пізньої ролі — обрана словами («Ікона: +1 ажіотажу на старті кожного матчу. Діє з наступного сезону.»);
+        /// без ролі — як працює вибір (<c>c.late.hint</c>). Обрану видно й без кольору смужки кнопки.
+        /// </summary>
+        public static string LateRoleNote(RingText t, LateRoleModel m)
+        {
+            foreach (var r in m.Rows)
+                if (r.Selected && r.Role != LateRole.None)
+                {
+                    string d = r.Description.TrimEnd();
+                    if (!d.EndsWith(".", StringComparison.Ordinal)) d += ".";
+                    return r.Name + ": " + d + " " + t.Get("c.late.from_next");
+                }
+            return m.HintText;
+        }
+
         /// <summary>Чернетка героя перед створенням: дивізіон (P2-6) — зі статі тіла (body_f_* — жіночий), суперники своєї статі.</summary>
         public static void SetDivision(CharacterDraft d, string body) { d.Female = CareerLooks.IsFemaleBody(body); }
     }
 
     /// <summary>Дія нижнього ряду кінця сезону (<see cref="CareerScreenLines.SeasonEndActions"/>).</summary>
-    public enum SeasonEndAction { TitleMatch = 0, SkipTitle = 1, AcceptOffer = 2, DeclineOffer = 3, NextSeason = 4 }
+    public enum SeasonEndAction { TitleMatch = 0, SkipTitle = 1, AcceptOffer = 2, DeclineOffer = 3, NextSeason = 4, ReadContract = 5 }
 }

@@ -324,6 +324,8 @@ namespace Game.Gameplay.Ring.UI
             col.Add(ShowKit.Bullet(T.Get("c.card.stip") + ": " + StipText(c.Stipulations)));
             if (c.PromoHypeBonus != 0) col.Add(ShowKit.Bullet(T.Format("c.card.promo_bonus", Signed(c.PromoHypeBonus))));
             if (c.IsRematch) col.Add(ShowKit.Bullet(T.Get("c.hub.rematch")));
+            string outgrown = CareerScreenLines.OutgrownLine(T, c);   // №7: переріс щабель — букер ставить легший матч
+            if (outgrown != null) col.Add(ShowKit.Bullet(outgrown));
             // P2-4 (8c3f16b): до росту гравця — нейтральний рядок «за місцем у картці», без червоної наліпки
             if (c.Opponent != null && c.RivalSteps > 0 && !ShowKit.RivalInForm(C)) col.Add(ShowKit.Bullet(ShowKit.RivalStepsText(T, c)));
             var inj = MenuKit.Body(InjuryText(c.Injuries), BrandTokens.TypeMinInfo, RingTheme.Ash);
@@ -396,6 +398,7 @@ namespace Game.Gameplay.Ring.UI
 
         public override void Refresh()
         {
+            RememberDevScroll();
             Root.Clear();
             Root.style.paddingLeft = 0f; Root.style.paddingRight = 0f; Root.style.paddingTop = 0f; Root.style.paddingBottom = 0f;
             _bar = new ShowBottomRow();
@@ -579,7 +582,10 @@ namespace Game.Gameplay.Ring.UI
                 fl.pickingMode = PickingMode.Ignore;
                 fl.style.flexShrink = 1f;
                 fl.Add(ArenaKit.Tag(T.Get("c.hub.fee"), RingTheme.Ash));
-                fl.Add(MenuKit.Body(T.Format("c.hub.fee_split", r.Fee, r.FeeWinBonus + r.FeeHypeBonus), BrandTokens.TypeMinInfo, RingTheme.Bg, true));
+                // №8: з менеджеркою — ставка до її частки і частка окремо (сума = число праворуч)
+                var split = MenuKit.Body(CareerScreenLines.FeeSplitLine(T, r), BrandTokens.TypeMinInfo, RingTheme.Bg, true);
+                split.style.whiteSpace = WhiteSpace.Normal;
+                fl.Add(split);
                 feeRow.Add(fl);
                 feeRow.Add(ArenaKit.Spacer());
                 feeRow.Add(ArenaKit.Money(r.TotalFee, 36f, RingTheme.Bg));
@@ -691,7 +697,7 @@ namespace Game.Gameplay.Ring.UI
                 col.Add(scroll);
                 DevFooterHint(foot);
                 col.Add(foot);
-                ScrollToDevAll(scroll);   // щойно розгорнутий «Усе» — до початку повного списку
+                KeepDevScroll(scroll, C.GetShowResult());   // щойно розгорнутий «Усе» — до початку повного списку; інакше — де була
             }
             box.Add(col);
             return box;
@@ -725,6 +731,7 @@ namespace Game.Gameplay.Ring.UI
 
         public override void Refresh()
         {
+            RememberDevScroll();   // покупка в «Усе (N)» перебудовує екран — прокрутка плити розвитку лишається на місці (огляд слоту 31)
             Root.Clear();
             Root.style.paddingLeft = 0f; Root.style.paddingRight = 0f; Root.style.paddingTop = 0f; Root.style.paddingBottom = 0f;
             _bar = new ShowBottomRow();
@@ -761,6 +768,10 @@ namespace Game.Gameplay.Ring.UI
                     // що буде — «повториться»; друга відмова поспіль коштує довіри — ризиком (сигнальним) під ним
                     Tile(a, _offer.DeclineText, CareerScreenLines.DeclineEffect(T), CareerScreenLines.DeclineRisk(T, C));
                     break;
+                case SeasonEndAction.ReadContract:
+                    // №8 (§6.4): дрібний шрифт — кидок Техніки, шанси до кидка; що видно — на папері (рядок дрібного шрифту)
+                    Tile(a, _offer.ReadText, _offer.ReadChanceText, null);
+                    break;
             }
         }
 
@@ -792,6 +803,7 @@ namespace Game.Gameplay.Ring.UI
                 case SeasonEndAction.AcceptOffer: C.AcceptOffer(); break;
                 case SeasonEndAction.DeclineOffer: C.DeclineOffer(); break;
                 case SeasonEndAction.NextSeason: C.StartNextSeason(); break;
+                case SeasonEndAction.ReadContract: _offer.Read(); break;
             }
             Host.Save();
             if (a != SeasonEndAction.NextSeason && C.Stage == CareerStage.SeasonEnd) Refresh();
@@ -859,8 +871,39 @@ namespace Game.Gameplay.Ring.UI
             else if (!rep.Fired)
                 col.Add(ShowKit.Bullet(T.Format("c.season.goal", CareerRules.TitleShotTrust, CareerRules.MaxFeud)));
             if (CareerScreenLines.OfferShown(C, _offer)) OfferBlock(col, _offer);
+            if (CareerScreenLines.LateRoleShown(C, CareerScreenLines.SeasonEndActions(C))) LateRoleBlock(col);
             box.Add(col);
             return box;
+        }
+
+        /// <summary>
+        /// №11 (§5.3): вибір пізньої ролі — на останньому кроці кінця сезону, перед «Новим сезоном». Кнопки ролей одним рядком (обрана —
+        /// із золотою смужкою), під ними — обрана словами й «діє з наступного сезону» (<see cref="CareerScreenLines.LateRoleNote"/>).
+        /// </summary>
+        private void LateRoleBlock(VisualElement col)
+        {
+            var m = new LateRoleModel(C, T);
+            col.Add(ShowKit.Rule());
+            col.Add(MenuKit.Body(m.TitleText, BrandTokens.TypeBody, RingTheme.Bg, true));
+            var chips = ArenaKit.Row();
+            chips.style.flexWrap = Wrap.Wrap;
+            chips.style.marginTop = 6f;
+            chips.pickingMode = PickingMode.Ignore;
+            foreach (var r in m.Rows)
+            {
+                var role = r.Role;
+                var b = Small(r.Name, () => { if (m.Choose(role)) Host.Save(); Refresh(); }, true, r.Selected ? RingTheme.Gold : RingTheme.Ash, r.Description);
+                RingUi.PadKey(b, "late:" + (int)role);
+                b.style.marginRight = 4f;
+                b.style.flexShrink = 0f;
+                b.style.whiteSpace = WhiteSpace.NoWrap;
+                chips.Add(b);
+            }
+            col.Add(chips);
+            var note = MenuKit.Body(CareerScreenLines.LateRoleNote(T, m), BrandTokens.TypeMinInfo, RingTheme.Bg, true);
+            note.style.whiteSpace = WhiteSpace.Normal;
+            note.style.marginTop = 2f;
+            col.Add(note);
         }
 
         /// <summary>
@@ -883,11 +926,29 @@ namespace Game.Gameplay.Ring.UI
                 }
             }
             string status = o.StatusText;
-            if (string.IsNullOrEmpty(status)) return;
-            var s = MenuKit.Body(status, BrandTokens.TypeMinInfo, RingTheme.Bg, true);
-            s.style.whiteSpace = WhiteSpace.Normal;
-            s.style.marginTop = 8f;
-            col.Add(s);
+            if (!string.IsNullOrEmpty(status))
+            {
+                var s = MenuKit.Body(status, BrandTokens.TypeMinInfo, RingTheme.Bg, true);
+                s.style.whiteSpace = WhiteSpace.Normal;
+                s.style.marginTop = 8f;
+                col.Add(s);
+            }
+            if (!o.ShowContract) return;
+            // №8 (§6.4): контракт до рішення — аванс, що видно в дрібному шрифті (насторожує — кармін), хто перевіряв, штраф пастки
+            col.Add(ShowKit.Bullet(o.AdvanceText));
+            col.Add(ContractLine(o.FinePrintText, o.FinePrintWarns));
+            if (!string.IsNullOrEmpty(o.ManagerNote)) col.Add(ContractLine(o.ManagerNote, false));
+            if (!string.IsNullOrEmpty(o.PenaltyText)) col.Add(ContractLine(o.PenaltyText, true));
+        }
+
+        /// <summary>Рядок контракту під пунктами: дрібним жирним, сигнальний — карміном (пункт пастки, штраф).</summary>
+        private static VisualElement ContractLine(string text, bool warn)
+        {
+            var l = MenuKit.Body(text, BrandTokens.TypeMinInfo, warn ? RingTheme.Crimson : RingTheme.Bg, true);
+            l.style.whiteSpace = WhiteSpace.Normal;
+            l.style.marginTop = 4f;
+            l.style.marginLeft = CareerTileLayout.BulletIndent;
+            return l;
         }
 
         private static VisualElement KeyLine(string text, string mark, bool ok, string hint)
@@ -963,7 +1024,7 @@ namespace Game.Gameplay.Ring.UI
             box.Add(scroll);
             DevFooterHint(foot);
             box.Add(foot);
-            ScrollToDevAll(scroll);   // щойно розгорнутий «Усе» — до початку повного списку
+            KeepDevScroll(scroll, C.State.Season);   // щойно розгорнутий «Усе» — до початку повного списку; інакше — де була
             _devBox = box;
             return box;
         }

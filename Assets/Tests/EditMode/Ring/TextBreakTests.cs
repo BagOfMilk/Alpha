@@ -41,7 +41,7 @@ namespace Game.Tests.EditMode
         {
             Assert.AreEqual("Поразка дала <nobr>популярність —</nobr> удруге не підніме",
                 TextBreak.GlueDashes("Поразка дала популярність — удруге не підніме"));
-            Assert.AreEqual("<nobr>10+ —</nobr> ворожнеча +1; <nobr>7–9 —</nobr> одне з двох; <nobr>≤6 —</nobr> зірване промо.",
+            Assert.AreEqual("<nobr>10+ —</nobr> <nobr>ворожнеча +1;</nobr> <nobr>7–9 —</nobr> одне з двох; <nobr>≤6 —</nobr> зірване промо.",
                 TextBreak.GlueDashes("10+ — ворожнеча +1; 7–9 — одне з двох; ≤6 — зірване промо."), "кожне окреме тире; діапазон «7–9» не чіпається");
             Assert.AreEqual("<nobr>Програв –</nobr> але", TextBreak.GlueDashes("Програв – але"), "коротке тире, що стоїть окремо, — так само");
             Assert.AreEqual("Діапазон 7–9 і 1-2", TextBreak.GlueDashes("Діапазон 7–9 і 1-2"), "без пробілів довкола — не тире-слово");
@@ -60,8 +60,8 @@ namespace Game.Tests.EditMode
         [Test]
         public void GlueDashes_KeepsTheWordBeforeTheSeparator_WithIt()
         {
-            Assert.AreEqual("<nobr>+3 ·</nobr> ажіотаж +2", TextBreak.GlueDashes("+3 · ажіотаж +2"));
-            Assert.AreEqual("<nobr>Промо ·</nobr> кидок 11, Успіх <nobr>(10+) ·</nobr> ворожнеча <nobr>+1 ·</nobr> ажіотаж",
+            Assert.AreEqual("<nobr>+3 ·</nobr> <nobr>ажіотаж +2</nobr>", TextBreak.GlueDashes("+3 · ажіотаж +2"));
+            Assert.AreEqual("<nobr>Промо ·</nobr> кидок 11, Успіх <nobr>(10+) ·</nobr> <nobr>ворожнеча +1 ·</nobr> ажіотаж",
                 TextBreak.GlueDashes("Промо · кидок 11, Успіх (10+) · ворожнеча +1 · ажіотаж"), "кожен роздільник");
             Assert.AreEqual("<nobr>Рух ·</nobr> <nobr>Удар —</nobr> так", TextBreak.GlueDashes("Рух · Удар — так"), "тире й роздільник в одному рядку");
             Assert.AreEqual("а·б і 7·9", TextBreak.GlueDashes("а·б і 7·9"), "без пробілів довкола — не роздільник-слово");
@@ -73,7 +73,48 @@ namespace Game.Tests.EditMode
             string g = TextBreak.GlueDashes(s);
             Assert.AreEqual(g, TextBreak.GlueDashes(g), "повторний виклик нічого не міняє");
             Assert.AreEqual(s, TextBreak.Strip(g), "без тегів — той самий текст");
-            Assert.AreEqual(s.Split(' ').Length - 2, TtfMetrics.Units(g).Count, "слово з роздільником — одна одиниця переносу");
+            Assert.AreEqual(s.Split(' ').Length - 3, TtfMetrics.Units(g).Count, "слово з роздільником (і «ворожнеча +1») — одна одиниця переносу");
+        }
+
+        /// <summary>
+        /// Число зі знаком тримається зі словом перед ним (огляд слоту 31, ПМ: «ворожнеча» в кінці рядка, «+1» на початку наступного).
+        /// Слово, число й роздільник за ним — один шматок; знак без цифри й дефіс у слові — ні.
+        /// </summary>
+        [Test]
+        public void GlueDashes_KeepsTheSignedNumber_WithTheWordBeforeIt()
+        {
+            Assert.AreEqual("Промо: <nobr>ворожнеча +1</nobr>", TextBreak.GlueDashes("Промо: ворожнеча +1"));
+            Assert.AreEqual("<nobr>довіра −1 ·</nobr> <nobr>гроші +₴40</nobr>", TextBreak.GlueDashes("довіра −1 · гроші +₴40"), "мінус U+2212 і гроші");
+            Assert.AreEqual("<nobr>Сила +2,</nobr> <nobr>Спритність -1.</nobr>", TextBreak.GlueDashes("Сила +2, Спритність -1."), "розділовий знак у кінці числа");
+            Assert.AreEqual("плюс + мінус − і 1-2", TextBreak.GlueDashes("плюс + мінус − і 1-2"), "знак без цифри й дефіс — не число зі знаком");
+            Assert.IsTrue(TextBreak.IsSignedNumber("+1")); Assert.IsTrue(TextBreak.IsSignedNumber("−12")); Assert.IsTrue(TextBreak.IsSignedNumber("+₴5"));
+            Assert.IsFalse(TextBreak.IsSignedNumber("+")); Assert.IsFalse(TextBreak.IsSignedNumber("+₴")); Assert.IsFalse(TextBreak.IsSignedNumber("1+"));
+            Assert.IsFalse(TextBreak.IsSignedNumber(null));
+
+            // рядок відгуку тижня з ключів WeekScreenView.ResultText: без правила «+1» хоч на одній ширині стає на початок рядка
+            var t = RingText.FromJson(CareerKit.Read("ui_uk.json"));
+            string s = string.Join(" · ", new[]
+            {
+                t.Get("week.action.3"), t.Format("c.roll", 9, "+ 1", 10, "Успіх (10+)"), t.Format("c.delta.trust", "+1"), t.Format("c.delta.feud", "+1"),
+            });
+            float widest;
+            bool reproduced = false;
+            var bad = new List<string>();
+            foreach (var font in new[] { Regular, Semi })
+                for (float w = WeekNoteW - 80f; w <= WeekNoteW + 80f; w += 2f)
+                {
+                    if (font.Wrap(s, BrandTokens.TypeMinInfo, w, 0f, out widest).Skip(1).Any(StartsWithSignedNumber)) reproduced = true;
+                    var glued = font.Wrap(TextBreak.GlueDashes(s), BrandTokens.TypeMinInfo, w, 0f, out widest);
+                    if (glued.Skip(1).Any(StartsWithSignedNumber) || glued.Skip(1).Any(StartsWithSeparator)) bad.Add(w + ": " + string.Join(" / ", glued));
+                }
+            Assert.IsTrue(reproduced, "без правила модель має відтворити ваду хоч на одній ширині: " + s);
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        private static bool StartsWithSignedNumber(string line)
+        {
+            int sp = line.IndexOf(' ');
+            return TextBreak.IsSignedNumber(sp < 0 ? line : line.Substring(0, sp));
         }
 
         /// <summary>

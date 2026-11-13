@@ -132,6 +132,44 @@ namespace Game.Gameplay.Ring.UI
             mark.RegisterCallback(once);
         }
 
+        private ScrollView _devKeptScroll;
+        private Vector2 _devKeptOffset;
+        private object _devKeptOwner;
+
+        /// <summary>
+        /// Перед <c>Root.Clear()</c> екрана з плитою розвитку: запам'ятати, де стоїть її прокрутка (огляд ПМ слоту 31, d_a1080 019→020:
+        /// покупка в розгорнутому «Усе (18)» перебудовувала кінець сезону, і прокрутка скидалася вгору — місце в довгому списку губилося).
+        /// </summary>
+        protected void RememberDevScroll()
+        {
+            if (_devKeptScroll != null) _devKeptOffset = _devKeptScroll.scrollOffset;
+            _devKeptScroll = null;
+        }
+
+        /// <summary>
+        /// Прокрутка плити розвитку після перебудови: щойно розгорнутий «Усе» — до початку повного списку (<see cref="ScrollToDevAll"/>);
+        /// інакше — той самий зсув, що до перебудови, якщо екран той самий (<paramref name="owner"/>: сезон, підсумок шоу). Новий екран —
+        /// з верху. Те саме, що шухляда тижня робить своїм зсувом.
+        /// </summary>
+        protected void KeepDevScroll(ScrollView scroll, object owner)
+        {
+            bool same = Equals(owner, _devKeptOwner);
+            _devKeptOwner = owner;
+            _devKeptScroll = scroll;
+            var restore = same ? _devKeptOffset : Vector2.zero;
+            _devKeptOffset = Vector2.zero;
+            if (DevAllStart != null) { ScrollToDevAll(scroll); return; }
+            if (scroll == null || (restore.x == 0f && restore.y == 0f)) return;
+            // наступним кадром після першої розкладки: межі прокрутки ScrollView оновлює у своїй розкладці
+            EventCallback<GeometryChangedEvent> once = null;
+            once = e =>
+            {
+                scroll.UnregisterCallback(once);
+                scroll.schedule.Execute(() => scroll.scrollOffset = restore);
+            };
+            scroll.RegisterCallback(once);
+        }
+
         /// <summary>Компактна однорядкова кнопка; <paramref name="hint"/> — у рядок-підказку при наведенні.</summary>
         protected Button Small(string text, Action onClick, bool enabled, Color? accent, string hint = null)
         {
@@ -256,7 +294,8 @@ namespace Game.Gameplay.Ring.UI
                 bool can = C.CanBuyAttr(a, out reason);
                 int v = C.Player.Get(a);
                 var b = Small(RingLabels.AttrName(T, a) + " " + Signed(v) + " → " + Signed(v + 1), () => { C.BuyAttr(a); changed(); }, can, null,
-                    T.Format("dev.attr.buy", Development.AttrCost) + " — " + T.Get("c.dev.attr.why." + i) + (can ? "" : " · " + T.Get("dev.reason." + reason)));
+                    CareerScreenLines.WithReason(T.Format("dev.attr.buy", Development.AttrCost) + " — " + T.Get("c.dev.attr.why." + i),
+                        can ? null : T.Get("dev.reason." + reason)));
                 RingUi.PadKey(b, "dev:attr:" + i);
                 b.style.marginRight = 4f;
                 attrs.Add(b);
@@ -293,7 +332,7 @@ namespace Game.Gameplay.Ring.UI
                 string id = p.Id;
                 var b = Small(RingLabels.PerkName(T, id) + " · " + p.Cost, () => { C.BuyPerk(id); changed(); }, can,
                     p.Path.HasValue ? RingUi.PathColor(p.Path.Value) : RingUi.Gold,
-                    RingLabels.PerkDesc(T, id) + (can ? "" : " · " + T.Get("dev.reason." + reason)));
+                    CareerScreenLines.WithReason(RingLabels.PerkDesc(T, id), can ? null : T.Get("dev.reason." + reason)));
                 RingUi.PadKey(b, "dev:perk:" + id);
                 b.style.marginRight = 4f;
                 prow.Add(b);

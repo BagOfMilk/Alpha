@@ -16,7 +16,7 @@ namespace Game.Gameplay.Ring.UI.Menus
     {
         private enum Item { Resume = 0, Settings, Title }
 
-        private const float PlateW = 440f, PlateH = 60f, PlateGap = 10f, Step = 14f, FocusShift = 25f;
+        private const float PlateW = 440f, PlateH = 60f, PlateGap = 10f, Step = 14f, FocusShift = 25f, HintGap = 18f;
 
         public readonly VisualElement Root;
         private readonly RingText _t;
@@ -98,10 +98,17 @@ namespace Game.Gameplay.Ring.UI.Menus
             }
             _focus.Reset(enabled, 0);   // за замовчуванням — «Продовжити»: Esc/Start/Enter одразу повертають у гру
 
-            _footer = MenuKit.Footer(out _hints, null);
-            // під паузою — ряд плиток тижня: напівпрозора підкладка змішувала підказку з їхнім текстом (кадр слоту 27, 09.11.2026)
+            // Підказка клавіш — під варіантами, на клині, сходинкою далі (огляд слоту 31, m1080 051): унизу ліворуч, як у меню,
+            // вона лягала на плитки тижня під паузою (номери, назви), хоч і на щільній підкладці. Тут під нею лише клин і затемнення.
+            _footer = new VisualElement();
+            _footer.pickingMode = PickingMode.Ignore;
+            _footer.style.marginTop = HintGap;
+            _footer.style.marginLeft = 3 * Step;
+            _hints = MenuKit.Body("", BrandTokens.TypeLabel, RingTheme.TextDim);
+            MenuKit.Underlay(_hints);
             _hints.style.backgroundColor = RingTheme.WithAlpha(RingTheme.Bg, BrandTokens.AlphaPlate);
-            Root.Add(_footer);
+            _footer.Add(_hints);
+            _col.Add(_footer);
             UpdateHints(MenuDevice.Keyboard);
             SyncFocus(true);
             PlayIn();

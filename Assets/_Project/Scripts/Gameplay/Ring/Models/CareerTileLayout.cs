@@ -141,6 +141,35 @@ namespace Game.Gameplay.Ring.Models
         /// низ разом із «▸ Усе (N)» (огляд слоту 30, ПМ). Ряд дій піднімає і канати, і шухляду на той самий lift.
         /// </summary>
         public const float DrawerBottom = RopesBottom + RopeH + DevRopeClear;
+        /// <summary>
+        /// Наліпка форми суперника («У ФОРМІ · СИЛЬНІШИЙ НА 2») звисає з низу афіші на стільки одиниць (bottom = −PosterStickerHang).
+        /// Межу шухляди треба рахувати від її низу, а не від афіші: на кадрах слоту 31 (o_ready 026) плита «Розвиток» ховала низ наліпки.
+        /// </summary>
+        public const float PosterStickerHang = 26f;
+        /// <summary>Відступ тексту пункту ShowKit.Bullet від краю колонки: квадрат 11 і проміжок 8 — під ним стають рядки контракту (№8).</summary>
+        public const float BulletIndent = 19f;
+        /// <summary>Просвіт між низом афіші (з наліпкою) і верхом шухляди.</summary>
+        public const float DrawerPosterGap = 12f;
+
+        /// <summary>Скільки місця шухляді під афішею: від низу афіші (і наліпки, якщо є) з просвітом до низу шухляди.</summary>
+        public static float DrawerRoomUnderPoster(float drawerBottomY, float posterBottomY, bool sticker)
+        {
+            return drawerBottomY - (posterBottomY + (sticker ? PosterStickerHang : 0f)) - DrawerPosterGap;
+        }
+
+        /// <summary>
+        /// Афіша створення «Твій борець»: висота рядка характеристики й нижній відступ паперу (широка панель / вузька). На 4:3 вкладка
+        /// «Прийоми» стоїть над піднятими канатами, а папір росте згори — з рядками по 38 рваний низ паперу заходив на вкладку
+        /// (огляд слоту 31, h4x3 014: ~13 одиниць). Вузька — компактніша: п'ять рядків по 34 і відступ 16.
+        /// </summary>
+        public const float CreateAttrRowH = 38f, CreateAttrRowNarrowH = 34f;
+        public const float CreatePaperPadBottom = 24f, CreatePaperPadBottomNarrow = 16f;
+        /// <summary>Скільки одиниць висоти паперу дає компактна вузька афіша: п'ять рядків характеристик і нижній відступ.</summary>
+        public static float CreatePaperNarrowSaving
+        {
+            get { return 5f * (CreateAttrRowH - CreateAttrRowNarrowH) + (CreatePaperPadBottom - CreatePaperPadBottomNarrow); }
+        }
+
         /// <summary>Шухляда: відступи прокрутки (лівий — від смужки 6), рядок «Розвиток» і підказка — у шапці над прокруткою.</summary>
         public const float DrawerPadLeft = 18f, DrawerPadRight = 24f, DrawerScrollPadBottom = 4f;
 
@@ -283,5 +312,40 @@ namespace Game.Gameplay.Ring.Models
         /// <summary>Місце під слово золотої плити: ширина й висота без відступів.</summary>
         public static float WordWidth(float plateWidth) { return plateWidth - WordLeft - WordRight; }
         public static float WordHeight(float plateHeight) { return plateHeight - WordTop - WordBottom; }
+
+        /// <summary>
+        /// Вигляд плитки дії за станом (ActionTile.Sync) — без кольорів рушія, щоб правило тримав охоронець. Звичайна — темна зі
+        /// смужкою акценту; фокус — золота заливка з білою обводкою; вибрана — заливка кольору вибору й галочка. Вибрана «краєм»
+        /// (<paramref name="selectAsEdge"/>, власник 12.11.2026, №4: «Вибрана плитка «ГЕРОЙ» — темна плитка з кобальтовим краєм
+        /// замість кобальтової заливки») лишається темною: смужка й обводка — кольору вибору, текст світлий; фокус поверх неї —
+        /// той самий, що в усіх плиток.
+        /// </summary>
+        public static TileLook Look(bool enabled, bool focus, bool selected, bool selectAsEdge, bool selectDarkText)
+        {
+            var l = new TileLook();
+            if (!enabled) { l.Fill = TileFill.Disabled; l.Stripe = TileEdge.Disabled; l.Outline = TileEdge.None; return l; }
+            bool filledSelect = selected && !selectAsEdge;
+            l.Fill = filledSelect ? TileFill.Select : focus ? TileFill.Gold : TileFill.Panel;
+            l.Stripe = filledSelect || focus ? TileEdge.None : selected ? TileEdge.Select : TileEdge.Accent;
+            l.Outline = focus ? TileEdge.Focus : selected && selectAsEdge ? TileEdge.Select : TileEdge.None;
+            l.DarkText = filledSelect ? selectDarkText : focus;
+            return l;
+        }
+    }
+
+    /// <summary>Заливка плитки дії: темна панель, золото фокуса, колір вибору, вимкнена (напівпрозора панель).</summary>
+    public enum TileFill { Panel, Gold, Select, Disabled }
+
+    /// <summary>Смужка чи обводка плитки: немає, акцент плитки, колір вибору, сіра вимкненої, біла фокуса.</summary>
+    public enum TileEdge { None, Accent, Select, Disabled, Focus }
+
+    /// <summary>Вигляд плитки дії за станом (<see cref="CareerTileLayout.Look"/>).</summary>
+    public struct TileLook
+    {
+        public TileFill Fill;
+        public TileEdge Stripe;
+        public TileEdge Outline;
+        /// <summary>Текст темний (на світлій заливці — фокус чи світла заливка вибору).</summary>
+        public bool DarkText;
     }
 }

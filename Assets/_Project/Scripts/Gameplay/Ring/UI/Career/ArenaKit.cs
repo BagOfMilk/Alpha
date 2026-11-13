@@ -450,6 +450,8 @@ namespace Game.Gameplay.Ring.UI
         public Color SelectColor = RingTheme.Gold;
         /// <summary>Вибрана плитка світла (золото) — текст темний; темна заливка ролі (кобальт, кармін) — текст світлий.</summary>
         public bool SelectDarkText = true;
+        /// <summary>Вибір не заливкою, а краєм: плитка лишається темною, смужка й обводка — <see cref="SelectColor"/> (№4, 12.11.2026).</summary>
+        public bool SelectAsEdge;
 
         public ActionTile(int key, string title, string effect, string risk, bool enabled, string reason = null)
         {
@@ -752,14 +754,14 @@ namespace Game.Gameplay.Ring.UI
 
         public void Sync()
         {
-            bool hot = _enabled && (_focus || _selected);
-            Color fill = !_enabled ? RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaPanel)
-                : _selected ? SelectColor : _focus ? RingTheme.Gold : RingTheme.Panel;
-            _plate.Fill = fill;
-            _plate.Stripe = !_enabled ? RingTheme.Disabled : hot ? (Color?)null : Accent;
-            _plate.Outline = _focus && _enabled ? (Color?)RingTheme.Text : null;
+            // правило вигляду — у моделі (CareerTileLayout.Look), тут лише кольори
+            var look = CareerTileLayout.Look(_enabled, _focus, _selected, SelectAsEdge, SelectDarkText);
+            _plate.Fill = look.Fill == TileFill.Disabled ? RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaPanel)
+                : look.Fill == TileFill.Select ? SelectColor : look.Fill == TileFill.Gold ? RingTheme.Gold : RingTheme.Panel;
+            _plate.Stripe = EdgeColor(look.Stripe);
+            _plate.Outline = EdgeColor(look.Outline);
             _plate.Redraw();
-            bool darkText = hot && (!_selected || SelectDarkText);
+            bool darkText = look.DarkText;
             Color text = !_enabled ? RingTheme.Disabled : darkText ? RingTheme.Bg : RingTheme.Text;
             _title.style.color = text;
             _effect.style.color = !_enabled ? RingTheme.Disabled : darkText ? RingTheme.Bg : RingTheme.TextDim;
@@ -774,6 +776,18 @@ namespace Game.Gameplay.Ring.UI
             _check.style.display = _selected ? DisplayStyle.Flex : DisplayStyle.None;
             _check.Ink = darkText ? RingTheme.Bg : RingTheme.Text;
             _face.style.translate = new Translate(new Length(0f), new Length(_focus && _enabled && !MenuAnimator.Reduced ? -7f : 0f));
+        }
+
+        private Color? EdgeColor(TileEdge e)
+        {
+            switch (e)
+            {
+                case TileEdge.Accent: return Accent;
+                case TileEdge.Select: return SelectColor;
+                case TileEdge.Disabled: return RingTheme.Disabled;
+                case TileEdge.Focus: return RingTheme.Text;
+                default: return null;
+            }
         }
     }
 
