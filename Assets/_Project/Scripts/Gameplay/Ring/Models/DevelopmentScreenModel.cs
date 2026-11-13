@@ -208,7 +208,7 @@ namespace Game.Gameplay.Ring.Models
                     ValueText = RingChances.Signed(v),
                     CanBuy = can,
                     ReasonText = can ? "" : _t.Get("dev.reason." + reason),
-                    BuyText = _t.Format("dev.attr.buy", Development.AttrCost)
+                    BuyText = _t.Format("dev.attr.buy", Development.AttrCostFor(_c.State, a))   // витривалість з сезону 4 дорожча (§5.5)
                 });
             }
             return rows;

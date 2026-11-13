@@ -349,6 +349,24 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
+        /// «Удар головою» Хардкорника — власний кліп у центрі. За рингом удар звучить ударом об бар'єр, а кліп бар'єра не показує
+        /// (і брудний прийом на тому самому кліпі звучить звичайним ударом) — там це підстановка.
+        /// </summary>
+        [Test]
+        public void Headbutt_OwnClipInCenter_StandInOutside()
+        {
+            foreach (var t in new[] { RollTier.Partial, RollTier.Strong })
+            {
+                var e = new MatchEvent { Kind = MatchEventKind.Action, Action = MatchActionId.Strike, Tier = t, HasRoll = true, Actor = MatchSide.Player, MoveKey = "headbutt" };
+                var inside = RingClipTable.Plan(e);
+                Assert.AreEqual("Center_Headbutt", inside.Single(s => s.Kind == StageStepKind.Pair).Clip, t.ToString());
+                Assert.IsFalse(inside.Any(s => s.IsStandIn), "у центрі — власний кліп: " + t);
+                e.Outside = true;
+                Assert.IsTrue(RingClipTable.Plan(e).Any(s => s.IsStandIn), "за рингом — підстановка: " + t);
+            }
+        }
+
+        /// <summary>
         /// Охоронець звірки зі звуком (F2_DIRECTOR п. 1): промінь надії не підводить цілком — ядро на провалі кладе суперника,
         /// як на 7–9. Отже провал грається тим самим планом, що й 7–9: пара від нападника, жодного «Bump_Back» (падає сам).
         /// </summary>
@@ -485,7 +503,7 @@ namespace Game.Tests.EditMode
         {
             var ev = Events();
             var L = Lengths();
-            foreach (var key in new[] { null, "armbar", "leg_lock", "spider_lock" })
+            foreach (var key in new[] { null, "armbar", "leg_lock", "spider_lock", "crossface", "bear_hug" })
                 foreach (var held in new[] { null, RingClipTable.HeldArmbar, RingClipTable.HeldLegLock })
                     foreach (var t in new[] { RollTier.Miss, RollTier.Partial, RollTier.Strong })
                     {
@@ -556,10 +574,16 @@ namespace Game.Tests.EditMode
                 var last = steps.LastOrDefault(s => s.Kind == StageStepKind.Pair);   // як режисер: остання зіграна пара
                 return last == null ? null : RingClipTable.HeldByNode(N[last.Clip + "_A"][1]);
             };
-            foreach (var key in new[] { "armbar", "leg_lock", "spider_lock" })
+            // Больові ґіміків 5–8 без своїх кліпів — на лікоть, вхід із позначкою підстановки (не загальна пара таблиці: інакше
+            // «терпіти» слідом починалося б з пози стоячи).
+            foreach (var kv in new Dictionary<string, string> { { "armbar", RingClipTable.HeldArmbar }, { "leg_lock", RingClipTable.HeldLegLock },
+                { "spider_lock", RingClipTable.HeldLegLock }, { "crossface", RingClipTable.HeldArmbar }, { "bear_hug", RingClipTable.HeldArmbar } })
             {
-                var sub = RingClipTable.Plan(new MatchEvent { Kind = MatchEventKind.Action, Action = MatchActionId.Submission, Tier = RollTier.Partial, Actor = P, MoveKey = key });
-                Assert.AreEqual(key == "armbar" ? RingClipTable.HeldArmbar : RingClipTable.HeldLegLock, heldAfter(sub), key);
+                var sub = RingClipTable.Plan(new MatchEvent { Kind = MatchEventKind.Action, Action = MatchActionId.Submission, Tier = RollTier.Partial, Actor = P, MoveKey = kv.Key });
+                Assert.AreEqual(kv.Value, heldAfter(sub), kv.Key);
+                bool standIn = kv.Key == "crossface" || kv.Key == "bear_hug";
+                Assert.AreEqual(standIn, sub.Any(s => s.IsStandIn), "підстановка больового позначена: " + kv.Key);
+                Assert.AreEqual(standIn, RingClipTable.IsHoldStandIn(kv.Key), kv.Key);
             }
             var meteor = RingClipTable.Plan(new MatchEvent { Kind = MatchEventKind.Action, Action = MatchActionId.Finisher, Tier = RollTier.Strong, Actor = P, MoveKey = "meteor", Staging = MoveStaging.Corner });
             Assert.AreEqual(RingClipTable.HeldPin, heldAfter(meteor), "«Метеор» 10+ — у накритті, далі відлік");

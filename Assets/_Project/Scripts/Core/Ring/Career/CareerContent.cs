@@ -4,8 +4,12 @@ using Game.Core.Ring.Match;
 
 namespace Game.Core.Ring.Career
 {
-    /// <summary>Ґімік борця (TRPG_DESIGN §5.2): архетип, що дає основу атрибутів і набір прийомів. MVP альфи — чотири.</summary>
-    public enum Gimmick { Monster = 0, Flyer = 1, Technician = 2, Showman = 3 }
+    /// <summary>
+    /// Ґімік борця (TRPG_DESIGN §5.2): архетип, що дає основу атрибутів і набір прийомів. MVP альфи — перші чотири; 5–8 (Ветеран,
+    /// Хардкорник, Новачок, Силач) — з 12.11.2026 (черга П5, пункт 4), на екрані створення — після У0 власника. Значень 0–3 не
+    /// міняти: їх зберігають сейви.
+    /// </summary>
+    public enum Gimmick { Monster = 0, Flyer = 1, Technician = 2, Showman = 3, Veteran = 4, Hardcore = 5, Rookie = 6, Strongman = 7 }
 
     /// <summary>Роль борця (§5.3): герой чи лиходій. Вона задає початковий шлях ворожнечі; далі шлях міняють вчинки (поворот).</summary>
     public enum CareerRole { Hero = 0, Villain = 1 }
@@ -120,6 +124,15 @@ namespace Game.Core.Ring.Career
         public string[] GimmickMoves = new string[0];
         public string SignatureMove;
         public string FinisherMove;
+        /// <summary>Вільних балів на створенні (у JSON — «freePoints», без поля — 1; Новачок — 2, «рівно, +2 вільні»).</summary>
+        public int FreePoints = 1;
+        /// <summary>
+        /// Скільки ґімік-прийомів борець знає на старті (перші з <see cref="GimmickMoves"/>; у JSON — «startMoves», без поля — усі).
+        /// Решту вивчає за очки розвитку. Новачок — 0: «мало прийомів».
+        /// </summary>
+        public int StartGimmickMoves = -1;
+        /// <summary>Чи показувати ґімік на екрані створення (у JSON — «onCreationScreen», без поля — так). Ґіміки 5–8 — після У0 власника.</summary>
+        public bool OnCreationScreen = true;
     }
 
     /// <summary>NPC-борець федерації (career_roster.json): місцевої — у корені, вищих — у «federations».</summary>
@@ -212,6 +225,9 @@ namespace Game.Core.Ring.Career
                     SignatureMove = JsonRead.Str(o, "signature", where),
                     FinisherMove = JsonRead.Str(o, "finisherMove", where)
                 };
+                d.FreePoints = JsonRead.Int(o, "freePoints", where, 1);
+                d.StartGimmickMoves = JsonRead.Int(o, "startMoves", where, -1);
+                d.OnCreationScreen = JsonRead.Bool(o, "onCreationScreen", where, true);
                 RingAttr fa;
                 if (!FeudVars.TryAttr(JsonRead.Str(o, "finisher", where), out fa)) throw new FormatException(where + ".finisher: невідомий атрибут");
                 d.FinisherAttr = fa;
@@ -309,11 +325,18 @@ namespace Game.Core.Ring.Career
         /// <summary>Перехресні посилання даних: прийоми ґіміків існують, ростер має Молота з атрибутами сценарію ворожнечі, чемпіон — з ростера.</summary>
         private void Validate()
         {
+            var gimmickIds = new HashSet<Gimmick>();
             foreach (var g in Gimmicks)
             {
+                if (!gimmickIds.Add(g.Id)) throw new FormatException("ґімік повторюється: " + g.Key);
                 var ids = new List<string>(g.GimmickMoves) { g.SignatureMove, g.FinisherMove };
                 foreach (var m in ids)
                     if (Moves.Find(m) == null) throw new FormatException("ґімік " + g.Key + ": немає прийому " + m);
+                if (g.FreePoints < 1 || g.FreePoints > 2) throw new FormatException("ґімік " + g.Key + ": вільних балів 1–2");
+                if (g.StartGimmickMoves < -1 || g.StartGimmickMoves > g.GimmickMoves.Length)
+                    throw new FormatException("ґімік " + g.Key + ": startMoves від 0 до числа ґімік-прийомів");
+                for (int i = 0; i < 5; i++)
+                    if (g.Attr[i] < WrestlerStats.MinAttr || g.Attr[i] > WrestlerStats.MaxAttr) throw new FormatException("ґімік " + g.Key + ": основа атрибутів поза межами");
             }
             if (Gimmicks.Count == 0 || Roster.Count == 0) throw new FormatException("кар'єра: порожні ґіміки чи ростер");
             if (FindNpc(BeltHolderId) == null) throw new FormatException("чемпіон поза ростером: " + BeltHolderId);
@@ -387,6 +410,8 @@ namespace Game.Core.Ring.Career
                         throw new FormatException(where + ": ефекти plan/stip/ally належать ворожнечі; у сценах — career:plan");
                     if (e.Kind == EffectKind.Career && e.Key == "npc_feud" && e.Target != "opponent" && e.Target != "last_opponent" && FindNpc(e.Target) == null)
                         throw new FormatException(where + ": ворожнеча з невідомим NPC '" + e.Target + "'");
+                    if (e.Kind == EffectKind.Career && e.Key == "opponent" && (FindNpc(e.Target) == null || e.Target == HammerId))
+                        throw new FormatException(where + ": ефект opponent — NPC ростеру (не Молот: у нього своя ворожнеча), а не '" + e.Target + "'");
                 }
                 foreach (var cd in conds)
                 {
@@ -466,8 +491,16 @@ namespace Game.Core.Ring.Career
 
         public GimmickDef GimmickOf(Gimmick g)
         {
+            var d = FindGimmick(g);
+            if (d == null) throw new ArgumentException("немає ґіміка " + g);
+            return d;
+        }
+
+        /// <summary>Ґімік за id або null (чернетка створення з невідомим ґіміком — CareerSession.CanCreate).</summary>
+        public GimmickDef FindGimmick(Gimmick g)
+        {
             for (int i = 0; i < Gimmicks.Count; i++) if (Gimmicks[i].Id == g) return Gimmicks[i];
-            throw new ArgumentException("немає ґіміка " + g);
+            return null;
         }
 
         /// <summary>

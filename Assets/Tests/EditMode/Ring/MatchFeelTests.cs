@@ -33,16 +33,45 @@ namespace Game.Tests.EditMode
             return ev.EffectSum(MatchEffectKind.Hype, MatchSide.Player) >= 2;
         }
 
-        public static Feel Measure(int matches, int seedBase = 5000)
+        /// <summary>Атаки, з яких «гравець, що читає шанси» обирає найкращу (утримання й больовий лишаються за ШІ).</summary>
+        private static readonly MatchActionId[] ReadAttacks = { MatchActionId.TopRope, MatchActionId.Throw, MatchActionId.Strike, MatchActionId.Taunt };
+
+        /// <summary>
+        /// Хід гравця, який бачить три шанси на кнопках: там, де ШІ вибрав би атаку, бере атаку з найбільшим шансом 7+ (ризикований
+        /// трюк і кидок — лише із запасом «Сил», «завести зал» — лише поки ажіотажу бракує до фінішера). Решта — як у ШІ.
+        /// </summary>
+        private static void ReaderStep(MatchEngine e)
+        {
+            if (e.Phase != MatchPhase.AwaitAction || e.CurrentActor != MatchSide.Player) { MatchAi.Step(e); return; }
+            var id = MatchAi.ChooseAction(e);
+            if (Array.IndexOf(ReadAttacks, id) >= 0)
+            {
+                var me = e.State.Actor;
+                int best = -1;
+                foreach (var a in ReadAttacks)
+                {
+                    var o = e.Describe(a);
+                    if (!o.Available || !o.HasRoll || o.RollIsOpponents || o.Chances == null) continue;
+                    if (MatchRules.Cost(a) >= 2 && me.Stamina < MatchRules.Cost(a) + MatchAi.StaminaReserve) continue;
+                    if (a == MatchActionId.Taunt && e.State.Hype >= MatchRules.FinisherHype) continue;
+                    int ok = o.Chances[1] + o.Chances[2];
+                    if (ok > best) { best = ok; id = a; }
+                }
+            }
+            if (id == MatchActionId.CatchBreath) e.EndTurn();
+            else e.Perform(id, id == MatchActionId.Finisher ? e.Setup.FinisherOf(e.CurrentActor) : null);
+        }
+
+        public static Feel Measure(int matches, int seedBase = 5000, Gimmick gimmick = Gimmick.Monster, bool reader = false)
         {
             var f = new Feel { Matches = matches };
             for (int i = 0; i < matches; i++)
             {
-                var s = CareerKit.NewHero((ulong)(seedBase + i));
+                var s = CareerKit.NewHero((ulong)(seedBase + i), gimmick);
                 s.EndWeek();
                 var e = s.StartShow();
                 int guard = 0;
-                while (!e.IsOver && guard++ < 4000) MatchAi.Step(e);
+                while (!e.IsOver && guard++ < 4000) { if (reader) ReaderStep(e); else MatchAi.Step(e); }
 
                 int streak = 0, maxStreak = 0, actions = 0, firstPop = -1;
                 bool nearFall = false, wasBehind = false, initChanged = false;
@@ -126,7 +155,7 @@ namespace Game.Tests.EditMode
         /// поміряй» на 75 % перемог у тижні 1). Кар'єру веде CareerBot (дії тижня, розвиток), кожен матч — однаковий ШІ за обидві
         /// сторони; титульний шанс береться завжди. Ключ — «s{сезон} w{тиждень}» і окремо «ворожнеча», «титул».
         /// </summary>
-        public static SortedDictionary<string, int[]> WinRates(int careers, int seasons, int seedBase = 9000)
+        public static SortedDictionary<string, int[]> WinRates(int careers, int seasons, int seedBase = 9000, Gimmick gimmick = Gimmick.Monster)
         {
             var d = new SortedDictionary<string, int[]>();
             Action<string, MatchWinner> add = (k, w) =>
@@ -137,7 +166,7 @@ namespace Game.Tests.EditMode
             };
             for (int i = 0; i < careers; i++)
             {
-                var s = CareerKit.NewHero((ulong)(seedBase + i));
+                var s = CareerKit.NewHero((ulong)(seedBase + i), gimmick);
                 var rep = new CareerRunReport();
                 int guard = 0;
                 string extra = null;
@@ -262,6 +291,58 @@ namespace Game.Tests.EditMode
             Assert.That(actions, Is.InRange(8.0, 15.0), "матч — 8–15 дій: не розгром і не тягучка");
             Assert.GreaterOrEqual(ShareIn815(f.Lengths), 0.88, "матч — 8–15 дій: не менше 88 % матчів у вікні");
             Assert.GreaterOrEqual((double)f.InitiativeChangedMatches / f.Matches, 0.99, "ініціатива переходить майже в кожному матчі");
+        }
+
+        /// <summary>
+        /// Відчуття бою за КОЖНИМ ґіміком (умова ПМ до ґіміків 5–8, 12.11.2026). <see cref="MatchFeel_Measure1000"/> і темп кар'єри
+        /// міряють лише Монстра, тож ґімік із перекошеними атрибутами чи ефектом (жетони, зсув порогів) пройшов би повз. Перебір
+        /// іде за значеннями enum, тож новий ґімік охоронець бере сам. Два гравці: ШІ і «читає шанси» (<see cref="ReaderStep"/>).
+        /// Межі — СПРАВНІСТЬ, а не баланс: ґімік не ламає матч (ініціатива, довжина, фінішер, кар'єра не безнадійна).
+        /// Замір 13.11.2026 (ШІ, 300 матчів / 100 кар'єр): перемоги на старті Монстр 63 %, Летун 45 %, Технік 48 %, Шоумен 37 %;
+        /// кар'єра, щотижневі: 66 / 49 / 59 / 39 %; ворожнеча: 51 / 35 / 47 / 28 %; титул: 49 / 38 / 42 / 22 %. «Читає шанси»
+        /// майже не змінює: удари й кидки йдуть від Сили, а Спритність і Харизма мають мало дій. Вирівнювання — рішення власника.
+        /// </summary>
+        [Test]
+        public void MatchFeel_EveryGimmick()
+        {
+            var sb = new System.Text.StringBuilder();
+            var bad = new List<string>();
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            foreach (bool reader in new[] { false, true })
+                foreach (Gimmick g in Enum.GetValues(typeof(Gimmick)))
+                {
+                    var f = Measure(300, 7000, g, reader);
+                    int rolls = Math.Max(1, f.Miss + f.Partial + f.Strong);
+                    string who = (reader ? "читає шанси " : "ШІ ") + g;
+                    double init = (double)f.InitiativeChangedMatches / f.Matches, share = ShareIn815(f.Lengths), fin = (double)f.FinisherLanded / f.Matches;
+                    sb.AppendFormat(inv, "{0}: чистий {1:P0}, «на два» {2:P0}, дій {3:F1}, 8–15 {4:P0}, ініціатива {5:P0}, перемог {6:P0}, фінішер {7}/{8}\n",
+                        who, (double)f.Strong / rolls, (double)f.NearFallMatches / f.Matches, (double)f.Rounds / f.Matches,
+                        share, init, (double)f.Wins / f.Matches, f.FinisherLanded, f.Matches);
+                    if (init < 0.90) bad.Add(who + ": ініціатива переходить лише в " + init.ToString("P0", inv) + " матчів");
+                    if (share < 0.75) bad.Add(who + ": 8–15 дій лише в " + share.ToString("P0", inv) + " матчів");
+                    if (fin < 0.20) bad.Add(who + ": фінішер влучний лише в " + fin.ToString("P0", inv) + " матчів");
+                }
+            // Кар'єра за ґіміком: щотижневі перемоги сезонів 1–3, ворожнеча, титул (100 кар'єр на ґімік).
+            foreach (Gimmick g in Enum.GetValues(typeof(Gimmick)))
+            {
+                var d = WinRates(100, 3, 9000, g);
+                int w = 0, n = 0, fw = 0, fn = 0;
+                foreach (var kv in d)
+                {
+                    if (kv.Key.StartsWith("~")) continue;
+                    int all = kv.Value[0] + kv.Value[1] + kv.Value[2];
+                    if (kv.Key.StartsWith("s")) { w += kv.Value[0]; n += all; }
+                    else if (kv.Key.StartsWith("ворожнеча")) { fw += kv.Value[0]; fn += all; }
+                }
+                int[] t; d.TryGetValue("титул", out t);
+                double weekly = (double)w / Math.Max(1, n);
+                sb.AppendFormat(inv, "кар'єра {0}: щотижневі {1:P0}, ворожнеча {2:P0}, титул {3}\n",
+                    g, weekly, (double)fw / Math.Max(1, fn), t == null ? "—" : ((double)t[0] / (t[0] + t[1] + t[2])).ToString("P0", inv));
+                if (weekly < 0.30) bad.Add("кар'єра " + g + ": щотижневих перемог лише " + weekly.ToString("P0", inv));
+            }
+            TestContext.WriteLine(sb.ToString());
+            System.Console.WriteLine("[feel-gimmick] " + sb);
+            Assert.IsEmpty(bad, "ґімік ламає матч чи кар'єру:\n" + string.Join("\n", bad));
         }
     }
 }

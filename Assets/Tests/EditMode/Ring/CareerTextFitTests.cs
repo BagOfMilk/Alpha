@@ -362,12 +362,19 @@ namespace Game.Tests.EditMode
 
         // ---------------- створення героя ----------------
 
-        /// <summary>Плитки створення (як у CreateScreenView): ґіміки з бонусами характеристик тією самою функцією, що й гра, і дві ролі.</summary>
+        /// <summary>
+        /// Плитки створення (як у CreateScreenView): ґіміки екрана створення — той самий вид, що бере екран (<c>GetCreationView</c>: ґіміки
+        /// 5–8 з <c>onCreationScreen = false</c> до У0 власника не показуються, злиття «Кар'єри» a3fd3fd5), з бонусами характеристик тією
+        /// самою функцією, що й гра, і дві ролі. Розкладка восьми — окремий пункт (Б4) після У0.
+        /// </summary>
         private static List<TileText> CreateTiles()
         {
             var all = new List<TileText>();
-            foreach (var g in CareerKit.Content().Gimmicks)
+            foreach (var gv in CareerKit.NewAtCreate(1).GetCreationView().Gimmicks)
+            {
+                var g = gv.Def;
                 all.Add(new TileText(Ui(g.NameKey), new[] { "" }, new string[0]) { Parts = RingLabels.AttrBonusParts(T, g.Attr) });
+            }
             all.Add(new TileText(Ui("role.hero"), new[] { "" }, new string[0]));
             all.Add(new TileText(Ui("role.villain"), new[] { "" }, new string[0]));
             return all;

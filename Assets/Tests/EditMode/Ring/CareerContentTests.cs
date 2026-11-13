@@ -80,15 +80,16 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void Moves_AreTwentyFour_IdsUnique_WithTheRightKinds()
+        public void Moves_AreForty_IdsUnique_WithTheRightKinds()
         {
+            // 24 прийоми чотирьох перших ґіміків + 16 ґіміків 5–8 (П5, §5.2): по два ґімік-прийоми, коронний і фінішер на ґімік.
             var c = CareerKit.Content();
-            Assert.AreEqual(24, c.Moves.All.Count);
-            Assert.AreEqual(24, c.Moves.All.Select(m => m.Id).Distinct().Count());
+            Assert.AreEqual(40, c.Moves.All.Count);
+            Assert.AreEqual(40, c.Moves.All.Select(m => m.Id).Distinct().Count());
             Assert.AreEqual(6, c.Moves.All.Count(m => m.Kind == MoveKind.Basic));
-            Assert.AreEqual(8, c.Moves.All.Count(m => m.Kind == MoveKind.Gimmick));
-            Assert.AreEqual(4, c.Moves.All.Count(m => m.Kind == MoveKind.Signature));
-            Assert.AreEqual(4, c.Moves.All.Count(m => m.Kind == MoveKind.Finisher));
+            Assert.AreEqual(16, c.Moves.All.Count(m => m.Kind == MoveKind.Gimmick));
+            Assert.AreEqual(8, c.Moves.All.Count(m => m.Kind == MoveKind.Signature));
+            Assert.AreEqual(8, c.Moves.All.Count(m => m.Kind == MoveKind.Finisher));
             Assert.AreEqual(2, c.Moves.All.Count(m => m.Kind == MoveKind.Learn));
             foreach (var m in c.Moves.All)
             {
@@ -102,10 +103,13 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void Gimmicks_AreFour_EachWithTwoMovesSignatureAndFinisherOfItsOwn()
+        public void Gimmicks_AreEight_FourOnTheCreationScreen_EachWithTwoMovesSignatureAndFinisherOfItsOwn()
         {
             var c = CareerKit.Content();
-            Assert.AreEqual(4, c.Gimmicks.Count);
+            Assert.AreEqual(8, c.Gimmicks.Count);
+            CollectionAssert.AreEqual(new[] { Gimmick.Monster, Gimmick.Flyer, Gimmick.Technician, Gimmick.Showman },
+                c.Gimmicks.Where(g => g.OnCreationScreen).Select(g => g.Id).ToArray(), "ґіміки 5–8 — на екрані лише після У0 власника");
+            Assert.AreEqual(Enum.GetValues(typeof(Gimmick)).Length, c.Gimmicks.Select(g => g.Id).Distinct().Count(), "кожен ґімік enum — у даних");
             foreach (var g in c.Gimmicks)
             {
                 Assert.AreEqual(2, g.GimmickMoves.Length);
@@ -113,8 +117,10 @@ namespace Game.Tests.EditMode
                 Assert.AreEqual(MoveKind.Signature, c.Moves.Get(g.SignatureMove).Kind);
                 Assert.AreEqual(MoveKind.Finisher, c.Moves.Get(g.FinisherMove).Kind);
                 Assert.AreEqual(g.Key, c.Moves.Get(g.FinisherMove).GimmickId);
-                int sum = g.Attr.Sum();
-                Assert.That(sum, Is.InRange(2, 4), "основа ґіміка " + g.Key + " збалансована за сумою");
+                // Бюджет створення = основа + вільні бали: 3–4. Новачок — 2 (§5.2 «Рівно, +2 вільні»): слабший старт, зате росте швидше.
+                int budget = g.Attr.Sum() + g.FreePoints;
+                if (g.Id == Gimmick.Rookie) Assert.AreEqual(2, budget, "Новачок — рівно, +2 вільні");
+                else Assert.That(budget, Is.InRange(3, 4), "основа ґіміка " + g.Key + " збалансована за сумою");
             }
         }
 

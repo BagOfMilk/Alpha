@@ -27,7 +27,7 @@ namespace Game.Tests.EditMode
         [Test]
         public void Hero_IsNeverAdvisedDirtyMovesOrAnotherPathsPerks_EvenWhenAffordable()
         {
-            for (int g = 0; g < 4; g++)
+            for (int g = 0; g < CareerKit.GimmickCount; g++)
             {
                 // герой із рангом 3 і в лиходія, і в бунтаря — перки чужих шляхів йому по кишені, але не радяться
                 var s = With((Gimmick)g, CareerRole.Hero, 40, 8, 6, 6);
@@ -131,7 +131,7 @@ namespace Game.Tests.EditMode
 
             int checkedLists = 0, withWhy = 0;
             var ends = new[] { MatchEndKind.Pin, MatchEndKind.Submission };
-            for (int g = 0; g < 4; g++)
+            for (int g = 0; g < CareerKit.GimmickCount; g++)
                 for (int r = 0; r < 2; r++)
                     foreach (int points in new[] { 2, 4, 8, 40 })
                         for (int last = 0; last < 6; last++)
@@ -185,7 +185,7 @@ namespace Game.Tests.EditMode
             why.Add(DevelopmentAdvice.WhyFor("lost_sub", AdviceKind.Move));
             why.Add(DevelopmentAdvice.RoleMoveKey(RingPath.Heel));
             for (int i = 0; i < 3; i++) why.Add(DevelopmentAdvice.RoleKey((RingPath)i));
-            for (int g = 0; g < 4; g++)
+            for (int g = 0; g < CareerKit.GimmickCount; g++)
                 for (int r = 0; r < 2; r++)
                 {
                     var s = With((Gimmick)g, (CareerRole)r, 40, r == 0 ? 6 : 0, r == 1 ? 6 : 0, 0);

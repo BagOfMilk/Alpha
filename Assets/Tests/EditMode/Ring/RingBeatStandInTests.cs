@@ -16,9 +16,10 @@ namespace Game.Tests.EditMode
     {
         /// <summary>
         /// Базова лінія 08.11.2026 (після 3-P1-3) — 20; 09.11.2026 (Ф2 кроки 5 і 7, кліпи P1–P2) — 17. Лише спадає: кліп прийшов —
-        /// зменшити число тут.
+        /// зменшити число тут. Виняток — новий зміст без кліпів: 12.11.2026 ґіміки 5–8 «Кар'єри» (a3fd3fd5) дали 16 прийомів, 14 з
+        /// них без власних кліпів — 17 → 31 (ПМ; перелік і запит — CLIP_NEEDS.md §11).
         /// </summary>
-        private const int Baseline = 17;
+        private const int Baseline = 31;
 
         private static readonly RollTier[] Tiers = { RollTier.Miss, RollTier.Partial, RollTier.Strong };
 

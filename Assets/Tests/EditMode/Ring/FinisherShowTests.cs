@@ -49,7 +49,7 @@ namespace Game.Tests.EditMode
             var rivalKeys = new HashSet<string>();
             for (int i = 0; i < 120; i++)
             {
-                var gim = (Gimmick)(i % 4);
+                var gim = (Gimmick)(i % CareerKit.GimmickCount);
                 var s = CareerKit.NewHero((ulong)(4000 + i), gim);
                 s.EndWeek();
                 var e = s.StartShow();
@@ -100,7 +100,7 @@ namespace Game.Tests.EditMode
             int diffs = 0, finishers = 0;
             for (int i = 0; i < 80; i++)
             {
-                var gim = (Gimmick)(i % 4);
+                var gim = (Gimmick)(i % CareerKit.GimmickCount);
                 var a = CareerKit.NewHero((ulong)(9000 + i), gim); a.EndWeek();
                 var b = CareerKit.NewHero((ulong)(9000 + i), gim); b.EndWeek();
                 var ea = a.StartShow();
