@@ -97,6 +97,15 @@ namespace Game.Gameplay.Ring
         /// <summary>Сейв переписано: підсумок для «Продовжити» перечитати при наступному показі титулу.</summary>
         private void InvalidateSaveSummary() { _saveSummary = null; }
 
+        /// <summary>
+        /// -ring-hero-name підміняє ім'я за замовчуванням (ключ «c.create.default_name», Rebind) — і героїні теж: екран створення бере
+        /// «c.create.default_name.fem» («Новачка», ПМ 13.11.2026), і без цього огляд героїні підставив би «Новачка» замість імені огляду.
+        /// </summary>
+        private void MirrorShotHeroName()
+        {
+            if (_text != null && _shotHeroName != null) _text.Add("c.create.default_name.fem", _shotHeroName);
+        }
+
         public void SettingsApplied()
         {
             _menuInput.SetBindings(_settings.Model.Applied.Keys);
@@ -183,6 +192,7 @@ namespace Game.Gameplay.Ring
             }
             _onTitle = true;
             Rebind();
+            MirrorShotHeroName();
             _bootDone = true;
             if (stage != null && !RingStageHub.DemoRequested && _menuShotsDir == null)
             {
@@ -199,6 +209,7 @@ namespace Game.Gameplay.Ring
             RingMenuServices.Music(MenuMusic.Loading);
             yield return null;
             if (continueSave) ContinueGame(); else NewGame();
+            MirrorShotHeroName();
             if (_onTitle) { _viewKey = null; Debug.LogWarning("[Ринг] вхід не вдався — титул заново"); }
             StepLoading();
             yield return null;

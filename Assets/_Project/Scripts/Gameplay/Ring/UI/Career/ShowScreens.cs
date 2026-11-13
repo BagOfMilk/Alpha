@@ -321,8 +321,9 @@ namespace Game.Gameplay.Ring.UI
             // прощальний матч чемпіона: віддай пояс — і вища федерація зустріне краще (ПМ 12.11.2026)
             string farewell = CareerScreenLines.FarewellNote(T, C, c);
             if (farewell != null) col.Add(ShowKit.Bullet(farewell));
-            if (!c.IsFeud) col.Add(ShowKit.Bullet(T.Get("c.card.plan") + ": " + PlanText(c.Plan)));
-            col.Add(ShowKit.Bullet(T.Get("c.card.stip") + ": " + StipText(c.Stipulations)));
+            // порожнє значення — без мітки: «Плану букера немає», «Умов немає» (ПМ 13.11.2026, огляд слоту 33)
+            if (!c.IsFeud) col.Add(ShowKit.Bullet(CareerScreenLines.PlanLine(T, c.Plan)));
+            col.Add(ShowKit.Bullet(CareerScreenLines.StipLine(T, T.Get("c.card.stip"), new[] { StipText(c.Stipulations) })));
             if (c.PromoHypeBonus != 0) col.Add(ShowKit.Bullet(T.Format("c.card.promo_bonus", Signed(c.PromoHypeBonus))));
             if (c.IsRematch) col.Add(ShowKit.Bullet(T.Get("c.hub.rematch")));
             string outgrown = CareerScreenLines.OutgrownLine(T, c);   // №7: переріс щабель — букер ставить легший матч

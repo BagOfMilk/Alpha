@@ -28,6 +28,11 @@ namespace Game.Gameplay.Ring.UI
         private readonly List<int> _tileKeys = new List<int>();   // ключ плитки (цифра) поруч із _tiles — для огляду меню
         private Label _hint;
         private VisualElement _row, _gold, _weekPlate, _last, _ropes, _header, _drawer, _poster;
+        // шухляда над афішею (ПМ 13.11.2026): шапка й підвал шухляди — для найменшої прокрутки; рядки умов афіші згортаються, коли під
+        // нею не влазить навіть мінімум шухляди (CareerTileLayout.DrawerMaxHeight) — до перебудови екрана чи зміни розміру панелі
+        private VisualElement _drawerHead, _drawerFoot, _posterDetails;
+        private bool _posterFolded;
+        private float _foldW = -1f, _foldH = -1f;
         /// <summary>На афіші є наліпка форми суперника, що звисає з її низу (межа шухляди — від наліпки).</summary>
         private bool _posterSticker;
         private string _hintDefault = "";
@@ -71,6 +76,7 @@ namespace Game.Gameplay.Ring.UI
             Root.Add(_weekPlate);
             Root.Add(ShowKit.RivalStrip(C, T, w.Card.Opponent, w.Card.OpponentFeudLevel, true));
             _posterSticker = false;
+            _posterFolded = false;
             _poster = Poster(w.Card, w.IsBigShowWeek);
             _poster.RegisterCallback<GeometryChangedEvent>(e => Fit());   // висота афіші відома лише після розкладки (межа шухляди)
             Root.Add(_poster);
@@ -174,17 +180,23 @@ namespace Game.Gameplay.Ring.UI
             if (_drawer != null)
             {
                 _drawer.style.bottom = CareerTileLayout.DrawerBottom + lift;
-                // шухляда не закриває афішу (гонорар, план, суперник), доки під нею лишається >= DrawerMinRoom — далі список
-                // прокручується; менше — лише до стрічки суперника (рев'ю 08.11.2026; поріг 260 при 4:3 клав шухляду на план букера
-                // і суперника — кадри слоту 27, 09.11.2026)
+                // верх шухляди не вище за низ афіші з просвітом, решта — прокруткою (огляд слоту 33, ПМ 13.11.2026). Колишній відкат
+                // «менше 150 під афішею — до стрічки суперника» клав «Розвиток» на картку з трьома рядками умов (4:3, s33 p11 006–011).
+                // Не влазить і мінімум шухляди — афіша згортає рядки умов, доки шухляда відкрита.
                 float height = Root.layout.height;
                 float bottomY = height - (CareerTileLayout.DrawerBottom + lift);
                 bool posterReady = _poster != null && !float.IsNaN(_poster.layout.height) && _poster.layout.height > 0f;
                 if (posterReady && !float.IsNaN(height))
                 {
+                    if (_posterFolded && (Math.Abs(width - _foldW) > 0.5f || Math.Abs(height - _foldH) > 0.5f)) FoldPoster(false);   // інша панель — наново
                     float room = CareerTileLayout.DrawerRoomUnderPoster(bottomY, _poster.layout.y + _poster.layout.height, _posterSticker);
-                    if (room < ArenaKit.DrawerMinRoom) room = bottomY - (ArenaKit.Top + ArenaKit.StripH + 12f);
-                    if (room > 120f) _drawer.style.maxHeight = room;
+                    bool fold;
+                    float max = CareerTileLayout.DrawerMaxHeight(room, _dev, out fold);
+                    if (fold && !_posterFolded) { _foldW = width; _foldH = height; FoldPoster(true); }
+                    _drawer.style.maxHeight = max;
+                    if (_drawerScroll != null)
+                        _drawerScroll.style.minHeight = CareerTileLayout.DrawerScrollMin(max, _drawerHead != null ? _drawerHead.layout.height : float.NaN,
+                            _drawerFoot != null ? _drawerFoot.layout.height : 0f);
                 }
             }
             if (_weekPlate != null)
@@ -193,6 +205,13 @@ namespace Game.Gameplay.Ring.UI
                 else { _weekPlate.style.left = Length.Percent(50f); _weekPlate.style.marginLeft = -175f; _weekPlate.style.top = ArenaKit.Top; }
             }
             if (_last != null) _last.style.top = narrow ? ArenaKit.SecondY + 104f + 14f + 70f + 14f : 288f;
+        }
+
+        /// <summary>Рядки умов афіші (пункти під планом) — сховати, доки шухляда відкрита й під афішею їй не вистачає місця.</summary>
+        private void FoldPoster(bool fold)
+        {
+            _posterFolded = fold;
+            if (_posterDetails != null) _posterDetails.style.display = fold ? DisplayStyle.None : DisplayStyle.Flex;
         }
 
         private ActionTile AddTile(int key, string title, string effect, string risk, bool enabled, string reason, Action act, string desc)
@@ -295,19 +314,25 @@ namespace Game.Gameplay.Ring.UI
             var line = new VisualElement();
             line.style.height = 2f; line.style.backgroundColor = RingTheme.Bg; line.style.marginTop = 6f; line.style.marginBottom = 8f;
             col.Add(line);
-            string plan = (c.IsFeud ? "" : T.Get("c.card.plan") + ": " + PlanText(c.Plan) + " · ") + StipText(c.Stipulations);
+            // без плану й умов — саме значення, без мітки («Плану букера немає · Умов немає», ПМ 13.11.2026)
+            string plan = (c.IsFeud ? "" : CareerScreenLines.PlanLine(T, c.Plan) + " · ") + StipText(c.Stipulations);
             col.Add(MenuKit.Body(plan, BrandTokens.TypeMinInfo, RingTheme.Bg, true));
-            if (c.PromoHypeBonus != 0) col.Add(Bullet(T.Format("c.card.promo_bonus", Signed(c.PromoHypeBonus))));
-            if (c.IsRematch) col.Add(Bullet(T.Get("c.hub.rematch")));
+            // рядки умов — окремим блоком: шухляда, якій під афішею не вистачає місця, згортає саме їх (FoldPoster)
+            var details = new VisualElement();
+            details.pickingMode = PickingMode.Ignore;
+            _posterDetails = details;
+            if (c.PromoHypeBonus != 0) details.Add(Bullet(T.Format("c.card.promo_bonus", Signed(c.PromoHypeBonus))));
+            if (c.IsRematch) details.Add(Bullet(T.Get("c.hub.rematch")));
             string outgrown = CareerScreenLines.OutgrownLine(T, c);   // №7: переріс щабель — букер ставить легший матч
-            if (outgrown != null) col.Add(Bullet(outgrown));
+            if (outgrown != null) details.Add(Bullet(outgrown));
             // P2-4 (8c3f16b): до росту гравця — нейтральний рядок «за місцем у картці», без червоної наліпки
-            if (c.Opponent != null && c.RivalSteps > 0 && !ShowKit.RivalInForm(C)) col.Add(Bullet(ShowKit.RivalStepsText(T, c)));
+            if (c.Opponent != null && c.RivalSteps > 0 && !ShowKit.RivalInForm(C)) details.Add(Bullet(ShowKit.RivalStepsText(T, c)));
             // №8 і №11: що тримає цей тиждень — пастка контракту (гонорар урізаний, без виїзних і підробітку) і пізня роль
             string exclusive = new SeasonOfferModel(C, T).ExclusiveText;
-            if (exclusive != null) col.Add(Bullet(exclusive));
+            if (exclusive != null) details.Add(Bullet(exclusive));
             string late = new LateRoleModel(C, T).CurrentText;
-            if (late != null) col.Add(Bullet(late));
+            if (late != null) details.Add(Bullet(late));
+            col.Add(details);
             box.Add(col);
             if (c.Opponent != null && c.RivalSteps > 0 && ShowKit.RivalInForm(C))
             {
@@ -407,7 +432,7 @@ namespace Game.Gameplay.Ring.UI
         private VisualElement Drawer()
         {
             var box = ArenaKit.Abs(null, null, ArenaKit.Edge, CareerTileLayout.DrawerBottom, 560f, null);   // над канатами (огляд слоту 30)
-            box.style.maxHeight = 430f;   // уточнює Fit: не вище афіші, якщо під нею є місце
+            box.style.maxHeight = CareerTileLayout.DrawerMaxH;   // уточнює Fit: не вище за низ афіші з просвітом
             box.style.overflow = Overflow.Visible;
             box.style.flexDirection = FlexDirection.Column;
             box.pickingMode = PickingMode.Position;
@@ -431,6 +456,8 @@ namespace Game.Gameplay.Ring.UI
             hint.style.unityTextAlign = TextAnchor.MiddleLeft;
             top.Add(hint);
             box.Add(top);
+            _drawerHead = top;
+            top.RegisterCallback<GeometryChangedEvent>(e => Fit());   // дворядкова підказка — менша прокрутка, підвал не на канатах
             var scroll = new ScrollView(ScrollViewMode.Vertical);
             ArenaKit.ThinScroller(scroll);
             scroll.style.flexShrink = 1f; scroll.style.minHeight = CareerTileLayout.DevScrollMinH;
@@ -446,6 +473,7 @@ namespace Game.Gameplay.Ring.UI
             scroll.Add(content);
             box.Add(scroll);
             if (foot != null) box.Add(foot);
+            _drawerFoot = foot;
             _drawerScroll = scroll;
             // щойно розгорнутий «Усе» — до початку повного списку, інакше — той самий зсув, що до перебудови; обидва — на межу рядка
             // (ПМ 13.11.2026, п. 2 і 5: зріз поради над «АТРИБУТИ» на с4, «ПЕРКИ» під краєм на 4:3), і в «Витратах» теж

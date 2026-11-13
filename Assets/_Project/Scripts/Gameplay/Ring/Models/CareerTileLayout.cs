@@ -149,13 +149,53 @@ namespace Game.Gameplay.Ring.Models
         public const float PosterStickerHang = 26f;
         /// <summary>Відступ тексту пункту ShowKit.Bullet від краю колонки: квадрат 11 і проміжок 8 — під ним стають рядки контракту (№8).</summary>
         public const float BulletIndent = 19f;
-        /// <summary>Просвіт між низом афіші (з наліпкою) і верхом шухляди.</summary>
-        public const float DrawerPosterGap = 12f;
+        /// <summary>Просвіт між низом афіші (з наліпкою) і верхом шухляди. Було 12 — «Витрати» стояли впритул до рваного краю (огляд слоту 33, 4:3).</summary>
+        public const float DrawerPosterGap = 20f;
 
         /// <summary>Скільки місця шухляді під афішею: від низу афіші (і наліпки, якщо є) з просвітом до низу шухляди.</summary>
         public static float DrawerRoomUnderPoster(float drawerBottomY, float posterBottomY, bool sticker)
         {
             return drawerBottomY - (posterBottomY + (sticker ? PosterStickerHang : 0f)) - DrawerPosterGap;
+        }
+
+        /// <summary>Найбільша висота шухляди (є місце над рядом дій).</summary>
+        public const float DrawerMaxH = 430f;
+        /// <summary>
+        /// Шапка шухляди (заголовок 25 і рядок-підказка в один рядок, відступ 8) і підвал «▾ Усе (N)» за кадрами 4:3 слоту 33 — для
+        /// рішення, чи влазить мінімум шухляди під афішу. Сталі, а не розкладка: дворядкова підказка при наведенні не згортає афішу.
+        /// </summary>
+        public const float DrawerHeadH = 40f, DrawerFootH = 36f;
+        /// <summary>Прокрутка шухляди, коли під афішею тісно, — не менша за рядок кнопок.</summary>
+        public const float DrawerScrollMinTight = 32f;
+
+        /// <summary>Мінімум шухляди: шапка, прокрутка <see cref="DevScrollMinH"/> і підвал (у «Витрат» підвалу немає).</summary>
+        public static float DrawerNeed(bool dev) { return DrawerHeadH + DevScrollMinH + (dev ? DrawerFootH : 0f); }
+
+        /// <summary>
+        /// Висота шухляди тижня над афішею (огляд слоту 33, ПМ 13.11.2026: «верх шухляди не вище за низ картки (із зазором), решта —
+        /// прокруткою»; коротку шухляду на 4:3 в М1 прийнято). Була межа «менше 150 під афішею — до стрічки суперника»: на 4:3 з трьома
+        /// рядками умов «Розвиток» ліз на картку, текст крізь текст (кадри s33_w_p11_star_4x3 006–011). Тепер шухляда не вища за місце
+        /// під афішею (<paramref name="room"/>, <see cref="DrawerRoomUnderPoster"/>) і за <see cref="DrawerMaxH"/>. Якщо під афішею менше
+        /// за мінімум шухляди — <paramref name="fold"/>: афіша згортає рядки умов, доки шухляда відкрита (решта — шапка, гонорар, план);
+        /// на цей прохід — мінімум, наступний рахує вже від згорнутої.
+        /// </summary>
+        public static float DrawerMaxHeight(float room, bool dev, out bool fold)
+        {
+            float need = DrawerNeed(dev);
+            if (float.IsNaN(room)) room = need;
+            fold = room < need;
+            return Math.Min(DrawerMaxH, Math.Max(room, need));
+        }
+
+        /// <summary>
+        /// Найменша висота прокрутки шухляди: <see cref="DevScrollMinH"/>, а коли тісно — скільки лишають шапка й підвал, але не менше
+        /// за рядок (<see cref="DrawerScrollMinTight"/>): так шапка з дворядковою підказкою не виштовхує підвал на канати.
+        /// </summary>
+        public static float DrawerScrollMin(float maxHeight, float headH, float footH)
+        {
+            if (float.IsNaN(headH) || headH <= 0f) headH = DrawerHeadH;
+            if (float.IsNaN(footH) || footH < 0f) footH = 0f;
+            return Math.Max(DrawerScrollMinTight, Math.Min(DevScrollMinH, maxHeight - headH - footH));
         }
 
         /// <summary>
@@ -240,8 +280,42 @@ namespace Game.Gameplay.Ring.Models
         public const float WedgeTaper = 0.38f;
         /// <summary>Частка клина титулу (права третина — рингу) і найбільша, до якої його розширює підпис на вузькій панелі.</summary>
         public const float TitleWedge = 0.46f, TitleWedgeMax = 0.62f;
-        /// <summary>Від кінця підпису титулу до краю клина — не менше (на 4:3 підпис виходив за клин, кадр m4x3\053 слоту 30).</summary>
-        public const float TitleTagClear = 40f;
+        /// <summary>
+        /// Темна смуга вздовж краю клина (MenuBackdrop, ACC-03): її правий край угорі — <c>WedgeInnerTop · ww</c>, унизу —
+        /// <c>WedgeInnerBottom · ww</c>. Між нею й краєм клина — світліший кармін, крізь який видно ринг, і напівтон.
+        /// </summary>
+        public const float WedgeInnerTop = 0.86f, WedgeInnerBottom = 0.50f;
+        /// <summary>
+        /// Від кінця підпису титулу до краю ТЕМНОЇ СМУГИ клина — не менше. Було 40 від краю клина: на 4:3 кінець підпису «…СЕЗОНОМ»
+        /// лягав на напівтон і світлий кармін, крізь який видно стійку рингу й борця, і зливався з тлом (огляд слоту 33, ПМ 13.11.2026,
+        /// кадри m4x3 004–010; раніше — m4x3\053 слоту 30, коли підпис виходив за клин).
+        /// </summary>
+        public const float TitleTagClear = 16f;
+
+        /// <summary>x правого краю темної смуги клина на висоті y.</summary>
+        public static float WedgeInnerEdge(float panelW, float panelH, float wedgeWidth, float y)
+        {
+            float f = panelH <= 0f ? 0f : Math.Min(1f, Math.Max(0f, y / panelH));
+            return panelW * wedgeWidth * (WedgeInnerTop + (WedgeInnerBottom - WedgeInnerTop) * f);
+        }
+
+        /// <summary>
+        /// Підпис титулу на вузькій панелі (4:3, 16:10) — двома рядками: одним рядком він тягнув клин на пів екрана або лягав на
+        /// напівтон (огляд слоту 33). Розрив — на тому роздільнику « · », за якого довший рядок найкоротший; сам роздільник на розриві не
+        /// лишається. Широка панель, текст без роздільника — як є.
+        /// </summary>
+        public static string TitleTagLines(string tag, float panelW)
+        {
+            const string sep = " · ";
+            if (string.IsNullOrEmpty(tag) || panelW <= 0f || !Narrow(panelW)) return tag;
+            int best = -1, bestLen = int.MaxValue;
+            for (int i = tag.IndexOf(sep, StringComparison.Ordinal); i >= 0; i = tag.IndexOf(sep, i + 1, StringComparison.Ordinal))
+            {
+                int longer = Math.Max(i, tag.Length - i - sep.Length);
+                if (longer < bestLen) { bestLen = longer; best = i; }
+            }
+            return best < 0 ? tag : tag.Substring(0, best) + "\n" + tag.Substring(best + sep.Length);
+        }
 
         /// <summary>x правого краю клина на висоті y.</summary>
         public static float WedgeEdge(float panelW, float panelH, float wedgeWidth, float y)
@@ -252,13 +326,13 @@ namespace Game.Gameplay.Ring.Models
 
         /// <summary>
         /// Частка клина титулу, за якої підпис (правий край <paramref name="textRight"/>, низ <paramref name="textBottom"/>) лежить на
-        /// клині з запасом <see cref="TitleTagClear"/>: не менше <see cref="TitleWedge"/> (широкі панелі — без змін), не більше
-        /// <see cref="TitleWedgeMax"/>.
+        /// темній смузі клина з запасом <see cref="TitleTagClear"/>: не менше <see cref="TitleWedge"/> (широкі панелі — без змін), не
+        /// більше <see cref="TitleWedgeMax"/>. Смуга звужується донизу, тож межа — на висоті низу підпису.
         /// </summary>
         public static float FitTitleWedge(float panelW, float panelH, float textRight, float textBottom)
         {
             if (panelW <= 0f || panelH <= 0f || textRight <= 0f) return TitleWedge;
-            float k = 1f - WedgeTaper * Math.Min(1f, Math.Max(0f, textBottom / panelH));
+            float k = WedgeInnerEdge(1f, panelH, 1f, textBottom);
             float need = (textRight + TitleTagClear) / (k * panelW);
             return Math.Min(TitleWedgeMax, Math.Max(TitleWedge, need));
         }

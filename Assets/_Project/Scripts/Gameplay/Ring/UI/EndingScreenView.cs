@@ -183,6 +183,8 @@ namespace Game.Gameplay.Ring.UI
             dev.Add(RingUi.PadKey(RingUi.SmallButton((_all ? "▾ " : "▸ ") + t.Format("c.dev.all", perkRows.Count + attrRows.Count), () => { _all = !_all; Refresh(); }, true, null), "dev:all"));
             if (_all)
             {
+                // заголовок «АТРИБУТИ», як «ПЕРКИ» нижче: атрибути не стоять без підпису під кнопкою «Усе» (ПМ 13.11.2026, k_ending_1080 155)
+                dev.Add(RingUi.Section(t.Get("dev.section.attrs")));
                 var attrs = RingUi.Row();
                 attrs.style.flexWrap = Wrap.Wrap;
                 foreach (var a in attrRows)

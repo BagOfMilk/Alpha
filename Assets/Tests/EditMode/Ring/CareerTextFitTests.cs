@@ -95,27 +95,47 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Клин тла титулу: на 16:9 — без змін (0,46), на 4:3 підпис «МІСЦЕВА ФЕДЕРАЦІЯ · …» лежить на клині з запасом
-        /// (кадр m4x3\053 слоту 30: виходив за край). Підпис — Display700 18 з розрядкою 0,14, великими; лівий край 95, верх 240.
+        /// Клин тла титулу: на 16:9 — без змін (0,46); підпис «МІСЦЕВА ФЕДЕРАЦІЯ · …» на кожній панелі кінчається на ТЕМНІЙ СМУЗІ
+        /// клина з запасом, а не на напівтоні й світлому карміні, крізь який видно ринг (огляд слоту 33, ПМ 13.11.2026, кадри m4x3
+        /// 004–010; раніше — m4x3\053 слоту 30, коли підпис виходив за клин). На вузькій панелі підпис — двома рядками
+        /// (CareerTileLayout.TitleTagLines), і клин не тягнеться на пів екрана. Підпис — Display700 18 з розрядкою 0,14, великими;
+        /// лівий край 95, верх 240.
         /// </summary>
         [Test]
-        public void TitleWedge_CoversTheTagline_OnEveryPanel()
+        public void TitleWedge_TaglineEndsOnTheDarkBand_OnEveryPanel()
         {
             string sub = Caps(Ui("m.title.sub"));
             // Ширина підпису між двома межами моделі: без розрядки (401) і з повною розрядкою 0,14 × кегль (525); у кадрі 16:9 слоту 30 —
             // 427 (рушій ставить розрядку вужчою). Гра міряє сам підпис (layout.xMax), тож тут — обидві межі.
-            float bottom = 240f + LegendFont.LineHeight(18f);
-            float low = 95f + LegendFont.Width(sub, 18f, 0f), right = 95f + LegendFont.Width(sub, 18f, 0.14f) + RenderSlack;
+            float line = LegendFont.LineHeight(18f);
+            float bottom = 240f + line;
+            float low = 95f + LegendFont.Width(sub, 18f, 0f);
             Assert.AreEqual(CareerTileLayout.TitleWedge, CareerTileLayout.FitTitleWedge(1600f, 900f, low, bottom), 1e-4f, "16:9 — без змін");
             Assert.AreEqual(CareerTileLayout.TitleWedge, CareerTileLayout.FitTitleWedge(1600f, 900f, 95f + 427f, bottom), 1e-4f, "16:9, ширина з кадру — без змін");
             foreach (var p in Panels)
             {
-                float w = CareerTileLayout.FitTitleWedge(p.Value, 900f, right, bottom);
+                string[] lines = CareerTileLayout.TitleTagLines(sub, p.Value).Split('\n');
+                Assert.AreEqual(CareerTileLayout.Narrow(p.Value) ? 2 : 1, lines.Length, p.Key + ": рядків підпису");
+                float right = 0f;
+                foreach (var l in lines) right = Math.Max(right, 95f + LegendFont.Width(l, 18f, 0.14f) + RenderSlack);
+                float b = 240f + line * lines.Length;
+                float w = CareerTileLayout.FitTitleWedge(p.Value, 900f, right, b);
                 Assert.That(w, Is.InRange(CareerTileLayout.TitleWedge, CareerTileLayout.TitleWedgeMax), p.Key);
-                Assert.GreaterOrEqual(CareerTileLayout.WedgeEdge(p.Value, 900f, w, bottom) + 0.01f, right + CareerTileLayout.TitleTagClear,
-                    p.Key + ": кінець підпису з запасом на клині (" + right.ToString("0", CultureInfo.InvariantCulture) + ")");
+                Assert.GreaterOrEqual(CareerTileLayout.WedgeInnerEdge(p.Value, 900f, w, b) + 0.01f, right + CareerTileLayout.TitleTagClear,
+                    p.Key + ": кінець підпису з запасом на темній смузі (" + right.ToString("0", CultureInfo.InvariantCulture) + ")");
+                Assert.Less(CareerTileLayout.WedgeInnerEdge(p.Value, 900f, w, b), CareerTileLayout.WedgeEdge(p.Value, 900f, w, b) - 4f * Math.Max(10f, 900f / 64f) + 0.01f,
+                    p.Key + ": темна смуга кінчається до напівтону (MenuBackdrop: крапки від краю клина − 4 кроки)");
             }
-            Assert.Greater(CareerTileLayout.FitTitleWedge(1200f, 900f, 95f + 427f, bottom), CareerTileLayout.TitleWedge, "4:3, ширина з кадру — клин ширший (вада кадру m4x3\\053)");
+            // кадр s33_m4x3 005 (1024×768, ×1,172): підпис одним рядком 94–508 од., низ ~260 — клин 0,51 клав кінець на напівтон
+            float wOld = 0.513f;
+            Assert.Less(CareerTileLayout.WedgeInnerEdge(1200f, 900f, wOld, 260f), 508f, "вада кадру: кінець підпису за темною смугою");
+            float wFit = CareerTileLayout.FitTitleWedge(1200f, 900f, 508f, 260f);   // той самий підпис одним рядком — клин розширюється до смуги
+            Assert.Greater(wFit, wOld, "4:3 одним рядком: клин ширший, ніж був");
+            Assert.GreaterOrEqual(CareerTileLayout.WedgeInnerEdge(1200f, 900f, wFit, 260f) + 0.01f, 508f + CareerTileLayout.TitleTagClear, "4:3 одним рядком: кінець на смузі");
+            Assert.AreEqual("МІСЦЕВА ФЕДЕРАЦІЯ\nОДИН БОРЕЦЬ · СЕЗОН ЗА СЕЗОНОМ", CareerTileLayout.TitleTagLines(sub, 1200f), "розрив — де довший рядок найкоротший");
+            Assert.AreEqual(sub, CareerTileLayout.TitleTagLines(sub, 1600f), "широка панель — одним рядком");
+            Assert.AreEqual("БЕЗ РОЗДІЛЬНИКА", CareerTileLayout.TitleTagLines("БЕЗ РОЗДІЛЬНИКА", 1200f));
+            Assert.AreEqual("А\nБ · В", CareerTileLayout.TitleTagLines("А · Б · В", 1200f), "порівну — перший роздільник");
         }
 
         /// <summary>

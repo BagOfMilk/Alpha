@@ -35,8 +35,6 @@ namespace Game.Gameplay.Ring.UI
         // Плитки ряду: вужчі за CompactTileW в один ряд (16:9 — ~183) — компактні; текст, що не вміщається в TileH, піднімає ряд
         // не більш ніж на TileGrowMax (кадри слоту 27, 09.11.2026: назви рвались посеред слова, шанси лягали під смугу).
         public const float CompactTileW = CareerTileLayout.CompactTileW, TileGrowMax = CareerTileLayout.TileGrowMax;
-        // Шухляда тижня не налазить на афішу, доки під афішею лишається хоч стільки (далі — прокрутка); менше — до стрічки суперника.
-        public const float DrawerMinRoom = 150f;
         // Низ екрана — відлік ЗНИЗУ: при «Розмірі інтерфейсу» 90–120 % логічна висота панелі 750–1000, а не 900
         public const float RowBottom = 45f, HeaderBottom = 164f, RopesBottom = CareerTileLayout.RopesBottom; // ширша панель — золота плита повна; вужча (4:3, великий масштаб) — вужча
 

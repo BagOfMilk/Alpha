@@ -99,7 +99,8 @@ namespace Game.Gameplay.Ring.UI.Menus
             _sub.style.position = Position.Absolute;
             _sub.style.left = 95f; _sub.style.top = 240f;
             Root.Add(_sub);
-            // на вузькій панелі (4:3) підпис виходив за клин (кадр m4x3\053 слоту 30): клин розширюється до кінця підпису
+            // на вузькій панелі (4:3) підпис виходив за клин (кадр m4x3\053 слоту 30), потім лягав на напівтон (слот 33): підпис —
+            // двома рядками, клин розширюється, доки кінець підпису не ляже на темну смугу
             _sub.RegisterCallback<GeometryChangedEvent>(e => FitWedge());
             Root.RegisterCallback<GeometryChangedEvent>(e => FitWedge());
 
@@ -155,10 +156,21 @@ namespace Game.Gameplay.Ring.UI.Menus
             SyncFocus(true);
         }
 
-        /// <summary>Клин тла — не вужчий, ніж треба, щоб підпис лежав на ньому з запасом (CareerTileLayout.FitTitleWedge).</summary>
+        /// <summary>
+        /// Підпис на вузькій панелі — двома рядками (CareerTileLayout.TitleTagLines), клин тла — не вужчий, ніж треба, щоб кінець
+        /// підпису лежав на темній смузі з запасом (CareerTileLayout.FitTitleWedge; огляд слоту 33, ПМ 13.11.2026: на 4:3 «…СЕЗОНОМ»
+        /// лягав на стійку рингу й борця).
+        /// </summary>
         private void FitWedge()
         {
             if (_back == null || _sub == null || _sub.style.display.value == DisplayStyle.None) return;
+            var label = _sub as Label;
+            float rootW = Root.layout.width;
+            if (label != null && !float.IsNaN(rootW) && rootW > 0f)
+            {
+                string tag = RingTheme.Caps(CareerTileLayout.TitleTagLines(T.Get("m.title.sub"), rootW));
+                if (label.text != tag) { label.text = tag; return; }   // нова розкладка підпису — клин з наступної
+            }
             var sub = _sub.layout;
             if (float.IsNaN(sub.width) || sub.width <= 0f) return;
             float w = CareerTileLayout.FitTitleWedge(Root.layout.width, Root.layout.height, sub.xMax, sub.yMax);

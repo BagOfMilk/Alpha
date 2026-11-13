@@ -420,6 +420,41 @@ namespace Game.Gameplay.Ring.Models
 
         /// <summary>Чернетка героя перед створенням: дивізіон (P2-6) — зі статі тіла (body_f_* — жіночий), суперники своєї статі.</summary>
         public static void SetDivision(CharacterDraft d, string body) { d.Female = CareerLooks.IsFemaleBody(body); }
+
+        // ---------------- огляд слоту 33 (ПМ 13.11.2026): порожнє значення — без мітки-тавтології ----------------
+
+        /// <summary>
+        /// Рядок плану букера: «План букера: Виграй чисто»; без плану — «Плану букера немає» (було «План букера: Плану немає»,
+        /// кадри g_heroine_feud_4x3 016, k_champdecl_1080 022, m4x3 050).
+        /// </summary>
+        public static string PlanLine(RingText t, BookerPlan p)
+        {
+            return p == BookerPlan.None ? t.Get("c.card.plan.none") : t.Get("c.card.plan") + ": " + RingLabels.PlanName(t, p);
+        }
+
+        /// <summary>
+        /// Рядок умов матчу з міткою: «Умови: Без дискваліфікації»; без умов — лише «Умов немає» (було «Умови: Умов немає», «Умови
+        /// матчу: Умов немає» — кадри картки шоу й огляду ворожнечі). <paramref name="parts"/> — назви умов; порожньо чи лише
+        /// «stip.none» — умов немає.
+        /// </summary>
+        public static string StipLine(RingText t, string label, IList<string> parts)
+        {
+            string none = t.Get("stip.none");
+            if (parts == null || parts.Count == 0 || (parts.Count == 1 && parts[0] == none)) return none;
+            return label + ": " + string.Join(", ", parts);
+        }
+
+        /// <summary>
+        /// Ім'я на рингу в полі створення за статтю тіла (ПМ 13.11.2026, п. 6): героїні — «Новачка», героєві — «Новачок». Лише поки в
+        /// полі ім'я за замовчуванням (будь-якої статі); своє ім'я гравця не чіпаємо. «.fem», а не «.f»: рід за тілом на екрані
+        /// створення, а не глобальна заміна HeroForms (виняток «c.create.default_name» у HeroFormsTests лишається).
+        /// </summary>
+        public static string FollowDefaultName(RingText t, string current, bool female)
+        {
+            string male = t.Get("c.create.default_name"), fem = t.Get("c.create.default_name.fem");
+            if (current != null && current != male && current != fem) return current;
+            return female ? fem : male;
+        }
     }
 
     /// <summary>Дія нижнього ряду кінця сезону (<see cref="CareerScreenLines.SeasonEndActions"/>).</summary>

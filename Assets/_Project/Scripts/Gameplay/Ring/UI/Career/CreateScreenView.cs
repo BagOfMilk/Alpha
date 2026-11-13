@@ -98,6 +98,8 @@ namespace Game.Gameplay.Ring.UI
             Root.Clear();
             Root.style.paddingLeft = 0f; Root.style.paddingRight = 0f; Root.style.paddingTop = 0f; Root.style.paddingBottom = 0f;
             _tiles.Clear();
+            // ім'я за замовчуванням — за тілом на екрані: героїня — «Новачка» (ПМ 13.11.2026, п. 6); своє ім'я гравця лишається
+            _d.RingName = CareerScreenLines.FollowDefaultName(T, _d.RingName, HeroForms.ShowsHeroine(T));
             RingPath path = PathOf(_d.Role);
             Color roleColor = ArenaKit.RoleColor(path);
 

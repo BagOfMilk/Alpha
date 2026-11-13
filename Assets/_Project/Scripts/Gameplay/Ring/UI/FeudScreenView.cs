@@ -144,8 +144,9 @@ namespace Game.Gameplay.Ring.UI
             plan.style.marginTop = 6f;
             plan.Add(RingUi.Section(_m.PlanSectionText));
             plan.Add(RingUi.Lbl(_m.PlanText, 12f));
-            plan.Add(RingUi.Lbl(t.Get("feud.section.stip") + ": " + string.Join(", ", _m.StipulationTexts()), 12f));
-            plan.Add(RingUi.Lbl(t.Get("feud.section.ally") + ": " + _m.AllyText, 12f));
+            // порожнє значення — без мітки: «Умов немає», «Без напарника» (ПМ 13.11.2026, огляд слоту 33, k_ending_1080 019)
+            plan.Add(RingUi.Lbl(CareerScreenLines.StipLine(t, t.Get("feud.section.stip"), _m.StipulationTexts()), 12f));
+            plan.Add(RingUi.Lbl(_m.AllyText, 12f));
             if (_m.HasNextPromo)
             {
                 plan.Add(RingUi.Section(t.Get("feud.section.next")));
