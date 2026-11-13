@@ -14,6 +14,9 @@ namespace Game.Gameplay.Ring.UI
     /// </summary>
     public sealed class PromoScreenView : RingScreenView
     {
+        /// <summary>Проходиться без миші (P3 геймпад, 11.11.2026): усі дії — кнопки RingUi, цілі фокусу.</summary>
+        protected override bool PadTargets { get { return true; } }
+
         private readonly PromoScreenModel _m;
         private string _lastSpeaker = "";
         private string _lastLine = "";
@@ -42,7 +45,9 @@ namespace Game.Gameplay.Ring.UI
             top.style.justifyContent = Justify.SpaceBetween;
             top.style.alignItems = Align.FlexStart;
             var head = RingUi.Column();
-            head.Add(RingUi.Lbl(t.Format("promo.act", _m.Act), 12f, RingUi.Dim));
+            // Підпис акту — лише у ворожнечі: у сцен кар'єри (розмова з букером, події поза рингом) актів немає, і «Акт 0» читався
+            // як помилка (плейтест 08.11.2026, P3).
+            if (_m.ActText != null) head.Add(RingUi.Lbl(_m.ActText, 12f, RingUi.Dim));   // сцени кар'єри — без «Акт 0»
             head.Add(RingUi.Lbl(_m.TitleText, 18f, RingUi.Gold, true));
             head.Add(RingUi.Lbl(_m.PlaceText, 12f, RingUi.Dim));
             // Назва на напівпрозорій плашці в куті: не налазить на ринг у кадрі (3D під UI).
@@ -112,7 +117,7 @@ namespace Game.Gameplay.Ring.UI
                     box.Add(RingUi.PrimaryButton(t.Get("ui.next"), OnConfirm));
                     break;
             }
-            box.Add(RingUi.Lbl(t.Get("ui.hint.keys"), 14f, RingUi.Dim));
+            box.Add(RingUi.Lbl(ArenaKit.ChooseHint(t), 14f, RingUi.Dim));
         }
 
         // ---------- шкали ворожнечі: компактно в кутку, зміна — коротким «+1 Популярність» ----------

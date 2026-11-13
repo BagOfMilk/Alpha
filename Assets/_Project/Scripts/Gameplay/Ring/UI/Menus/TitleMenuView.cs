@@ -24,6 +24,7 @@ namespace Game.Gameplay.Ring.UI.Menus
         private readonly List<MenuButton> _plates = new List<MenuButton>();
         private readonly List<Item> _items = new List<Item>();
         private VisualElement _lockup, _seal, _frame, _sub, _column, _status, _footer, _lines;
+        private MenuBackdrop _back;
         private Label _word, _hints, _statusText;
         private SlashSpinner _spinner;
         private MenuDialog _dialog;
@@ -59,8 +60,8 @@ namespace Game.Gameplay.Ring.UI.Menus
 
         private void Build()
         {
-            var back = new MenuBackdrop { WedgeWidth = 0.46f, Scrim = 0.18f, WedgeAlpha = 0.78f, CrimsonCut = true };
-            Root.Add(back);
+            _back = new MenuBackdrop { WedgeWidth = CareerTileLayout.TitleWedge, Scrim = 0.18f, WedgeAlpha = 0.78f, CrimsonCut = true };
+            Root.Add(_back);
             _lines = new SpeedLines(3);
             Root.Add(_lines);
 
@@ -98,6 +99,9 @@ namespace Game.Gameplay.Ring.UI.Menus
             _sub.style.position = Position.Absolute;
             _sub.style.left = 95f; _sub.style.top = 240f;
             Root.Add(_sub);
+            // на вузькій панелі (4:3) підпис виходив за клин (кадр m4x3\053 слоту 30): клин розширюється до кінця підпису
+            _sub.RegisterCallback<GeometryChangedEvent>(e => FitWedge());
+            Root.RegisterCallback<GeometryChangedEvent>(e => FitWedge());
 
             // ---- колонка пластин (B01 §4) зі сходинкою (мова «Енергія») ----
             _column = new VisualElement();
@@ -149,6 +153,18 @@ namespace Game.Gameplay.Ring.UI.Menus
             Root.RegisterCallback<PointerDownEvent>(e => { if (_mode == Mode.Intro) SkipIntro(); }, TrickleDown.TrickleDown);
             UpdateHints(MenuDevice.Keyboard);
             SyncFocus(true);
+        }
+
+        /// <summary>Клин тла — не вужчий, ніж треба, щоб підпис лежав на ньому з запасом (CareerTileLayout.FitTitleWedge).</summary>
+        private void FitWedge()
+        {
+            if (_back == null || _sub == null || _sub.style.display.value == DisplayStyle.None) return;
+            var sub = _sub.layout;
+            if (float.IsNaN(sub.width) || sub.width <= 0f) return;
+            float w = CareerTileLayout.FitTitleWedge(Root.layout.width, Root.layout.height, sub.xMax, sub.yMax);
+            if (Math.Abs(w - _back.WedgeWidth) < 0.001f) return;
+            _back.WedgeWidth = w;
+            _back.MarkDirtyRepaint();
         }
 
         private static string ItemKey(Item it)

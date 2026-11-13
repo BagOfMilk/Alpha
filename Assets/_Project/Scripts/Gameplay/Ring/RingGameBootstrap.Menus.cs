@@ -20,6 +20,13 @@ namespace Game.Gameplay.Ring
     public sealed partial class RingGameBootstrap : IMenuHost
     {
         private const string MenuShotsArg = "-ring-menu-shots";
+        /// <summary>
+        /// Слот 32 (ПМ 13.11.2026): <c>-ring-menu-scene create|week</c> — замість повного туру одна сцена (<see cref="MenuShots.Scene"/>);
+        /// <c>-ring-menu-load &lt;файл&gt;</c> — сейв огляду з файлу (стан і «тіло|зачіска», як у грі) замість нової кар'єри.
+        /// Лише разом з <c>-ring-menu-shots</c>: сейв огляду — свій (ring_menu_bot.txt), сейв гравця не чіпається.
+        /// </summary>
+        private const string MenuSceneArg = "-ring-menu-scene", MenuLoadArg = "-ring-menu-load";
+        private string _menuScene, _menuLoad;
 
         private RingSettingsRuntime _settings;
         private RingMenuInput _menuInput;
@@ -105,6 +112,14 @@ namespace Game.Gameplay.Ring
             _menuShotsDir = ReadArg(MenuShotsArg);
             bool review = _shotsDir != null || _menuShotsDir != null || ReadArg("-ring-lookbook") != null || ReadArg("-ring-font-spike") != null;
             _settings = new RingSettingsRuntime(review ? (IRingSettingsStore)new MemorySettingsStore() : new PlayerPrefsSettingsStore(), !review);
+            // огляд масштабу інтерфейсу (90/100/110/120): -ring-uiscale 120 — лише в пам'яті огляду, у налаштування гравця не пишеться
+            int reviewScale;
+            string scaleArg = review ? ReadArg("-ring-uiscale") : null;
+            if (scaleArg != null && int.TryParse(scaleArg, out reviewScale))
+            {
+                _settings.Model.Applied.UiScale = reviewScale;
+                _settings.Model.Applied.Clamp();
+            }
             _settings.ApplyAll();
             _menuInput = new RingMenuInput();
             _menuInput.SetBindings(_settings.Model.Applied.Keys);
@@ -113,6 +128,8 @@ namespace Game.Gameplay.Ring
             {
                 Application.runInBackground = true;
                 System.IO.Directory.CreateDirectory(_menuShotsDir);
+                _menuScene = ReadArg(MenuSceneArg);
+                _menuLoad = ReadArg(MenuLoadArg);
             }
         }
 
@@ -144,7 +161,7 @@ namespace Game.Gameplay.Ring
             StepLoading();
             yield return null;
             MigrateSave();
-            if (_menuShotsDir != null) WriteBotSave(true);
+            if (_menuShotsDir != null) { if (_menuLoad != null) WriteShotSaveFrom(_menuLoad); else WriteBotSave(true); }
             _career = CareerSession.New(_content, new SeededDiceRoller(_seed), _seed);
             _seed += 1;
             StepLoading();
@@ -173,7 +190,7 @@ namespace Game.Gameplay.Ring
                 stage.BeginIntro(_text.Get("c.game.title"), _text.Get("c.game.sub"));
             }
             if (!quick) RingMenuServices.Music(MenuMusic.Login);
-            if (_menuShotsDir != null) StartCoroutine(MenuShots.Run(this));
+            if (_menuShotsDir != null) StartCoroutine(_menuScene != null ? MenuShots.Scene(this, _menuScene) : MenuShots.Run(this));
         }
 
         /// <summary>Вхід у гру після «Продовжити» / «Нова кар'єра»: справжні кроки, далі розріз у гру.</summary>
@@ -254,14 +271,157 @@ namespace Game.Gameplay.Ring
             return (int)k != 0 && UnityEngine.Input.GetKeyDown(k);
         }
 
-        /// <summary>Ввід меню (клавіатура, геймпад, колесо) — для екранів-меню; true — екран його прийняв.</summary>
+        /// <summary>
+        /// Ввід меню (клавіатура, геймпад, колесо) — для екранів-меню; true — екран його прийняв (тоді старі клавіші екранів
+        /// кар'єри цього кадру не діють). Екрани кар'єри з <see cref="RingScreenView.PadEnabled"/> — фокус без миші
+        /// (<see cref="PollCareerPad"/>); поле вводу у фокусі — друк (<see cref="PollTyping"/>).
+        /// </summary>
         private bool PollMenuInput()
         {
+            if (_menuInput == null) return false;
             var nav = _view as IMenuNavigable;
-            if (nav == null || _menuInput == null) return false;
-            _menuInput.Poll(nav, Time.unscaledDeltaTime);
+            if (nav == null && _view == null) return false;
+            // кому ввід кадру — чиста модель (тест CareerPadFeatureTests): у М1 фокус без миші вимкнений, поле імені — завжди друк
+            var route = CareerPadFeature.Route(nav != null, nav == null && Typing, nav == null && _view.PadEnabled);
+            // екран без фокуса без миші — режим знімається, інакше наведення мишею там не діяло б (аудит P3, 11.11.2026)
+            if (route == CareerInputRoute.Menu || route == CareerInputRoute.Legacy) PadFocus.Release();
+            switch (route)
+            {
+                case CareerInputRoute.Menu:
+                    _menuInput.Poll(nav, Time.unscaledDeltaTime);
+                    return true;
+                case CareerInputRoute.Typing: return PollTyping();
+                case CareerInputRoute.Pad: return PollCareerPad();
+                default: return false;
+            }
+        }
+
+        private readonly CareerPadSink _careerPad = new CareerPadSink();
+        private bool _padLastSeen;
+
+        /// <summary>Поле вводу (ім'я героя) у фокусі: клавіатура друкує в нього.</summary>
+        private bool Typing
+        {
+            get
+            {
+                var f = _root != null && _root.focusController != null ? _root.focusController.focusedElement as VisualElement : null;
+                for (var p = f; p != null; p = p.parent) if (p is TextField) return true;   // фокус може стояти на внутрішньому полі вводу
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Поле вводу у фокусі (аудит P3 геймпад, 11.11.2026): цифри, Пробіл і L екрана кар'єри не діють — інакше «1» в імені
+        /// міняла ґімік і перебудовувала поле, а Пробіл чи Enter одразу створювали героя. Enter і Esc — вийти з поля (друге Esc —
+        /// пауза); хрестовина й кнопки геймпада виходять з поля й діють як завжди.
+        /// </summary>
+        private bool PollTyping()
+        {
+            if (RingMenuInput.LeaveTextDown()) { BlurTyping(); return true; }
+            if (_view.PadEnabled)
+            {
+                _careerPad.Begin(this, _view, true);
+                _menuInput.Poll(_careerPad, Time.unscaledDeltaTime);
+            }
             return true;
         }
+
+        private void BlurTyping()
+        {
+            var f = _root.focusController != null ? _root.focusController.focusedElement : null;
+            if (f != null) f.Blur();
+        }
+
+        /// <summary>
+        /// Фокус без миші на екрані кар'єри (P3 геймпад, 11.11.2026): хрестовина, стік і стрілки рухають фокус; A / Enter натискає
+        /// ціль у фокусі; B — як Esc (спершу закрити верхнє, потім пауза); рух миші ховає фокус — і Enter знову головна дія
+        /// екрана. Підпис «Enter» / «A» на плитах перемальовується, коли гравець змінив пристрій.
+        /// </summary>
+        private bool PollCareerPad()
+        {
+            // кнопка UI Toolkit, клацнута мишею, не тримає фокус рушія: інакше Enter / A натиснули б і її, і ціль фокусу
+            var held = _root.focusController != null ? _root.focusController.focusedElement : null;
+            if (held != null) held.Blur();
+            _careerPad.Begin(this, _view, false);
+            _menuInput.Poll(_careerPad, Time.unscaledDeltaTime);
+            var pad = _view.Pad;
+            if (PadFocus.Active && RingMenuInput.MouseArmed) pad.Hide();
+            if (RingMenuInput.PadLast != _padLastSeen)
+            {
+                _padLastSeen = RingMenuInput.PadLast;
+                _view.Refresh();
+            }
+            pad.Sync();
+            return _careerPad.Consumed;
+        }
+
+        /// <summary>Дії меню → фокус екрана кар'єри. Клавіатурне «Підтвердити» без фокусу лишається старому шляху (головна дія).</summary>
+        private sealed class CareerPadSink : IMenuNavigable
+        {
+            private RingGameBootstrap _host;
+            private RingScreenView _view;
+            private bool _typing;
+            public bool Consumed;
+
+            public void Begin(RingGameBootstrap host, RingScreenView view, bool typing)
+            {
+                _host = host; _view = view; _typing = typing; Consumed = false;
+            }
+
+            public void OnMenu(RingAction action, MenuDevice device)
+            {
+                if (device == MenuDevice.Mouse) return;                 // колесо крутить шухляду саме
+                if (_typing)
+                {
+                    if (device != MenuDevice.Gamepad) return;           // клавіатура друкує
+                    _host.BlurTyping();
+                }
+                var pad = _view.Pad;
+                switch (action)
+                {
+                    case RingAction.Up: pad.Move(PadDir.Up); Consumed = true; return;
+                    case RingAction.Down: pad.Move(PadDir.Down); Consumed = true; return;
+                    case RingAction.Left: pad.Move(PadDir.Left); Consumed = true; return;
+                    case RingAction.Right: pad.Move(PadDir.Right); Consumed = true; return;
+                    case RingAction.Confirm:
+                        if (RingMenuInput.StartDown()) return;     // Start — пауза (старий шлях)
+                        // A в полі імені — лише вийти з поля, фокус на ньому ж: Activate поставив би курсор назад (аудит P3, 11.11.2026)
+                        if (_typing) { pad.Show(); Consumed = true; return; }
+                        if (pad.Activate()) { Consumed = true; return; }
+                        if (device == MenuDevice.Gamepad) { pad.Show(); Consumed = true; }  // перше A лише показує фокус
+                        return;
+                    case RingAction.Back:
+                        if (device != MenuDevice.Gamepad) return;           // Esc і перепризначене «Назад» — старий шлях
+                        _host.OpenPause();
+                        Consumed = true;
+                        return;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Огляд меню: дія геймпада на поточному екрані кар'єри — тим самим шляхом, що A / B / хрестовина (підпис «A» замість
+        /// «Enter» з'явиться наступного кадру, як у гравця).
+        /// </summary>
+        internal void PadNavForShots(RingAction action)
+        {
+            if (_view == null || !_view.PadEnabled) return;
+            RingMenuInput.MouseArmed = false;
+            RingMenuInput.PadLast = true;
+            _careerPad.Begin(this, _view, false);
+            _careerPad.OnMenu(action, MenuDevice.Gamepad);
+            _view.Pad.Sync();
+        }
+
+        /// <summary>Огляд меню: гравець узяв мишу — фокус ховається, підписи знову «Enter».</summary>
+        internal void PadHideForShots()
+        {
+            RingMenuInput.PadLast = false;
+            if (_view != null && _view.PadEnabled) _view.Pad.Hide();
+        }
+
+        /// <summary>Ключ цілі у фокусі (лог огляду: що саме знято).</summary>
+        internal string PadKeyForShots { get { return _view != null && _view.PadEnabled && PadFocus.Active ? _view.Pad.CurrentKey : null; } }
 
         // ---------------- пауза (ТЗ B01 §6.2) ----------------
 
@@ -283,7 +443,15 @@ namespace Game.Gameplay.Ring
             }
         }
 
+        /// <summary>Esc у грі: спершу екран закриває своє верхнє (<see cref="RingScreenView.OnBack"/>), інакше — пауза.</summary>
         private void OpenPause()
+        {
+            if (!CanPause) return;
+            if (_view != null && _view.OnBack()) { RingMenuServices.Play(MenuSfx.Back); return; }
+            ShowPause();
+        }
+
+        private void ShowPause()
         {
             if (!CanPause) return;
             string context = _career.Stage == CareerStage.Create ? null
@@ -382,6 +550,24 @@ namespace Game.Gameplay.Ring
             catch (Exception ex) { Debug.LogWarning("[Ринг] огляд меню: сейв не записано: " + ex.Message); }
         }
 
+        /// <summary>Сейв огляду з файлу (<c>-ring-menu-load</c>): ті самі рядки — у сейв огляду меню. Немає файлу — лог і нова кар'єра.</summary>
+        private void WriteShotSaveFrom(string path)
+        {
+            try
+            {
+                var lines = System.IO.File.ReadAllLines(path);
+                RingSaveFile.Delete(SavePath);
+                RingSaveFile.Write(SavePath, lines);
+                _saveSummary = null;
+                Debug.Log("[Ринг] огляд меню: сейв з " + path);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("[Ринг] огляд меню: сейв " + path + " не прочитано (" + ex.Message + ") — нова кар'єра");
+                WriteBotSave(true);
+            }
+        }
+
         // ---------------- для огляду меню ----------------
 
         internal string MenuShotsDir { get { return _menuShotsDir; } }
@@ -390,7 +576,13 @@ namespace Game.Gameplay.Ring
         internal WipeTransition Wipe { get { return _wipe; } }
         internal bool OnTitle { get { return _onTitle; } }
         internal PauseOverlay CurrentPause { get { return _pause; } }
-        internal void OpenPauseForShots() { OpenPause(); }
+        /// <summary>Огляд: стан кар'єри для кадрів, яких бот сам не дістане (травма на плитці «Відновлення»); тур повертає все назад.</summary>
+        internal CareerSession CareerForShots { get { return _career; } }
+        /// <summary>Огляд: текст гри (назви вкладок для пошуку цілі фокусу).</summary>
+        internal RingText TextForShots { get { return _text; } }
+        internal void OpenPauseForShots() { ShowPause(); }
+        /// <summary>Огляд: той самий шлях, що Esc у грі (спершу <see cref="RingScreenView.OnBack"/>, потім пауза).</summary>
+        internal void EscForShots() { OpenPause(); }
         internal void Shot(string name)
         {
             ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(_menuShotsDir, string.Format("{0:000}_{1}.png", _menuShot++, name)));

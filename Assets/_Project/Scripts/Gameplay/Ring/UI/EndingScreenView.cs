@@ -11,6 +11,9 @@ namespace Game.Gameplay.Ring.UI
     /// </summary>
     public sealed class EndingScreenView : RingScreenView
     {
+        /// <summary>Проходиться без миші (P3 геймпад, 11.11.2026): усі дії — кнопки RingUi, цілі фокусу.</summary>
+        protected override bool PadTargets { get { return true; } }
+
         private readonly DevelopmentScreenModel _m;
         private bool _opened;
 
@@ -91,7 +94,7 @@ namespace Game.Gameplay.Ring.UI
             {
                 var attr = a.Attr;
                 string text = a.Name + "  " + a.ValueText + "   " + (a.CanBuy ? a.BuyText : a.ReasonText);
-                right.Add(RingUi.MakeButton(text, () => { _m.BuyAttr(attr); Refresh(); }, a.CanBuy, null, 17f));
+                right.Add(RingUi.PadKey(RingUi.MakeButton(text, () => { _m.BuyAttr(attr); Refresh(); }, a.CanBuy, null, 17f), "dev:attr:" + (int)attr));
             }
             if (Ctx.AfterDevelopment != null)
             {
@@ -177,7 +180,7 @@ namespace Game.Gameplay.Ring.UI
                 shown++;
             }
             if (shown == 0) dev.Add(RingUi.Lbl(t.Get("c.dev.none"), 12f, RingUi.Dim));
-            dev.Add(RingUi.SmallButton((_all ? "▾ " : "▸ ") + t.Format("c.dev.all", perkRows.Count + attrRows.Count), () => { _all = !_all; Refresh(); }, true, null));
+            dev.Add(RingUi.PadKey(RingUi.SmallButton((_all ? "▾ " : "▸ ") + t.Format("c.dev.all", perkRows.Count + attrRows.Count), () => { _all = !_all; Refresh(); }, true, null), "dev:all"));
             if (_all)
             {
                 var attrs = RingUi.Row();
@@ -185,8 +188,8 @@ namespace Game.Gameplay.Ring.UI
                 foreach (var a in attrRows)
                 {
                     var attr = a.Attr;
-                    attrs.Add(RingUi.SmallButton(a.Name + " " + Signed(a.Value) + " → " + Signed(a.Value + 1), () => { _m.BuyAttr(attr); Refresh(); }, a.CanBuy, null, hint,
-                        (a.CanBuy ? a.BuyText : a.ReasonText) + " — " + t.Get("c.dev.attr.why." + (int)attr)));
+                    attrs.Add(RingUi.PadKey(RingUi.SmallButton(CareerScreenLines.AttrTile(t, a.Name, a.Value), () => { _m.BuyAttr(attr); Refresh(); }, a.CanBuy, null, hint,
+                        (a.CanBuy ? a.BuyText : a.ReasonText) + " — " + t.Get("c.dev.attr.why." + (int)attr)), "dev:attr:" + (int)attr));
                 }
                 dev.Add(attrs);
                 dev.Add(RingUi.Section(t.Get("dev.section.perks")));
@@ -196,8 +199,8 @@ namespace Game.Gameplay.Ring.UI
                 {
                     string id = r.Id;
                     bool can = r.State == PerkState.Available;
-                    perks.Add(RingUi.SmallButton(r.Name + " · " + r.Cost, () => { _m.BuyPerk(id); Refresh(); }, can,
-                        r.IsGeneral ? RingUi.Gold : RingUi.PathColor(r.Path), hint, r.PathText + " — " + r.Desc + (can ? "" : " · " + r.ReasonText)));
+                    perks.Add(RingUi.PadKey(RingUi.SmallButton(r.Name + " · " + r.Cost, () => { _m.BuyPerk(id); Refresh(); }, can,
+                        r.IsGeneral ? RingUi.Gold : RingUi.PathColor(r.Path), hint, r.PathText + " — " + r.Desc + (can ? "" : " · " + r.ReasonText)), "dev:perk:" + id));
                 }
                 dev.Add(perks);
             }
@@ -210,7 +213,8 @@ namespace Game.Gameplay.Ring.UI
             col.Add(go);
         }
 
-        private bool _all;
+        /// <summary>«Усе (N)» розгорнуто; огляд <c>-ring-shot-dev-all</c> знімає кінцівку одразу з повним списком (атрибут на максимумі, п. 6).</summary>
+        private bool _all = CareerScreenView.DevAllForShots;
 
         private static string Signed(int v) { return v > 0 ? "+" + v : v < 0 ? "\u2212" + (-v) : "0"; }
 
@@ -240,7 +244,7 @@ namespace Game.Gameplay.Ring.UI
             Color? accent = r.IsGeneral ? RingUi.Gold : RingUi.PathColor(r.Path);
             bool can = r.State == PerkState.Available;
             var b = RingUi.MakeButton(text, () => { _m.BuyPerk(id); Refresh(); }, can, r.State == PerkState.Owned ? RingUi.Good : accent, 16f);
-            return b;
+            return RingUi.PadKey(b, "perk:" + id);
         }
 
         /// <summary>Enter/Пробіл/кнопка: між матчами — далі за сюжетом; після розв'язки нічого (реванш чи «Заново» — кнопками).</summary>
