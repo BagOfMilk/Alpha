@@ -739,6 +739,20 @@ namespace Game.Core.Ring.Career
             return false;
         }
 
+        /// <summary>Подія була в одному з минулих сезонів (умова сцени seen_before, §7: «повернення ветерана» — через сезон після травми).</summary>
+        public bool BackstageSeenBefore(string sceneId)
+        {
+            string tail = ":" + sceneId;
+            foreach (var k in State.BackstageSeen)
+            {
+                if (!k.EndsWith(tail, StringComparison.Ordinal)) continue;
+                int season;
+                if (int.TryParse(k.Substring(0, k.Length - tail.Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out season) && season < State.Season)
+                    return true;
+            }
+            return false;
+        }
+
         /// <summary>Тиждень сезону, з якого подія доступна (детермінований розкид за зерном кар'єри; не пізніше останнього тижня).</summary>
         public int BackstageDueWeek(BackstageScene sc)
         {
@@ -876,6 +890,7 @@ namespace Game.Core.Ring.Career
                     RingPath rp;
                     return FeudVars.TryPath(c.Target, out rp) && CurrentRole == rp;
                 case "max_feud": return MaxFeudLevel >= c.Min;
+                case "seen_before": return BackstageSeenBefore(c.Target);
                 case "champion": return IsChampion;
                 case "last_won": return State.LastOutcome == 1;
                 case "last_lost": return State.LastOutcome == 2;

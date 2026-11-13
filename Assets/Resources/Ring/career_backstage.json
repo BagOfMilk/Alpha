@@ -1465,7 +1465,8 @@
     }
    ],
    "fromWeek": 2,
-   "spread": 3
+   "spread": 3,
+   "once": true
   },
   {
    "id": "ev_mixed",
@@ -3608,6 +3609,303 @@
     {
      "career": "role",
      "target": "rebel",
+     "not": true
+    }
+   ]
+  },
+  {
+   "id": "ev_veteran",
+   "kind": "event",
+   "title": "bs.ev_veteran.title",
+   "place": "bs.ev_veteran.place",
+   "start": "nb",
+   "nodes": [
+    {
+     "id": "nb",
+     "type": "branch",
+     "cases": [
+      {
+       "requires": [
+        {
+         "flag": "friend_helped"
+        }
+       ],
+       "next": "h1"
+      }
+     ],
+     "next": "i1"
+    },
+    {
+     "id": "h1",
+     "type": "line",
+     "speaker": "narrator",
+     "text": "bs.ev_veteran.h1",
+     "next": "h2"
+    },
+    {
+     "id": "h2",
+     "type": "line",
+     "speaker": "stalevyi",
+     "text": "bs.ev_veteran.h2",
+     "next": "h3"
+    },
+    {
+     "id": "h3",
+     "type": "line",
+     "speaker": "stalevyi",
+     "text": "bs.ev_veteran.h3",
+     "next": "hc"
+    },
+    {
+     "id": "hc",
+     "type": "choice",
+     "options": [
+      {
+       "id": "learn",
+       "text": "bs.ev_veteran.hc.learn",
+       "effects": [
+        {
+         "career": "dev",
+         "add": 2
+        },
+        {
+         "career": "actions",
+         "add": -1
+        },
+        {
+         "flag": "veteran_partner"
+        }
+       ],
+       "next": "h4",
+       "requires": [
+        {
+         "career": "actions",
+         "min": 2
+        }
+       ],
+       "path": "face"
+      },
+      {
+       "id": "word",
+       "text": "bs.ev_veteran.hc.word",
+       "effects": [
+        {
+         "var": "locker",
+         "add": 1
+        },
+        {
+         "flag": "veteran_partner"
+        }
+       ],
+       "next": "h5",
+       "path": "face"
+      }
+     ]
+    },
+    {
+     "id": "h4",
+     "type": "line",
+     "speaker": "stalevyi",
+     "text": "bs.ev_veteran.h4",
+     "next": "end"
+    },
+    {
+     "id": "h5",
+     "type": "line",
+     "speaker": "narrator",
+     "text": "bs.ev_veteran.h5",
+     "next": "end"
+    },
+    {
+     "id": "i1",
+     "type": "line",
+     "speaker": "narrator",
+     "text": "bs.ev_veteran.i1",
+     "next": "i2"
+    },
+    {
+     "id": "i2",
+     "type": "line",
+     "speaker": "stalevyi",
+     "text": "bs.ev_veteran.i2",
+     "next": "ic"
+    },
+    {
+     "id": "ic",
+     "type": "choice",
+     "options": [
+      {
+       "id": "sorry",
+       "text": "bs.ev_veteran.ic.sorry",
+       "effects": [
+        {
+         "var": "locker",
+         "add": 1
+        }
+       ],
+       "next": "i3",
+       "path": "face"
+      },
+      {
+       "id": "shrug",
+       "text": "bs.ev_veteran.ic.shrug",
+       "effects": [
+        {
+         "var": "locker",
+         "add": -1
+        }
+       ],
+       "next": "i4",
+       "path": "heel"
+      }
+     ]
+    },
+    {
+     "id": "i3",
+     "type": "line",
+     "speaker": "stalevyi",
+     "text": "bs.ev_veteran.i3",
+     "next": "end"
+    },
+    {
+     "id": "i4",
+     "type": "line",
+     "speaker": "stalevyi",
+     "text": "bs.ev_veteran.i4",
+     "next": "end"
+    },
+    {
+     "id": "end",
+     "type": "end"
+    }
+   ],
+   "fromWeek": 2,
+   "spread": 2,
+   "once": true,
+   "requires": [
+    {
+     "career": "seen_before",
+     "target": "ev_friend"
+    }
+   ]
+  },
+  {
+   "id": "ev_betrayal",
+   "kind": "event",
+   "title": "bs.ev_betrayal.title",
+   "place": "bs.ev_betrayal.place",
+   "start": "n1",
+   "nodes": [
+    {
+     "id": "n1",
+     "type": "line",
+     "speaker": "narrator",
+     "text": "bs.ev_betrayal.n1",
+     "next": "n2"
+    },
+    {
+     "id": "n2",
+     "type": "line",
+     "speaker": "stalevyi",
+     "text": "bs.ev_betrayal.n2",
+     "next": "n3"
+    },
+    {
+     "id": "n3",
+     "type": "choice",
+     "options": [
+      {
+       "id": "fight",
+       "text": "bs.ev_betrayal.n3.fight",
+       "effects": [
+        {
+         "career": "npc_feud",
+         "target": "stalevyi",
+         "add": 2
+        },
+        {
+         "career": "injure",
+         "target": "random",
+         "add": 1
+        }
+       ],
+       "next": "n4",
+       "path": "heel"
+      },
+      {
+       "id": "booker",
+       "text": "bs.ev_betrayal.n3.booker",
+       "effects": [
+        {
+         "career": "npc_feud",
+         "target": "stalevyi",
+         "add": 1
+        },
+        {
+         "var": "trust",
+         "add": -1
+        }
+       ],
+       "next": "n5"
+      },
+      {
+       "id": "let",
+       "text": "bs.ev_betrayal.n3.let",
+       "effects": [
+        {
+         "var": "locker",
+         "add": 1
+        }
+       ],
+       "next": "n6",
+       "path": "face"
+      }
+     ]
+    },
+    {
+     "id": "n4",
+     "type": "line",
+     "speaker": "narrator",
+     "text": "bs.ev_betrayal.n4",
+     "next": "end"
+    },
+    {
+     "id": "n5",
+     "type": "line",
+     "speaker": "booker",
+     "text": "bs.ev_betrayal.n5",
+     "next": "end"
+    },
+    {
+     "id": "n6",
+     "type": "line",
+     "speaker": "narrator",
+     "text": "bs.ev_betrayal.n6",
+     "next": "end"
+    },
+    {
+     "id": "end",
+     "type": "end"
+    }
+   ],
+   "fromWeek": 2,
+   "spread": 2,
+   "once": true,
+   "requires": [
+    {
+     "flag": "veteran_partner"
+    },
+    {
+     "career": "seen_before",
+     "target": "ev_veteran"
+    },
+    {
+     "career": "female",
+     "not": true
+    },
+    {
+     "career": "tier",
+     "min": 2,
      "not": true
     }
    ]

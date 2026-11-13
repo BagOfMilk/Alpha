@@ -480,6 +480,11 @@ namespace Game.Tests.EditMode
             {
                 string allowed = null;
                 foreach (var cd in sc.Requires) if (cd.Kind == ConditionKind.Career && cd.Key == "booker" && !cd.Negate) allowed = cd.Target;
+                // умови «tier» звужують федерації сцени; одна федерація — лише її букер (ev_betrayal: tier min 2 not → федерація 1)
+                int lo = 1, hi = c.Federations.Count;
+                foreach (var cd in sc.Requires)
+                    if (cd.Kind == ConditionKind.Career && cd.Key == "tier") { if (cd.Negate) hi = Math.Min(hi, cd.Min - 1); else lo = Math.Max(lo, cd.Min); }
+                if (allowed == null && lo == hi) allowed = c.Federation(lo).Booker;
                 if (sc.Kind == BackstageKind.Booker && sc.Requires.Count == 0) allowed = "booker";   // запасна — розмова Ліни, лише місцева федерація
                 if (LinaOnlyScenes.ContainsKey(sc.Id)) allowed = "booker";
                 var p = sc.Promo;
