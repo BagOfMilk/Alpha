@@ -12,10 +12,11 @@ namespace Game.Tests.EditMode
     /// <summary>Створення борця (TRPG_DESIGN §5.1–§5.4): ґімік, роль, вільний бал, набір прийомів і прийоми як обгортки дій рушія.</summary>
     public class GimmickTests
     {
+        // Летун і Шоумен — вирівнювання V8 (власник 13.11.2026: «Так, усі 7»): Летуну Сила 0 → 1, Шоумену Витривалість 0 → 1.
         [TestCase(Gimmick.Monster, 2, -1, 0, 2, 0)]
-        [TestCase(Gimmick.Flyer, 0, 3, 0, -1, 0)]
+        [TestCase(Gimmick.Flyer, 1, 3, 0, -1, 0)]
         [TestCase(Gimmick.Technician, 0, 0, 3, 0, 0)]
-        [TestCase(Gimmick.Showman, -1, 0, 0, 0, 3)]
+        [TestCase(Gimmick.Showman, -1, 0, 0, 1, 3)]
         public void GimmickBase_IsInTheData(Gimmick g, int str, int agi, int tech, int sta, int cha)
         {
             var d = CareerKit.Content().GimmickOf(g);
