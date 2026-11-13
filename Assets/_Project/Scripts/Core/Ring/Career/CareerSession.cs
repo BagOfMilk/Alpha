@@ -156,10 +156,68 @@ namespace Game.Core.Ring.Career
         {
             Feud.State.AudienceCap = Federation.Ceiling;
             Feud.State.AudienceHypeAt = Federation.PopularityHype;
+            Feud.State.LateRole = State.LateRole;
         }
 
-        /// <summary>Роль зараз — домінантний шлях (поворот герой ↔ лиходій — подія кар'єри).</summary>
+        /// <summary>Обрати пізню роль (§5.3) — на екрані кінця сезону, з першого: одна на раз, змінити можна в кінці кожного сезону.</summary>
+        public bool CanChooseLateRole { get { return Stage == CareerStage.SeasonEnd; } }
+
+        /// <summary>Пізня роль (або <see cref="LateRole.None"/> — без неї). false — не кінець сезону.</summary>
+        public bool ChooseLateRole(LateRole role)
+        {
+            if (!CanChooseLateRole) return false;
+            State.LateRole = role;
+            Feud.State.LateRole = role;
+            return true;
+        }
+
+        /// <summary>Зірка поза рингом: тренувань цього тижня вже стільки, скільки дозволено (§5.3 «менше часу на тренування»).</summary>
+        public bool StarTrainingUsed
+        {
+            get
+            {
+                if (State.LateRole != LateRole.OffRingStar) return false;
+                int n = 0;
+                foreach (var k in State.ActionsDone) if (k == (int)WeekActionKind.Training) n++;
+                return n >= LateRoles.StarTrainingsPerWeek;
+            }
+        }
+
+        /// <summary>Роль зараз — домінантний шлях (поворот герой ↔ лиходій — подія кар'єри ev_turn, §5.3; <see cref="Turn"/>).</summary>
         public RingPath CurrentRole { get { return Feud.State.DominantPath(); } }
+
+        /// <summary>
+        /// Найсильніша ворожнеча героя зараз — із суперниками, з яких букер складає картку (федерація й дивізіон героя; Молот — шкалою
+        /// ворожнечі, поки її не розв'язано). Умова повороту ролі (§5.3: «потрібна ворожнеча 3+»).
+        /// </summary>
+        public int MaxFeudLevel
+        {
+            get
+            {
+                int m = 0;
+                foreach (var n in BookingPool()) m = Math.Max(m, FeudLevel(n.Id));
+                return m;
+            }
+        }
+
+        /// <summary>
+        /// Поворот ролі (§5.3, ефект сцени <c>turn</c>): очки героя й лиходія міняються місцями — зал перечитує той самий образ навиворіт,
+        /// тож вага образу переходить у нову роль, а куплені перки лишаються. Після повороту нова роль домінує завжди (за рівних очок —
+        /// +1 новій). Лише з протилежної ролі: бунтар (без ролі) не повертається, повернутий удруге в ту саму роль — нічого. Ставить і
+        /// заявлену роль кар'єри. false — повороту не було.
+        /// </summary>
+        public bool Turn(RingPath to)
+        {
+            if (to == RingPath.Rebel) return false;
+            var from = to == RingPath.Face ? RingPath.Heel : RingPath.Face;
+            if (CurrentRole != from) return false;
+            int a = Feud.State.GetPath(from), b = Feud.State.GetPath(to);
+            Feud.State.AddPath(to, a - b);
+            Feud.State.AddPath(from, b - a);
+            while (CurrentRole != to) Feud.State.AddPath(to, 1);
+            State.Role = to == RingPath.Face ? CareerRole.Hero : CareerRole.Villain;
+            return true;
+        }
 
         /// <summary>Матч, що йде зараз: звичайний (окремий) або матч ворожнечі на великому шоу. null — матчу немає.</summary>
         public MatchEngine Engine { get { return State.Phase == ShowPhase.Feud ? Feud.CurrentMatch : _engine; } }
@@ -322,7 +380,7 @@ namespace Game.Core.Ring.Career
                 ActionsLeft = State.ActionsLeft, ActionsTotal = State.Strained ? CareerRules.StrainedActions : CareerRules.ActionsPerWeek,
                 Strained = State.Strained, PromoChoicePending = State.PromoChoicePending, Money = State.Money, Popularity = Popularity,
                 Trust = Trust, DevPoints = DevPoints, IsBigShowWeek = State.IsBigWeek(State.Week), Card = GetShowCard(),
-                CanRecover = HasSomethingToRecover(), BackstageOpen = _bs != null
+                CanRecover = HasSomethingToRecover(), BackstageOpen = _bs != null, StarTrainingUsed = StarTrainingUsed
             };
             foreach (var k in State.ActionsDone) v.ActionsDone.Add((WeekActionKind)k);
             v.Injuries = InjuryViews();
@@ -512,6 +570,7 @@ namespace Game.Core.Ring.Career
         public WeekActionResult Train(bool withTrainer)
         {
             var r = Begin(WeekActionKind.Training);
+            if (r.Ok && StarTrainingUsed) { r.Ok = false; r.Reason = "star_training"; }
             if (r.Ok && withTrainer && State.Money < CareerRules.TrainerCost) { r.Ok = false; r.Reason = "money"; }
             if (!r.Ok) return r;
             int pts = CareerRules.TrainingPoints;
@@ -557,6 +616,12 @@ namespace Game.Core.Ring.Career
             var r = Begin(WeekActionKind.Promo);
             if (!r.Ok) return r;
             Roll(r, RingAttr.Charisma, BodyZone.Head, "career:promo");
+            if (State.LateRole == LateRole.OffRingStar && r.Tier != RollTier.Miss)
+            {
+                // Зірка поза рингом: промо — ще й заробіток
+                int pay = r.Tier == RollTier.Strong ? LateRoles.StarPromoMoneyStrong : LateRoles.StarPromoMoneyPartial;
+                State.Money += pay; r.MoneyDelta += pay;
+            }
             switch (r.Tier)
             {
                 case RollTier.Strong:
@@ -742,7 +807,15 @@ namespace Game.Core.Ring.Career
                 if (sc.Once && BackstageSeenEver(sc.Id)) continue;
                 if (SceneHolds(sc)) return sc;
             }
-            foreach (var sc in all) if (sc.Kind == BackstageKind.Booker && SceneHolds(sc)) return sc;
+            // розмова з букером: спершу та, чиї умови виконано (свій букер федерації); запасна без умов — коли жодна не підходить
+            BackstageScene fallback = null;
+            foreach (var sc in all)
+            {
+                if (sc.Kind != BackstageKind.Booker || !SceneHolds(sc)) continue;
+                if (sc.Requires.Count > 0) return sc;
+                if (fallback == null) fallback = sc;
+            }
+            if (fallback != null) return fallback;
             throw new InvalidOperationException("Немає закулісної сцени для відкриття");
         }
 
@@ -798,6 +871,11 @@ namespace Game.Core.Ring.Career
                 case "injured": return State.IsInjured;
                 case "female": return State.Female;
                 case "manager": return State.Manager;
+                case "booker": return Federation.Booker == c.Target;
+                case "role":
+                    RingPath rp;
+                    return FeudVars.TryPath(c.Target, out rp) && CurrentRole == rp;
+                case "max_feud": return MaxFeudLevel >= c.Min;
                 case "champion": return IsChampion;
                 case "last_won": return State.LastOutcome == 1;
                 case "last_lost": return State.LastOutcome == 2;
@@ -891,6 +969,10 @@ namespace Game.Core.Ring.Career
                     break;
                 case "manager":
                     State.Manager = e.Amount > 0;
+                    break;
+                case "turn":
+                    RingPath to;
+                    if (FeudVars.TryPath(e.Target, out to) && Turn(to)) r.TurnedTo = to;
                     break;
             }
         }
@@ -1007,7 +1089,8 @@ namespace Game.Core.Ring.Career
             {
                 RingName = State.RingName, Costume = State.Costume, Gimmick = State.Gimmick, Role = CurrentRole, Money = State.Money,
                 Popularity = Popularity, Trust = Trust, DevPoints = DevPoints, IsChampion = IsChampion, Season = State.Season,
-                Week = State.Week, TitlesWon = State.TitlesWon, FiredCount = State.FiredCount, FeudResolved = State.FeudResolved
+                Week = State.Week, TitlesWon = State.TitlesWon, FiredCount = State.FiredCount, FeudResolved = State.FeudResolved,
+                LateRole = State.LateRole
             };
             for (int i = 0; i < 5; i++) v.Attr[i] = Player.Get((RingAttr)i);
             foreach (var id in State.Moves) v.Moves.Add(Content.Moves.Get(id));
@@ -1043,6 +1126,7 @@ namespace Game.Core.Ring.Career
             }
             var npc = Content.FindNpc(State.Opponent);
             var mods = Development.ToModifiers(Feud.State.Perks);
+            LateRoles.ApplyTo(mods, State.LateRole);
             var rivalMods = new MatchModifiers();
             int hype = 1 + FeudLevel(npc.Id) + mods.StartHypeBonus + State.NextHypeBonus + (State.CostumeBought ? CareerRules.CostumeHype : 0)
                        + (State.IsInjured ? CareerRules.InjuredShowHype : 0);
@@ -1632,11 +1716,18 @@ namespace Game.Core.Ring.Career
         /// <summary>Менеджер найнятий (§6.4): 15 % кожного гонорару; пастку бачить без кидка; аванс переходу +25 %.</summary>
         public bool HasManager { get { return State.Manager; } }
 
-        /// <summary>Звільнити менеджера — будь-коли, без штрафу (наймає сцена закулісся ev_manager).</summary>
+        /// <summary>Прапор кар'єри «менеджерку звільнено»: сцена ev_manager читає його й вітається інакше (знову найняти можна).</summary>
+        public const string ManagerFiredFlag = "manager_fired";
+
+        /// <summary>
+        /// Звільнити менеджера — будь-коли, без штрафу (наймає сцена закулісся ev_manager). Наступного сезону Марта приходить знову
+        /// і пам'ятає звільнення (гілка сцени за прапором <see cref="ManagerFiredFlag"/>); відмова в сцені закриває її назавжди.
+        /// </summary>
         public bool FireManager()
         {
             if (!State.Manager || Stage == CareerStage.Title || Stage == CareerStage.Create) return false;
             State.Manager = false;
+            Feud.State.Flags.Add(ManagerFiredFlag);
             return true;
         }
 

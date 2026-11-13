@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Game.Core.Randomness;
 using Game.Core.Ring;
 using Game.Core.Ring.Career;
@@ -29,6 +30,26 @@ namespace Game.Tests.EditMode
             s.State.Week = week; s.State.Season = season;
             if (allEventsSeen) foreach (var id in EventIds) s.State.BackstageSeen.Add(season + ":" + id);
             return s;
+        }
+
+        /// <summary>
+        /// Герой у федерації <paramref name="tier"/>: усі події цього сезону вже були, тож «Закулісся» відкриває розмову з букером
+        /// федерації. Популярність — підлога федерації (з неї менеджерка цікавиться, тому події позначені всі, а не лише EventIds).
+        /// </summary>
+        private static CareerSession HeroIn(CareerContent c, int tier, int week = 1, ulong seed = 1)
+        {
+            var s = Hero(c, seed, week, 1);
+            if (tier > 1) s.EnterFederation(tier, c.Federation(tier).Floor, 1);
+            foreach (var sc in c.Backstage.Scenes) if (sc.Kind == BackstageKind.Event) s.State.BackstageSeen.Add(s.State.Season + ":" + sc.Id);
+            return s;
+        }
+
+        /// <summary>Розмова з букером федерації <paramref name="tier"/>: та, що відкривається герою цієї федерації.</summary>
+        private static string TalkOf(CareerContent c, int tier)
+        {
+            var r = HeroIn(c, tier).Backstage();
+            Assert.AreEqual(BackstageKind.Booker, r.SceneKind, "федерація " + tier);
+            return r.SceneId;
         }
 
         /// <summary>Сесія, де першою відкриється подія id: попередні події цього сезону вже були, тиждень — останній (усе дозріло).</summary>
@@ -139,6 +160,34 @@ namespace Game.Tests.EditMode
                 Assert.IsTrue(own.ContainsKey("speaker." + sp), "немає імені мовця " + sp);
             }
             Assert.IsFalse(used.Contains(CareerContent.HammerId), "Молот — у ворожнечі, а не в закулісних сценах кар'єри");
+        }
+
+        [Test]
+        public void Loader_BookerCondition_NeedsAFederationsBooker_AndTheirTalkIsSpokenByThemAlone()
+        {
+            Func<string, CareerContent> load = extra => CareerContent.Load(CareerKit.Read("feud_hammer.json"), CareerKit.Read("career_moves.json"),
+                CareerKit.Read("career_gimmicks.json"), CareerKit.Read("career_roster.json"),
+                "{\"scenes\":[{\"id\":\"booker_talk\",\"kind\":\"booker\",\"start\":\"n1\",\"nodes\":["
+                + "{\"id\":\"n1\",\"type\":\"line\",\"speaker\":\"booker\",\"text\":\"k\",\"next\":\"end\"},{\"id\":\"end\",\"type\":\"end\"}]}," + extra + "]}");
+            Func<string, string, string> talk = (cond, speaker) => "{\"id\":\"b2\",\"kind\":\"booker\",\"start\":\"n1\",\"requires\":[" + cond + "],\"nodes\":["
+                + "{\"id\":\"n1\",\"type\":\"line\",\"speaker\":\"" + speaker + "\",\"text\":\"k\",\"next\":\"end\"},{\"id\":\"end\",\"type\":\"end\"}]}";
+            Assert.IsNotNull(load(talk("{\"career\":\"booker\",\"target\":\"booker2\"}", "booker2")).Backstage);
+            Assert.IsNotNull(load(talk("{\"career\":\"booker\",\"target\":\"booker2\"}", "narrator")).Backstage, "оповідач у розмові букера — можна");
+            Assert.Throws<FormatException>(() => load(talk("{\"career\":\"booker\"}", "booker2")), "booker без target");
+            Assert.Throws<FormatException>(() => FeudCondition.FromJson(MiniJson.ParseObject("{\"career\":\"booker\"}"), "t"), "і поза закуліссям — умова без target");
+            Assert.Throws<FormatException>(() => load(talk("{\"career\":\"booker\",\"target\":\"scout\"}", "scout")), "агент — не букер федерації");
+            Assert.Throws<FormatException>(() => load(talk("{\"career\":\"booker\",\"target\":\"booker2\"}", "booker")), "у розмові Агати говорить Ліна");
+            Assert.Throws<FormatException>(() => load(talk("{\"career\":\"booker\",\"target\":\"booker2\"}", "booker3")), "у розмові Агати говорить Девід");
+        }
+
+        [Test]
+        public void TheOwnBookersTalk_WinsOverTheFallback_WhateverTheFileOrder()
+        {
+            // запасна розмова (без умов) у файлі стоїть першою — і все одно бере гору своя розмова букера федерації
+            var c = Shared();
+            Assert.AreEqual(0, c.Backstage.Scenes.FindIndex(x => x.Kind == BackstageKind.Booker), "у файлі першою стоїть запасна");
+            Assert.AreEqual("booker_talk", c.Backstage.Scenes.First(x => x.Kind == BackstageKind.Booker).Id);
+            for (int tier = 2; tier <= c.Federations.Count; tier++) Assert.AreNotEqual("booker_talk", TalkOf(c, tier));
         }
 
         [Test]
@@ -277,30 +326,198 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void BookerTalk_EveryPath_ReachesTheEnd_AcrossAllFiveSubTalks()
+        public void BookerTalk_EveryPath_ReachesTheEnd_AcrossAllFiveSubTalks_InEveryFederation()
         {
             var c = Shared();
-            var visited = new HashSet<string>();
-            var variants = new List<Func<CareerSession>>
+            for (int tier = 1; tier <= c.Federations.Count; tier++)
             {
-                () => { var s = Hero(c, 1, 1, 1, true); s.Feud.State.Trust = 1; return s; },                                         // холодна
-                () => { var s = Hero(c, 1, 1, 1, true); s.Feud.State.Trust = 3; s.State.LastOutcome = 2; s.State.LastOpponent = "dzhura"; return s; },   // поразка
-                () => { var s = Hero(c, 1, 1, 1, true); s.Feud.State.Trust = 4; return s; },                                         // титульний натяк
-                () => { var s = Hero(c, 1, 2, 1, true); s.Feud.State.Trust = 3; s.State.Plan = BookerPlan.WinClean; return s; },      // план
-                () => { var s = Hero(c, 1, 1, 1, true); s.Feud.State.Trust = 2; s.State.LastOutcome = 1; return s; },                 // після перемоги
-                () => { var s = Hero(c, 1, 1, 1, true); s.Feud.State.Trust = 2; return s; }                                          // звичайна
-            };
-            foreach (var v in variants) Explore(v, "booker_talk", visited);
-            AssertAllNodesVisited(c, "booker_talk", visited);
+                int f = tier;
+                string talk = TalkOf(c, f);
+                string rival = c.Federation(f).Roster.First(n => !n.Female && n.Id != CareerContent.HammerId).Id;
+                var visited = new HashSet<string>();
+                var variants = new List<Func<CareerSession>>
+                {
+                    () => { var s = HeroIn(c, f); s.Feud.State.Trust = 1; return s; },                                              // холодна
+                    () => { var s = HeroIn(c, f); s.Feud.State.Trust = 3; s.State.LastOutcome = 2; s.State.LastOpponent = rival; return s; },   // поразка
+                    () => { var s = HeroIn(c, f); s.Feud.State.Trust = 4; return s; },                                              // титульний натяк
+                    () => { var s = HeroIn(c, f, 2); s.Feud.State.Trust = 3; s.State.Plan = BookerPlan.WinClean; return s; },       // план
+                    () => { var s = HeroIn(c, f); s.Feud.State.Trust = 2; s.State.LastOutcome = 1; return s; },                    // після перемоги
+                    () => { var s = HeroIn(c, f); s.Feud.State.Trust = 2; return s; }                                              // звичайна
+                };
+                foreach (var v in variants) Explore(v, talk, visited);
+                AssertAllNodesVisited(c, talk, visited);
+            }
         }
 
         [Test]
-        public void BookerTalk_PicksTheSubTalkByState()
+        public void EveryFederation_TalksWithItsOwnBooker_InTheirOwnVoice_LinasTalkStaysHome()
         {
             var c = Shared();
+            var talks = new HashSet<string>();
+            for (int tier = 1; tier <= c.Federations.Count; tier++)
+            {
+                var f = c.Federation(tier);
+                string talk = TalkOf(c, tier);
+                Assert.IsTrue(talks.Add(talk), "у кожної федерації своя розмова: " + talk);
+                var speakers = c.Backstage.Find(talk).Promo.Nodes.Where(n => n.Type == PromoNodeType.Line).Select(n => n.Speaker).Distinct().ToList();
+                CollectionAssert.AreEqual(new[] { f.Booker }, speakers, "федерація " + tier + ": говорить лише її букер");
+                if (tier > 1) Assert.AreNotEqual("booker_talk", talk, "федерація " + tier + " не говорить голосом Ліни");
+            }
+            Assert.AreEqual("booker_talk", TalkOf(c, 1), "запасна розмова без умов — Ліна, місцева федерація");
+            // перехід посеред кар'єри: розмова змінюється разом із федерацією, і після сейву теж
+            var s = HeroIn(c, 1);
+            s.EnterFederation(3, c.Federation(3).Floor, 2);
+            var t = CareerKit.Fresh(1, c);
+            t.RestoreState(s.CaptureState());
+            Assert.AreEqual(TalkOf(c, 3), t.Backstage().SceneId);
+        }
+
+        [Test]
+        public void BookerTalks_OfOtherFederations_KeepTheSameSubTalks_AndTheSameStakes()
+        {
+            var c = Shared();
+            var lina = c.Backstage.Find("booker_talk").Promo;
+            for (int tier = 2; tier <= c.Federations.Count; tier++)
+            {
+                var p = c.Backstage.Find(TalkOf(c, tier)).Promo;
+                Assert.AreEqual(lina.Start, p.Start);
+                Assert.AreEqual(lina.TitleKey, p.TitleKey, "заголовок той самий — «Розмова з букером»");
+                Assert.AreNotEqual(lina.PlaceKey, p.PlaceKey, "кабінет — свій");
+                CollectionAssert.AreEqual(lina.Nodes.Select(n => n.Id + ":" + n.Type), p.Nodes.Select(n => n.Id + ":" + n.Type), p.Id + ": ті самі вузли");
+                foreach (var n in lina.Nodes)
+                {
+                    var m = p.Find(n.Id);
+                    Assert.AreEqual(string.Join(";", n.Cases.Select(x => string.Join(",", x.Requires) + ">" + x.Next)), string.Join(";", m.Cases.Select(x => string.Join(",", x.Requires) + ">" + x.Next)), p.Id + "/" + n.Id + ": гілки");
+                    Assert.AreEqual(Stakes(n), Stakes(m), p.Id + "/" + n.Id + ": ставки ті самі — темп кар'єри не змінюється (вікна заміряно на розмові Ліни)");
+                }
+            }
+        }
+
+        private static string Fx(FeudEffect e) { return e.Kind + ":" + e.Key + ":" + e.Amount + ":" + e.Target + ":" + e.Value; }
+
+        private static string Stakes(PromoNode n)
+        {
+            var parts = new List<string> { n.Next ?? "", n.Attr + "/" + n.Mod + "/" + n.Pick10 + "/" + n.Pick7 };
+            foreach (var o in n.Options) parts.Add(o.Id + ">" + o.Next + "[" + string.Join(",", o.Requires) + "]{" + string.Join(",", o.Effects.Select(e => Fx(e))) + "}" + o.Path);
+            foreach (var r in n.Rewards) parts.Add(r.Id + "{" + string.Join(",", r.Effects.Select(e => Fx(e))) + "}");
+            parts.Add("fail{" + string.Join(",", n.Fail.Select(e => Fx(e))) + "}");
+            return string.Join(" | ", parts);
+        }
+
+        /// <summary>Як у текстах звуть букерів (відмінки) — щоб знайти чуже ім'я в сцені.</summary>
+        private static readonly Dictionary<string, Regex> BookerNames = new Dictionary<string, Regex>
+        {
+            { "booker", new Regex("\\b(?:Ліна|Ліни|Ліні|Ліну|Ліною)\\b|\\bВорон\\b") },
+            { "booker2", new Regex("\\bАгат|\\bНовак\\b") },
+            { "booker3", new Regex("\\bДевід|\\bОкоро\\b") },
+            { "booker4", new Regex("\\bХіроко\\b|\\bТанак") },
+        };
+
+        /// <summary>Сцени, що бувають лише у федерації Ліни, — з причиною.</summary>
+        private static readonly Dictionary<string, string> LinaOnlyScenes = new Dictionary<string, string>
+        {
+            { "ev_mixed", "перше шоу ворожнечі з Молотом — великий тиждень сезону 1, тобто завжди федерація Ліни" },
+        };
+
+        /// <summary>
+        /// Вузли, до яких ведуть лише випадки гілок з умовою «букер федерації = X» (і всі — з тим самим X): вузол → X. Старт, перехід
+        /// рядка, варіант вибору, кидок і запасна гілка (next) — перехід без букера.
+        /// </summary>
+        private static Dictionary<string, string> BookerGuards(PromoDef p)
+        {
+            var into = new Dictionary<string, List<string>>();
+            Action<string, string> edge = (to, guard) =>
+            {
+                if (to == null) return;
+                List<string> l;
+                if (!into.TryGetValue(to, out l)) into[to] = l = new List<string>();
+                l.Add(guard);
+            };
+            edge(p.Start, null);
+            foreach (var n in p.Nodes)
+            {
+                if (n.Type != PromoNodeType.Branch) { foreach (var t in n.Targets()) edge(t, null); continue; }
+                foreach (var cs in n.Cases)
+                    edge(cs.Next, cs.Requires.Where(cd => cd.Kind == ConditionKind.Career && cd.Key == "booker" && !cd.Negate)
+                        .Select(cd => cd.Target).FirstOrDefault());
+                edge(n.Next, null);
+            }
+            var guards = new Dictionary<string, string>();
+            foreach (var kv in into)
+                if (kv.Value[0] != null && kv.Value.All(x => x == kv.Value[0])) guards[kv.Key] = kv.Value[0];
+            return guards;
+        }
+
+        [Test]
+        public void BookerNames_OnlyInTheirOwnFederationsScenes_AndTrustRewardsOfTheFeudNameNoBooker()
+        {
+            // перевірка самого охоронця: гілка за букером федерації пускає до репліки лише свого букера
+            var turn = BookerGuards(Shared().Backstage.Find("ev_turn").Promo);
+            Assert.AreEqual("booker", turn["b1"]);
+            Assert.AreEqual("booker2", turn["b2"]);
+            Assert.IsFalse(turn.ContainsKey("b0"), "запасна гілка — без букера");
+            Assert.IsFalse(turn.ContainsKey("rb"), "спільний вузол після реплік — без букера");
+
+            var c = Shared();
+            var text = new Dictionary<string, string>();
+            foreach (var f in new[] { "strings_uk.json", "backstage_uk.json" })
+                foreach (var kv in MiniJson.ParseObject(CareerKit.Read(f))) text[kv.Key] = (string)kv.Value;
+            foreach (var b in BookerNames) Assert.IsTrue(b.Value.IsMatch(text["speaker." + b.Key]), "ім'я " + b.Key + " розпізнається: " + text["speaker." + b.Key]);
+            Assert.IsTrue(c.Federations.All(f => BookerNames.ContainsKey(f.Booker)), "кожен букер федерації — у переліку імен");
+
+            var bad = new List<string>();
+            Action<string, string, string> check = (where, key, allowed) =>
+            {
+                foreach (var k in new[] { key, key + HeroForms.FemaleSuffix, key + HeroForms.RivalSuffix })
+                {
+                    string v;
+                    if (k == null || !text.TryGetValue(k, out v)) continue;
+                    foreach (var b in BookerNames)
+                        if (b.Key != allowed && b.Value.IsMatch(v)) bad.Add(where + " " + k + ": " + b.Key + " — «" + v + "»");
+                }
+            };
+            foreach (var sc in c.Backstage.Scenes)
+            {
+                string allowed = null;
+                foreach (var cd in sc.Requires) if (cd.Kind == ConditionKind.Career && cd.Key == "booker" && !cd.Negate) allowed = cd.Target;
+                if (sc.Kind == BackstageKind.Booker && sc.Requires.Count == 0) allowed = "booker";   // запасна — розмова Ліни, лише місцева федерація
+                if (LinaOnlyScenes.ContainsKey(sc.Id)) allowed = "booker";
+                var p = sc.Promo;
+                check(sc.Id, p.TitleKey, allowed);
+                check(sc.Id, p.PlaceKey, allowed);
+                var guards = BookerGuards(p);
+                foreach (var n in p.Nodes)
+                {
+                    // вузол, до якого ведуть лише випадки гілки «букер федерації = X», буває тільки у федерації X
+                    string g, here = guards.TryGetValue(n.Id, out g) ? g : allowed;
+                    check(sc.Id + "/" + n.Id, n.TextKey, here);
+                    foreach (var o in n.Options) check(sc.Id + "/" + n.Id, o.TextKey, here);
+                    foreach (var r in n.Rewards) check(sc.Id + "/" + n.Id, r.TextKey, here);
+                    if (n.Type == PromoNodeType.Line && c.IsFederationBooker(n.Speaker) && n.Speaker != here)
+                        bad.Add(sc.Id + "/" + n.Id + ": говорить " + n.Speaker + ", а вузол буває не лише в федерації цього букера");
+                }
+            }
+            // промо ворожнечі йдуть у будь-якій федерації: нагорода довірою — довіра букера цієї федерації, без імені
+            foreach (var p in c.Feud.Promos)
+                foreach (var n in p.Nodes)
+                    foreach (var r in n.Rewards)
+                        if (r.Effects.Any(e => e.Kind == EffectKind.Var && e.Key == FeudVars.Trust)) check("ворожнеча " + p.Id + "/" + n.Id, r.TextKey, null);
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        [Test]
+        public void BookerTalk_PicksTheSubTalkByState_InEveryFederation()
+        {
+            var c = Shared();
+            for (int tier = 1; tier <= c.Federations.Count; tier++) PicksTheSubTalkByState(c, tier);
+        }
+
+        private static void PicksTheSubTalkByState(CareerContent c, int tier)
+        {
+            string talk = TalkOf(c, tier);
             Func<CareerSession, string> second = s =>
             {
-                s.Backstage();
+                Assert.AreEqual(talk, s.Backstage().SceneId);
                 var r = s.CurrentBackstage;
                 Assert.AreEqual("n1", r.Current.Id);
                 r.Advance();
@@ -308,7 +525,7 @@ namespace Game.Tests.EditMode
             };
             Func<int, int, Action<CareerSession>, string> at = (trust, week, setup) =>
             {
-                var s = Hero(c, 1, week, 1, true);
+                var s = HeroIn(c, tier, week);
                 s.Feud.State.Trust = trust;
                 if (setup != null) setup(s);
                 return second(s);

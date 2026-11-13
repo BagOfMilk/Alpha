@@ -64,7 +64,7 @@ namespace Game.Tests.EditMode
             RegexOptions.IgnoreCase);
 
         /// <summary>Тексти про суперника тижня (картка, підсумок дії, чутки, розмова з букером): чоловічий рід — «.rf» з білого переліку чи нейтральний текст.</summary>
-        private static readonly string[] RivalPrefixes = { "c.card.", "c.delta.", "rumor.", "bs.booker_talk." };
+        private static readonly string[] RivalPrefixes = { "c.card.", "c.delta.", "rumor.", "bs.booker" };   // bs.booker — розмови всіх букерів
 
         /// <summary>
         /// Білий перелік «.rf» (ПМ 12.11.2026): лише картка тижня й рядок підсумку дії про того самого суперника — на екрані один
