@@ -497,11 +497,36 @@ namespace Game.Tests.EditMode
             };
             Assert.AreEqual(T.Format("c.injury.weeks", T.Get("bodyzone." + (int)BodyZone.Legs), 2) + " · "
                 + T.Format("c.injury.dmg", T.Get("bodyzone." + (int)BodyZone.Body), 1, 4), CareerScreenLines.InjuryText(T, mixed), "ціла зона — без рядка");
+
+            // смужка зони на стрічці героя (ShowKit.PlayerStrip; рев'ю 13.11.2026): сегментів — поріг, підпис — «ушкодження/поріг»
+            var pm = CareerScreenLines.ZoneMeterFor(plain.GetWeekView().Card.Injuries, BodyZone.Head);
+            var hm = CareerScreenLines.ZoneMeterFor(hard.GetWeekView().Card.Injuries, BodyZone.Head);
+            Assert.AreEqual(CareerRules.InjuryAtZoneDamage, pm.Segments);
+            Assert.AreEqual(hard.InjuryAtZoneDamage, hm.Segments, "Хардкорник — чотири сегменти");
+            Assert.AreEqual(2, pm.Filled);
+            Assert.AreEqual(2, hm.Filled);
+            Assert.AreEqual("2/3", CareerScreenLines.ZoneMeterText(T, pm));
+            Assert.AreEqual("2/4", CareerScreenLines.ZoneMeterText(T, hm));
+            hard.State.ZoneDamage[(int)BodyZone.Head] = 3;
+            hm = CareerScreenLines.ZoneMeterFor(hard.GetWeekView().Card.Injuries, BodyZone.Head);
+            Assert.AreEqual("3/4", CareerScreenLines.ZoneMeterText(T, hm), "три ушкодження Хардкорника — ще не травма й не повна смужка");
+            Assert.Less(hm.Filled, hm.Segments);
+            var legs = CareerScreenLines.ZoneMeterFor(mixed, BodyZone.Legs);
+            Assert.AreEqual(legs.Segments, legs.Filled, "травма — смужка повна");
+            Assert.AreEqual(T.Format("c.hub.weeks", 2), CareerScreenLines.ZoneMeterText(T, legs));
+            var body = CareerScreenLines.ZoneMeterFor(mixed, BodyZone.Body);
+            Assert.AreEqual(4, body.Segments);
+            Assert.AreEqual("1/4", CareerScreenLines.ZoneMeterText(T, body));
+            var none = CareerScreenLines.ZoneMeterFor(new List<InjuryView>(), BodyZone.Head);
+            Assert.AreEqual(CareerRules.InjuryAtZoneDamage, none.Segments);
+            Assert.AreEqual("0/3", CareerScreenLines.ZoneMeterText(T, none), "зони немає у виді — порожня смужка");
         }
 
         /// <summary>
         /// Ціни старіння й поріг травми в екранах — з сесії й виду (ПМ 12.11.2026, п. А1–А2): у коді екранів кар'єри (не в коментарях)
         /// немає сталих <c>Development.AttrCost</c> і <c>CareerRules.CoachProgressStep</c>, рядок тіла збирає лише <see cref="CareerScreenLines"/>.
+        /// Рев'ю 13.11.2026: скан не бачив смужки зони з порогом 3 у ShowScreens — тепер ловить і сталий поріг травми
+        /// (<c>CareerRules.InjuryAtZoneDamage</c>, <c>"/3"</c>, <c>Segments(3,</c>, <c>Math.Min(3,</c>) в екранах, а ціни — і в моделях.
         /// </summary>
         [Test]
         public void Sources_AgeingPricesAndInjuryThreshold_ComeFromTheSession()
@@ -509,22 +534,31 @@ namespace Game.Tests.EditMode
             string ui = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI");
             var files = new List<string>(Directory.GetFiles(Path.Combine(ui, "Career"), "*.cs")) { Path.Combine(ui, "CareerScreens.cs") };
             var bad = new List<string>();
-            var stale = new Regex(@"Development\.AttrCost\b|CareerRules\.CoachProgressStep\b|""c\.injury\.dmg""");
-            foreach (var f in files)
-                foreach (var line in File.ReadAllText(f).Split('\n'))
-                {
-                    string code = line.Trim();
-                    if (code.StartsWith("//")) continue;
-                    int cut = code.IndexOf("//", System.StringComparison.Ordinal);
-                    if (cut >= 0) code = code.Substring(0, cut);
-                    if (stale.IsMatch(code)) bad.Add(Path.GetFileName(f) + ": " + code);
-                }
+            var stale = new Regex(@"Development\.AttrCost\b|CareerRules\.CoachProgressStep\b|CareerRules\.InjuryAtZoneDamage\b|""c\.injury\.dmg""|""/3""|Segments\(\s*3\s*,|Math\.Min\(\s*3\s*,");
+            // моделі збирають рядки й самі беруть сталий поріг за замовчуванням і ключ рядка тіла; ціну й крок — лише з сесії
+            var staleModels = new Regex(@"Development\.AttrCost\b|CareerRules\.CoachProgressStep\b");
+            var models = Directory.GetFiles(Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "Models"), "*.cs");
+            Assert.Greater(models.Length, 0);
+            foreach (var pair in new[] { new KeyValuePair<Regex, IEnumerable<string>>(stale, files), new KeyValuePair<Regex, IEnumerable<string>>(staleModels, models) })
+                foreach (var f in pair.Value)
+                    foreach (var line in File.ReadAllText(f).Split('\n'))
+                    {
+                        string code = line.Trim();
+                        if (code.StartsWith("//")) continue;
+                        int cut = code.IndexOf("//", System.StringComparison.Ordinal);
+                        if (cut >= 0) code = code.Substring(0, cut);
+                        if (pair.Key.IsMatch(code)) bad.Add(Path.GetFileName(f) + ": " + code);
+                    }
             string week = File.ReadAllText(Path.Combine(ui, "Career", "WeekScreenView.cs"));
             string career = File.ReadAllText(Path.Combine(ui, "CareerScreens.cs"));
             if (!week.Contains("CareerScreenLines.CoachButton(T, C, k)") || !week.Contains("CareerScreenLines.CoachHint(T, C, k)"))
                 bad.Add("WeekScreenView: тренер не з CoachButton / CoachHint");
             if (!career.Contains("CareerScreenLines.AttrBuyHint(T, C, a, can ? null : reason)")) bad.Add("CareerScreens: підказка атрибута не з AttrBuyHint");
             if (!career.Contains("return CareerScreenLines.InjuryText(T, injuries);")) bad.Add("CareerScreens: рядок тіла не з InjuryText");
+            string show = File.ReadAllText(Path.Combine(ui, "Career", "ShowScreens.cs"));
+            if (!show.Contains("CareerScreenLines.ZoneMeterFor(v.Injuries, (BodyZone)z)") || !show.Contains("ArenaKit.Segments(meter.Segments, filled,")
+                || !show.Contains("CareerScreenLines.ZoneMeterText(t, meter)"))
+                bad.Add("ShowScreens: смужка зони героя не з ZoneMeterFor / ZoneMeterText");
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
 

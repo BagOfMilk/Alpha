@@ -216,6 +216,39 @@ namespace Game.Gameplay.Ring.Models
             return parts.Count == 0 ? t.Get("c.injury.none") : string.Join(" · ", parts);
         }
 
+        /// <summary>Смужка зони тіла на стрічці героя: сегментів — поріг травми зони, заповнено — ушкодження (травма — уся), тижні травми.</summary>
+        public struct ZoneMeter
+        {
+            public int Segments;
+            public int Filled;
+            public int WeeksLeft;
+        }
+
+        /// <summary>
+        /// Смужка зони <paramref name="zone"/>: сегментів стільки, скільки поріг травми (<see cref="InjuryView.Threshold"/>: 3, у
+        /// Хардкорника 4 — стала 3 показувала б «3/3» і повну смужку там, де ядро травмує лише на четвертому ушкодженні; рев'ю 13.11.2026),
+        /// заповнено — ушкодження, травмована зона — повністю. Зони немає у виді — порожня смужка зі звичайним порогом.
+        /// </summary>
+        public static ZoneMeter ZoneMeterFor(List<InjuryView> injuries, BodyZone zone)
+        {
+            var m = new ZoneMeter { Segments = CareerRules.InjuryAtZoneDamage };
+            if (injuries == null) return m;
+            foreach (var i in injuries)
+            {
+                if (i.Zone != zone) continue;
+                m.Segments = Math.Max(1, i.Threshold);
+                m.WeeksLeft = i.WeeksLeft;
+                m.Filled = i.WeeksLeft > 0 ? m.Segments : Math.Max(0, Math.Min(m.Segments, i.ZoneDamage));
+            }
+            return m;
+        }
+
+        /// <summary>Підпис смужки зони: травма — «N тиж.», інакше «ушкодження/поріг» («2/4» у Хардкорника).</summary>
+        public static string ZoneMeterText(RingText t, ZoneMeter m)
+        {
+            return m.WeeksLeft > 0 ? t.Format("c.hub.weeks", m.WeeksLeft) : m.Filled + "/" + m.Segments;
+        }
+
         /// <summary>Рядок «Витрат»: життя й дорога цієї федерації за тиждень (<see cref="CareerSession.WeeklyCost"/>, наприкінці тижня).</summary>
         public static string LivingLine(RingText t, CareerSession c) { return t.Format("c.shop.living", c.WeeklyCost); }
 

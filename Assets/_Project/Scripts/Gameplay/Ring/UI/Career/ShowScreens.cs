@@ -40,16 +40,16 @@ namespace Game.Gameplay.Ring.UI
             var doll = new InjuryDoll();
             for (int z = 0; z < 3; z++)
             {
-                int dmg = 0, weeks = 0;
-                foreach (var i in v.Injuries) if ((int)i.Zone == z) { dmg = i.ZoneDamage; weeks = i.WeeksLeft; }
-                int filled = weeks > 0 ? 3 : Math.Min(3, dmg);
+                // сегментів — поріг травми зони з виду (у Хардкорника 4), а не стала 3 (рев'ю 13.11.2026 — той самий клас, що А2)
+                var meter = CareerScreenLines.ZoneMeterFor(v.Injuries, (BodyZone)z);
+                int filled = meter.Filled;
                 var r = ArenaKit.Row();
                 r.style.height = 17f;
                 var l = ArenaKit.Tag(t.Get("bodyzone." + z), RingTheme.TextDim);
                 l.style.width = 92f;
                 r.Add(l);
-                r.Add(ArenaKit.Segments(3, filled, RingTheme.Signal, 66f, 11f));
-                var val = MenuKit.Display(weeks > 0 ? t.Format("c.hub.weeks", weeks) : filled + "/3", BrandTokens.TypeLabel, filled > 0 ? RingTheme.Text : RingTheme.TextDim, RingFontRole.Display900, 0.02f);
+                r.Add(ArenaKit.Segments(meter.Segments, filled, RingTheme.Signal, 66f, 11f));
+                var val = MenuKit.Display(CareerScreenLines.ZoneMeterText(t, meter), BrandTokens.TypeLabel, filled > 0 ? RingTheme.Text : RingTheme.TextDim, RingFontRole.Display900, 0.02f);
                 val.style.marginLeft = 10f;
                 r.Add(val);
                 zones.Add(r);
