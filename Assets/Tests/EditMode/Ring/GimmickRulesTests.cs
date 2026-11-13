@@ -4,6 +4,7 @@ using System.Linq;
 using Game.Core.Ring;
 using Game.Core.Ring.Career;
 using Game.Core.Ring.Match;
+using Game.Gameplay.Ring.Models;
 using NUnit.Framework;
 
 namespace Game.Tests.EditMode
@@ -150,6 +151,31 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(names.Contains(t("perk.veteran")), "«Ветеран» — уже перк");
             Assert.IsFalse(names.Contains(t("c.create.default_name")), "типове рингове ім'я — не назва ґіміка");
             Assert.IsFalse(names.Contains(t("w.player.name")));
+        }
+
+        /// <summary>
+        /// Назва ґіміка за статтю борця (рев'ю ПМ 13.11.2026: героїня бачила себе «Силачем»). Назву показують і героєві, і суперникові
+        /// на одному екрані, тож це «.fem», як у шляхів (path.&lt;шлях&gt;.fem, рід — за статтю борця), а не «.f»: «.f» HeroForms
+        /// підставляє глобально, і суперник героїні теж став би «Силачкою». Монстр і Самородок — спільного роду.
+        /// </summary>
+        [Test]
+        public void EveryGimmickName_HasAFemForm_NotAGlobalHeroForm_AndTheFemNamesDoNotClash()
+        {
+            var ui = MiniJson.ParseObject(CareerKit.Read("ui_uk.json"));
+            var strings = MiniJson.ParseObject(CareerKit.Read("strings_uk.json"));
+            Func<string, string> t = k => { object o; Assert.IsTrue(ui.TryGetValue(k, out o) || strings.TryGetValue(k, out o), "немає ключа " + k); return (string)o; };
+            var fem = new HashSet<string>();
+            foreach (var g in CareerKit.Content().Gimmicks)
+            {
+                string key = "gimmick." + g.Key;
+                Assert.IsTrue(fem.Add(t(key + ".fem")), "жіноча назва повторюється: " + g.Key);
+                Assert.IsFalse(ui.ContainsKey(key + HeroForms.FemaleSuffix) || strings.ContainsKey(key + HeroForms.FemaleSuffix),
+                    key + ": «.f» підмінив би назву й суперникові — лише «.fem»");
+                Assert.IsFalse(ui.ContainsKey(key + ".desc" + HeroForms.FemaleSuffix), key + ".desc — безособовий, без «.f»");
+            }
+            CollectionAssert.AreEquivalent(new[] { "Монстр", "Летунка", "Технікиня", "Шоувумен", "Бувала", "Хардкорниця", "Самородок", "Силачка" }, fem);
+            foreach (var k in new[] { "perk.veteran", "perk.crowd_favorite.f", "perk.hero_of_crowd.f", "c.create.default_name", "w.player.name" })
+                Assert.IsFalse(fem.Contains(t(k)), k);
         }
 
         [Test]
