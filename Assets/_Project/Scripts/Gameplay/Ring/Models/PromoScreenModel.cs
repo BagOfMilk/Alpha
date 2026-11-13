@@ -104,17 +104,17 @@ namespace Game.Gameplay.Ring.Models
             {
                 var n = _runner.Current;
                 if (n.Type != PromoNodeType.Line || string.IsNullOrEmpty(n.Speaker)) return "";
-                return _t.Get("speaker." + n.Speaker);
+                return _t.Get("speaker." + _runner.SpeakerOf(n));
             }
         }
 
-        /// <summary>Id мовця вузла-репліки (player, rival, booker...); порожньо, якщо вузол не репліка.</summary>
+        /// <summary>Id мовця вузла-репліки (player, rival, booker...; «booker» — голос букера федерації); порожньо, якщо вузол не репліка.</summary>
         public string SpeakerId
         {
             get
             {
                 var n = _runner.Current;
-                return n.Type == PromoNodeType.Line && !string.IsNullOrEmpty(n.Speaker) ? n.Speaker : "";
+                return n.Type == PromoNodeType.Line && !string.IsNullOrEmpty(n.Speaker) ? _runner.SpeakerOf(n) : "";
             }
         }
 

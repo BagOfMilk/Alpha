@@ -603,6 +603,39 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void FireManager_NotWhileABackstageSceneIsOpen_TheFiredFlagWouldBeLost()
+        {
+            // рев'ю ПМ 12.11.2026: сцена працює з копією стану ворожнечі й після кінця переписує прапори — звільнення посеред сцени губилось
+            var s = PlayManagerScene(26, "hire");
+            Assert.IsTrue(s.HasManager);
+            s.State.ActionsLeft = 3;
+            Assert.IsTrue(s.Backstage().Ok);
+            Assert.IsTrue(s.BackstageOpen);
+            Assert.IsFalse(s.FireManager(), "посеред сцени — ні");
+            Assert.IsTrue(s.HasManager);
+            CareerKit.PlayScene(s, 0);
+            Assert.IsTrue(s.FireManager(), "після сцени — так");
+            Assert.IsTrue(s.Feud.State.HasFlag(CareerSession.ManagerFiredFlag));
+            ToNextSeasonBeforeManagerScene(s);
+            Assert.AreEqual("ev_manager", s.Backstage().SceneId);
+            Assert.AreEqual("n1f", s.CurrentBackstage.Current.Id, "пам'ятає звільнення");
+        }
+
+        [Test]
+        public void FiredBeforeHerSceneOfTheSeason_SheComesBackNextSeason_NotAWeekLater()
+        {
+            var s = PlayManagerScene(27, "hire");
+            ToNextSeasonBeforeManagerScene(s);
+            Assert.IsFalse(s.BackstageSeenThisSeason("ev_manager"), "цього сезону її події ще не було");
+            Assert.IsTrue(s.FireManager());
+            Assert.AreNotEqual("ev_manager", s.Backstage().SceneId, "звільнена — того самого сезону не повертається");
+            CareerKit.PlayScene(s, 0);
+            ToNextSeasonBeforeManagerScene(s);
+            Assert.AreEqual("ev_manager", s.Backstage().SceneId, "наступного — так");
+            Assert.AreEqual("n1f", s.CurrentBackstage.Current.Id);
+        }
+
+        [Test]
         public void ChampionFarewell_FiringTheManagerAfterSigning_KeepsTheSignedAdvance()
         {
             var s = AtSeasonEnd(6, 1, 3, CareerRules.OfferTrust - CareerRules.OfferChampionTrustBonus, champion: true);
