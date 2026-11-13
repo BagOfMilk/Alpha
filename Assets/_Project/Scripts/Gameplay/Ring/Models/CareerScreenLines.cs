@@ -193,12 +193,36 @@ namespace Game.Gameplay.Ring.Models
         /// <summary>
         /// Підказка кнопки атрибута в повному списку розвитку: ціна — та, що спише покупка (<see cref="CareerSession.AttrCost"/>:
         /// витривалість з сезону 4 дорожча, §5.5), навіщо атрибут і, якщо купити не можна, чому (<paramref name="reason"/> — код
-        /// <c>dev.reason.*</c>, null — можна).
+        /// <c>dev.reason.*</c>, null — можна). Атрибут на максимумі (<see cref="AttrAtMax"/>, ПМ 13.11.2026, п. 6) — без ціни: купувати
+        /// нічого, тож «+1 (2 оч.)» поруч із «Досягнуто максимуму» лише плутало; причина — максимум, хоч би який код дав виклик (на
+        /// етапі без розвитку <see cref="CareerSession.CanBuyAttr"/> каже «stage» раніше за «max»).
         /// </summary>
         public static string AttrBuyHint(RingText t, CareerSession c, RingAttr a, string reason)
         {
-            return WithReason(t.Format("dev.attr.buy", c.AttrCost(a)) + " — " + t.Get("c.dev.attr.why." + (int)a),
+            string why = t.Get("c.dev.attr.why." + (int)a);
+            if (AttrAtMax(c, a)) return WithReason(why, t.Get("dev.reason.max"));
+            return WithReason(t.Format("dev.attr.buy", c.AttrCost(a)) + " — " + why,
                 string.IsNullOrEmpty(reason) ? null : t.Get("dev.reason." + reason));
+        }
+
+        /// <summary>Атрибут уже на стелі (<see cref="WrestlerStats.MaxAttr"/>): +1 не буде — плитка й підказка без «→ +4» і без ціни.</summary>
+        public static bool AttrAtMax(CareerSession c, RingAttr a) { return c.Player.Get(a) >= WrestlerStats.MaxAttr; }
+
+        /// <summary>
+        /// Напис плитки атрибута в повному списку розвитку: «Сила +2 → +3» — «було → стане»; на максимумі — «Сила +3 · макс.»
+        /// (ПМ 13.11.2026, п. 6: тьмяна «+3 → +4» обіцяла рівень, якого немає). Той самий знак, що й в інших рядках розвитку
+        /// (<see cref="RingChances.Signed"/>).
+        /// </summary>
+        public static string AttrButton(RingText t, CareerSession c, RingAttr a) { return AttrTile(t, RingLabels.AttrName(t, a), c.Player.Get(a)); }
+
+        /// <summary>
+        /// Той самий напис за назвою й значенням — для екранів зі своєю моделлю рядка (кінцівка ворожнечі, <c>AttrRow</c>; рев'ю
+        /// 13.11.2026: там теж стояло «+3 → +4»).
+        /// </summary>
+        public static string AttrTile(RingText t, string name, int value)
+        {
+            string head = name + " " + RingChances.Signed(value);
+            return value >= WrestlerStats.MaxAttr ? head + " · " + t.Get("c.dev.attr.max") : head + " → " + RingChances.Signed(value + 1);
         }
 
         /// <summary>

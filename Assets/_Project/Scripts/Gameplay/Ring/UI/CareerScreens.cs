@@ -142,15 +142,88 @@ namespace Game.Gameplay.Ring.UI
             var mark = DevAllStart;
             DevAllStart = null;
             if (mark == null || scroll == null) return;
-            // один раз, після першої розкладки мітки; зсув — наступним кадром, коли ScrollView уже оновила межі прокрутки. Позиція — у
-            // координатах вмісту (від поточного зсуву не залежить)
-            EventCallback<GeometryChangedEvent> once = null;
-            once = e =>
+            RowSnap(scroll, () => MarkTop(mark, scroll), true);   // на межу рядка: над «АТРИБУТИ» — без зрізу поради (п. 2)
+        }
+
+        /// <summary>Верх мітки в координатах вмісту прокрутки (від поточного зсуву не залежить).</summary>
+        protected static float MarkTop(VisualElement mark, ScrollView scroll) { return mark.ChangeCoordinatesTo(scroll.contentContainer, Vector2.zero).y; }
+
+        /// <summary>
+        /// Класи для прокрутки на межу рядка (<see cref="RowSnap"/>): заголовок розділу (над нижнім краєм без свого рядка не лишається)
+        /// і неподільна група (порада — назва з поясненням під нею).
+        /// </summary>
+        internal const string RowHeadClass = "ring-row-head", RowUnitClass = "ring-row-unit";
+
+        /// <summary>
+        /// Прокрутка на межу рядка (ПМ 13.11.2026, п. 2 і 5; кадри слоту 32): після розкладки — зсув <paramref name="want"/> (початок
+        /// повного списку, зсув до перебудови, 0), вирівняний на початок рядка, а нижній край вікна — на кінець останнього цілого
+        /// рядка: нижній відступ прокрутки росте на запас (<see cref="CareerTileLayout.SnapRows"/>; вікно коротшає, зовнішня висота
+        /// та сама). На с4 (1080) щойно розгорнутий «Усе» стояв на межі прокрутки, і під «РОЗВИТОК» висів зріз «Залізна щелепа · 2»;
+        /// на 4:3 нижній край різав «ПЕРКИ» під перемикачем. Прив'язка до <paramref name="want"/> тримається на кожній новій розкладці
+        /// (шухляду ще звужує <c>Fit</c>, підказка в шапці стає довшою), доки гравець не прокрутить сам (коліщатко, смуга, фокус без
+        /// миші — зсув уже не той, що поставлено тут); далі — лише чистий нижній край від його зсуву: прокручене рукою не стрибає.
+        /// <paramref name="mark"/> — бажаний зсув є початком щойно розгорнутого списку (може лежати нижче межі прокрутки), інакше —
+        /// зсув до перебудови (не далі межі).
+        /// </summary>
+        protected static void RowSnap(ScrollView scroll, Func<float> want, bool mark)
+        {
+            if (scroll == null) return;
+            float basePad = float.NaN;   // відступ, який дав екран (стиль першої розкладки, з USS чи з коду); запас — поверх нього
+            float extra = 0f, target = 0f, lastSet = float.NaN;
+            bool anchored = true, pending = false;
+            EventCallback<GeometryChangedEvent> relayout = e =>
             {
-                mark.UnregisterCallback(once);
-                scroll.schedule.Execute(() => scroll.scrollOffset = new Vector2(0f, mark.ChangeCoordinatesTo(scroll.contentContainer, Vector2.zero).y));
+                if (float.IsNaN(basePad)) basePad = scroll.resolvedStyle.paddingBottom;
+                // запас, з яким зроблена саме ця розкладка (стиль, щойно змінений тут, ще не розкладено)
+                float applied = scroll.resolvedStyle.paddingBottom - basePad;
+                float view = scroll.contentViewport.layout.height + applied, contentH = scroll.contentContainer.layout.height;
+                if (float.IsNaN(view) || float.IsNaN(contentH) || float.IsNaN(applied) || view <= 0f) return;
+                // гравець прокрутив сам — прив'язку знято
+                if (anchored && !pending && !float.IsNaN(lastSet) && Mathf.Abs(scroll.scrollOffset.y - lastSet) > CareerTileLayout.RowEps) anchored = false;
+                var mode = !anchored ? RowSnapMode.Keep : mark ? RowSnapMode.Mark : RowSnapMode.Restore;
+                float add, t = CareerTileLayout.SnapRows(RowsOf(scroll.contentContainer), contentH, view, anchored ? want() : scroll.scrollOffset.y, mode, out add);
+                if (Mathf.Abs(add - extra) > CareerTileLayout.RowEps) { extra = add; scroll.style.paddingBottom = basePad + extra; }
+                if (!anchored || Mathf.Abs(applied - extra) > CareerTileLayout.RowEps) return;   // зсув — коли межі прокрутки вже з новим запасом
+                target = t;
+                if (pending) return;
+                if (Mathf.Abs(scroll.scrollOffset.y - t) <= CareerTileLayout.RowEps) { lastSet = scroll.scrollOffset.y; return; }
+                pending = true;
+                scroll.schedule.Execute(() =>
+                {
+                    pending = false;
+                    scroll.scrollOffset = new Vector2(scroll.scrollOffset.x, target);
+                    lastSet = scroll.scrollOffset.y;
+                });
             };
-            mark.RegisterCallback(once);
+            scroll.RegisterCallback(relayout);
+            scroll.contentViewport.RegisterCallback(relayout);
+            scroll.contentContainer.RegisterCallback(relayout);
+        }
+
+        /// <summary>Рядки вмісту прокрутки: кнопки й рядки тексту (і неподільні групи) у координатах вмісту, злиті за висотою.</summary>
+        private static List<ScrollRow> RowsOf(VisualElement content)
+        {
+            var atoms = new List<ScrollRow>();
+            CollectRows(content, content, atoms);
+            return CareerTileLayout.MergeRows(atoms);
+        }
+
+        private static void CollectRows(VisualElement e, VisualElement content, List<ScrollRow> atoms)
+        {
+            int n = e.childCount;
+            for (int i = 0; i < n; i++)
+            {
+                var c = e[i];
+                if (c.resolvedStyle.display == DisplayStyle.None || c.resolvedStyle.position == Position.Absolute) continue;   // фон, рамки — не рядки
+                if (c is TextElement || c.ClassListContains(RowUnitClass))
+                {
+                    float h = c.layout.height;
+                    if (float.IsNaN(h) || h <= CareerTileLayout.RowEps) continue;
+                    float top = c.ChangeCoordinatesTo(content, Vector2.zero).y;
+                    atoms.Add(new ScrollRow(top, top + h, c.ClassListContains(RowHeadClass)));
+                }
+                else CollectRows(c, content, atoms);
+            }
         }
 
         private ScrollView _devKeptScroll;
@@ -180,15 +253,7 @@ namespace Game.Gameplay.Ring.UI
             var restore = same ? _devKeptOffset : Vector2.zero;
             _devKeptOffset = Vector2.zero;
             if (DevAllStart != null) { ScrollToDevAll(scroll); return; }
-            if (scroll == null || (restore.x == 0f && restore.y == 0f)) return;
-            // наступним кадром після першої розкладки: межі прокрутки ScrollView оновлює у своїй розкладці
-            EventCallback<GeometryChangedEvent> once = null;
-            once = e =>
-            {
-                scroll.UnregisterCallback(once);
-                scroll.schedule.Execute(() => scroll.scrollOffset = restore);
-            };
-            scroll.RegisterCallback(once);
+            RowSnap(scroll, () => restore.y, false);   // і з верху: нижній край — на межі рядка (п. 2)
         }
 
         /// <summary>Компактна однорядкова кнопка; <paramref name="hint"/> — у рядок-підказку при наведенні.</summary>
@@ -214,7 +279,13 @@ namespace Game.Gameplay.Ring.UI
             e.style.paddingTop = v; e.style.paddingBottom = v; e.style.paddingLeft = h; e.style.paddingRight = h;
         }
 
-        protected static Label Section(string text) { return RingUi.Section(text); }
+        /// <summary>Заголовок розділу; у прокрутці на межу рядка — заголовок (<see cref="RowHeadClass"/>): без свого рядка над краєм не лишається.</summary>
+        protected static Label Section(string text)
+        {
+            var l = RingUi.Section(text);
+            l.AddToClassList(RowHeadClass);
+            return l;
+        }
 
         protected string PlanText(BookerPlan p) { return RingLabels.PlanName(T, p); }
 
@@ -284,7 +355,9 @@ namespace Game.Gameplay.Ring.UI
             }
             if (recs.Count > 0)
             {
-                card.Add(RingUi.Lbl(T.Get("c.dev.recommended"), 12f, RingUi.Dim));
+                var recHead = RingUi.Lbl(T.Get("c.dev.recommended"), 12f, RingUi.Dim);
+                recHead.AddToClassList(RowHeadClass);
+                card.Add(recHead);
                 foreach (var r in recs) card.Add(r);
             }
             else card.Add(RingUi.Lbl(T.Get("c.dev.none"), 12f, RingUi.Dim));
@@ -305,8 +378,7 @@ namespace Game.Gameplay.Ring.UI
                 var a = (RingAttr)i;
                 string reason;
                 bool can = C.CanBuyAttr(a, out reason);
-                int v = C.Player.Get(a);
-                var b = Small(RingLabels.AttrName(T, a) + " " + Signed(v) + " → " + Signed(v + 1), () => { C.BuyAttr(a); changed(); }, can, null,
+                var b = Small(CareerScreenLines.AttrButton(T, C, a), () => { C.BuyAttr(a); changed(); }, can, null,   // на максимумі — «· макс.» (п. 6)
                     CareerScreenLines.AttrBuyHint(T, C, a, can ? null : reason));   // ціна — та, що спише покупка (з сезону 4 витривалість дорожча)
                 RingUi.PadKey(b, "dev:attr:" + i);
                 b.style.marginRight = 4f;
@@ -362,6 +434,7 @@ namespace Game.Gameplay.Ring.UI
         {
             var box = RingUi.Column();
             box.style.marginBottom = 4f;
+            box.AddToClassList(RowUnitClass);   // назва й пояснення — один рядок прокрутки: край не відрізає пояснення від назви
             var b = RingUi.PadKey(Small(title, buy, true, accent), padKey);
             b.style.marginBottom = 0f;
             box.Add(b);

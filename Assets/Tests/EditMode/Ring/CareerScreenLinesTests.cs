@@ -433,6 +433,9 @@ namespace Game.Tests.EditMode
             int stamina = System.Array.IndexOf(CareerRules.Coaches, RingAttr.Stamina), other = stamina == 0 ? 1 : 0;
             Assert.GreaterOrEqual(stamina, 0, "тренер витривалості є");
             Assert.AreEqual(CareerRules.CoachProgressStep + 1, s4.CoachStepFor(stamina), "передумова: тренер витривалості довший");
+            // жоден атрибут не на стелі: там ціни немає зовсім (п. 6, AttrAtMax_TileSaysMax_HintHasNoPrice), а тут перевіряється ціна
+            foreach (var s in new[] { s1, s4 })
+                for (int i = 0; i < 5; i++) s.Player.Set((RingAttr)i, 0);
 
             foreach (var s in new[] { s1, s4 })
                 for (int i = 0; i < 5; i++)
@@ -554,12 +557,88 @@ namespace Game.Tests.EditMode
             if (!week.Contains("CareerScreenLines.CoachButton(T, C, k)") || !week.Contains("CareerScreenLines.CoachHint(T, C, k)"))
                 bad.Add("WeekScreenView: тренер не з CoachButton / CoachHint");
             if (!career.Contains("CareerScreenLines.AttrBuyHint(T, C, a, can ? null : reason)")) bad.Add("CareerScreens: підказка атрибута не з AttrBuyHint");
+            if (!career.Contains("Small(CareerScreenLines.AttrButton(T, C, a),") || career.Contains("\" → \" + Signed(v + 1)"))
+                bad.Add("CareerScreens: плитка атрибута не з AttrButton (на стелі — «· макс.», п. 6)");
             if (!career.Contains("return CareerScreenLines.InjuryText(T, injuries);")) bad.Add("CareerScreens: рядок тіла не з InjuryText");
             string show = File.ReadAllText(Path.Combine(ui, "Career", "ShowScreens.cs"));
             if (!show.Contains("CareerScreenLines.ZoneMeterFor(v.Injuries, (BodyZone)z)") || !show.Contains("ArenaKit.Segments(meter.Segments, filled,")
                 || !show.Contains("CareerScreenLines.ZoneMeterText(t, meter)"))
                 bad.Add("ShowScreens: смужка зони героя не з ZoneMeterFor / ZoneMeterText");
             Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Атрибут на стелі (ПМ 13.11.2026, п. 6, огляд слоту 32): плитка «Сила +3 · макс.» замість тьмяної «Сила +3 → +4», підказка —
+        /// навіщо атрибут і «Досягнуто максимуму», без ціни: купувати нічого. Хоч би яку причину дав виклик («max», «stage» — на етапі
+        /// без розвитку ядро каже її раніше, «points», null) — підказка та сама. Нижче стелі — «було → стане» і ціна, як і були.
+        /// </summary>
+        [Test]
+        public void AttrAtMax_TileSaysMax_HintHasNoPrice()
+        {
+            var s = CareerKit.NewHero(7);
+            s.Feud.State.DevPoints = 9;
+            for (int i = 0; i < 5; i++)
+            {
+                var a = (RingAttr)i;
+                string name = RingLabels.AttrName(T, a), why = T.Get("c.dev.attr.why." + i);
+                NoMissingKey(name, "назва атрибута " + i);
+
+                s.Player.Set(a, WrestlerStats.MaxAttr);
+                Assert.IsTrue(CareerScreenLines.AttrAtMax(s, a), a + ": на стелі");
+                string reason;
+                Assert.IsFalse(s.CanBuyAttr(a, out reason), a + ": на стелі купити не можна");
+                string tile = CareerScreenLines.AttrButton(T, s, a);
+                NoMissingKey(tile, "плитка атрибута на стелі");
+                Assert.AreEqual(name + " +" + WrestlerStats.MaxAttr + " · " + T.Get("c.dev.attr.max"), tile, a + ": плитка на стелі");
+                StringAssert.DoesNotContain("→", tile, a + ": на стелі не обіцяє +1");
+                string expect = CareerScreenLines.WithReason(why, T.Get("dev.reason.max"));
+                foreach (var r in new[] { reason, "max", "stage", "points", null })
+                {
+                    string hint = CareerScreenLines.AttrBuyHint(T, s, a, r);
+                    NoMissingKey(hint, "підказка атрибута на стелі");
+                    Assert.AreEqual(expect, hint, a + ", причина " + (r ?? "null") + ": підказка на стелі — без ціни");
+                    StringAssert.DoesNotContain(T.Format("dev.attr.buy", s.AttrCost(a)), hint, a + ": ціни немає");
+                    StringAssert.DoesNotContain("оч.", hint, a + ": очок немає");
+                }
+
+                s.Player.Set(a, WrestlerStats.MaxAttr - 1);
+                Assert.IsFalse(CareerScreenLines.AttrAtMax(s, a));
+                Assert.AreEqual(name + " " + RingChances.Signed(WrestlerStats.MaxAttr - 1) + " → " + RingChances.Signed(WrestlerStats.MaxAttr),
+                    CareerScreenLines.AttrButton(T, s, a), a + ": нижче стелі — «було → стане»");
+                StringAssert.StartsWith(T.Format("dev.attr.buy", s.AttrCost(a)), CareerScreenLines.AttrBuyHint(T, s, a, null), a + ": нижче стелі — ціна");
+
+                s.Player.Set(a, WrestlerStats.MinAttr);
+                Assert.AreEqual(name + " \u22121 → 0", CareerScreenLines.AttrButton(T, s, a), a + ": від’ємний — знак мінуса, як у порадах");
+            }
+            Assert.AreEqual("Сила +3 · макс.", CareerScreenLines.AttrButton(T, WithAttr(s, RingAttr.Strength, 3), RingAttr.Strength), "як просив ПМ");
+            // екран кінцівки ворожнечі — своя модель рядка (AttrRow), той самий напис (рев'ю 13.11.2026: там теж було «+3 → +4»)
+            Assert.AreEqual("Сила +3 · макс.", CareerScreenLines.AttrTile(T, "Сила", WrestlerStats.MaxAttr));
+            Assert.AreEqual("Сила +2 → +3", CareerScreenLines.AttrTile(T, "Сила", 2));
+            string ending = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI", "EndingScreenView.cs"));
+            StringAssert.Contains("RingUi.SmallButton(CareerScreenLines.AttrTile(t, a.Name, a.Value),", ending, "кінцівка: плитка атрибута з AttrTile");
+            StringAssert.DoesNotContain("\" → \" + Signed(a.Value + 1)", ending, "кінцівка: старе «було → стане» повз AttrTile");
+            StringAssert.Contains("private bool _all = CareerScreenView.DevAllForShots;", ending, "огляд знімає кінцівку з повним списком");
+            Assert.AreEqual("Сила: удари, кидки, викинути за канати · Досягнуто максимуму",
+                CareerScreenLines.AttrBuyHint(T, s, RingAttr.Strength, "max"), "крапка опису перед « · » знята");
+        }
+
+        private static CareerSession WithAttr(CareerSession s, RingAttr a, int v) { s.Player.Set(a, v); return s; }
+
+        /// <summary>
+        /// Заголовок афіші створення (ПМ 13.11.2026, п. 1, огляд слоту 32): у героїні — «Твоя борчиня», у героя — «Твій борець». Жіноча
+        /// форма — ключем <c>c.hub.create.poster.f</c>, яку <see cref="HeroForms.Apply(RingText, bool, bool)"/> ставить за тілом на
+        /// екрані; екран бере саме цей ключ (скан коду нижче).
+        /// </summary>
+        [Test]
+        public void Create_PosterHeader_TakesTheHeroSex()
+        {
+            var t = RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json"));   // свій текст: Apply міняє його
+            HeroForms.Apply(t, true, false);
+            Assert.AreEqual("Твоя борчиня", t.Get("c.hub.create.poster"), "героїня");
+            HeroForms.Apply(t, false, false);
+            Assert.AreEqual("Твій борець", t.Get("c.hub.create.poster"), "герой");
+            string create = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI", "Career", "CreateScreenView.cs"));
+            StringAssert.Contains("T.Get(\"c.hub.create.poster\")", create, "афіша бере ключ, який міняють форми героїні");
         }
 
         /// <summary>
@@ -750,6 +829,139 @@ namespace Game.Tests.EditMode
                 bad.Add("SeasonEnd: межа плити не оновлюється з висотою панелі");
             if (!CodeLine(show, "if (_devCol != null) _devCol.style.maxHeight = CareerTileLayout.DevPlateMaxH(top, Root.layout.height);"))
                 bad.Add("ShowResult.Fit: межа плити не йде за її верхом");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        private static ScrollRow Row(float top, float bottom, bool head = false) { return new ScrollRow(top, bottom, head); }
+
+        /// <summary>
+        /// Прокрутка на межу рядка (ПМ 13.11.2026, п. 2 і 5, кадри слоту 32), чиста частина — <see cref="CareerTileLayout.SnapRows"/>.
+        /// п. 2 (с4, 1080): «Усе» щойно розгорнуто, а початок повного списку нижче межі прокрутки — вікно стояло на межі, і над
+        /// «АТРИБУТИ» висів зріз поради. Тепер верх — сам «АТРИБУТИ», вікно до кінця, решта — запас знизу.
+        /// п. 5 (4:3): нижній край різав заголовок «ПЕРКИ» — тепер вікно кінчається на останньому цілому рядку, заголовок без свого
+        /// рядка ховається разом із ним.
+        /// </summary>
+        [Test]
+        public void SnapRows_TopOnARow_BottomAfterTheLastWholeRow_HeadKeptWithItsRow()
+        {
+            const RowSnapMode Mark = RowSnapMode.Mark, Restore = RowSnapMode.Restore, Keep = RowSnapMode.Keep;
+            float extra;
+            // п. 2: дві поради, далі «АТРИБУТИ» (100) і решта; вміст 282, вікно 200 — межа прокрутки 82, нижче за 100
+            var s4 = new List<ScrollRow> { Row(0, 50), Row(54, 96), Row(100, 118, true), Row(121, 145), Row(148, 172), Row(175, 193, true),
+                Row(196, 220), Row(223, 247), Row(250, 274) };
+            Assert.AreEqual(100f, CareerTileLayout.SnapRows(s4, 282f, 200f, 100f, Mark, out extra), "п. 2: верх — сам заголовок списку");
+            Assert.AreEqual(18f, extra, 0.01f, "п. 2: вікно від «АТРИБУТИ» до кінця (182), решта 18 — запас знизу");
+
+            // п. 5: заголовок, два ряди атрибутів, «НОВІ ПРИЙОМИ», ряд, «ПЕРКИ» (123–141), перки; вікно 135 різало «ПЕРКИ»
+            var narrow = new List<ScrollRow> { Row(0, 18, true), Row(21, 45), Row(48, 72), Row(75, 93, true), Row(96, 120), Row(123, 141, true),
+                Row(144, 168), Row(171, 195) };
+            Assert.AreEqual(0f, CareerTileLayout.SnapRows(narrow, 200f, 135f, 0f, Restore, out extra));
+            Assert.AreEqual(12f, extra, 0.01f, "п. 5: вікно кінчається там, де починається «ПЕРКИ» (123), — край його не ріже");
+            // вікно 145: «ПЕРКИ» вміщається цілим, а його рядок — ні: заголовок без рядка над краєм не лишається
+            Assert.AreEqual(0f, CareerTileLayout.SnapRows(narrow, 200f, 145f, 0f, Restore, out extra));
+            Assert.AreEqual(22f, extra, 0.01f, "заголовок — разом зі своїм рядком");
+            // вікно 170: «ПЕРКИ» і перший ряд перків цілі; наступний ряд (171) починається нижче краю — різати нічого
+            Assert.AreEqual(0f, CareerTileLayout.SnapRows(narrow, 200f, 170f, 0f, Restore, out extra));
+            Assert.AreEqual(0f, extra, 0.01f, "низ 170 — у проміжку між рядами");
+            Assert.AreEqual(0f, CareerTileLayout.SnapRows(narrow, 200f, 160f, 0f, Restore, out extra));
+            Assert.AreEqual(160f - 123f, extra, 0.01f, "край посеред ряду перків — «ПЕРКИ» ховається з ним: вікно до 123");
+            // межа допуску: низ ряду на 0,4 нижче краю — ряд цілий; на 2 нижче — ні
+            Assert.AreEqual(0f, CareerTileLayout.SnapRows(narrow, 200f, 167.6f, 0f, Restore, out extra));
+            Assert.AreEqual(0f, extra, 0.01f, "168 при краї 167,6 — у допуску пів пікселя");
+            Assert.AreEqual(0f, CareerTileLayout.SnapRows(narrow, 200f, 166f, 0f, Restore, out extra));
+            Assert.AreEqual(166f - 123f, extra, 0.01f);
+
+            // верх — на початок рядка, що містить бажаний зсув (не нижче): 50 — у ряду 48–72, 47 — між рядами, на попередній
+            Assert.AreEqual(48f, CareerTileLayout.SnapRows(narrow, 200f, 100f, 50f, Restore, out extra));
+            Assert.AreEqual(21f, CareerTileLayout.SnapRows(narrow, 200f, 100f, 47f, Mark, out extra));
+            Assert.AreEqual(0f, CareerTileLayout.SnapRows(narrow, 200f, 100f, -5f, Restore, out extra), "від'ємний — з верху");
+            Assert.AreEqual(0f, CareerTileLayout.SnapRows(narrow, 200f, 100f, float.NaN, Mark, out extra), "NaN — з верху");
+            Assert.AreEqual(0f, CareerTileLayout.SnapRows(narrow, 200f, 100f, float.NaN, Keep, out extra), "NaN рукою — з верху, не NaN");
+            // гравець прокрутив сам — верх не рухається, лише чистий низ
+            Assert.AreEqual(30f, CareerTileLayout.SnapRows(narrow, 200f, 100f, 30f, Keep, out extra));
+            Assert.AreEqual(130f - 123f, extra, 0.01f, "рукою на 30: низ 130 різав «ПЕРКИ» (123) — вікно до 123");
+
+            // рев'ю 13.11.2026: гравець був у кінці довгого списку, купив — список коротшає; відновлений зсув (190) — далі нової межі
+            // (200 − 100 = 100): упор у межу, а не майже порожнє вікно
+            Assert.AreEqual(96f, CareerTileLayout.SnapRows(narrow, 200f, 100f, 190f, Restore, out extra), "до межі 100, на початок рядка 96");
+            Assert.AreEqual(0f, extra, 0.01f, "від 96 вікно до 196 — останній ряд (171–195) цілий, різати нічого");
+            // мітка ж нижче межі — дозволено (п. 2): від неї до кінця, решта порожня
+            Assert.AreEqual(144f, CareerTileLayout.SnapRows(narrow, 200f, 100f, 150f, Mark, out extra));
+            Assert.AreEqual(100f - (200f - 144f), extra, 0.01f, "мітка 144: вікно 56 вмісту, 44 — запас");
+            // рукою за межею (запас від мітки ще стоїть) — верх не рухається, запас тримає зсув
+            Assert.AreEqual(120f, CareerTileLayout.SnapRows(narrow, 200f, 100f, 120f, Keep, out extra));
+            Assert.AreEqual(20f, extra, 0.01f);
+
+            // рядки не з нуля (відступ картки 8): верх — 0, низ на межі рядка
+            var padded = new List<ScrollRow> { Row(8, 26, true), Row(29, 53), Row(56, 80), Row(83, 107) };
+            Assert.AreEqual(0f, CareerTileLayout.SnapRows(padded, 115f, 70f, 0f, Restore, out extra));
+            Assert.AreEqual(70f - 56f, extra, 0.01f);
+            // два заголовки поспіль над краєм — ховаються обидва
+            var twoHeads = new List<ScrollRow> { Row(0, 24), Row(27, 51), Row(54, 72, true), Row(75, 93, true), Row(96, 120) };
+            Assert.AreEqual(0f, CareerTileLayout.SnapRows(twoHeads, 130f, 100f, 0f, Restore, out extra));
+            Assert.AreEqual(100f - 54f, extra, 0.01f, "обидва заголовки — разом зі своїм рядком");
+            // лише заголовок вміщається — лишається (порожнє вікно гірше)
+            Assert.AreEqual(54f, CareerTileLayout.SnapRows(twoHeads, 130f, 20f, 54f, Restore, out extra));
+            Assert.AreEqual(0f, extra, 0.01f, "перший заголовок — єдиний рядок вікна, лишається; наступний (75) нижче краю 74");
+
+            // уміщається — гортати нічого
+            Assert.AreEqual(0f, CareerTileLayout.SnapRows(narrow, 200f, 200f, 0f, Restore, out extra));
+            Assert.AreEqual(0f, extra);
+            Assert.AreEqual(0f, CareerTileLayout.SnapRows(new List<ScrollRow>(), 300f, 100f, 0f, Restore, out extra));
+            Assert.AreEqual(0f, extra);
+            // видно до кінця — запасу немає
+            Assert.AreEqual(96f, CareerTileLayout.SnapRows(narrow, 200f, 104f, 96f, Restore, out extra));
+            Assert.AreEqual(0f, extra, 0.01f, "від 96 до кінця (200) — 104: видно все до кінця");
+            // рядок, вищий за вікно, цілим не стане — запасу немає (частина краща за порожнечу)
+            var tall = new List<ScrollRow> { Row(0, 18, true), Row(21, 300) };
+            Assert.AreEqual(0f, CareerTileLayout.SnapRows(tall, 300f, 100f, 0f, Restore, out extra));
+            Assert.AreEqual(0f, extra);
+        }
+
+        /// <summary>
+        /// Атоми — у рядки (<see cref="CareerTileLayout.MergeRows"/>): кнопки одного ряду (різної висоти) — один рядок; заголовок лише
+        /// тоді, коли весь рядок — заголовок; порожні й NaN відкидаються; порядок — за верхом, хоч би як прийшли.
+        /// </summary>
+        [Test]
+        public void MergeRows_ButtonsOfOneLine_OneRow_HeadOnlyIfAllHeads()
+        {
+            var rows = CareerTileLayout.MergeRows(new[] { Row(48, 72), Row(0, 18, true), Row(21, 45), Row(21, 46), Row(200, 200),
+                Row(float.NaN, 10f), Row(75, 93, true), Row(80, 90), Row(96, 120, true), Row(97, 119, true) });
+            Assert.AreEqual(5, rows.Count, string.Join(" | ", rows) + " — порожній атом (200–200) рядком не стає");
+            Assert.AreEqual(0f, rows[0].Top); Assert.IsTrue(rows[0].Head);
+            Assert.AreEqual(21f, rows[1].Top); Assert.AreEqual(46f, rows[1].Bottom, "ряд кнопок — до найнижчої"); Assert.IsFalse(rows[1].Head);
+            Assert.AreEqual(48f, rows[2].Top);
+            Assert.AreEqual(75f, rows[3].Top); Assert.IsFalse(rows[3].Head, "заголовок із кнопкою поруч — уже не заголовок");
+            Assert.IsTrue(rows[4].Head, "два заголовки на одній висоті — заголовок");
+            Assert.AreEqual(0, CareerTileLayout.MergeRows(null).Count);
+            // дотик рядків (низ одного = верх іншого) — два рядки
+            Assert.AreEqual(2, CareerTileLayout.MergeRows(new[] { Row(0, 20), Row(20, 40) }).Count);
+        }
+
+        /// <summary>
+        /// Прокрутки розвитку йдуть на межу рядка (п. 2 і 5): шухляда тижня (і «Витрати»), плита підсумку, плита кінця сезону — через
+        /// <c>RowSnap</c>; заголовки розділів і «Рекомендовано» — заголовки рядків, порада — неподільна група. Прив'язка тримається, доки
+        /// гравець не прокрутить сам; базовий відступ — з розрахованого стилю першої розкладки.
+        /// </summary>
+        [Test]
+        public void Sources_DevScrolls_SnapToRows()
+        {
+            string ui = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI");
+            string week = File.ReadAllText(Path.Combine(ui, "Career", "WeekScreenView.cs"));
+            string career = File.ReadAllText(Path.Combine(ui, "CareerScreens.cs"));
+            var bad = new List<string>();
+            if (!CodeLine(week, "RowSnap(scroll, () => mark != null ? MarkTop(mark, scroll) : restore.y, mark != null);")) bad.Add("WeekScreenView: шухляда не на межу рядка");
+            if (week.Contains("scroll.scrollOffset = restore;")) bad.Add("WeekScreenView: старе відновлення зсуву повз RowSnap");
+            if (!CodeLine(career, "RowSnap(scroll, () => MarkTop(mark, scroll), true);")) bad.Add("CareerScreens: ScrollToDevAll повз RowSnap (мітка)");
+            if (!CodeLine(career, "RowSnap(scroll, () => restore.y, false);")) bad.Add("CareerScreens: KeepDevScroll повз RowSnap (відновлення)");
+            if (Regex.Matches(career, Regex.Escape("scroll.scrollOffset = ")).Count != 1) bad.Add("CareerScreens: зсув прокрутки ставиться не лише в RowSnap");
+            if (!CodeLine(career, "l.AddToClassList(RowHeadClass);") || !CodeLine(career, "recHead.AddToClassList(RowHeadClass);"))
+                bad.Add("CareerScreens: заголовки розділів не позначені");
+            if (!career.Contains("box.AddToClassList(RowUnitClass);")) bad.Add("CareerScreens: порада не неподільна");
+            if (!career.Contains("CareerTileLayout.SnapRows(RowsOf(scroll.contentContainer), contentH, view, anchored ? want() : scroll.scrollOffset.y, mode, out add)"))
+                bad.Add("CareerScreens: RowSnap не з SnapRows або прив'язка не до want");
+            if (!CodeLine(career, "if (float.IsNaN(basePad)) basePad = scroll.resolvedStyle.paddingBottom;")) bad.Add("CareerScreens: базовий відступ не з першої розкладки");
+            if (career.Contains("++waits")) bad.Add("CareerScreens: прив'язку знову знято лічильником подій (рев'ю 13.11.2026)");
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
 

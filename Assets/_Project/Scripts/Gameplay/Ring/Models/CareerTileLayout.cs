@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Game.Gameplay.Ring.Models
 {
@@ -358,6 +359,95 @@ namespace Game.Gameplay.Ring.Models
             l.DarkText = filledSelect ? selectDarkText : focus;
             return l;
         }
+
+        // ---- прокрутка списку розвитку: на межу рядка (ПМ 13.11.2026, п. 2 і 5) ----
+
+        /// <summary>Допуск порівнянь розкладки — пів пікселя.</summary>
+        public const float RowEps = 0.5f;
+
+        /// <summary>
+        /// Атоми вмісту (кнопки, рядки тексту) — у рядки: ті, що перекриваються по висоті, — один рядок (кнопки одного ряду з
+        /// переносом стоять на одній висоті). Рядок — заголовок, лише якщо всі його атоми — заголовки. За зростанням верху.
+        /// </summary>
+        public static List<ScrollRow> MergeRows(IEnumerable<ScrollRow> atoms)
+        {
+            var list = new List<ScrollRow>();
+            if (atoms != null)
+                foreach (var a in atoms)
+                    if (!float.IsNaN(a.Top) && !float.IsNaN(a.Bottom) && a.Bottom - a.Top > RowEps) list.Add(a);
+            list.Sort((x, y) => x.Top.CompareTo(y.Top));
+            var rows = new List<ScrollRow>();
+            foreach (var a in list)
+            {
+                int last = rows.Count - 1;
+                if (last >= 0 && a.Top < rows[last].Bottom - RowEps)
+                {
+                    var r = rows[last];
+                    rows[last] = new ScrollRow(r.Top, Math.Max(r.Bottom, a.Bottom), r.Head && a.Head);
+                }
+                else rows.Add(a);
+            }
+            return rows;
+        }
+
+        /// <summary>
+        /// Прокрутка на межу рядка (огляд слоту 32, ПМ 13.11.2026): верхній край вікна — початок рядка, нижній — кінець останнього
+        /// цілого рядка; заголовок розділу без свого рядка під ним над краєм не лишається. Шухляда «Розвиток» на с4 (1080) щойно
+        /// розгорнутим «Усе» стояла на межі прокрутки, і над «АТРИБУТИ» висів зріз «Залізна щелепа · 2»; на 4:3 нижній край різав
+        /// «ПЕРКИ» під перемикачем.
+        /// <paramref name="rows"/> — рядки вмісту (<see cref="MergeRows"/>), координати — від верху вмісту; <paramref name="contentH"/> —
+        /// висота вмісту; <paramref name="view"/> — висота вікна прокрутки з відступом, який дав екран; <paramref name="want"/> — бажаний
+        /// зсув; <paramref name="mode"/> — звідки він (<see cref="RowSnapMode"/>).
+        /// Повертає зсув; <paramref name="extra"/> — скільки додати до нижнього відступу прокрутки, щоб вікно скінчилося на межі
+        /// рядка (вікно коротшає; мітка нижче межі прокрутки — вікно показує від неї до кінця, решта порожня).
+        /// Вміст уміщається — 0 і 0: гортати нічого.
+        /// </summary>
+        public static float SnapRows(IList<ScrollRow> rows, float contentH, float view, float want, RowSnapMode mode, out float extra)
+        {
+            extra = 0f;
+            if (rows == null || rows.Count == 0 || float.IsNaN(contentH) || float.IsNaN(view) || view <= 0f || contentH <= view + RowEps) return 0f;
+            if (float.IsNaN(want) || want < 0f) want = 0f;
+            // відновлений зсув — не далі межі прокрутки: після покупки вміст коротшає, і колишній низ списку дав би майже порожнє вікно
+            // (рев'ю 13.11.2026); мітка — навпаки, може бути нижче межі (п. 2), а зсув рукою межу вже має від самої прокрутки
+            if (mode == RowSnapMode.Restore) want = Math.Min(want, contentH - view);
+            float t = 0f;
+            if (mode == RowSnapMode.Keep) t = want;
+            else
+                foreach (var r in rows)
+                    if (r.Top <= want + RowEps && r.Top > t) t = r.Top;
+            if (t > contentH - view + RowEps) { extra = view - (contentH - t); return t; }   // початок нижче межі — до кінця, решта порожня
+            float bottom = t + view;
+            int first = -1, last = -1;
+            for (int i = 0; i < rows.Count; i++)
+            {
+                if (rows[i].Top < t - RowEps) continue;
+                if (first < 0) first = i;
+                if (rows[i].Bottom <= bottom + RowEps) last = i;
+                else break;
+            }
+            if (last < 0 || last == rows.Count - 1) return t;   // жоден рядок не вміщається цілим (вікно нижче рядка) або видно до кінця
+            while (rows[last].Head && last > first) last--;       // заголовок (і заголовки поспіль) — разом зі своїм рядком
+            var next = rows[last + 1];                            // перший рядок, якого не видно цілим
+            if (next.Bottom - next.Top > view - RowEps) return t;  // вищий за вікно — цілим не стане ніколи: краще частина, ніж порожнеча
+            if (next.Top < bottom - RowEps) extra = bottom - next.Top;
+            return t;
+        }
+    }
+
+    /// <summary>
+    /// Звідки бажаний зсув прокрутки на межу рядка (<see cref="CareerTileLayout.SnapRows"/>): <c>Mark</c> — початок щойно розгорнутого
+    /// списку (може лежати нижче межі прокрутки — тоді запас знизу); <c>Restore</c> — зсув до перебудови (не далі межі); обидва —
+    /// на початок рядка. <c>Keep</c> — гравець прокрутив сам: верх не рухати, лише чистий нижній край.
+    /// </summary>
+    public enum RowSnapMode { Mark, Restore, Keep }
+
+    /// <summary>Рядок у прокрутці (<see cref="CareerTileLayout.SnapRows"/>): верх і низ від верху вмісту; заголовок розділу чи ні.</summary>
+    public struct ScrollRow
+    {
+        public float Top, Bottom;
+        public bool Head;
+        public ScrollRow(float top, float bottom, bool head) { Top = top; Bottom = bottom; Head = head; }
+        public override string ToString() { return (Head ? "H " : "") + Top + "–" + Bottom; }
     }
 
     /// <summary>Заливка плитки дії: темна панель, золото фокуса, колір вибору, вимкнена (напівпрозора панель).</summary>

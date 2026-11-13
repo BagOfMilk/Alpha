@@ -445,11 +445,14 @@ namespace Game.Gameplay.Ring.UI
             content.style.borderTopWidth = 0f; content.style.borderBottomWidth = 0f; content.style.borderLeftWidth = 0f; content.style.borderRightWidth = 0f;
             scroll.Add(content);
             box.Add(scroll);
-            if (foot != null) { box.Add(foot); ScrollToDevAll(scroll); }   // щойно розгорнутий «Усе» — до початку повного списку
+            if (foot != null) box.Add(foot);
             _drawerScroll = scroll;
+            // щойно розгорнутий «Усе» — до початку повного списку, інакше — той самий зсув, що до перебудови; обидва — на межу рядка
+            // (ПМ 13.11.2026, п. 2 і 5: зріз поради над «АТРИБУТИ» на с4, «ПЕРКИ» під краєм на 4:3), і в «Витратах» теж
+            var mark = foot != null ? DevAllStart : null;
+            DevAllStart = null;
             var restore = _drawerOffset;
-            bool restored = restore.x == 0f && restore.y == 0f;
-            scroll.RegisterCallback<GeometryChangedEvent>(e => { if (restored) return; restored = true; scroll.scrollOffset = restore; });
+            RowSnap(scroll, () => mark != null ? MarkTop(mark, scroll) : restore.y, mark != null);
             return box;
         }
 

@@ -188,7 +188,7 @@ namespace Game.Gameplay.Ring.UI
                 foreach (var a in attrRows)
                 {
                     var attr = a.Attr;
-                    attrs.Add(RingUi.PadKey(RingUi.SmallButton(a.Name + " " + Signed(a.Value) + " → " + Signed(a.Value + 1), () => { _m.BuyAttr(attr); Refresh(); }, a.CanBuy, null, hint,
+                    attrs.Add(RingUi.PadKey(RingUi.SmallButton(CareerScreenLines.AttrTile(t, a.Name, a.Value), () => { _m.BuyAttr(attr); Refresh(); }, a.CanBuy, null, hint,
                         (a.CanBuy ? a.BuyText : a.ReasonText) + " — " + t.Get("c.dev.attr.why." + (int)attr)), "dev:attr:" + (int)attr));
                 }
                 dev.Add(attrs);
@@ -213,7 +213,8 @@ namespace Game.Gameplay.Ring.UI
             col.Add(go);
         }
 
-        private bool _all;
+        /// <summary>«Усе (N)» розгорнуто; огляд <c>-ring-shot-dev-all</c> знімає кінцівку одразу з повним списком (атрибут на максимумі, п. 6).</summary>
+        private bool _all = CareerScreenView.DevAllForShots;
 
         private static string Signed(int v) { return v > 0 ? "+" + v : v < 0 ? "\u2212" + (-v) : "0"; }
 

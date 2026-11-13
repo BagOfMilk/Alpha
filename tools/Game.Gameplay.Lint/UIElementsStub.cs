@@ -415,6 +415,18 @@ namespace UnityEngine.UIElements
         // плита розвитку «Рингу»: прокрутка до щойно розгорнутого списку після розкладки
         public IVisualElementScheduler schedule { get { return null; } }
         public virtual VisualElement contentContainer { get { return this; } }
+        // прокрутка «Рингу» на межу рядка (п. 2 і 5 слоту 32): розраховані стилі й класи-позначки рядків
+        public IResolvedStyle resolvedStyle { get { return null; } }
+        public void AddToClassList(string className) { }
+        public bool ClassListContains(string cls) { return false; }
+    }
+
+    /// <summary>Розраховані значення стилю після розкладки (лише те, що читає код «Рингу»).</summary>
+    public interface IResolvedStyle
+    {
+        float paddingBottom { get; }
+        DisplayStyle display { get; }
+        Position position { get; }
     }
 
     public class TextElement : VisualElement
@@ -456,6 +468,7 @@ namespace UnityEngine.UIElements
         public ScrollView(ScrollViewMode scrollViewMode) { }
 
         public Vector2 scrollOffset { get; set; }
+        public VisualElement contentViewport { get { return null; } }
         public ScrollerVisibility verticalScrollerVisibility { get; set; }
         public ScrollerVisibility horizontalScrollerVisibility { get; set; }
     }
