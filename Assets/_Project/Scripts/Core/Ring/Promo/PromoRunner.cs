@@ -38,6 +38,22 @@ namespace Game.Core.Ring
         /// <summary>Скільки нагород треба обрати (рівно).</summary>
         public int RewardsToPick { get; private set; }
 
+        /// <summary>Мовець «booker» у даних ворожнечі — букер федерації, де йде промо.</summary>
+        public const string BookerSpeaker = "booker";
+
+        /// <summary>
+        /// Хто говорить за «booker» (id мовця букера поточної федерації; null — як у даних). Промо ворожнечі з Молотом іде в будь-якій
+        /// федерації кар'єри (рев'ю ПМ 12.11.2026): у федерації Агати її репліки — голосом Агати, а не Ліни.
+        /// </summary>
+        public string BookerVoice;
+
+        /// <summary>Мовець вузла з урахуванням <see cref="BookerVoice"/>.</summary>
+        public string SpeakerOf(PromoNode n)
+        {
+            if (n == null) return null;
+            return n.Speaker == BookerSpeaker && !string.IsNullOrEmpty(BookerVoice) ? BookerVoice : n.Speaker;
+        }
+
         public PromoRunner(FeudScript script, PromoDef promo, FeudState state, string startNodeId = null)
         {
             Script = script ?? throw new ArgumentNullException(nameof(script));

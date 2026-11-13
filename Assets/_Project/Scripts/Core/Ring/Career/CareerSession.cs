@@ -157,6 +157,8 @@ namespace Game.Core.Ring.Career
             Feud.State.AudienceCap = Federation.Ceiling;
             Feud.State.AudienceHypeAt = Federation.PopularityHype;
             Feud.State.LateRole = State.LateRole;
+            // промо ворожнечі з Молотом іде й у федераціях 2–4: «booker» у них — букер цієї федерації (рев'ю ПМ 12.11.2026)
+            Feud.BookerVoice = Federation.Booker;
         }
 
         /// <summary>Обрати пізню роль (§5.3) — на екрані кінця сезону, з першого: одна на раз, змінити можна в кінці кожного сезону.</summary>
@@ -1733,6 +1735,8 @@ namespace Game.Core.Ring.Career
 
         /// <summary>Прапор кар'єри «менеджерку звільнено»: сцена ev_manager читає його й вітається інакше (знову найняти можна).</summary>
         public const string ManagerFiredFlag = "manager_fired";
+        /// <summary>Подія менеджерки Марти Ріос.</summary>
+        public const string ManagerSceneId = "ev_manager";
 
         /// <summary>
         /// Звільнити менеджера — будь-коли, без штрафу (наймає сцена закулісся ev_manager). Наступного сезону Марта приходить знову
@@ -1740,9 +1744,12 @@ namespace Game.Core.Ring.Career
         /// </summary>
         public bool FireManager()
         {
-            if (!State.Manager || Stage == CareerStage.Title || Stage == CareerStage.Create) return false;
+            // посеред закулісної сцени — ні: сцена працює з копією стану ворожнечі, і прапор звільнення загубився б (рев'ю ПМ 12.11.2026)
+            if (!State.Manager || Stage == CareerStage.Title || Stage == CareerStage.Create || _bs != null) return false;
             State.Manager = false;
             Feud.State.Flags.Add(ManagerFiredFlag);
+            // повертається наступного сезону, а не за тиждень: подія менеджерки цього сезону вже «була»
+            State.BackstageSeen.Add(SeenKey(State.Season, ManagerSceneId));
             return true;
         }
 

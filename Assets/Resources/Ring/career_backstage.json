@@ -1594,6 +1594,10 @@
    "requires": [
     {
      "career": "female"
+    },
+    {
+     "career": "booker",
+     "target": "booker"
     }
    ]
   },
