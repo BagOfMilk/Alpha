@@ -16,6 +16,7 @@ namespace Game.Gameplay.Ring.UI
     public sealed class RingCallout
     {
         public readonly VisualElement Layer;
+        private readonly VisualElement _plate;
         private readonly Label _word;
         private readonly Label _sub;
 
@@ -32,19 +33,25 @@ namespace Game.Gameplay.Ring.UI
             Layer.style.position = Position.Absolute;
             Layer.style.left = 0f; Layer.style.right = 0f; Layer.style.top = Length.Percent(12.5f);
             Layer.style.alignItems = Align.Center;
+            // Темна підкладка під словом І підрядком: червоне «Провал» губилось на сорочці рефері й натовпі, а підрядок
+            // «Ти / Суперник» під плитою — на смугах рефері й світлому маті (огляд слоту 31: h4x3 275, h1080 435).
+            _plate = RingUi.Column();
+            _plate.pickingMode = PickingMode.Ignore;
+            _plate.style.alignItems = Align.Center;
+            _plate.style.backgroundColor = RingTheme.WithAlpha(RingTheme.Bg, BrandTokens.AlphaUnderlay);
+            _plate.style.paddingLeft = 18f; _plate.style.paddingRight = 18f; _plate.style.paddingTop = 2f; _plate.style.paddingBottom = 6f;
+            _plate.style.borderTopLeftRadius = 8f; _plate.style.borderTopRightRadius = 8f;
+            _plate.style.borderBottomLeftRadius = 8f; _plate.style.borderBottomRightRadius = 8f;
             _word = RingUi.Lbl("", 40f, RingUi.Gold, true);
             _word.pickingMode = PickingMode.Ignore;
-            // Темна підкладка: червоне «Провал» губилось на сорочці рефері й натовпі.
-            _word.style.backgroundColor = RingTheme.WithAlpha(RingTheme.Bg, BrandTokens.AlphaUnderlay);
-            _word.style.paddingLeft = 18f; _word.style.paddingRight = 18f; _word.style.paddingTop = 2f; _word.style.paddingBottom = 4f;
-            _word.style.borderTopLeftRadius = 8f; _word.style.borderTopRightRadius = 8f;
-            _word.style.borderBottomLeftRadius = 8f; _word.style.borderBottomRightRadius = 8f;
             _word.style.unityTextAlign = TextAnchor.MiddleCenter;
             _sub = RingUi.Lbl("", 16f, RingUi.Text);
             _sub.pickingMode = PickingMode.Ignore;
             _sub.style.unityTextAlign = TextAnchor.MiddleCenter;
-            Layer.Add(_word);
-            Layer.Add(_sub);
+            _sub.style.marginTop = -2f;
+            _plate.Add(_word);
+            _plate.Add(_sub);
+            Layer.Add(_plate);
             Layer.style.opacity = 0f;
         }
 
@@ -72,11 +79,12 @@ namespace Game.Gameplay.Ring.UI
                 if (_q.Count == 0) return;
                 _cur = _q.Dequeue();
                 _t = 0f;
-                if (string.IsNullOrEmpty(_cur.Word)) { _word.style.display = DisplayStyle.None; _sub.text = ""; }
-                else _word.style.display = DisplayStyle.Flex;
+                // Порожнє слово — пауза в черзі: плиту ховаємо цілком, порожній підрядок не тримає під словом смужку.
+                _plate.style.display = string.IsNullOrEmpty(_cur.Word) ? DisplayStyle.None : DisplayStyle.Flex;
                 _word.text = _cur.Word;
                 _word.style.color = _cur.Color;
                 _sub.text = _cur.Sub;
+                _sub.style.display = string.IsNullOrEmpty(_cur.Sub) ? DisplayStyle.None : DisplayStyle.Flex;
             }
             _t += dt;
             // Удар масштабу на вході (0,12 с: 1,35 → 1), утримання, згасання за останні 0,25 с.
