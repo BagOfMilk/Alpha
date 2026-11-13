@@ -357,7 +357,9 @@ namespace Game.Gameplay.Ring.Stage
                     PlanEndure(list, ev, ctx);
                     break;
                 case MatchEventKind.Rescue:
-                    list.Add(new StageStep { Kind = StageStepKind.Ref, RefClip = "Ref_Flinch", Hold = 1.3f, Cam = StageCam.Overview, Note = "напарник відволікає рефері" });
+                    // Кадр відліку (низький план), а не загальний: загальний одразу після кіноплану й утримання дивився в натовп,
+                    // і рефері, якого відволікли, не було видно (огляд слоту 33, 13.11.2026, k_ending 132–133).
+                    list.Add(new StageStep { Kind = StageStepKind.Ref, RefClip = "Ref_Flinch", Hold = 1.3f, Cam = StageCam.Low, Note = "напарник відволікає рефері" });
                     break;
                 case MatchEventKind.MatchEnd:
                     list.Add(new StageStep { Kind = StageStepKind.End, Cam = StageCam.Big, Note = "кінець: рефері піднімає руку" });

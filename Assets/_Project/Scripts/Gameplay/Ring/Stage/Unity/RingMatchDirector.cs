@@ -1924,6 +1924,14 @@ namespace Game.Gameplay.Ring.Stage
         private const float CountBodyLegs = 0.95f;
         /// <summary>Де в рефері коліна на стійці, уперед від таза, м (ПЛЕЙСХОЛДЕР).</summary>
         private const float CountKneeFwd = 0.25f;
+        /// <summary>Де голова рефері, що схилився на долоню відліку, уперед від таза, м (ПЛЕЙСХОЛДЕР, слот 33).</summary>
+        private const float CountLeanFwd = 0.4f;
+        /// <summary>Найближче до осі тіла, де голова рефері в нахилі, м (ПЛЕЙСХОЛДЕР, слот 33).</summary>
+        private const float CountLeanClear = 0.2f;
+        /// <summary>На скільки голова й плечі нападника на накритті виходять за вісь захисника, м (ПЛЕЙСХОЛДЕР, слот 33).</summary>
+        private const float CoverBeyond = 0.45f;
+        /// <summary>Ноги нападника на накритті — назад від таза, м (ПЛЕЙСХОЛДЕР).</summary>
+        private const float CoverLegs = 0.9f;
 
         /// <summary>
         /// Відлік утримання (<see cref="StageStep.Count"/>): рефері йде до плечей захисника — з боку, протилежного нападникові,
@@ -1950,19 +1958,24 @@ namespace Game.Gameplay.Ring.Stage
             Vector3 toA = pA - sh;
             toA.y = 0f;
             if (Vector3.Dot(toA, n) > 0f) n = -n;
-            Vector3 spot = sh + n * CountReach;
             float lim = RingStage3D.RingHalf - 0.3f;
-            spot = new Vector3(Mathf.Clamp(spot.x, -lim, lim), RingStage3D.MatY, Mathf.Clamp(spot.z, -lim, lim));
-            float yaw = RingStage3D.YawTo(spot, sh);
-            // Не стояти й не ставати колінами на тіла (огляд 8f, «залізна хватка»: коліна рефері на стегні суперника). Вісь
-            // захисника — від голови до ступнів (ноги — з протилежного від голови боку від таза), нападника — його точка.
+            // Не стояти, не ставати колінами й не схилятися на тіла (огляд 8f, «залізна хватка»: коліна рефері на стегні
+            // суперника; слот 33, 13.11.2026: голова рефері впритул до голови нападника, на «два» рефері лежав на героїні). Вісь
+            // захисника — від голови до ступнів; нападник — таз біля захисника, тулуб поперек його грудей (CoverBody), а не точка.
+            Vector3 feet = hip - h * CountBodyLegs;
+            var bodies = new List<RefPlacement.Seg>
             {
-                Vector3 feet = hip - h * CountBodyLegs;
-                var bodies = new List<RefPlacement.Seg>
-                {
-                    new RefPlacement.Seg(head.x, head.z, feet.x, feet.z),
-                    new RefPlacement.Seg(pA.x, pA.z, pA.x, pA.z),
-                };
+                new RefPlacement.Seg(head.x, head.z, feet.x, feet.z),
+                RefPlacement.CoverBody(pA.x, pA.z, new RefPlacement.Seg(head.x, head.z, hip.x, hip.z), CoverBeyond, CoverLegs),
+            };
+            float cxs, czs;
+            bool freeSpot = RefPlacement.CountSpot(sh.x, sh.z, n.x, n.z, h.x, h.z, bodies, CountReach, CountKneeFwd, CountLeanFwd,
+                CountBodyClear, CountLeanClear, lim, out cxs, out czs);
+            Vector3 spot = new Vector3(Mathf.Clamp(cxs, -lim, lim), RingStage3D.MatY, Mathf.Clamp(czs, -lim, lim));
+            float yaw = RingStage3D.YawTo(spot, sh);
+            if (Trace && freeSpot) Debug.Log("[Ринг] відлік: рефері біля плечей, вільно (" + spot.x.ToString("0.00", CultureInfo.InvariantCulture) + ", " + spot.z.ToString("0.00", CultureInfo.InvariantCulture) + ")");
+            if (!freeSpot)
+            {
                 Vector3 fwd = Rot(yaw, Vector3.forward);
                 float sx = spot.x, sz = spot.z;
                 if (RefPlacement.PushClear(ref sx, ref sz, fwd.x, fwd.z, CountKneeFwd, bodies, CountBodyClear, lim))
