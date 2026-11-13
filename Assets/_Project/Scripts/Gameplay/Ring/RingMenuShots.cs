@@ -96,8 +96,15 @@ namespace Game.Gameplay.Ring
             UI.CareerScreenView.ExpandForShots = scene == "week";   // тиждень відкривається з шухлядою (є очки — «Розвиток»)
             float guard = 0f;
             while (!(h.CurrentView is TitleMenuView) && guard < 10f) { guard += Time.unscaledDeltaTime; yield return null; }
-            yield return Wait(1.2f);
-            Nav(h, RingAction.Confirm);                   // «Продовжити» — фокус титулу, коли є сейв
+            // вступ титулу (≤ 2 с) — перше натискання під час нього лише пропускає вступ (кадри слоту 32: стояли на титулі);
+            // тому чекаємо, як повний тур, і тиснемо «Продовжити», доки гра не рушить (перевірка сейву — 0,45 с, далі розріз)
+            yield return Wait(2.6f);
+            for (int attempt = 0; attempt < 4 && h.OnTitle && h.CurrentLoading == null && !h.Wipe.Busy; attempt++)
+            {
+                Nav(h, RingAction.Confirm);               // «Продовжити» — фокус титулу, коли є сейв
+                guard = 0f;
+                while (h.OnTitle && h.CurrentLoading == null && !h.Wipe.Busy && guard < 2.5f) { guard += Time.unscaledDeltaTime; yield return null; }
+            }
             guard = 0f;
             while ((h.OnTitle || h.CurrentLoading != null || h.Wipe.Busy) && guard < 25f) { guard += Time.unscaledDeltaTime; yield return null; }
             yield return Wait(1.2f);
