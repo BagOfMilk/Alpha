@@ -27,12 +27,17 @@ namespace Game.Tests.EditMode
         /// додали дві чесні: план на куті знизу замість Top_Rope_Perch_Loop і невдачу больового на лікоть). Разом 101 → 103 —
         /// не нові заглушки: «Затягнути в кут» і «Таран плечем» тепер зі склейкою, а підготовка сценаріїв бере лише удари в центрі
         /// (<c>RingDemoScript.All</c>), тож у черзі частіше випадає дропкік-підстановка (6 → 13).
+        /// 12.11.2026 — новий зміст без кліпів, не нові заглушки старого: ґіміки 5–8 «Кар'єри» (a3fd3fd5) дали 16 прийомів, і демо
+        /// грає кожен (сценаріїв 59); 14 з них — підстановкою (CLIP_NEEDS.md §11). Разом 103 → 181, різних 14 → 28 (ПМ).
         /// </summary>
-        private const int StandInCeiling = 103;
-        private const int StandInKindsCeiling = 14;
+        private const int StandInCeiling = 181;
+        private const int StandInKindsCeiling = 28;
 
-        /// <summary>Прийомів у каталозі гри (`Ring/career_moves`) — не менше; випадкова втрата прийому з JSON — червоний тест.</summary>
-        private const int CatalogMovesFloor = 24;
+        /// <summary>
+        /// Прийомів у каталозі гри (`Ring/career_moves`) — не менше; випадкова втрата прийому з JSON — червоний тест.
+        /// 12.11.2026: 24 → 40 (ґіміки 5–8).
+        /// </summary>
+        private const int CatalogMovesFloor = 40;
 
         [Test]
         public void EverySpec_PlaysToTheEnd_ThroughTheRealEngine()

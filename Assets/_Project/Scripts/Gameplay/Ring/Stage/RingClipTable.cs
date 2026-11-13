@@ -236,8 +236,14 @@ namespace Game.Gameplay.Ring.Stage
             public string Note;
             /// <summary>Підписний прийом (<c>career_moves.json</c>, kind signature): утримання після нього — кульмінація.</summary>
             public bool Climax;
-            public MoveClips(string partial, string strong, StageCam cam, string perch = null, bool solo = false, string note = null, bool climax = false)
-            { Partial = partial; Strong = strong; Cam = cam; Perch = perch; Solo = solo; Note = note; Climax = climax; }
+            /// <summary>
+            /// Позначка «за рингом», якщо там кліп — підстановка, а в центрі власний: удар за рингом звучить ударом об бар'єр
+            /// (<c>RingSoundMap</c>), а кліп центру бар'єра не показує.
+            /// </summary>
+            public string OutsideNote;
+            public MoveClips(string partial, string strong, StageCam cam, string perch = null, bool solo = false, string note = null, bool climax = false,
+                string outsideNote = null)
+            { Partial = partial; Strong = strong; Cam = cam; Perch = perch; Solo = solo; Note = note; Climax = climax; OutsideNote = outsideNote; }
         }
 
         /// <summary>
@@ -278,7 +284,10 @@ namespace Game.Gameplay.Ring.Stage
             { "crossface",       new MoveClips(null, null, StageCam.Close) },
             { "old_school",      new MoveClips("Chain_Headlock_Punches", "Center_RunningElbow", StageCam.Big, null, false, "бракує «Старої школи» — удари з захвату голови, на 10+ лікоть", true) },
             { "last_lesson",     new MoveClips("Center_Clothesline", "Center_Clothesline", StageCam.Big, null, false, "бракує фінішера «Останній урок» — ларіат") },
-            { "headbutt",        new MoveClips("Center_Headbutt", "Center_Headbutt", StageCam.Close) },
+            // За рингом удар звучить ударом об бар'єр, а брудний прийом на тому самому кліпі — звичайним ударом (RingSoundMapTests.
+            // SameBeatClip_SameSound): за рингом це підстановка до набору «за рингом».
+            { "headbutt",        new MoveClips("Center_Headbutt", "Center_Headbutt", StageCam.Close, null, false, null, false,
+                                     "бракує удару головою об бар'єр (набір «за рингом») — удар головою в центрі") },
             { "clubbing_blow",   new MoveClips("Chain_FrontFacelock_Clubs", "Chain_FrontFacelock_Clubs", StageCam.Close) },
             { "floor_slam",      new MoveClips("Bodyslam", "Bodyslam", StageCam.Big, null, false, "бракує кидка «Об підлогу» — боді-слем", true) },
             { "scar_maker",      new MoveClips("Center_RunningKnee", "Center_RunningKnee", StageCam.Big, null, false, "бракує фінішера «Шрам» — удар коліном") },
@@ -614,7 +623,8 @@ namespace Game.Gameplay.Ring.Stage
                     if (StoodUp(ev, b)) list.Add(StandUp(b, ctx.VictimNode, true));
                 }
                 else if (miss) AddMiss(list, ev.Action, a, cut);
-                else list.Add(StageStep.Pair(a, strong ? mc.Strong : mc.Partial, strong ? StageCam.Big : mc.Cam, null, cut ? null : mc.Note));
+                else list.Add(StageStep.Pair(a, strong ? mc.Strong : mc.Partial, strong ? StageCam.Big : mc.Cam, null,
+                    cut ? null : ev.Outside && mc.OutsideNote != null ? mc.OutsideNote : mc.Note));
                 return;
             }
 

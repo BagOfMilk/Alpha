@@ -349,6 +349,24 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
+        /// «Удар головою» Хардкорника — власний кліп у центрі. За рингом удар звучить ударом об бар'єр, а кліп бар'єра не показує
+        /// (і брудний прийом на тому самому кліпі звучить звичайним ударом) — там це підстановка.
+        /// </summary>
+        [Test]
+        public void Headbutt_OwnClipInCenter_StandInOutside()
+        {
+            foreach (var t in new[] { RollTier.Partial, RollTier.Strong })
+            {
+                var e = new MatchEvent { Kind = MatchEventKind.Action, Action = MatchActionId.Strike, Tier = t, HasRoll = true, Actor = MatchSide.Player, MoveKey = "headbutt" };
+                var inside = RingClipTable.Plan(e);
+                Assert.AreEqual("Center_Headbutt", inside.Single(s => s.Kind == StageStepKind.Pair).Clip, t.ToString());
+                Assert.IsFalse(inside.Any(s => s.IsStandIn), "у центрі — власний кліп: " + t);
+                e.Outside = true;
+                Assert.IsTrue(RingClipTable.Plan(e).Any(s => s.IsStandIn), "за рингом — підстановка: " + t);
+            }
+        }
+
+        /// <summary>
         /// Охоронець звірки зі звуком (F2_DIRECTOR п. 1): промінь надії не підводить цілком — ядро на провалі кладе суперника,
         /// як на 7–9. Отже провал грається тим самим планом, що й 7–9: пара від нападника, жодного «Bump_Back» (падає сам).
         /// </summary>
