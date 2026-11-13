@@ -397,6 +397,35 @@ namespace Game.Tests.EditMode
         private static MatchEvent Kick(RollTier t) { return new MatchEvent { Kind = MatchEventKind.Kickout, Tier = t, HasRoll = true, Actor = MatchSide.Rival }; }
 
         /// <summary>
+        /// Порятунок напарником (огляд слоту 33, 13.11.2026): на розв'язці відліку була виноска «ТРИ!», а за мить — «Напарник
+        /// рятує»; крок порятунку брав загальний план, що дивився в натовп. Тепер «три» немає, якщо в журналі одразу за утриманням
+        /// іде Rescue, а рефері, якого відволікли, — у кадрі відліку.
+        /// </summary>
+        [Test]
+        public void Rescue_NoThreeCallout_AndStaysInTheCountShot()
+        {
+            var e = MatchKit.Engine(false, new[] { 4, 7, 7, 4 }, s => s.PlayerHasAlly = true);
+            e.State.Player.Posture = Posture.Down; e.State.Player.Damage = Math.Max(e.State.Player.Damage, MatchRules.PinMinDamage); MatchKit.NotFresh(e.State.Player);
+            e.Perform(MatchActionId.Pin);
+            var log = e.State.Log;
+            var kick = log.Last(x => x.Kind == MatchEventKind.Kickout);
+            Assert.AreEqual(RollTier.Miss, kick.Tier);
+            Assert.IsTrue(MatchScreenModel.RescueFollows(log, kick), "за «три» — порятунок: виноски «ТРИ!» немає");
+
+            MatchKit.Play(e, MatchActionId.Submission);
+            e.Perform(MatchActionId.Pin);
+            var last = e.State.Log.Last(x => x.Kind == MatchEventKind.Kickout);
+            Assert.AreNotSame(kick, last);
+            Assert.IsFalse(MatchScreenModel.RescueFollows(e.State.Log, last), "удруге рятунку немає — «ТРИ!» є");
+            Assert.IsFalse(MatchScreenModel.RescueFollows(e.State.Log, log.First(x => x.Kind != MatchEventKind.Kickout)), "не утримання — ні");
+
+            var rescue = log.First(x => x.Kind == MatchEventKind.Rescue);
+            var steps = RingClipTable.Plan(rescue);
+            Assert.AreEqual(1, steps.Count);
+            Assert.AreEqual(StageCam.Low, steps[0].Cam, "рефері, якого відволікли, — у кадрі відліку, а не в загальному плані");
+        }
+
+        /// <summary>
         /// Охоронець (2а), утримання P1-1 (<c>F2_DIRECTOR.md</c>): рахунок рефері за ступенем ядра — 10+ вирвався на «раз» («два»
         /// немає), 7–9 — на «два», 7–9 після фінішера чи підписного — «два з половиною», провал — «три» на третій долоні. Розв'язка (і
         /// рядок журналу) — на мітці рефері, усередині кліпа; відлік стартує рівно один раз.

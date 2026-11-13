@@ -72,6 +72,61 @@ namespace Game.Core.Ring.Match
         }
 
         /// <summary>
+        /// Тіло нападника на накритті (огляд слоту 33, 13.11.2026: голова рефері впритул до голови нападника). Таз — у
+        /// (<paramref name="ax"/>, <paramref name="az"/>), біля захисника; тулуб іде поперек грудей захисника до найближчої точки
+        /// його верху (<paramref name="defenderUpper"/>: голова — таз) і ще на <paramref name="beyond"/> за неї, ноги — назад від
+        /// таза на <paramref name="legs"/>. Раніше нападник був точкою таза, і рефері ставав якраз туди, де лежать його плечі й
+        /// голова. Таз на осі захисника (напрям невідомий) — точка.
+        /// </summary>
+        public static Seg CoverBody(float ax, float az, Seg defenderUpper, float beyond, float legs)
+        {
+            float cx, cz;
+            Closest(ax, az, defenderUpper, out cx, out cz);
+            float dx = cx - ax, dz = cz - az;
+            float d = (float)Math.Sqrt(dx * dx + dz * dz);
+            if (d < 1e-3f) return new Seg(ax, az, ax, az);
+            dx /= d; dz /= d;
+            return new Seg(ax - dx * legs, az - dz * legs, cx + dx * beyond, cz + dz * beyond);
+        }
+
+        // ПЛЕЙСХОЛДЕР: нахил кандидатів відліку від перпендикуляра до тіла в бік голови захисника, градуси.
+        private static readonly float[] CountTilts = { 0f, 30f, 50f };
+
+        /// <summary>
+        /// Місце рефері на відліку: біля плечей захисника (<paramref name="sx"/>, <paramref name="sz"/>), обличчям до них.
+        /// Кандидати — збоку <paramref name="sideX"/>/<paramref name="sideZ"/> (протилежному нападникові) на <paramref name="reach"/>
+        /// від осі тіла, далі зі зсувом до голови (нахил <see cref="CountTilts"/>, відстань від осі та сама), потім так само з
+        /// другого боку. Кожен перевіряється вздовж погляду: таз і коліна (<paramref name="kneeFwd"/>) — не ближче за
+        /// <paramref name="clear"/> до осі жодного тіла; голова в нахилі на долоні (<paramref name="leanFwd"/>) — не ближче за
+        /// <paramref name="leanClear"/>. Перший вільний — відповідь (true). Жодного — false і перший кандидат (виклик доштовхує
+        /// <see cref="PushClear"/>).
+        /// </summary>
+        public static bool CountSpot(float sx, float sz, float sideX, float sideZ, float headX, float headZ, IList<Seg> bodies,
+            float reach, float kneeFwd, float leanFwd, float clear, float leanClear, float lim, out float x, out float z)
+        {
+            x = sx + sideX * reach; z = sz + sideZ * reach;
+            for (int s = 0; s < 2; s++)
+            {
+                float nx = s == 0 ? sideX : -sideX, nz = s == 0 ? sideZ : -sideZ;
+                foreach (float tilt in CountTilts)
+                {
+                    float along = reach * (float)Math.Tan(tilt * Math.PI / 180.0);
+                    float cx = sx + nx * reach + headX * along, cz = sz + nz * reach + headZ * along;
+                    if (Math.Abs(cx) > lim || Math.Abs(cz) > lim) continue;
+                    float fx = sx - cx, fz = sz - cz;                 // погляд — на плечі
+                    float fl = (float)Math.Sqrt(fx * fx + fz * fz);
+                    fx /= fl; fz /= fl;
+                    if (MinDist(cx, cz, bodies) < clear) continue;
+                    if (MinDist(cx + fx * kneeFwd, cz + fz * kneeFwd, bodies) < clear) continue;
+                    if (MinDist(cx + fx * leanFwd, cz + fz * leanFwd, bodies) < leanClear) continue;
+                    x = cx; z = cz;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
         /// Зсув місця рефері від тіл: і сама точка (<paramref name="x"/>, <paramref name="z"/>), і «коліна» — на
         /// <paramref name="kneeFwd"/> уздовж (<paramref name="faceX"/>, <paramref name="faceZ"/>) — мають бути не ближче за
         /// <paramref name="minClear"/> до осі тіла. Зсув — від найближчої точки тіла, у межах рингу ±<paramref name="lim"/>.

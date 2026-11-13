@@ -88,9 +88,11 @@ namespace Game.Gameplay.Ring.UI
             {
                 bool first = _beatSeen < 0;
                 _beatSeen = st.BeatSeq;
-                if (!first && st.BeatEvent != null) RingCallouts.Push(_call, st.BeatEvent, st.BeatPhase, Ctx.Text, _m.IsOver ? _m.Engine.Result.Winner : (MatchWinner?)null);
-                // Такт останньої події кроку — табло наздоганяє кадр саме на контакті (а не після всієї серії кліпів).
                 var log = _m.Engine.State.Log;
+                if (!first && st.BeatEvent != null)
+                    RingCallouts.Push(_call, st.BeatEvent, st.BeatPhase, Ctx.Text, _m.IsOver ? _m.Engine.Result.Winner : (MatchWinner?)null,
+                        MatchScreenModel.RescueFollows(log, st.BeatEvent));
+                // Такт останньої події кроку — табло наздоганяє кадр саме на контакті (а не після всієї серії кліпів).
                 if (!first && st.BeatEvent != null && log.Count > 0 && st.BeatEvent.Seq >= log[log.Count - 1].Seq && st.ShownSeq >= st.BeatEvent.Seq) { _snapP = null; Refresh(); }
             }
             // Журнал відкриває рядок на такті його події (не раніше).

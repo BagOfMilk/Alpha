@@ -586,6 +586,24 @@ namespace Game.Gameplay.Ring.Models
             };
         }
 
+        // ---------- виноска відліку ----------
+
+        /// <summary>
+        /// Чи розірвав рахунок напарник: у журналі одразу за цим утриманням іде <see cref="MatchEventKind.Rescue"/>
+        /// (MatchEngine.ResolvePin). Тоді рефері рахує «два з половиною», і виноска «ТРИ!» брехала б
+        /// (огляд слоту 33, 13.11.2026: «ТРИ!», а за мить — «Напарник рятує»).
+        /// </summary>
+        public static bool RescueFollows(IList<MatchEvent> log, MatchEvent ev)
+        {
+            if (log == null || ev == null || ev.Kind != MatchEventKind.Kickout) return false;
+            for (int i = log.Count - 1; i >= 0; i--)
+            {
+                if (!ReferenceEquals(log[i], ev)) continue;
+                return i + 1 < log.Count && log[i + 1].Kind == MatchEventKind.Rescue;
+            }
+            return false;
+        }
+
         // ---------- фокус без миші ----------
 
         /// <summary>Ідентифікатор рядка дії для фокуса: прийом кар'єри або дія рушія (стабільний між оновленнями рядків).</summary>

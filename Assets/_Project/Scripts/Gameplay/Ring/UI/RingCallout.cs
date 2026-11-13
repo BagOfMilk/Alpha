@@ -100,7 +100,8 @@ namespace Game.Gameplay.Ring.UI
     public static class RingCallouts
     {
         /// <param name="phase">Фаза такту: 0 — контакт; утримання — 1 «раз», 2 «два», 3 — розв'язка (<c>IRingStage.BeatPhase</c>).</param>
-        public static void Push(RingCallout c, MatchEvent ev, int phase, RingText t, MatchWinner? winner)
+        /// <param name="rescued">За утриманням іде порятунок напарником (<see cref="MatchScreenModel.RescueFollows"/>): «три» не було.</param>
+        public static void Push(RingCallout c, MatchEvent ev, int phase, RingText t, MatchWinner? winner, bool rescued = false)
         {
             switch (ev.Kind)
             {
@@ -110,7 +111,8 @@ namespace Game.Gameplay.Ring.UI
                     // (огляд 08.11.2026: слова йшли за таймером і обганяли відлік).
                     if (phase == 1) c.Now(t.Get("match.call.one"), null, RingUi.Text, 34f, 0.7f);
                     else if (phase == 2) c.Now(t.Get("match.call.two"), null, RingUi.Warn, 40f, 0.7f);
-                    else if (ev.Tier == RollTier.Miss) c.Now(t.Get("match.call.three"), null, RingUi.Bad, 64f, 1.4f);
+                    // Напарник розірвав рахунок: рефері зупинився на «два з половиною» — слова «три» немає (огляд слоту 33).
+                    else if (ev.Tier == RollTier.Miss) { if (!rescued) c.Now(t.Get("match.call.three"), null, RingUi.Bad, 64f, 1.4f); }
                     // «ВИРВАЛАСЯ!» — у роді того, хто вирвався (Actor події Kickout; P2-6).
                     else c.Now(ev.Tier == RollTier.Partial ? t.Get("match.call.kickout.two") : RingLabels.ForSide(t, "match.call.kickout", ev.Actor),
                         ev.Perk != null ? Who(t, ev) + " · " + RingLabels.PerkName(t, ev.Perk) : Who(t, ev), RingUi.Gold, 54f, 1.5f);
