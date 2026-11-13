@@ -14,6 +14,12 @@ namespace Game.Gameplay.Ring.Models
         /// </summary>
         public static string PathName(RingText t, RingPath p, bool female) { return female ? t.Get("path." + FeudVars.PathName(p) + ".fem") : PathName(t, p); }
         public static string PathMark(RingText t, RingPath p) { return t.Get("path." + FeudVars.PathName(p) + ".mark"); }
+        /// <summary>
+        /// Назва ґіміка за статтю борця (рев'ю ПМ 13.11.2026: героїня бачила себе «Силачем»): «Силачка, Летунка…» — ключі
+        /// «gimmick.&lt;ключ&gt;.fem» (c26ca6dd «Кар'єри»). Як у шляхів, не «.f»: назву видно й героєві, й суперникові на одному
+        /// екрані, а «.f» HeroForms підмінив би її обом. Стать: герой — <see cref="HeroForms.ShowsHeroine"/>, суперник — NpcDef.Female.
+        /// </summary>
+        public static string GimmickName(RingText t, string gimmickKey, bool female) { string k = "gimmick." + gimmickKey; return t.Get(female ? k + ".fem" : k); }
         public static string Var(RingText t, string name) { return t.Get("var." + name); }
 
         public static string PlanName(RingText t, BookerPlan p)
