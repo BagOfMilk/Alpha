@@ -351,8 +351,8 @@ namespace Game.Core.Ring.Career
             State.Season = 1; State.Week = 1;
             Array.Clear(State.SeasonRecord, 0, State.SeasonRecord.Length);
             State.SeasonPopStart = Popularity;
+            Stage = CareerStage.Week;   // спершу тиждень, потім картка: обіцяний сценою суперник ставиться лише на тижні
             StartWeek();
-            Stage = CareerStage.Week;
             OpenAutoScene();
         }
 
@@ -406,7 +406,9 @@ namespace Game.Core.Ring.Career
 
         /// <summary>
         /// Суперник, якого пообіцяла сцена (ефект кар'єри «opponent»; зрада Сталевого — матч-розплата, рев'ю ПМ 927b86c), стає суперником
-        /// найближчого звичайного шоу: цього тижня, поки триває тиждень, інакше — на наступному звичайному. Велике шоу, титульний матч і
+        /// найближчого звичайного шоу: цього тижня, поки триває тиждень, інакше — на наступному звичайному. Охорона «лише на тижні» —
+        /// від шоу й кінця сезону; тому кожен початок тижня ставить Stage = Week ДО StartWeek (рев'ю ПМ 74a7d4b1: інакше обіцянку
+        /// пропускало кожне наступне шоу, і вона спрацьовувала пізніше — на BookShow посеред тижня). Велике шоу, титульний матч і
         /// шоу ворожнечі з Молотом не чіпаються — обіцянка чекає. Такого NPC немає в пулі федерації (герой перейшов в іншу) — обіцянка
         /// знімається. true — картку переписано (або суперник уже той самий).
         /// </summary>
@@ -1571,8 +1573,8 @@ namespace Game.Core.Ring.Career
             else
             {
                 State.Week++;
+                Stage = CareerStage.Week;   // до StartWeek: відкладена розплата (PendingOpponent) стає на перше ж звичайне шоу
                 StartWeek();
-                Stage = CareerStage.Week;
                 OpenAutoScene();
             }
         }
@@ -1930,8 +1932,8 @@ namespace Game.Core.Ring.Career
                 State.ContractExclusive = false; State.ContractEndSeason = 0; State.ContractPenalty = 0;
             }
             State.Strained = false;
+            Stage = CareerStage.Week;   // до StartWeek — див. ApplyPendingOpponent
             StartWeek();
-            Stage = CareerStage.Week;
             OpenAutoScene();
         }
 
