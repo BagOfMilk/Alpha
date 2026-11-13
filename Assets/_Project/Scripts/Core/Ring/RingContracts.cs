@@ -80,6 +80,11 @@ namespace Game.Core.Ring
         public bool DirtyGame;
         /// <summary>«Імпровізація»: раз за матч провал (не фінішер, не промінь надії) стає «частково».</summary>
         public bool Improvise;
+        /// <summary>
+        /// «Читає суперника» (ґімік «Ветеран», Кар'єра п. 4 М1, 12.11.2026): гравець бачить намір суперника перед його ходом
+        /// (<c>MatchScreenModel.RivalIntent</c>). На кидки не впливає — лише показ; показ на екрані — після У0.
+        /// </summary>
+        public bool ReadsRival;
     }
 
     /// <summary>Усе, що матч отримує від ворожнечі (gdd §1, §3).</summary>
