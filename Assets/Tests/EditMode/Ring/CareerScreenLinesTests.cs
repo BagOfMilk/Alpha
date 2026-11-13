@@ -1301,7 +1301,8 @@ namespace Game.Tests.EditMode
             if (!week.Contains("CareerScreenLines.TurnLine(T, r, HeroForms.ShowsHeroine(T))")) bad.Add("WeekScreenView: відгук без повороту ролі");
             if (!show.Contains("if (CareerScreenLines.LateRoleShown(C, CareerScreenLines.SeasonEndActions(C))) LateRoleBlock(col);")) bad.Add("ShowScreens: немає вибору пізньої ролі");
             // правки слоту 31
-            if (!week.Contains("CareerTileLayout.DrawerRoomUnderPoster(")) bad.Add("WeekScreenView: шухляда не рахує наліпку (правка 1)");
+            // наліпку рахує CareerTileLayout.DrawerOverPoster (через DrawerRoomUnderPoster; тест WeekDrawer_FoldDecision_…) — вид лише передає її
+            if (!week.Contains("_posterSticker, _dev, out fold);")) bad.Add("WeekScreenView: шухляда не рахує наліпку (правка 1)");
             if (Regex.Matches(week, @"Tab\.style\.flexShrink = 0f").Count < 2) bad.Add("WeekScreenView: вкладки «Розвиток / Витрати» стискаються (правка 2)");
             if (!dialog.Contains("MenuShapes.Trapezoid(") || !dialog.Contains("card.Add(col);")) bad.Add("MenuDialog: діалог без підкладки (правка 3)");
             if (pause.Contains("MenuKit.Footer(") || !pause.Contains("_col.Add(_footer);")) bad.Add("PauseOverlay: підказка клавіш знову внизу, на плитках тижня (правка 4)");
@@ -1393,6 +1394,51 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(f, "до розкладки — без згортання");
             Assert.AreEqual(CareerTileLayout.DrawerNeed(false), before, 0.01f, "до розкладки — мінімум, не NaN у стилі");
             Assert.GreaterOrEqual(CareerTileLayout.DrawerPosterGap, 20f, "«Витрати» впритул до рваного краю (s33 p11 012–015, p7 006–015)");
+        }
+
+        /// <summary>
+        /// П. 1, кадр слоту 34 (a_s1 4:3): картка згортала рядок умов на проміжному проході розкладки (ряд дій ще не на місці) і так
+        /// лишалась, хоч під повною карткою було ~198 од. Рішення — за повною висотою афіші, тож воно оборотне й не коливається.
+        /// </summary>
+        [Test]
+        public void WeekDrawer_FoldDecision_IsStableAndReversible()
+        {
+            const float bottomY = 539f, details = 26f;
+            bool f;
+            // проміжний прохід: шухляда «нижче» на два ряди плиток — тісно, згортає
+            CareerTileLayout.DrawerOverPoster(bottomY - 200f, 321f, false, details, false, true, out f);
+            Assert.IsTrue(f, "тісно — згортає");
+            // наступний прохід: розкладка на місці, афіша згорнута (низ 295) — повна (321) влазить: розгортає
+            float h = CareerTileLayout.DrawerOverPoster(bottomY, 321f - details, true, details, false, true, out f);
+            Assert.IsFalse(f, "місця під повною карткою досить — картка розгортається");
+            Assert.AreEqual(bottomY - 321f - CareerTileLayout.DrawerPosterGap, h, 0.01f, "висота — від низу розгорнутої картки");
+            // стійкість: рішення, застосоване до розкладки, на наступному проході те саме (обидва стани, усі розміри)
+            foreach (bool dev in new[] { true, false })
+            foreach (bool sticker in new[] { false, true })
+            for (float full = 250f; full <= 520f; full += 5f)
+            for (float d = 0f; d <= 120f; d += 20f)
+            {
+                bool f1, f2;
+                CareerTileLayout.DrawerOverPoster(bottomY, full, false, d, sticker, dev, out f1);
+                float h2 = CareerTileLayout.DrawerOverPoster(bottomY, f1 ? full - d : full, f1, d, sticker, dev, out f2);
+                Assert.AreEqual(f1, f2, "коливання: повна " + full + ", рядки " + d);
+                if (!f2) Assert.GreaterOrEqual(bottomY - h2 + 0.01f, full + (sticker ? CareerTileLayout.PosterStickerHang : 0f) + CareerTileLayout.DrawerPosterGap, "не на картці");
+                else if (bottomY - (full - d) - (sticker ? CareerTileLayout.PosterStickerHang : 0f) - CareerTileLayout.DrawerPosterGap >= CareerTileLayout.DrawerNeed(dev))
+                    Assert.GreaterOrEqual(bottomY - h2 + 0.01f, full - d + (sticker ? CareerTileLayout.PosterStickerHang : 0f) + CareerTileLayout.DrawerPosterGap, "згорнута — не на картці");
+            }
+            // згорнута — шухляда бере звільнене рядками місце: повна 390 (під нею 129 < 132), згорнута 364 — під нею 155
+            h = CareerTileLayout.DrawerOverPoster(bottomY, 390f, false, details, false, true, out f);
+            Assert.IsTrue(f, "під повною карткою не влазить мінімум — згортає");
+            Assert.AreEqual(bottomY - (390f - details) - CareerTileLayout.DrawerPosterGap, h, 0.01f, "висота — від низу згорнутої картки");
+            // висота рядків невідома (NaN) чи від'ємна — рахується нулем, а не ламає висоту до мінімуму
+            foreach (float bad in new[] { float.NaN, -5f })
+            {
+                h = CareerTileLayout.DrawerOverPoster(bottomY, 300f, true, bad, false, true, out f);
+                Assert.IsFalse(f, "рядки " + bad + ": місця досить — розгорнута");
+                Assert.AreEqual(bottomY - 300f - CareerTileLayout.DrawerPosterGap, h, 0.01f, "рядки " + bad + " — нуль");
+            }
+            CareerTileLayout.DrawerOverPoster(bottomY, 321f, false, float.NaN, false, true, out f);
+            Assert.IsFalse(f, "висота рядків ще невідома — без згортання за неї");
         }
 
         /// <summary>
@@ -1514,12 +1560,16 @@ namespace Game.Tests.EditMode
             string shapes = File.ReadAllText(Path.Combine(ui, "Menus", "MenuShapes.cs"));
             var bad = new List<string>();
             if (week.Contains("ArenaKit.StripH + 12f") || week.Contains("DrawerMinRoom") || week.Contains("if (room > 120f)")) bad.Add("WeekScreenView: шухляда знову відкочується до стрічки");
-            if (!week.Contains("CareerTileLayout.DrawerMaxHeight(room, _dev, out fold)") || !CodeLine(week, "_drawer.style.maxHeight = max;")) bad.Add("WeekScreenView: висота шухляди не з моделі");
-            if (!CodeLine(week, "if (fold && !_posterFolded) { _foldW = width; _foldH = height; FoldPoster(true); }")) bad.Add("WeekScreenView: картка не згортає рядки умов");
+            if (!week.Contains("float max = CareerTileLayout.DrawerOverPoster(bottomY, _poster.layout.y + _poster.layout.height, _posterFolded, _detailsH,")
+                || !CodeLine(week, "_drawer.style.maxHeight = max;")) bad.Add("WeekScreenView: висота шухляди не з моделі");
+            if (!CodeLine(week, "if (fold != _posterFolded) FoldPoster(fold);")) bad.Add("WeekScreenView: картка не згортає (чи не розгортає) рядки умов");
+            if (!CodeLine(week, "if (!_posterFolded && _posterDetails != null && !float.IsNaN(_posterDetails.layout.height)) _detailsH = _posterDetails.layout.height;"))
+                bad.Add("WeekScreenView: висота схованих рядків не з розгорнутої афіші");
             if (!week.Contains("_posterDetails.style.display = fold ? DisplayStyle.None : DisplayStyle.Flex;")) bad.Add("WeekScreenView: згортання нічого не ховає");
             if (Regex.Matches(week, Regex.Escape("details.Add(Bullet(")).Count < 6 || Regex.Matches(week, Regex.Escape("col.Add(Bullet(")).Count > 0)
                 bad.Add("WeekScreenView: рядки умов афіші — не в блоці, що згортається");
             if (!CodeLine(week, "_posterFolded = false;")) bad.Add("WeekScreenView: згортання не скидається з перебудовою");
+            if (!CodeLine(week, "_detailsH = 0f;")) bad.Add("WeekScreenView: висота рядків старої афіші переживає перебудову");
             if (!week.Contains("CareerTileLayout.DrawerScrollMin(max, ")) bad.Add("WeekScreenView: прокрутка шухляди не поступається шапці");
             int all = ending.IndexOf("if (_all)", System.StringComparison.Ordinal);
             int attrs = all < 0 ? -1 : ending.IndexOf("dev.Add(RingUi.Section(t.Get(\"dev.section.attrs\")));", all, System.StringComparison.Ordinal);

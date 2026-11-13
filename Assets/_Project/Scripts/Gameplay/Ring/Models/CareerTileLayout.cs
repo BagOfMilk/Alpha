@@ -188,6 +188,22 @@ namespace Game.Gameplay.Ring.Models
         }
 
         /// <summary>
+        /// Шухляда над афішею з рядками умов, що згортаються (<see cref="DrawerMaxHeight"/>). Рішення «згорнути» — за ПОВНОЮ висотою
+        /// афіші: зараз низ <paramref name="posterBottomNow"/>, і якщо вона згорнута (<paramref name="foldedNow"/>) — плюс сховані
+        /// рядки <paramref name="detailsH"/>. Тож рішення однакове в обох станах (не коливається) і оборотне: проміжний прохід
+        /// розкладки, коли ряд дій ще не на місці й шухляді здається тісно, більше не згортає картку назавжди (кадр слоту 34, a_s1 4:3:
+        /// рядок «Суперник під твоє місце в картці» зник при ~198 од. під повною карткою). Висота — від низу афіші в обраному стані.
+        /// </summary>
+        public static float DrawerOverPoster(float drawerBottomY, float posterBottomNow, bool foldedNow, float detailsH, bool sticker, bool dev, out bool fold)
+        {
+            if (float.IsNaN(detailsH) || detailsH < 0f) detailsH = 0f;
+            float full = posterBottomNow + (foldedNow ? detailsH : 0f);
+            DrawerMaxHeight(DrawerRoomUnderPoster(drawerBottomY, full, sticker), dev, out fold);
+            bool unused;
+            return DrawerMaxHeight(DrawerRoomUnderPoster(drawerBottomY, fold ? full - detailsH : full, sticker), dev, out unused);
+        }
+
+        /// <summary>
         /// Найменша висота прокрутки шухляди: <see cref="DevScrollMinH"/>, а коли тісно — скільки лишають шапка й підвал, але не менше
         /// за рядок (<see cref="DrawerScrollMinTight"/>): так шапка з дворядковою підказкою не виштовхує підвал на канати.
         /// </summary>

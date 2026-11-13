@@ -29,10 +29,11 @@ namespace Game.Gameplay.Ring.UI
         private Label _hint;
         private VisualElement _row, _gold, _weekPlate, _last, _ropes, _header, _drawer, _poster;
         // шухляда над афішею (ПМ 13.11.2026): шапка й підвал шухляди — для найменшої прокрутки; рядки умов афіші згортаються, коли під
-        // нею не влазить навіть мінімум шухляди (CareerTileLayout.DrawerMaxHeight) — до перебудови екрана чи зміни розміру панелі
+        // ПОВНОЮ афішею не влазить навіть мінімум шухляди (CareerTileLayout.DrawerOverPoster); висота схованих рядків — з останньої
+        // розкладки розгорнутої афіші
         private VisualElement _drawerHead, _drawerFoot, _posterDetails;
         private bool _posterFolded;
-        private float _foldW = -1f, _foldH = -1f;
+        private float _detailsH;
         /// <summary>На афіші є наліпка форми суперника, що звисає з її низу (межа шухляди — від наліпки).</summary>
         private bool _posterSticker;
         private string _hintDefault = "";
@@ -77,6 +78,7 @@ namespace Game.Gameplay.Ring.UI
             Root.Add(ShowKit.RivalStrip(C, T, w.Card.Opponent, w.Card.OpponentFeudLevel, true));
             _posterSticker = false;
             _posterFolded = false;
+            _detailsH = 0f;
             _poster = Poster(w.Card, w.IsBigShowWeek);
             _poster.RegisterCallback<GeometryChangedEvent>(e => Fit());   // висота афіші відома лише після розкладки (межа шухляди)
             Root.Add(_poster);
@@ -188,11 +190,13 @@ namespace Game.Gameplay.Ring.UI
                 bool posterReady = _poster != null && !float.IsNaN(_poster.layout.height) && _poster.layout.height > 0f;
                 if (posterReady && !float.IsNaN(height))
                 {
-                    if (_posterFolded && (Math.Abs(width - _foldW) > 0.5f || Math.Abs(height - _foldH) > 0.5f)) FoldPoster(false);   // інша панель — наново
-                    float room = CareerTileLayout.DrawerRoomUnderPoster(bottomY, _poster.layout.y + _poster.layout.height, _posterSticker);
+                    // рішення — за повною висотою афіші (з рядками, навіть сховані): однакове в обох станах, тож не коливається й
+                    // розгортає картку, щойно проміжний прохід розкладки минув (кадр слоту 34, a_s1 4:3)
+                    if (!_posterFolded && _posterDetails != null && !float.IsNaN(_posterDetails.layout.height)) _detailsH = _posterDetails.layout.height;
                     bool fold;
-                    float max = CareerTileLayout.DrawerMaxHeight(room, _dev, out fold);
-                    if (fold && !_posterFolded) { _foldW = width; _foldH = height; FoldPoster(true); }
+                    float max = CareerTileLayout.DrawerOverPoster(bottomY, _poster.layout.y + _poster.layout.height, _posterFolded, _detailsH,
+                        _posterSticker, _dev, out fold);
+                    if (fold != _posterFolded) FoldPoster(fold);
                     _drawer.style.maxHeight = max;
                     if (_drawerScroll != null)
                         _drawerScroll.style.minHeight = CareerTileLayout.DrawerScrollMin(max, _drawerHead != null ? _drawerHead.layout.height : float.NaN,
