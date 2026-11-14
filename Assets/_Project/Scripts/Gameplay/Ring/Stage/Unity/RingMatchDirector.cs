@@ -1987,9 +1987,10 @@ namespace Game.Gameplay.Ring.Stage
                 }
                 else Debug.LogWarning("[Ринг] відлік: вільного місця для рефері біля пари немає — лишається на старому (можливий перетин з тілом)");
             }
-            yield return Walk(new[] { new SlideItem(R, spot, yaw) });
             var down = _s.Clip("Ref_Kneel_Down");
-            if (down != null && Upright(R))
+            bool kneel = down != null && Upright(R);
+            yield return Walk(new[] { new SlideItem(R, kneel ? KneelApproach(R, down, spot, yaw) : spot, yaw) });
+            if (kneel && Upright(R))
             {
                 R.PlayAt(down, false, R.PosePos, yaw, RingStage3D.PlaySpeed);
                 yield return new WaitForSeconds(down.length / RingStage3D.PlaySpeed);
@@ -1999,6 +2000,24 @@ namespace Game.Gameplay.Ring.Stage
             _countT0 = Time.time;
             if (Trace) Debug.Log("[Ринг] відлік: " + countClip + " (" + ev.Tier + ")");
             if (_plan.IsCount && !_beatFired) StartCoroutine(CountBeats(ev, _plan));
+        }
+
+        /// <summary>
+        /// Куди рефері підійти стоячи, щоб таз НА КОЛІНІ опинився в точці відліку <paramref name="spot"/>:
+        /// <c>Ref_Kneel_Down</c> несе таз уперед чи назад. Вузол ref_kneel у Кліпів-1, 14.11.2026: кінець кліпа — (0; −0,40) уперед,
+        /// раніше (0; +0,20) назад. Хід таза рахується з самого кліпа (вибірка початку й кінця, повернута курсом так само, як
+        /// <see cref="RingActor.PlayAtTime"/> ставить слот), тож підхід правильний і зі старим, і з новим FBX.
+        /// Хід понад 1 м — запобіжник: тоді рефері йде просто в точку.
+        /// </summary>
+        private static Vector3 KneelApproach(RingActor r, AnimationClip down, Vector3 spot, float yaw)
+        {
+            Vector3 h0, h1;
+            float y0, y1;
+            r.SampleLocal(down, 0f, out h0, out y0);
+            r.SampleLocal(down, down.length, out h1, out y1);
+            Vector3 d = Quaternion.Euler(0f, yaw - y0, 0f) * new Vector3(h1.x - h0.x, 0f, h1.z - h0.z);
+            if (d.sqrMagnitude > 1f) return spot;
+            return new Vector3(spot.x - d.x, spot.y, spot.z - d.z);
         }
 
         /// <summary>Мітка другого дотику предмета в кліпі (пропозиція ПМ «Кліпам», <c>CLIP_NEEDS.md</c> §5).</summary>

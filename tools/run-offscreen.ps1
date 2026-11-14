@@ -94,7 +94,16 @@ $parkX = $virtual.Right + 200
 $parkY = $virtual.Top
 
 $gameArgList = @()
-foreach ($chunk in $GameArgs) { $gameArgList += $chunk.Split(@(' ', ','), [System.StringSplitOptions]::RemoveEmptyEntries) }
+# Значення з пробілом — у лапках: -GameArgs "-ring-hero-name 'Максиміліан Шершеньковий'" — один аргумент (14.11.2026,
+# огляд довгого імені героя). Лапки рахуються лише на межі аргументу: апостроф усередині слова («Дем'ян») не відкриває
+# лапок; ім'я з апострофом і пробілом — у подвійних лапках.
+foreach ($chunk in $GameArgs) {
+    foreach ($m in [regex]::Matches($chunk, "(?<=^|[\s,])'([^']*)'(?=$|[\s,])|(?<=^|[\s,])`"([^`"]*)`"(?=$|[\s,])|[^\s,]+")) {
+        if ($m.Groups[1].Success) { $gameArgList += $m.Groups[1].Value }
+        elseif ($m.Groups[2].Success) { $gameArgList += $m.Groups[2].Value }
+        else { $gameArgList += $m.Value }
+    }
+}
 $launchArgs = @('-screen-fullscreen', '0', '-screen-width', "$Width", '-screen-height', "$Height") + $gameArgList
 Write-Host ("Аргументи гри: " + ($launchArgs -join ' '))
 $sw = [System.Diagnostics.Stopwatch]::StartNew()
