@@ -295,14 +295,19 @@ namespace Game.Tests.EditMode
         /// Природна досяжність (рев'ю ПМ 927b86c): жодної підготовки стану — герой федерації 1 щотижня бере «Закулісся» раз, решту
         /// дня тренується, від пропозицій вищих федерацій відмовляється. Щосезонні події (інтерв'ю, парковка, контракт, менеджерка,
         /// поворот) стоять у файлі раніше, але сцени дуги їх випереджають: друг — у сезоні 1, ветеран — у сезоні 2, зрада — у сезоні 3,
-        /// і на найближчому звичайному шоу після зради — матч-розплата зі Сталевим.
+        /// і на найближчому звичайному шоу після зради — матч-розплата зі Сталевим. За КОЖНИМ ґіміком екрана створення (з 14.11.2026
+        /// там усі вісім, f74a24a3): ґімік міняє перемоги, травми й ріст — дуга від цього не має ламатися.
         /// </summary>
         [Test]
-        public void Arc_ComesNaturally_TheBackstageOnceAWeek_VeteranInSeason2_BetrayalInSeason3_ThenThePayback()
+        public void Arc_ComesNaturally_ForEveryGimmick_TheBackstageOnceAWeek_VeteranInSeason2_BetrayalInSeason3_ThenThePayback()
         {
+            var gimmicks = CareerKit.NewAtCreate(1).GetCreationView().Gimmicks.Select(o => o.Def.Id).ToList();
+            Assert.AreEqual(Enum.GetValues(typeof(Gimmick)).Length, gimmicks.Count, "на екрані створення — усі ґіміки");
+            foreach (var g in gimmicks)
             foreach (ulong seed in new ulong[] { 11, 12, 13, 14, 15 })
             {
-                var s = CareerKit.NewHero(seed);
+                var s = CareerKit.NewHero(seed, g);
+                string who = g + ", seed " + seed;
                 var at = new Dictionary<string, int>();
                 var rep = new CareerRunReport();
                 bool betrayed = false, checkedPayback = false;
@@ -337,7 +342,7 @@ namespace Game.Tests.EditMode
                             bool ordinary = !s.State.IsBig && !s.State.IsTitle && !s.State.IsFeudShow;
                             if (betrayed && !checkedPayback && ordinary)
                             {
-                                Assert.AreEqual(Stalevyi, s.State.Opponent, "seed " + seed + ": найближче звичайне шоу після зради — розплата (" + key + ")");
+                                Assert.AreEqual(Stalevyi, s.State.Opponent, who + ": найближче звичайне шоу після зради — розплата (" + key + ")");
                                 checkedPayback = true;
                             }
                         }
@@ -346,12 +351,12 @@ namespace Game.Tests.EditMode
                 }
                 Assert.Less(guard, 4000);
                 string seen = string.Join(",", at.Select(kv => kv.Key + "@" + kv.Value));
-                Assert.AreEqual(1, s.State.Federation, "seed " + seed + ": герой лишився у федерації 1");
-                Assert.AreEqual(1, at.ContainsKey(Friend) ? at[Friend] : -1, "seed " + seed + ": друг у лазареті — сезон 1; " + seen);
-                Assert.AreEqual(2, at.ContainsKey(Veteran) ? at[Veteran] : -1, "seed " + seed + ": ветеран — сезон 2; " + seen);
-                Assert.AreEqual(3, at.ContainsKey(Betrayal) ? at[Betrayal] : -1, "seed " + seed + ": зрада — сезон 3; " + seen);
-                Assert.IsTrue(checkedPayback, "seed " + seed + ": матч-розплата відбувся");
-                Assert.Greater(at.Count, 3, "seed " + seed + ": щосезонні події теж трапляються: " + seen);
+                Assert.AreEqual(1, s.State.Federation, who + ": герой лишився у федерації 1");
+                Assert.AreEqual(1, at.ContainsKey(Friend) ? at[Friend] : -1, who + ": друг у лазареті — сезон 1; " + seen);
+                Assert.AreEqual(2, at.ContainsKey(Veteran) ? at[Veteran] : -1, who + ": ветеран — сезон 2; " + seen);
+                Assert.AreEqual(3, at.ContainsKey(Betrayal) ? at[Betrayal] : -1, who + ": зрада — сезон 3; " + seen);
+                Assert.IsTrue(checkedPayback, who + ": матч-розплата відбувся");
+                Assert.Greater(at.Count, 3, who + ": щосезонні події теж трапляються: " + seen);
             }
         }
 
