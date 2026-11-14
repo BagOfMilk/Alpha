@@ -187,7 +187,9 @@ namespace Game.Gameplay.Ring.Models
         /// <summary>Підказка тренера: скільки тренувань на +1 — крок цього тренера (<see cref="CareerSession.CoachStepFor"/>).</summary>
         public static string CoachHint(RingText t, CareerSession c, int coach)
         {
-            return t.Format("c.shop.coach.desc", RingLabels.AttrName(t, CareerRules.Coaches[coach]), c.CoachStepFor(coach));
+            int step = c.CoachStepFor(coach);   // з сезону 7 у тренера витривалості — 5: «За 5 тренувань», не «тренування»
+            string hint = t.Format(PluralMany(step) ? "c.shop.coach.desc.many" : "c.shop.coach.desc", RingLabels.AttrName(t, CareerRules.Coaches[coach]), step);
+            return CareerRules.Coaches[coach] == RingAttr.Stamina ? WithReason(hint, AgeingTail(t, c.State.Season, true)) : hint;   // Б5
         }
 
         /// <summary>
@@ -201,8 +203,49 @@ namespace Game.Gameplay.Ring.Models
         {
             string why = t.Get("c.dev.attr.why." + (int)a);
             if (AttrAtMax(c, a)) return WithReason(why, t.Get("dev.reason.max"));
-            return WithReason(t.Format("dev.attr.buy", c.AttrCost(a)) + " — " + why,
-                string.IsNullOrEmpty(reason) ? null : t.Get("dev.reason." + reason));
+            string hint = t.Format("dev.attr.buy", c.AttrCost(a)) + " — " + why;
+            string no = string.IsNullOrEmpty(reason) ? null : t.Get("dev.reason." + reason);
+            string age = a == RingAttr.Stamina ? AgeingTail(t, c.State.Season, false) : null;   // Б5: чому дорожча
+            if (age == null) return WithReason(hint, no);
+            hint = WithReason(hint, age);
+            return no == null ? hint : hint + " · " + no;   // «оч.» — скорочення: крапку перед причиною не зрізати (WithReason зрізав би)
+        }
+
+        /// <summary>
+        /// Б5 (§5.5, власник 13.11.2026: «Так, усі 7»): хвіст підказки витривалості й тренера витривалості з сезону 4 — «тіло старіє:
+        /// +1 оч.» / «тіло старіє: +1 тренування» (надбавка <see cref="Ageing.StaminaSurcharge"/>); до сезону 4 — null, М1 без змін.
+        /// </summary>
+        public static string AgeingTail(RingText t, int season, bool coach)
+        {
+            int s = Ageing.StaminaSurcharge(season);
+            return s <= 0 ? null : t.Format(coach ? "c.age.coach" : "c.age.attr", s);
+        }
+
+        /// <summary>
+        /// Б5: рядок кінця сезону — лише на останньому кроці («Новий сезон») і лише коли надбавка наступного сезону росте (кінець
+        /// сезонів 3 і 6): «Тіло старіє: з наступного сезону витривалість — 3 оч., тренер витривалості — 4 тренування.» Ціни — з
+        /// сесії (<see cref="CareerSession.AttrCost"/>, <see cref="CareerSession.CoachStepFor"/>) плюс приріст надбавки
+        /// (<see cref="Ageing.StaminaSurcharge"/>). На екрані ще не стоїть: текст У0 — два рядки, і з контрактом та пізньою роллю
+        /// папір кінця сезону сягав канатів на 16 одиниць (CareerTextFitTests, 14.11.2026) — місце чи коротший текст — рішення власника.
+        /// </summary>
+        public static string AgeingNextLine(RingText t, CareerSession c, List<SeasonEndAction> actions)
+        {
+            if (c == null || actions == null || actions.Count != 1 || actions[0] != SeasonEndAction.NextSeason) return null;
+            int grow = Ageing.StaminaSurcharge(c.State.Season + 1) - Ageing.StaminaSurcharge(c.State.Season);
+            if (grow <= 0) return null;
+            int coach = c.CoachStepFor(Array.IndexOf(CareerRules.Coaches, RingAttr.Stamina)) + grow;   // кінець сезону 6: 5 — «5 тренувань»
+            return t.Format(PluralMany(coach) ? "c.age.next.many" : "c.age.next", c.AttrCost(RingAttr.Stamina) + grow, coach);
+        }
+
+        /// <summary>
+        /// Число вимагає родового множини («5 тренувань»), а не «тренування» (1, 2–4, 21–24): 0, 5–20, 25–30, 11–14 у кожній сотні.
+        /// Ключі з «.many» — той самий текст у цій формі.
+        /// </summary>
+        public static bool PluralMany(int n)
+        {
+            n = Math.Abs(n);
+            int d = n % 10, h = n % 100;
+            return d == 0 || d >= 5 || (h >= 11 && h <= 14);
         }
 
         /// <summary>Атрибут уже на стелі (<see cref="WrestlerStats.MaxAttr"/>): +1 не буде — плитка й підказка без «→ +4» і без ціни.</summary>
@@ -234,10 +277,32 @@ namespace Game.Gameplay.Ring.Models
             var parts = new List<string>();
             foreach (var i in injuries)
             {
-                if (i.WeeksLeft > 0) parts.Add(t.Format("c.injury.weeks", t.Get("bodyzone." + (int)i.Zone), i.WeeksLeft));
-                else if (i.ZoneDamage > 0) parts.Add(t.Format("c.injury.dmg", t.Get("bodyzone." + (int)i.Zone), i.ZoneDamage, i.Threshold));
+                string zone = t.Get("bodyzone." + (int)i.Zone);
+                if (i.WeeksLeft > 0) parts.Add(ScarTail(t, t.Format("c.injury.weeks", zone, i.WeeksLeft), i.ScarWeeks));
+                else if (i.ZoneDamage > 0) parts.Add(ScarTail(t, t.Format("c.injury.dmg", zone, i.ZoneDamage, i.Threshold), i.ScarWeeks));
+                else if (i.ScarWeeks > 0) parts.Add(t.Format("c.injury.scar_only", zone, i.ScarWeeks));   // Б5: здорова зона зі слідом
             }
             return parts.Count == 0 ? t.Get("c.injury.none") : string.Join(" · ", parts);
+        }
+
+        /// <summary>
+        /// Б5 (§5.5): слід травми — з сезону 4 (<see cref="InjuryView.ScarWeeks"/>; до того 0, М1 без змін). Травмована зона — «Ноги:
+        /// травма, ще 3 тиж. (слід: +1)»: поточна травма довша на стільки; ушкоджена — той самий хвіст: нова травма буде довшою.
+        /// </summary>
+        public static string ScarTail(RingText t, string line, int scarWeeks)
+        {
+            return scarWeeks > 0 ? line + " " + t.Format("c.injury.scar", scarWeeks) : line;
+        }
+
+        /// <summary>
+        /// Б6 (власник 13.11.2026, «Так, усі 7», варіант А): сцена закулісся вписала суперника найближчого шоу
+        /// (<see cref="WeekActionResult.OpponentChanged"/>) — частина рядка результату «суперник на шоу — {0}» з ім'ям із картки, вже
+        /// переписаної ядром. «На шоу — …», а не «змінився»: прапорець стоїть і тоді, коли обіцяний суперник уже був у картці.
+        /// Відкладену розплату (велике шоу, титул) у М1 не показуємо. Немає прапорця чи імені — null.
+        /// </summary>
+        public static string OpponentLine(RingText t, WeekActionResult r, string opponentName)
+        {
+            return r != null && r.OpponentChanged && !string.IsNullOrEmpty(opponentName) ? t.Format("c.delta.opponent", opponentName) : null;
         }
 
         /// <summary>Смужка зони тіла на стрічці героя: сегментів — поріг травми зони, заповнено — ушкодження (травма — уся), тижні травми.</summary>
@@ -420,6 +485,94 @@ namespace Game.Gameplay.Ring.Models
 
         /// <summary>Чернетка героя перед створенням: дивізіон (P2-6) — зі статі тіла (body_f_* — жіночий), суперники своєї статі.</summary>
         public static void SetDivision(CharacterDraft d, string body) { d.Female = CareerLooks.IsFemaleBody(body); }
+
+        /// <summary>
+        /// Скільки вільних балів заготовки стоїть в атрибуті <paramref name="a"/>: перший — у <see cref="CharacterDraft.FreePoint"/>,
+        /// другий (лише коли балів два, Самородок) — у <see cref="CharacterDraft.FreePoint2"/>, а без нього — туди ж, що й перший
+        /// (так само рахує ядро, <c>CareerSession.AttrsWithFreePoints</c>).
+        /// </summary>
+        public static int FreePointsIn(CharacterDraft d, int freePoints, RingAttr a)
+        {
+            if (d == null || freePoints <= 0) return 0;
+            int n = d.FreePoint == a ? 1 : 0;
+            if (freePoints >= 2 && (d.FreePoint2 ?? d.FreePoint) == a) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// Клік по рядку характеристики афіші (Б4, власник 13.11.2026: «Так, усі 7»). Один вільний бал — переходить сюди. Два
+        /// (Самородок) — бал ставиться сюди, а найдавніший із двох переходить: <see cref="CharacterDraft.FreePoint"/> — давніший,
+        /// <see cref="CharacterDraft.FreePoint2"/> — новіший; двічі по тому самому атрибуту — обидва там (+2). Вище стелі
+        /// <paramref name="max"/> бал не ставиться — заготовка не змінюється, false.
+        /// </summary>
+        public static bool PlaceFreePoint(CharacterDraft d, int freePoints, int baseValue, int max, RingAttr a)
+        {
+            if (d == null || freePoints <= 0) return false;
+            if (freePoints < 2)
+            {
+                if (baseValue + 1 > max) return false;
+                d.FreePoint = a;
+                d.FreePoint2 = null;
+                return true;
+            }
+            RingAttr newer = d.FreePoint2 ?? d.FreePoint;
+            int here = (newer == a ? 1 : 0) + 1;
+            if (baseValue + here > max) return false;
+            d.FreePoint = newer;
+            d.FreePoint2 = a;
+            return true;
+        }
+
+        /// <summary>
+        /// Частини ефекту плитки ґіміка на створенні: бонуси основи (<see cref="RingLabels.AttrBonusParts"/>) у порядку
+        /// <see cref="CareerTileLayout.CreateEffectOrder"/> (Ш-1: найдовша — остання, підписна — перша) і, у ґіміка з двома вільними
+        /// балами, рядок «+2 вільні бали» (арт-директор 14.11.2026: у Самородка всі основи 0 — плитка була порожня; той самий кегль і
+        /// колір, що в бонусів, без золота).
+        /// </summary>
+        public static List<string> CreateTileParts(RingText t, int[] attrs, int freePoints)
+        {
+            var parts = attrs != null ? RingLabels.AttrBonusParts(t, attrs) : new string[0];
+            var values = new List<int>();
+            if (attrs != null) foreach (int v in attrs) if (v != 0) values.Add(v);   // той самий порядок, що в AttrBonusParts
+            var res = CareerTileLayout.CreateEffectOrder(parts, values);
+            if (freePoints >= 2) res.Add(t.Get("c.create.tile.freepoints"));
+            return res;
+        }
+
+        // ---------------- огляд слоту 33 (ПМ 13.11.2026): порожнє значення — без мітки-тавтології ----------------
+
+        /// <summary>
+        /// Рядок плану букера: «План букера: Виграй чисто»; без плану — «Плану букера немає» (було «План букера: Плану немає»,
+        /// кадри g_heroine_feud_4x3 016, k_champdecl_1080 022, m4x3 050).
+        /// </summary>
+        public static string PlanLine(RingText t, BookerPlan p)
+        {
+            return p == BookerPlan.None ? t.Get("c.card.plan.none") : t.Get("c.card.plan") + ": " + RingLabels.PlanName(t, p);
+        }
+
+        /// <summary>
+        /// Рядок умов матчу з міткою: «Умови: Без дискваліфікації»; без умов — лише «Умов немає» (було «Умови: Умов немає», «Умови
+        /// матчу: Умов немає» — кадри картки шоу й огляду ворожнечі). <paramref name="parts"/> — назви умов; порожньо чи лише
+        /// «stip.none» — умов немає.
+        /// </summary>
+        public static string StipLine(RingText t, string label, IList<string> parts)
+        {
+            string none = t.Get("stip.none");
+            if (parts == null || parts.Count == 0 || (parts.Count == 1 && parts[0] == none)) return none;
+            return label + ": " + string.Join(", ", parts);
+        }
+
+        /// <summary>
+        /// Ім'я на рингу в полі створення за статтю тіла (ПМ 13.11.2026, п. 6): героїні — «Новачка», героєві — «Новачок». Лише поки в
+        /// полі ім'я за замовчуванням (будь-якої статі); своє ім'я гравця не чіпаємо. «.fem», а не «.f»: рід за тілом на екрані
+        /// створення, а не глобальна заміна HeroForms (виняток «c.create.default_name» у HeroFormsTests лишається).
+        /// </summary>
+        public static string FollowDefaultName(RingText t, string current, bool female)
+        {
+            string male = t.Get("c.create.default_name"), fem = t.Get("c.create.default_name.fem");
+            if (current != null && current != male && current != fem) return current;
+            return female ? fem : male;
+        }
     }
 
     /// <summary>Дія нижнього ряду кінця сезону (<see cref="CareerScreenLines.SeasonEndActions"/>).</summary>

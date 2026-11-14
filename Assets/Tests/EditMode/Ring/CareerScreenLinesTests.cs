@@ -443,7 +443,10 @@ namespace Game.Tests.EditMode
                     var a = (RingAttr)i;
                     string hint = CareerScreenLines.AttrBuyHint(T, s, a, null);
                     NoMissingKey(hint, "підказка атрибута");
-                    Assert.AreEqual(T.Format("dev.attr.buy", s.AttrCost(a)) + " — " + T.Get("c.dev.attr.why." + i), hint, "сезон " + s.State.Season + ", " + a);
+                    string expect = T.Format("dev.attr.buy", s.AttrCost(a)) + " — " + T.Get("c.dev.attr.why." + i);
+                    // Б5: з сезону 4 у витривалості — чому дорожча
+                    if (a == RingAttr.Stamina && s.State.Season >= Ageing.FromSeason) expect = CareerScreenLines.WithReason(expect, T.Format("c.age.attr", 1));
+                    Assert.AreEqual(expect, hint, "сезон " + s.State.Season + ", " + a);
                 }
             StringAssert.StartsWith(T.Format("dev.attr.buy", 3), CareerScreenLines.AttrBuyHint(T, s4, RingAttr.Stamina, null), "сезон 4: 3 оч.");
             StringAssert.StartsWith(T.Format("dev.attr.buy", 2), CareerScreenLines.AttrBuyHint(T, s4, RingAttr.Strength, null), "сила — як і була");
@@ -451,18 +454,33 @@ namespace Game.Tests.EditMode
             string no = CareerScreenLines.AttrBuyHint(T, s4, RingAttr.Stamina, "points");
             StringAssert.EndsWith(" · " + T.Get("dev.reason.points"), no, "купити не можна — чому");
             StringAssert.StartsWith(T.Format("dev.attr.buy", 3), no);
+            StringAssert.EndsWith(" · тіло старіє: +1 оч.", CareerScreenLines.AttrBuyHint(T, s4, RingAttr.Stamina, null), "Б5: хвіст — текст У0");
+            StringAssert.Contains("тіло старіє: +1 оч. · " + T.Get("dev.reason.points"), no, "хвіст старіння — перед причиною, крапка «оч.» на місці");
+            StringAssert.DoesNotContain("тіло старіє", CareerScreenLines.AttrBuyHint(T, s1, RingAttr.Stamina, null), "сезон 1 — без хвоста");
+            StringAssert.DoesNotContain("тіло старіє", CareerScreenLines.AttrBuyHint(T, s4, RingAttr.Strength, null), "сила не дорожчає — без хвоста");
 
             // магазин тренерів: найнятий — прогрес із кроком цього тренера, ні — плата; підказка — крок цього тренера
             string sName = RingLabels.AttrName(T, RingAttr.Stamina), oName = RingLabels.AttrName(T, CareerRules.Coaches[other]);
             s4.State.Coach = stamina; s4.State.CoachProgress = 2;
             Assert.AreEqual(T.Format("c.shop.coach.hired", sName, 2, CareerRules.CoachProgressStep + 1), CareerScreenLines.CoachButton(T, s4, stamina));
             StringAssert.Contains("2/4", CareerScreenLines.CoachButton(T, s4, stamina), "сезон 4: до +1 витривалості — 4 тренування");
-            Assert.AreEqual(T.Format("c.shop.coach.desc", sName, CareerRules.CoachProgressStep + 1), CareerScreenLines.CoachHint(T, s4, stamina));
+            Assert.AreEqual(CareerScreenLines.WithReason(T.Format("c.shop.coach.desc", sName, CareerRules.CoachProgressStep + 1), T.Format("c.age.coach", 1)),
+                CareerScreenLines.CoachHint(T, s4, stamina));
+            StringAssert.EndsWith(" · тіло старіє: +1 тренування", CareerScreenLines.CoachHint(T, s4, stamina), "Б5: хвіст — текст У0");
             Assert.AreEqual(T.Format("c.shop.coach", oName, CareerRules.CoachWeeklyFee), CareerScreenLines.CoachButton(T, s4, other), "не найнятий — плата");
             Assert.AreEqual(T.Format("c.shop.coach.desc", oName, CareerRules.CoachProgressStep), CareerScreenLines.CoachHint(T, s4, other), "інший тренер — як і був");
             s1.State.Coach = stamina; s1.State.CoachProgress = 2;
             StringAssert.Contains("2/3", CareerScreenLines.CoachButton(T, s1, stamina), "сезон 1 — стара ціна");
             NoMissingKey(CareerScreenLines.CoachHint(T, s1, stamina), "підказка тренера");
+            StringAssert.DoesNotContain("тіло старіє", CareerScreenLines.CoachHint(T, s1, stamina), "сезон 1 — без хвоста");
+            // сезон 7: крок тренера витривалості — 5, «за 5 тренувань» (не «тренування»), надбавка +2
+            var s7 = InSeason(s1, 7);
+            Assert.AreEqual(CareerRules.CoachProgressStep + 2, s7.CoachStepFor(stamina), "передумова: сезон 7 — +2");
+            string h7 = CareerScreenLines.CoachHint(T, s7, stamina);
+            NoMissingKey(h7, "підказка тренера, сезон 7");
+            StringAssert.Contains("За 5 тренувань", h7);
+            StringAssert.EndsWith(" · тіло старіє: +2 тренування", h7);
+            StringAssert.Contains("За 4 тренування", CareerScreenLines.CoachHint(T, s4, stamina), "4 — «тренування»");
 
             // «Радимо зараз»: ціна атрибута в назві — з поради ядра, тобто та сама, що спише покупка
             s4.Feud.State.DevPoints = 20;
@@ -1019,7 +1037,9 @@ namespace Game.Tests.EditMode
             if (week.Contains("HeaderBottom + 50f")) bad.Add("WeekScreenView: шухляда знову на старому низу (214, у канатах)");
             if (Regex.Matches(week, Regex.Escape("CareerTileLayout.DrawerBottom")).Count < 3) bad.Add("WeekScreenView: низ шухляди (створення й Fit) — не DrawerBottom");
             if (!week.Contains("DevelopmentPanel(Refresh, 2, moreTo: foot)")) bad.Add("WeekScreenView: «Усе (N)» шухляди не в підвалі");
-            if (!Regex.IsMatch(create, @"bool paper = narrow && _paperMoves != null;")) bad.Add("CreateScreenView: прийоми на папері не залежать від вузької панелі");
+            // Б4-1: два ряди ґіміків («tall») — і на вузькій панелі, і з п'ятим ґіміком на будь-якій
+            if (!Regex.IsMatch(create, @"bool tall = narrow \|\| eight;") || !Regex.IsMatch(create, @"bool paper = tall && _paperMoves != null;"))
+                bad.Add("CreateScreenView: прийоми на папері не залежать від двох рядів (вузька панель чи Б4-1)");
             if (!create.Contains("_desc.style.display = paper ? DisplayStyle.None : DisplayStyle.Flex")) bad.Add("CreateScreenView: опис ролі не ховається під прийоми");
             if (!create.Contains("_movesCard.style.display = paper ? DisplayStyle.None : DisplayStyle.Flex")) bad.Add("CreateScreenView: темна картка прийомів лишається на вузькій панелі");
             var swap = Regex.Match(settings, @"void SwitchTab\([^)]*\)\s*\{(?<body>[\s\S]*?)\n        \}");
@@ -1282,7 +1302,7 @@ namespace Game.Tests.EditMode
             var bad = new List<string>();
             // №4
             if (!kit.Contains("CareerTileLayout.Look(")) bad.Add("ArenaKit: плитка не бере вигляд із CareerTileLayout.Look");
-            if (!CodeLine(create, "tile.SelectAsEdge = r == CareerRole.Hero;")) bad.Add("CreateScreenView: герой не обирається краєм");
+            if (!CodeLine(create, "tile.SelectAsEdge = true;")) bad.Add("CreateScreenView: роль не обирається краєм (№4: «ЛИХОДІЙ» — як «ГЕРОЙ», край свого кольору)");
             // №7
             if (!CodeLine(week, "string outgrown = CareerScreenLines.OutgrownLine(T, c);")) bad.Add("WeekScreenView: афіша без «переріс щабель»");
             if (!CodeLine(show, "string outgrown = CareerScreenLines.OutgrownLine(T, c);")) bad.Add("ShowScreens: картка шоу без «переріс щабель»");
@@ -1301,7 +1321,8 @@ namespace Game.Tests.EditMode
             if (!week.Contains("CareerScreenLines.TurnLine(T, r, HeroForms.ShowsHeroine(T))")) bad.Add("WeekScreenView: відгук без повороту ролі");
             if (!show.Contains("if (CareerScreenLines.LateRoleShown(C, CareerScreenLines.SeasonEndActions(C))) LateRoleBlock(col);")) bad.Add("ShowScreens: немає вибору пізньої ролі");
             // правки слоту 31
-            if (!week.Contains("CareerTileLayout.DrawerRoomUnderPoster(")) bad.Add("WeekScreenView: шухляда не рахує наліпку (правка 1)");
+            // наліпку рахує CareerTileLayout.DrawerOverPoster (через DrawerRoomUnderPoster; тест WeekDrawer_FoldDecision_…) — вид лише передає її
+            if (!week.Contains("_posterSticker, _dev, out fold);")) bad.Add("WeekScreenView: шухляда не рахує наліпку (правка 1)");
             if (Regex.Matches(week, @"Tab\.style\.flexShrink = 0f").Count < 2) bad.Add("WeekScreenView: вкладки «Розвиток / Витрати» стискаються (правка 2)");
             if (!dialog.Contains("MenuShapes.Trapezoid(") || !dialog.Contains("card.Add(col);")) bad.Add("MenuDialog: діалог без підкладки (правка 3)");
             if (pause.Contains("MenuKit.Footer(") || !pause.Contains("_col.Add(_footer);")) bad.Add("PauseOverlay: підказка клавіш знову внизу, на плитках тижня (правка 4)");
@@ -1350,6 +1371,530 @@ namespace Game.Tests.EditMode
                 string v = kv.Value as string ?? "";
                 if (plural.IsMatch(v)) bad.Add(kv.Key + ": " + v);
             }
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        // ---------------- огляд слоту 33 (ПМ 13.11.2026) ----------------
+
+        /// <summary>
+        /// П. 1 (ВИСОКА): шухляда тижня на 4:3 лізла на картку шоу з трьома рядками умов — текст крізь текст (s33_w_p11_star_4x3 006–011).
+        /// Рішення ПМ: «верх шухляди не вище за низ картки (із зазором), решта — прокруткою»; коротку шухляду в М1 прийнято. Числа — з
+        /// кадрів 4:3 (1024×768, ×1,172): низ шухляди 539, низ афіші p7 ≈ 352, p11 ≈ 380. Колишній відкат «менше 150 — до стрічки
+        /// суперника» давав p11 шухляду 376 і верх на 163 — над карткою.
+        /// </summary>
+        [Test]
+        public void WeekDrawer_NeverClimbsOverThePoster()
+        {
+            const float bottomY = 539f;
+            foreach (bool dev in new[] { true, false })
+            foreach (float posterBottom in new[] { 250f, 300f, 352f, 380f, 400f, 430f, 470f, 520f })
+            foreach (bool sticker in new[] { false, true })
+            {
+                string at = (dev ? "розвиток" : "витрати") + ", низ афіші " + posterBottom + (sticker ? " + наліпка" : "");
+                float room = CareerTileLayout.DrawerRoomUnderPoster(bottomY, posterBottom, sticker);
+                bool fold;
+                float h = CareerTileLayout.DrawerMaxHeight(room, dev, out fold);
+                Assert.LessOrEqual(h, CareerTileLayout.DrawerMaxH, at);
+                if (fold) { Assert.Less(room, CareerTileLayout.DrawerNeed(dev), at + ": згортання — лише коли не влазить мінімум"); continue; }
+                float top = bottomY - h, posterLow = posterBottom + (sticker ? CareerTileLayout.PosterStickerHang : 0f);
+                Assert.GreaterOrEqual(top + 0.01f, posterLow + CareerTileLayout.DrawerPosterGap, at + ": верх шухляди не вище за низ картки з просвітом");
+                Assert.AreEqual(System.Math.Min(room, CareerTileLayout.DrawerMaxH), h, 0.01f, at + ": решта — прокруткою, місце під карткою не губиться");
+            }
+            bool f;
+            float p11 = CareerTileLayout.DrawerMaxHeight(CareerTileLayout.DrawerRoomUnderPoster(bottomY, 380f, false), true, out f);
+            Assert.IsFalse(f, "p11 4:3: коротка шухляда, картка ціла (ПМ: «коротку шухляду на 4:3 в М1 приймаю»)");
+            Assert.Less(p11, 160f, "p11 4:3: шухляда коротка, а не до стрічки суперника (було 376)");
+            Assert.GreaterOrEqual(p11, CareerTileLayout.DrawerNeed(true), "мінімум — шапка, рядок прокрутки, «Усе»");
+            float tall = CareerTileLayout.DrawerMaxHeight(60f, true, out f);
+            Assert.IsTrue(f, "картка з усіма рядками умов: мінімум не влазить — рядки умов згортаються");
+            Assert.AreEqual(CareerTileLayout.DrawerNeed(true), tall, 0.01f, "до згортання — мінімум, наступний прохід рахує від згорнутої");
+            Assert.AreEqual(CareerTileLayout.DrawerMaxH, CareerTileLayout.DrawerMaxHeight(1000f, true, out f), 0.01f, "широка панель — як було");
+            Assert.IsFalse(f);
+            float before = CareerTileLayout.DrawerMaxHeight(float.NaN, false, out f);
+            Assert.IsFalse(f, "до розкладки — без згортання");
+            Assert.AreEqual(CareerTileLayout.DrawerNeed(false), before, 0.01f, "до розкладки — мінімум, не NaN у стилі");
+            Assert.GreaterOrEqual(CareerTileLayout.DrawerPosterGap, 20f, "«Витрати» впритул до рваного краю (s33 p11 012–015, p7 006–015)");
+        }
+
+        /// <summary>
+        /// П. 1, кадр слоту 34 (a_s1 4:3): картка згортала рядок умов на проміжному проході розкладки (ряд дій ще не на місці) і так
+        /// лишалась, хоч під повною карткою було ~198 од. Рішення — за повною висотою афіші, тож воно оборотне й не коливається.
+        /// </summary>
+        [Test]
+        public void WeekDrawer_FoldDecision_IsStableAndReversible()
+        {
+            const float bottomY = 539f, details = 26f;
+            bool f;
+            // проміжний прохід: шухляда «нижче» на два ряди плиток — тісно, згортає
+            CareerTileLayout.DrawerOverPoster(bottomY - 200f, 321f, false, details, false, true, out f);
+            Assert.IsTrue(f, "тісно — згортає");
+            // наступний прохід: розкладка на місці, афіша згорнута (низ 295) — повна (321) влазить: розгортає
+            float h = CareerTileLayout.DrawerOverPoster(bottomY, 321f - details, true, details, false, true, out f);
+            Assert.IsFalse(f, "місця під повною карткою досить — картка розгортається");
+            Assert.AreEqual(bottomY - 321f - CareerTileLayout.DrawerPosterGap, h, 0.01f, "висота — від низу розгорнутої картки");
+            // стійкість: рішення, застосоване до розкладки, на наступному проході те саме (обидва стани, усі розміри)
+            foreach (bool dev in new[] { true, false })
+            foreach (bool sticker in new[] { false, true })
+            for (float full = 250f; full <= 520f; full += 5f)
+            for (float d = 0f; d <= 120f; d += 20f)
+            {
+                bool f1, f2;
+                CareerTileLayout.DrawerOverPoster(bottomY, full, false, d, sticker, dev, out f1);
+                float h2 = CareerTileLayout.DrawerOverPoster(bottomY, f1 ? full - d : full, f1, d, sticker, dev, out f2);
+                Assert.AreEqual(f1, f2, "коливання: повна " + full + ", рядки " + d);
+                if (!f2) Assert.GreaterOrEqual(bottomY - h2 + 0.01f, full + (sticker ? CareerTileLayout.PosterStickerHang : 0f) + CareerTileLayout.DrawerPosterGap, "не на картці");
+                else if (bottomY - (full - d) - (sticker ? CareerTileLayout.PosterStickerHang : 0f) - CareerTileLayout.DrawerPosterGap >= CareerTileLayout.DrawerNeed(dev))
+                    Assert.GreaterOrEqual(bottomY - h2 + 0.01f, full - d + (sticker ? CareerTileLayout.PosterStickerHang : 0f) + CareerTileLayout.DrawerPosterGap, "згорнута — не на картці");
+            }
+            // згорнута — шухляда бере звільнене рядками місце: повна 390 (під нею 129 < 132), згорнута 364 — під нею 155
+            h = CareerTileLayout.DrawerOverPoster(bottomY, 390f, false, details, false, true, out f);
+            Assert.IsTrue(f, "під повною карткою не влазить мінімум — згортає");
+            Assert.AreEqual(bottomY - (390f - details) - CareerTileLayout.DrawerPosterGap, h, 0.01f, "висота — від низу згорнутої картки");
+            // висота рядків невідома (NaN) чи від'ємна — рахується нулем, а не ламає висоту до мінімуму
+            foreach (float bad in new[] { float.NaN, -5f })
+            {
+                h = CareerTileLayout.DrawerOverPoster(bottomY, 300f, true, bad, false, true, out f);
+                Assert.IsFalse(f, "рядки " + bad + ": місця досить — розгорнута");
+                Assert.AreEqual(bottomY - 300f - CareerTileLayout.DrawerPosterGap, h, 0.01f, "рядки " + bad + " — нуль");
+            }
+            CareerTileLayout.DrawerOverPoster(bottomY, 321f, false, float.NaN, false, true, out f);
+            Assert.IsFalse(f, "висота рядків ще невідома — без згортання за неї");
+        }
+
+        /// <summary>
+        /// П. 1: шапка з дворядковою підказкою (при наведенні) не виштовхує підвал «Усе» на канати — прокрутка шухляди стискається до
+        /// рядка; поки місця досить — звична <see cref="CareerTileLayout.DevScrollMinH"/>.
+        /// </summary>
+        [Test]
+        public void WeekDrawer_ScrollMin_GivesWayToTheHeadAndFoot()
+        {
+            Assert.AreEqual(CareerTileLayout.DevScrollMinH, CareerTileLayout.DrawerScrollMin(139f, 40f, 36f), 0.01f, "місця досить");
+            Assert.AreEqual(139f - 56f - 36f, CareerTileLayout.DrawerScrollMin(139f, 56f, 36f), 0.01f, "дворядкова підказка — менша прокрутка");
+            Assert.AreEqual(CareerTileLayout.DrawerScrollMinTight, CareerTileLayout.DrawerScrollMin(90f, 56f, 36f), 0.01f, "не менше за рядок кнопок");
+            Assert.AreEqual(CareerTileLayout.DevScrollMinH, CareerTileLayout.DrawerScrollMin(430f, float.NaN, 0f), 0.01f, "до розкладки — шапка за сталою");
+            foreach (float max in new[] { 132f, 139f, 160f })
+                Assert.LessOrEqual(CareerTileLayout.DrawerHeadH + CareerTileLayout.DrawerScrollMin(max, CareerTileLayout.DrawerHeadH, CareerTileLayout.DrawerFootH)
+                    + CareerTileLayout.DrawerFootH, max + 0.01f, "мінімум шухляди вміщається в " + max);
+        }
+
+        /// <summary>
+        /// П. 2: порожнє значення — без мітки-тавтології скрізь: «План букера: Плану немає», «Умови: Умов немає», «Умови матчу: Умов
+        /// немає», «Напарник: Напарника немає» (картка шоу, рядок тижня, огляд ворожнечі) → «Плану букера немає», «Умов немає», «Без
+        /// напарника». П. 4: «Очки розвитку». П. 5: «Тест — Тарас «Молот» Гребінь» (імена не відмінюються).
+        /// </summary>
+        [Test]
+        public void EmptyValues_HaveNoTautologicalLabel()
+        {
+            Assert.AreEqual("Плану букера немає", CareerScreenLines.PlanLine(T, BookerPlan.None));
+            foreach (BookerPlan p in System.Enum.GetValues(typeof(BookerPlan)))
+            {
+                string line = CareerScreenLines.PlanLine(T, p);
+                NoMissingKey(line, p.ToString());
+                if (p != BookerPlan.None) Assert.AreEqual(T.Get("c.card.plan") + ": " + RingLabels.PlanName(T, p), line);
+                StringAssert.DoesNotContain(T.Get("plan.none"), line, p + ": «Плану немає» після мітки");
+            }
+            string none = T.Get("stip.none");
+            Assert.AreEqual("Умов немає", none);
+            Assert.AreEqual(none, CareerScreenLines.StipLine(T, T.Get("c.card.stip"), new[] { none }), "картка шоу");
+            Assert.AreEqual(none, CareerScreenLines.StipLine(T, T.Get("feud.section.stip"), new List<string> { none }), "огляд ворожнечі");
+            Assert.AreEqual(none, CareerScreenLines.StipLine(T, T.Get("c.card.stip"), new string[0]));
+            Assert.AreEqual(none, CareerScreenLines.StipLine(T, T.Get("c.card.stip"), null));
+            Assert.AreEqual(T.Get("feud.section.stip") + ": " + T.Get("stip.no_dq") + ", " + T.Get("stip.no_ally"),
+                CareerScreenLines.StipLine(T, T.Get("feud.section.stip"), new[] { T.Get("stip.no_dq"), T.Get("stip.no_ally") }), "умови — з міткою");
+            Assert.AreEqual("Без напарника", T.Get("feud.ally.no"));
+            Assert.AreEqual("Очки розвитку: 5", T.Format("dev.points", 5));
+            Assert.AreEqual("Тест — Тарас «Молот» Гребінь", T.Format("feud.versus", "Тест", "Тарас «Молот» Гребінь"));
+            Assert.AreEqual("Тест — Тарас «Молот» Гребінь", T.Format("c.open.vs", "Тест", "Тарас «Молот» Гребінь"), "заголовок відкриття — так само");
+
+            // тавтологія як правило: «мітка: значення», де значення — «X немає» з тим самим коренем, що й мітка
+            var bad = new List<string>();
+            foreach (var pair in new[] { new[] { "c.card.plan", "plan.none" }, new[] { "c.card.stip", "stip.none" }, new[] { "feud.section.stip", "stip.none" },
+                new[] { "feud.section.ally", "feud.ally.no" } })
+            {
+                string label = T.Get(pair[0]), value = T.Get(pair[1]);
+                if (value.EndsWith("немає") && value.Substring(0, 4).ToLowerInvariant() == label.Substring(0, 4).ToLowerInvariant()) bad.Add(pair[0] + " → " + pair[1]);
+            }
+            Assert.AreEqual(new List<string> { "c.card.plan → plan.none", "c.card.stip → stip.none", "feud.section.stip → stip.none" }, bad,
+                "пари, які разом дають тавтологію (тому значення ставиться без мітки); напарник — «Без напарника»");
+
+            string ui = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI");
+            string week = File.ReadAllText(Path.Combine(ui, "Career", "WeekScreenView.cs"));
+            string show = File.ReadAllText(Path.Combine(ui, "Career", "ShowScreens.cs"));
+            string feud = File.ReadAllText(Path.Combine(ui, "FeudScreenView.cs"));
+            var src = new List<string>();
+            if (!week.Contains("CareerScreenLines.PlanLine(T, c.Plan) + \" · \"") || week.Contains("T.Get(\"c.card.plan\") + \": \"")) src.Add("WeekScreenView: рядок тижня «План букера: Плану немає»");
+            if (!CodeLine(show, "if (!c.IsFeud) col.Add(ShowKit.Bullet(CareerScreenLines.PlanLine(T, c.Plan)));") || show.Contains("T.Get(\"c.card.plan\") + \": \""))
+                src.Add("ShowScreens: картка шоу «План букера: Плану немає»");
+            if (!show.Contains("CareerScreenLines.StipLine(T, T.Get(\"c.card.stip\"), ") || show.Contains("T.Get(\"c.card.stip\") + \": \"")) src.Add("ShowScreens: картка шоу «Умови: Умов немає»");
+            if (!feud.Contains("CareerScreenLines.StipLine(t, t.Get(\"feud.section.stip\"), _m.StipulationTexts())") || feud.Contains("t.Get(\"feud.section.ally\") + \": \"")
+                || feud.Contains("t.Get(\"feud.section.stip\") + \": \""))
+                src.Add("FeudScreenView: огляд ворожнечі «Умови матчу: Умов немає» / «Напарник: …»");
+            Assert.IsEmpty(src, string.Join("\n", src));
+        }
+
+        /// <summary>
+        /// П. 6: на афіші створення героїні — «Новачка» (s33_p1080 014–021 і ті самі кадри 16:10, 21:9, 4:3). Ім'я за замовчуванням іде
+        /// за тілом в обидва боки; своє ім'я гравця не чіпаємо; огляд з -ring-hero-name ставить своє ім'я обом статям.
+        /// </summary>
+        [Test]
+        public void Create_DefaultName_FollowsTheBody()
+        {
+            Assert.AreEqual("Новачок", T.Get("c.create.default_name"));
+            Assert.AreEqual("Новачка", T.Get("c.create.default_name.fem"));
+            Assert.AreEqual("Новачка", CareerScreenLines.FollowDefaultName(T, "Новачок", true));
+            Assert.AreEqual("Новачок", CareerScreenLines.FollowDefaultName(T, "Новачка", false), "назад до героя");
+            Assert.AreEqual("Новачка", CareerScreenLines.FollowDefaultName(T, "Новачка", true));
+            Assert.AreEqual("Новачок", CareerScreenLines.FollowDefaultName(T, null, false));
+            Assert.AreEqual("Буря", CareerScreenLines.FollowDefaultName(T, "Буря", true), "своє ім'я — як є");
+            Assert.AreEqual("Буря", CareerScreenLines.FollowDefaultName(T, "Буря", false));
+            var shot = RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json"));
+            shot.Add("c.create.default_name", "Тест");
+            shot.Add("c.create.default_name.fem", "Тест");
+            Assert.AreEqual("Тест", CareerScreenLines.FollowDefaultName(shot, "Тест", true), "огляд з -ring-hero-name: ім'я огляду й героїні");
+
+            string root = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring");
+            string create = File.ReadAllText(Path.Combine(root, "UI", "Career", "CreateScreenView.cs"));
+            string menus = File.ReadAllText(Path.Combine(root, "RingGameBootstrap.Menus.cs"));
+            var src = new List<string>();
+            if (!CodeLine(create, "_d.RingName = CareerScreenLines.FollowDefaultName(T, _d.RingName, HeroForms.ShowsHeroine(T));")) src.Add("CreateScreenView: ім'я не йде за тілом");
+            int refresh = create.IndexOf("public override void Refresh()", System.StringComparison.Ordinal);
+            int follow = create.IndexOf("CareerScreenLines.FollowDefaultName(", System.StringComparison.Ordinal);
+            int field = create.IndexOf("new TextField { value = _d.RingName", System.StringComparison.Ordinal);
+            if (refresh < 0 || follow < refresh || field < follow) src.Add("CreateScreenView: ім'я за тілом — на початку Refresh, до поля імені");
+            if (!menus.Contains("_text.Add(\"c.create.default_name.fem\", _shotHeroName)") || System.Text.RegularExpressions.Regex.Matches(menus, @"\bMirrorShotHeroName\(\);").Count < 2)
+                src.Add("RingGameBootstrap.Menus: -ring-hero-name не доходить до героїні");
+            Assert.IsEmpty(src, string.Join("\n", src));
+        }
+
+        /// <summary>
+        /// П. 1, 3 і 7 — джерела екранів: шухляда тижня без відкату до стрічки й зі згортанням рядків картки; заголовок «АТРИБУТИ» у
+        /// розгорнутому «Усе» кінцівки ворожнечі (k_ending_1080 155); клин титулу з темною смугою зі сталих моделі, підпис двома рядками.
+        /// </summary>
+        [Test]
+        public void Sources_Slot33Fixes()
+        {
+            string ui = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI");
+            string week = File.ReadAllText(Path.Combine(ui, "Career", "WeekScreenView.cs"));
+            string ending = File.ReadAllText(Path.Combine(ui, "EndingScreenView.cs"));
+            string title = File.ReadAllText(Path.Combine(ui, "Menus", "TitleMenuView.cs"));
+            string shapes = File.ReadAllText(Path.Combine(ui, "Menus", "MenuShapes.cs"));
+            var bad = new List<string>();
+            if (week.Contains("ArenaKit.StripH + 12f") || week.Contains("DrawerMinRoom") || week.Contains("if (room > 120f)")) bad.Add("WeekScreenView: шухляда знову відкочується до стрічки");
+            if (!week.Contains("float max = CareerTileLayout.DrawerOverPoster(bottomY, _poster.layout.y + _poster.layout.height, _posterFolded, _detailsH,")
+                || !CodeLine(week, "_drawer.style.maxHeight = max;")) bad.Add("WeekScreenView: висота шухляди не з моделі");
+            if (!CodeLine(week, "if (fold != _posterFolded) FoldPoster(fold);")) bad.Add("WeekScreenView: картка не згортає (чи не розгортає) рядки умов");
+            if (!CodeLine(week, "if (!_posterFolded && _posterDetails != null && !float.IsNaN(_posterDetails.layout.height)) _detailsH = _posterDetails.layout.height;"))
+                bad.Add("WeekScreenView: висота схованих рядків не з розгорнутої афіші");
+            if (!week.Contains("_posterDetails.style.display = fold ? DisplayStyle.None : DisplayStyle.Flex;")) bad.Add("WeekScreenView: згортання нічого не ховає");
+            if (Regex.Matches(week, Regex.Escape("details.Add(Bullet(")).Count < 6 || Regex.Matches(week, Regex.Escape("col.Add(Bullet(")).Count > 0)
+                bad.Add("WeekScreenView: рядки умов афіші — не в блоці, що згортається");
+            if (!CodeLine(week, "_posterFolded = false;")) bad.Add("WeekScreenView: згортання не скидається з перебудовою");
+            if (!CodeLine(week, "_detailsH = 0f;")) bad.Add("WeekScreenView: висота рядків старої афіші переживає перебудову");
+            if (!week.Contains("CareerTileLayout.DrawerScrollMin(max, ")) bad.Add("WeekScreenView: прокрутка шухляди не поступається шапці");
+            int all = ending.IndexOf("if (_all)", System.StringComparison.Ordinal);
+            int attrs = all < 0 ? -1 : ending.IndexOf("dev.Add(RingUi.Section(t.Get(\"dev.section.attrs\")));", all, System.StringComparison.Ordinal);
+            int perks = all < 0 ? -1 : ending.IndexOf("dev.Add(RingUi.Section(t.Get(\"dev.section.perks\")));", all, System.StringComparison.Ordinal);
+            if (attrs < 0 || perks < 0 || attrs > perks) bad.Add("EndingScreenView: у «Усе» атрибути без заголовка «АТРИБУТИ»");
+            if (!title.Contains("CareerTileLayout.TitleTagLines(T.Get(\"m.title.sub\"), rootW)")) bad.Add("TitleMenuView: підпис на вузькій панелі одним рядком");
+            if (!shapes.Contains("ww * CareerTileLayout.WedgeInnerTop") || !shapes.Contains("ww * CareerTileLayout.WedgeInnerBottom")) bad.Add("MenuShapes: темна смуга клина не зі сталих моделі");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+        // ---------------- Б4: вісім ґіміків, клавіші, «Вільні бали (+2)» (власник 13.11.2026; ПМ і арт-директор 14.11.2026) ----------------
+
+        /// <summary>
+        /// Б4: клавіші — ґіміки 1…кількість за місцем плитки; ролі 5 і 6, поки ґіміків не більше чотирьох (М1 без змін), з п'ятим —
+        /// 9 і 0. Решта цифр нічого не робить; «0» на плитці — «0».
+        /// </summary>
+        [Test]
+        public void CreateKeys_GimmicksByPlace_RolesFiveSix_OrNineZero()
+        {
+            int hero, villain;
+            CareerTileLayout.CreateRoleKeys(4, out hero, out villain);
+            Assert.AreEqual(5, hero); Assert.AreEqual(6, villain);
+            CareerTileLayout.CreateRoleKeys(8, out hero, out villain);
+            Assert.AreEqual(9, hero); Assert.AreEqual(CareerTileLayout.KeyZero, villain);
+            Assert.AreEqual("0", CareerTileLayout.KeyLabel(CareerTileLayout.KeyZero));
+            Assert.AreEqual("7", CareerTileLayout.KeyLabel(7));
+            Assert.AreEqual("", CareerTileLayout.KeyLabel(0), "без клавіші — порожній квадрат не підписується");
+            foreach (int n in new[] { 4, 5, 8 })
+            {
+                CareerTileLayout.CreateRoleKeys(n, out hero, out villain);
+                for (int k = 1; k <= CareerTileLayout.KeyZero; k++)
+                {
+                    int d = CareerTileLayout.CreateDigit(k, n);
+                    if (k == hero) Assert.AreEqual(CareerTileLayout.CreateDigitHero, d, n + " ґіміків, клавіша " + k);
+                    else if (k == villain) Assert.AreEqual(CareerTileLayout.CreateDigitVillain, d, n + " ґіміків, клавіша " + k);
+                    else if (k <= n) Assert.AreEqual(k - 1, d, n + " ґіміків, клавіша " + k + " — ґімік за місцем");
+                    else Assert.AreEqual(CareerTileLayout.CreateDigitNone, d, n + " ґіміків, клавіша " + k + " — нічого");
+                }
+            }
+            Assert.IsFalse(CareerTileLayout.CreateEight(4), "чотири ґіміки — розкладка М1");
+            Assert.IsTrue(CareerTileLayout.CreateEight(8), "вісім — Б4-1");
+        }
+
+        /// <summary>
+        /// Б4: два вільні бали Самородка — клік ставить бал сюди, найдавніший переходить; двічі по тому самому — обидва там; вище стелі
+        /// бал не ставиться. Один бал — просто переходить. Ядро рахує заготовку так само (CreateHero дає основу + бали).
+        /// </summary>
+        [Test]
+        public void FreePoints_TwoPoints_OldestMoves_TwiceStacks_CapHolds_AndTheCoreAgrees()
+        {
+            const int max = WrestlerStats.MaxAttr;
+            var content = CareerKit.NewAtCreate(1).Content;
+            Assert.AreEqual(2, content.GimmickOf(Gimmick.Rookie).FreePoints, "передумова: у Самородка два вільні бали");
+            foreach (int v in content.GimmickOf(Gimmick.Rookie).Attr) Assert.AreEqual(0, v, "передумова: основи Самородка — 0");
+
+            var d = CareerKit.Draft(Gimmick.Rookie, CareerRole.Hero, RingAttr.Strength);
+            Assert.AreEqual(2, CareerScreenLines.FreePointsIn(d, 2, RingAttr.Strength), "другого ще не ставили — обидва там, де перший (як у ядрі)");
+            Assert.IsTrue(CareerScreenLines.PlaceFreePoint(d, 2, 0, max, RingAttr.Agility));
+            Assert.AreEqual(1, CareerScreenLines.FreePointsIn(d, 2, RingAttr.Strength));
+            Assert.AreEqual(1, CareerScreenLines.FreePointsIn(d, 2, RingAttr.Agility));
+            Assert.IsTrue(CareerScreenLines.PlaceFreePoint(d, 2, 0, max, RingAttr.Technique));
+            Assert.AreEqual(0, CareerScreenLines.FreePointsIn(d, 2, RingAttr.Strength), "найдавніший (сила) перейшов");
+            Assert.AreEqual(1, CareerScreenLines.FreePointsIn(d, 2, RingAttr.Agility));
+            Assert.AreEqual(1, CareerScreenLines.FreePointsIn(d, 2, RingAttr.Technique));
+            Assert.IsTrue(CareerScreenLines.PlaceFreePoint(d, 2, 0, max, RingAttr.Technique));
+            Assert.AreEqual(2, CareerScreenLines.FreePointsIn(d, 2, RingAttr.Technique), "двічі — обидва тут");
+            Assert.AreEqual(0, CareerScreenLines.FreePointsIn(d, 2, RingAttr.Agility));
+            Assert.IsTrue(CareerScreenLines.PlaceFreePoint(d, 2, 0, max, RingAttr.Technique));
+            Assert.AreEqual(2, CareerScreenLines.FreePointsIn(d, 2, RingAttr.Technique), "утретє — так само обидва");
+            int sum = 0;
+            for (int i = 0; i < 5; i++) sum += CareerScreenLines.FreePointsIn(d, 2, (RingAttr)i);
+            Assert.AreEqual(2, sum, "балів завжди два");
+
+            // стеля: основа 2 — другий бал туди ж дав би 4
+            var c = CareerKit.Draft(Gimmick.Rookie, CareerRole.Hero, RingAttr.Strength);
+            Assert.IsTrue(CareerScreenLines.PlaceFreePoint(c, 2, 2, max, RingAttr.Agility), "2 + 1 = 3 — можна");
+            Assert.IsFalse(CareerScreenLines.PlaceFreePoint(c, 2, 2, max, RingAttr.Agility), "2 + 2 > 3 — ні");
+            Assert.AreEqual(1, CareerScreenLines.FreePointsIn(c, 2, RingAttr.Agility), "відмова заготовки не змінює");
+            Assert.AreEqual(1, CareerScreenLines.FreePointsIn(c, 2, RingAttr.Strength));
+
+            // один вільний бал — переходить, другий бал заготовки не рахується
+            var m = CareerKit.Draft(Gimmick.Monster, CareerRole.Hero, RingAttr.Strength);
+            Assert.IsFalse(CareerScreenLines.PlaceFreePoint(m, 1, max, max, RingAttr.Technique), "на стелі — ні");
+            Assert.IsTrue(CareerScreenLines.PlaceFreePoint(m, 1, 0, max, RingAttr.Charisma));
+            Assert.AreEqual(RingAttr.Charisma, m.FreePoint);
+            Assert.IsNull(m.FreePoint2);
+            m.FreePoint2 = RingAttr.Agility;   // лишився від Самородка
+            Assert.AreEqual(0, CareerScreenLines.FreePointsIn(m, 1, RingAttr.Agility), "у ґіміка з одним балом другий не рахується");
+            Assert.AreEqual(0, CareerScreenLines.FreePointsIn(null, 2, RingAttr.Agility));
+            Assert.IsFalse(CareerScreenLines.PlaceFreePoint(null, 2, 0, max, RingAttr.Agility));
+            Assert.IsFalse(CareerScreenLines.PlaceFreePoint(m, 0, 0, max, RingAttr.Agility), "без вільних балів — нічого");
+
+            // ядро: обидва в техніку — техніка +2; два різні — по +1
+            var s = CareerKit.NewAtCreate(31);
+            var r = CareerKit.Draft(Gimmick.Rookie, CareerRole.Hero, RingAttr.Strength);
+            CareerScreenLines.PlaceFreePoint(r, 2, 0, max, RingAttr.Technique);
+            CareerScreenLines.PlaceFreePoint(r, 2, 0, max, RingAttr.Technique);
+            string reason;
+            Assert.IsTrue(s.CanCreate(r, out reason), reason);
+            s.CreateHero(r);
+            Assert.AreEqual(2, s.Player.Get(RingAttr.Technique));
+            Assert.AreEqual(0, s.Player.Get(RingAttr.Strength), "перший бал пішов із сили");
+            var s2 = CareerKit.NewAtCreate(32);
+            var r2 = CareerKit.Draft(Gimmick.Rookie, CareerRole.Hero, RingAttr.Strength);
+            CareerScreenLines.PlaceFreePoint(r2, 2, 0, max, RingAttr.Agility);
+            s2.CreateHero(r2);
+            Assert.AreEqual(1, s2.Player.Get(RingAttr.Strength));
+            Assert.AreEqual(1, s2.Player.Get(RingAttr.Agility));
+        }
+
+        /// <summary>Шкала характеристики афіші: мінусовий блок, заповнені, вільні (золоті) й порожні клітинки — з моделі.</summary>
+        [Test]
+        public void AttrCells_FreePointsGoldOverTheBase_NegativeBlockFirst()
+        {
+            Assert.AreEqual("·|□□□", Cells(0, 0));
+            Assert.AreEqual("·|■■□", Cells(2, 0));
+            Assert.AreEqual("·|■■+", Cells(2, 1));
+            Assert.AreEqual("·|■■■", Cells(3, 0));
+            Assert.AreEqual("·|++□", Cells(0, 2), "Самородок: обидва в одну");
+            Assert.AreEqual("·|■++", Cells(1, 2));
+            Assert.AreEqual("−|□□□", Cells(-1, 0), "мінус — сигнальний блок");
+            Assert.AreEqual("+|□□□", Cells(-1, 1), "бал при мінусовій основі закриває мінус");
+            Assert.AreEqual("+|+□□", Cells(-1, 2));
+        }
+
+        private static string Cells(int b, int free)
+        {
+            var c = CareerTileLayout.CreateAttrCells(b, free, WrestlerStats.MaxAttr);
+            Assert.AreEqual(WrestlerStats.MaxAttr + 1, c.Length);
+            var sb = new System.Text.StringBuilder();
+            sb.Append(c[0] == CareerTileLayout.AttrCell.Negative ? "−" : c[0] == CareerTileLayout.AttrCell.Free ? "+" : "·").Append('|');
+            for (int k = 1; k < c.Length; k++)
+                sb.Append(c[k] == CareerTileLayout.AttrCell.Filled ? "■" : c[k] == CareerTileLayout.AttrCell.Free ? "+" : "□");
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Ш-1 (арт-директор 14.11.2026): частини плитки ґіміка — ті самі, що з <see cref="RingLabels.AttrBonusParts"/>; переставлено
+        /// лише Шоумена — «Харизма +3 · Сила −1» / «Витривалість +1» (найдовша — остання, підписна — перша). У Самородка — «+2 вільні
+        /// бали». Модель порядку без значень лише ставить найдовшу в кінець; менше трьох частин чи найдовша вже остання — без змін.
+        /// </summary>
+        [Test]
+        public void CreateTileParts_OnlyShowmanReordered_SignatureFirst_RookieSaysTwoFreePoints()
+        {
+            var content = CareerKit.NewAtCreate(1).Content;
+            Assert.AreEqual(CareerKit.GimmickCount, content.Gimmicks.Count, "усі вісім ґіміків");
+            int changed = 0;
+            foreach (var g in content.Gimmicks)
+            {
+                var plain = new List<string>(RingLabels.AttrBonusParts(T, g.Attr));
+                var parts = CareerScreenLines.CreateTileParts(T, g.Attr, g.FreePoints);
+                var expect = new List<string>(plain);
+                if (g.FreePoints >= 2) expect.Add(T.Get("c.create.tile.freepoints"));
+                CollectionAssert.AreEquivalent(expect, parts, g.Key + ": ті самі частини");
+                foreach (var p in parts) NoMissingKey(p, g.Key);
+                bool same = true;
+                for (int i = 0; i < plain.Count; i++) if (parts[i] != plain[i]) same = false;
+                if (!same) { changed++; Assert.AreEqual(Gimmick.Showman, g.Id, g.Key + ": порядок мав лишитися"); }
+            }
+            Assert.AreEqual(1, changed, "переставлено лише Шоумена");
+            var showman = content.GimmickOf(Gimmick.Showman);
+            string cha = RingLabels.AttrName(T, RingAttr.Charisma) + " " + RingChances.Signed(3);
+            string str = RingLabels.AttrName(T, RingAttr.Strength) + " " + RingChances.Signed(-1);
+            string sta = RingLabels.AttrName(T, RingAttr.Stamina) + " " + RingChances.Signed(1);
+            CollectionAssert.AreEqual(new[] { cha, str, sta }, CareerScreenLines.CreateTileParts(T, showman.Attr, showman.FreePoints), "Шоумен — за Харизмою");
+            var rookie = content.GimmickOf(Gimmick.Rookie);
+            CollectionAssert.AreEqual(new[] { "+2 вільні бали" }, CareerScreenLines.CreateTileParts(T, rookie.Attr, rookie.FreePoints), "текст У0");
+
+            CollectionAssert.AreEqual(new[] { "a", "ccc", "bbbbb" }, CareerTileLayout.CreateEffectOrder(new[] { "a", "bbbbb", "ccc" }), "без значень — лише найдовша в кінець");
+            CollectionAssert.AreEqual(new[] { "ccc", "a", "bbbbb" }, CareerTileLayout.CreateEffectOrder(new[] { "a", "bbbbb", "ccc" }, new[] { -1, 1, 3 }), "підписна — перша");
+            CollectionAssert.AreEqual(new[] { "a", "ccc", "bbbbb" }, CareerTileLayout.CreateEffectOrder(new[] { "a", "bbbbb", "ccc" }, new[] { 2, 1, 2 }), "рівні бонуси — перша з них");
+            CollectionAssert.AreEqual(new[] { "aa", "bb", "cc" }, CareerTileLayout.CreateEffectOrder(new[] { "aa", "bb", "cc" }, new[] { 1, 2, 3 }), "рівна довжина — остання вже найдовша");
+            CollectionAssert.AreEqual(new[] { "x", "yyyy" }, CareerTileLayout.CreateEffectOrder(new[] { "x", "yyyy" }, new[] { 3, 1 }), "дві частини — без змін");
+            CollectionAssert.IsEmpty(CareerTileLayout.CreateEffectOrder(null));
+            CollectionAssert.IsEmpty(CareerScreenLines.CreateTileParts(T, null, 1));
+        }
+
+        // ---------------- Б5: тіло старіє (власник 13.11.2026, «Так, усі 7») ----------------
+
+        /// <summary>
+        /// Б5: хвіст «тіло старіє» — з сезону 4 (+1), з сезону 7 (+2); рядок кінця сезону — лише на останньому кроці («Новий сезон»)
+        /// кінців сезонів 3 і 6, коли ціна наступного сезону росте; ціни — з сесії того сезону; 5 — «тренувань».
+        /// </summary>
+        [Test]
+        public void Ageing_Tail_FromSeason4_AndTheNextSeasonLine_OnlyWhenThePriceGrows()
+        {
+            for (int season = 1; season < Ageing.FromSeason; season++)
+            {
+                Assert.IsNull(CareerScreenLines.AgeingTail(T, season, false), "сезон " + season);
+                Assert.IsNull(CareerScreenLines.AgeingTail(T, season, true), "сезон " + season);
+            }
+            Assert.AreEqual("тіло старіє: +1 оч.", CareerScreenLines.AgeingTail(T, 4, false));
+            Assert.AreEqual("тіло старіє: +1 тренування", CareerScreenLines.AgeingTail(T, 4, true));
+            Assert.AreEqual("тіло старіє: +2 оч.", CareerScreenLines.AgeingTail(T, 7, false));
+            Assert.AreEqual("тіло старіє: +2 тренування", CareerScreenLines.AgeingTail(T, 7, true));
+
+            var last = new List<SeasonEndAction> { SeasonEndAction.NextSeason };
+            var s1 = CareerKit.NewHero(8);
+            var s3 = InSeason(s1, 3);
+            Assert.AreEqual("Тіло старіє: з наступного сезону витривалість — 3 оч., тренер витривалості — 4 тренування.",
+                CareerScreenLines.AgeingNextLine(T, s3, last), "кінець сезону 3 — текст У0");
+            var s6 = InSeason(s1, 6);
+            Assert.AreEqual("Тіло старіє: з наступного сезону витривалість — 4 оч., тренер витривалості — 5 тренувань.",
+                CareerScreenLines.AgeingNextLine(T, s6, last), "кінець сезону 6: 5 — «тренувань»");
+            // ціни — ті, що спише покупка наступного сезону (сесія того сезону)
+            foreach (var n in new[] { 3, 6 })
+            {
+                var cur = n == 3 ? s3 : s6;
+                var nxt = InSeason(s1, n + 1);
+                int stamina = System.Array.IndexOf(CareerRules.Coaches, RingAttr.Stamina);
+                StringAssert.Contains("— " + nxt.AttrCost(RingAttr.Stamina) + " оч.", CareerScreenLines.AgeingNextLine(T, cur, last), "сезон " + n + ": очки");
+                StringAssert.Contains("— " + nxt.CoachStepFor(stamina) + " трен", CareerScreenLines.AgeingNextLine(T, cur, last), "сезон " + n + ": тренування");
+            }
+            for (int season = 1; season <= 12; season++)
+                if (season != 3 && season != 6) Assert.IsNull(CareerScreenLines.AgeingNextLine(T, InSeason(s1, season), last), "сезон " + season + ": ціна не росте");
+            Assert.IsNull(CareerScreenLines.AgeingNextLine(T, s3, new List<SeasonEndAction> { SeasonEndAction.TitleMatch, SeasonEndAction.SkipTitle }), "не останній крок");
+            Assert.IsNull(CareerScreenLines.AgeingNextLine(T, s3, new List<SeasonEndAction> { SeasonEndAction.AcceptOffer, SeasonEndAction.DeclineOffer }));
+            Assert.IsNull(CareerScreenLines.AgeingNextLine(T, s3, null));
+            Assert.IsNull(CareerScreenLines.AgeingNextLine(T, s3, new List<SeasonEndAction>()));
+            Assert.IsNull(CareerScreenLines.AgeingNextLine(T, null, last));
+
+            foreach (int n in new[] { 0, 5, 6, 9, 10, 11, 12, 13, 14, 15, 20, 25, 111, 112 }) Assert.IsTrue(CareerScreenLines.PluralMany(n), n + " — «тренувань»");
+            foreach (int n in new[] { 1, 2, 3, 4, 21, 22, 23, 24, 101, 102, 104 }) Assert.IsFalse(CareerScreenLines.PluralMany(n), n + " — «тренування»");
+        }
+
+        /// <summary>
+        /// Б5: слід травми (з сезону 4) — хвіст «(слід: +1)» у травмованої й ушкодженої зони, рядок «слід — травма на 1 тиж. довша» у
+        /// здорової зони зі слідом. Вид — справжній (сезон 4, сліди в стані), рядки — тексти У0.
+        /// </summary>
+        [Test]
+        public void Injury_ScarTail_AndTheScarOnlyLine_FromTheRealView()
+        {
+            var t = InSeason(CareerKit.NewHero(6), 4);
+            t.State.Scars[(int)BodyZone.Legs] = 2; t.State.Injury[(int)BodyZone.Legs] = 3;   // травма зі слідом раніших
+            t.State.Scars[(int)BodyZone.Head] = 1; t.State.Injury[(int)BodyZone.Head] = 0; t.State.ZoneDamage[(int)BodyZone.Head] = 0;
+            t.State.Scars[(int)BodyZone.Body] = 1; t.State.Injury[(int)BodyZone.Body] = 0; t.State.ZoneDamage[(int)BodyZone.Body] = 1;
+            var v = t.GetWeekView().Injuries;
+            string legs = T.Get("bodyzone." + (int)BodyZone.Legs), head = T.Get("bodyzone." + (int)BodyZone.Head), body = T.Get("bodyzone." + (int)BodyZone.Body);
+            string line = CareerScreenLines.InjuryText(T, v);
+            NoMissingKey(line, "рядок тіла зі слідами");
+            StringAssert.Contains("Ноги: травма, ще 3 тиж. (слід: +1)", line, "текст У0");
+            StringAssert.Contains(head + ": слід — травма на 1 тиж. довша", line, "здорова зона зі слідом");
+            StringAssert.Contains(T.Format("c.injury.dmg", body, 1, t.InjuryAtZoneDamage) + " (слід: +1)", line, "ушкоджена зона зі слідом");
+            Assert.AreEqual(legs, "Ноги", "передумова тексту У0");
+
+            var early = InSeason(CareerKit.NewHero(6), 3);
+            early.State.Scars[(int)BodyZone.Legs] = 2; early.State.Injury[(int)BodyZone.Legs] = 3;
+            StringAssert.DoesNotContain("слід", CareerScreenLines.InjuryText(T, early.GetWeekView().Injuries), "до сезону 4 сліду не видно");
+            Assert.AreEqual("x", CareerScreenLines.ScarTail(T, "x", 0));
+            Assert.AreEqual("x (слід: +1)", CareerScreenLines.ScarTail(T, "x", 1));
+        }
+
+        // ---------------- Б6: суперник на шоу (власник 13.11.2026, варіант А) ----------------
+
+        /// <summary>
+        /// Б6: рядок результату «суперник на шоу — {0}» — лише коли сцена переписала картку (<see cref="WeekActionResult.OpponentChanged"/>);
+        /// без прапорця, без імені чи без результату — рядка немає. Суперниця — «.rf» того самого ключа (білий перелік «Кар'єри»,
+        /// 4cbeac7f).
+        /// </summary>
+        [Test]
+        public void OpponentLine_OnlyWhenTheSceneRewroteTheCard_RivalWomanForm()
+        {
+            var yes = new WeekActionResult { OpponentChanged = true };
+            Assert.AreEqual("суперник на шоу — Сталевий", CareerScreenLines.OpponentLine(T, yes, "Сталевий"));
+            Assert.IsNull(CareerScreenLines.OpponentLine(T, new WeekActionResult(), "Сталевий"), "картку не переписано — рядка немає");
+            Assert.IsNull(CareerScreenLines.OpponentLine(T, yes, null));
+            Assert.IsNull(CareerScreenLines.OpponentLine(T, yes, ""));
+            Assert.IsNull(CareerScreenLines.OpponentLine(T, null, "Сталевий"));
+            var rt = RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json"));
+            HeroForms.Apply(rt, true, true);   // «.rf» — героїня проти суперниці (суперниці без героїні кар'єра не ставить)
+            Assert.AreEqual("суперниця на шоу — Мара", CareerScreenLines.OpponentLine(rt, yes, "Мара"));
+            HeroForms.Apply(rt, true, false);
+            Assert.AreEqual("суперник на шоу — Сталевий", CareerScreenLines.OpponentLine(rt, yes, "Сталевий"), "героїня проти суперника");
+        }
+
+        /// <summary>Б4, Б4-1, С-1, Ш-1, Б5, Б6 — джерела екранів кладуть рядки з моделей у свої складники.</summary>
+        [Test]
+        public void Sources_B4_B5_B6_AreWired()
+        {
+            string ui = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI");
+            string create = File.ReadAllText(Path.Combine(ui, "Career", "CreateScreenView.cs"));
+            string week = File.ReadAllText(Path.Combine(ui, "Career", "WeekScreenView.cs"));
+            string show = File.ReadAllText(Path.Combine(ui, "Career", "ShowScreens.cs"));
+            string kit = File.ReadAllText(Path.Combine(ui, "Career", "ArenaKit.cs"));
+            var bad = new List<string>();
+            if (!CodeLine(create, "tile.SetEffectParts(CareerScreenLines.CreateTileParts(T, g.BaseAttr, g.FreePoints));"))
+                bad.Add("CreateScreenView: плитка ґіміка не з CreateTileParts (Ш-1, «+2 вільні бали»)");
+            if (!CodeLine(create, "CareerTileLayout.CreateRoleKeys(_v.Gimmicks.Count, out heroKey, out villainKey);")) bad.Add("CreateScreenView: клавіші ролей не з моделі");
+            if (!CodeLine(create, "int d = CareerTileLayout.CreateDigit(n, _v.Gimmicks.Count);")) bad.Add("CreateScreenView: цифри не з моделі");
+            if (!CodeLine(create, "if (Input.GetKeyDown(KeyCode.Alpha0) && !Typing()) OnDigit(CareerTileLayout.KeyZero);")) bad.Add("CreateScreenView: «0» не ловиться");
+            if (!create.Contains("CareerScreenLines.PlaceFreePoint(_d, freePoints, baseValue, _v.MaxAttr, a)")
+                || !create.Contains("CareerScreenLines.FreePointsIn(_d, Current.FreePoints, a)")) bad.Add("CreateScreenView: вільні бали не з моделі");
+            if (!create.Contains("CareerTileLayout.CreateAttrCells(baseValue, free, _v.MaxAttr)")) bad.Add("CreateScreenView: клітинки шкали не з моделі");
+            if (!create.Contains("T.Get(two ? \"c.create.freepoints\" : \"c.create.freepoint\")")) bad.Add("CreateScreenView: заголовок «Вільні бали (+2)»");
+            if (!create.Contains("var desc = two ? MenuKit.Body(T.Get(\"c.create.freepoints.hint\")")) bad.Add("CreateScreenView: С-1 — підказка Самородка не на місці опису ролі");
+            if (!CodeLine(create, "bool eight = CareerTileLayout.CreateEight(_v.Gimmicks.Count);")) bad.Add("CreateScreenView: Б4-1 не за моделлю");
+            if (!CodeLine(create, "tile.SetLow();") || !create.Contains("_roleCol.Add(tile);")) bad.Add("CreateScreenView: Б4-1 — ролі не низькими плитами в колонці");
+            if (!create.Contains("_reasonBox.style.height = eight ? CareerTileLayout.CreateRoleReasonH : 45f;")) bad.Add("CreateScreenView: Б4-1 — причина не в просвіті");
+            if (!kit.Contains("CareerTileLayout.KeyLabel(key)")) bad.Add("ArenaKit: квадрат клавіші без «0»");
+            if (!week.Contains("CareerScreenLines.ScarTail(T, T.Format(\"c.injury.tile\"") || !CodeLine(week, "i.ScarWeeks);   // Б5: слід"))
+                bad.Add("WeekScreenView: ризик травми без сліду");
+            if (!CodeLine(week, "string opp = CareerScreenLines.OpponentLine(T, r, OpponentName());")) bad.Add("WeekScreenView: Б6 — без рядка суперника");
+            if (show.Contains("AgeingNextLine")) bad.Add("ShowScreens: рядок «Тіло старіє…» на папері — місце ще на рішенні власника (папір сягав канатів)");
+            if (!CodeLine(create, "t.ReserveCheck = true;   // назва не заходить під галочку вибору (Б4-1: «ХАРДКОРНИЦЯ» на 4:3)")
+                || !kit.Contains("CareerTileLayout.TitleWidthBeforeCheck(faceW, left, checkR)") || !CodeLine(kit, "if (ReserveCheck && !float.IsNaN(faceW) && faceW > 0f)")
+                || !CodeLine(kit, "float checkR = _low ? CareerTileLayout.LowCheckRight : CareerTileLayout.CheckRight(_compact);")) bad.Add("CreateScreenView / ArenaKit: назва плитки створення — не до галочки");
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
     }

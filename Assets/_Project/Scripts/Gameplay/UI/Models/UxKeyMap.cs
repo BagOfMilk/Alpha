@@ -149,6 +149,7 @@ namespace Game.Gameplay.UI
             new UxKeyBinding("Alpha7",     UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "варіант / дія тижня / прийом 7"),
             new UxKeyBinding("Alpha8",     UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "варіант / дія тижня / прийом 8"),
             new UxKeyBinding("Alpha9",     UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "варіант / дія тижня / прийом 9"),
+            new UxKeyBinding("Alpha0",     UxKeyScope.RingCareer, "CreateScreenView.cs",      "створення борця: роль «Лиходій» з п'ятим ґіміком (Б4; 9 — «Герой»)"),
             new UxKeyBinding("L",          UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "повний журнал матчу"),
             new UxKeyBinding("Escape",     UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "пауза (будь-який екран кар'єри); у паузі — назад у гру"),
             new UxKeyBinding("JoystickButton7", UxKeyScope.RingCareer, "RingGameBootstrap.cs", "геймпад Start — пауза"),

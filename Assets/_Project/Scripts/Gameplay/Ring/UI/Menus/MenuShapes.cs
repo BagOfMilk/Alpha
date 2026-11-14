@@ -231,7 +231,7 @@ namespace Game.Gameplay.Ring.UI.Menus
             var wedge = new[] { new Vector2(0, 0), new Vector2(ww, 0), new Vector2(wb, H), new Vector2(0, H) };
             MenuShapes.Polygon(p, wedge, RingTheme.WithAlpha(MenuPalette.Wedge, WedgeAlpha));
             // темна смуга вздовж краю клина — читабельність тексту на ньому (ACC-03)
-            var inner = new[] { new Vector2(0, 0), new Vector2(ww * 0.86f, 0), new Vector2(ww * 0.50f, H), new Vector2(0, H) };
+            var inner = new[] { new Vector2(0, 0), new Vector2(ww * CareerTileLayout.WedgeInnerTop, 0), new Vector2(ww * CareerTileLayout.WedgeInnerBottom, H), new Vector2(0, H) };
             MenuShapes.Polygon(p, inner, RingTheme.WithAlpha(RingTheme.Bg, BrandTokens.AlphaUnderlay));
             if (Halftone)
             {

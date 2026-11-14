@@ -74,7 +74,8 @@ namespace Game.Tests.EditMode
             CollectionAssert.AreEqual(new[] { 4, 5, 6, 7 }, New.Select(g => (int)g).ToArray(), "номери 4–7 — у сейвах, не міняти");
             Func<Gimmick, int[]> a = g => c.GimmickOf(g).Attr;
             CollectionAssert.AreEqual(new[] { 0, 0, 2, 0, 1 }, a(Gimmick.Veteran), "Ветеран: Техніка +2, Харизма +1");
-            CollectionAssert.AreEqual(new[] { 1, 0, 0, 2, 0 }, a(Gimmick.Hardcore), "Хардкорник: Витривалість +2, Сила +1");
+            // V8 (власник 13.11.2026: «Так, усі 7»): Витривалість 2 → 1 — з +1 до зсуву порогів Хардкорник вибивався над смугою
+            CollectionAssert.AreEqual(new[] { 1, 0, 0, 1, 0 }, a(Gimmick.Hardcore), "Хардкорник: Витривалість +1, Сила +1 (V8)");
             CollectionAssert.AreEqual(new[] { 0, 0, 0, 0, 0 }, a(Gimmick.Rookie), "Новачок: рівно");
             CollectionAssert.AreEqual(new[] { 3, -1, 0, 0, 0 }, a(Gimmick.Strongman), "Силач: Сила +3, повільний — спритність −1");
             Assert.AreEqual(RingAttr.Technique, c.GimmickOf(Gimmick.Veteran).FinisherAttr);

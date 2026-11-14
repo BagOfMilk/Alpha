@@ -61,6 +61,19 @@ namespace Game.Gameplay.Ring.Models
         /// за ним із тим самим просвітом KeyGap. Було 50 — на 2 одиниці на квадраті ключа (кадр слоту 28, 21:9, «Герой»).
         /// </summary>
         public static float CheckRight(bool compact) { return compact ? CompactCheckRight : BodyRight + KeyBox + KeyGap; }
+
+        /// <summary>Просвіт від назви до галочки вибору: 4 між ними й 2 запасу рендера (CareerTextFitTests: CheckClear + RenderSlack).</summary>
+        public const float TitleCheckGap = 6f;
+
+        /// <summary>
+        /// Ширина назви плитки, що може бути вибраною (створення): до галочки, а не до краю — кегль меншає завчасно й не стрибає від
+        /// вибору. Б4-1: «ХАРДКОРНИЦЯ» на 4:3 (плитка 192) на кеглі 17 лягала на галочку. <paramref name="bodyLeft"/> — лівий відступ
+        /// тексту плитки, <paramref name="checkRight"/> — правий відступ галочки (<see cref="CheckRight"/>, <see cref="LowCheckRight"/>).
+        /// </summary>
+        public static float TitleWidthBeforeCheck(float tileWidth, float bodyLeft, float checkRight)
+        {
+            return tileWidth - checkRight - CheckW - TitleCheckGap - bodyLeft;
+        }
         public const float TitleSize = 21f, CompactTitleSize = 17f, TitleTrack = 0.03f;
         /// <summary>Назва плитки — завжди один рядок: кегль меншає до цього, не нижче (Статут: кегль ≥ 15).</summary>
         public const float TitleMinSize = BrandTokens.TypeMinInfo;
@@ -149,13 +162,69 @@ namespace Game.Gameplay.Ring.Models
         public const float PosterStickerHang = 26f;
         /// <summary>Відступ тексту пункту ShowKit.Bullet від краю колонки: квадрат 11 і проміжок 8 — під ним стають рядки контракту (№8).</summary>
         public const float BulletIndent = 19f;
-        /// <summary>Просвіт між низом афіші (з наліпкою) і верхом шухляди.</summary>
-        public const float DrawerPosterGap = 12f;
+        /// <summary>Просвіт між низом афіші (з наліпкою) і верхом шухляди. Було 12 — «Витрати» стояли впритул до рваного краю (огляд слоту 33, 4:3).</summary>
+        public const float DrawerPosterGap = 20f;
 
         /// <summary>Скільки місця шухляді під афішею: від низу афіші (і наліпки, якщо є) з просвітом до низу шухляди.</summary>
         public static float DrawerRoomUnderPoster(float drawerBottomY, float posterBottomY, bool sticker)
         {
             return drawerBottomY - (posterBottomY + (sticker ? PosterStickerHang : 0f)) - DrawerPosterGap;
+        }
+
+        /// <summary>Найбільша висота шухляди (є місце над рядом дій).</summary>
+        public const float DrawerMaxH = 430f;
+        /// <summary>
+        /// Шапка шухляди (заголовок 25 і рядок-підказка в один рядок, відступ 8) і підвал «▾ Усе (N)» за кадрами 4:3 слоту 33 — для
+        /// рішення, чи влазить мінімум шухляди під афішу. Сталі, а не розкладка: дворядкова підказка при наведенні не згортає афішу.
+        /// </summary>
+        public const float DrawerHeadH = 40f, DrawerFootH = 36f;
+        /// <summary>Прокрутка шухляди, коли під афішею тісно, — не менша за рядок кнопок.</summary>
+        public const float DrawerScrollMinTight = 32f;
+
+        /// <summary>Мінімум шухляди: шапка, прокрутка <see cref="DevScrollMinH"/> і підвал (у «Витрат» підвалу немає).</summary>
+        public static float DrawerNeed(bool dev) { return DrawerHeadH + DevScrollMinH + (dev ? DrawerFootH : 0f); }
+
+        /// <summary>
+        /// Висота шухляди тижня над афішею (огляд слоту 33, ПМ 13.11.2026: «верх шухляди не вище за низ картки (із зазором), решта —
+        /// прокруткою»; коротку шухляду на 4:3 в М1 прийнято). Була межа «менше 150 під афішею — до стрічки суперника»: на 4:3 з трьома
+        /// рядками умов «Розвиток» ліз на картку, текст крізь текст (кадри s33_w_p11_star_4x3 006–011). Тепер шухляда не вища за місце
+        /// під афішею (<paramref name="room"/>, <see cref="DrawerRoomUnderPoster"/>) і за <see cref="DrawerMaxH"/>. Якщо під афішею менше
+        /// за мінімум шухляди — <paramref name="fold"/>: афіша згортає рядки умов, доки шухляда відкрита (решта — шапка, гонорар, план);
+        /// на цей прохід — мінімум, наступний рахує вже від згорнутої.
+        /// </summary>
+        public static float DrawerMaxHeight(float room, bool dev, out bool fold)
+        {
+            float need = DrawerNeed(dev);
+            if (float.IsNaN(room)) room = need;
+            fold = room < need;
+            return Math.Min(DrawerMaxH, Math.Max(room, need));
+        }
+
+        /// <summary>
+        /// Шухляда над афішею з рядками умов, що згортаються (<see cref="DrawerMaxHeight"/>). Рішення «згорнути» — за ПОВНОЮ висотою
+        /// афіші: зараз низ <paramref name="posterBottomNow"/>, і якщо вона згорнута (<paramref name="foldedNow"/>) — плюс сховані
+        /// рядки <paramref name="detailsH"/>. Тож рішення однакове в обох станах (не коливається) і оборотне: проміжний прохід
+        /// розкладки, коли ряд дій ще не на місці й шухляді здається тісно, більше не згортає картку назавжди (кадр слоту 34, a_s1 4:3:
+        /// рядок «Суперник під твоє місце в картці» зник при ~198 од. під повною карткою). Висота — від низу афіші в обраному стані.
+        /// </summary>
+        public static float DrawerOverPoster(float drawerBottomY, float posterBottomNow, bool foldedNow, float detailsH, bool sticker, bool dev, out bool fold)
+        {
+            if (float.IsNaN(detailsH) || detailsH < 0f) detailsH = 0f;
+            float full = posterBottomNow + (foldedNow ? detailsH : 0f);
+            DrawerMaxHeight(DrawerRoomUnderPoster(drawerBottomY, full, sticker), dev, out fold);
+            bool unused;
+            return DrawerMaxHeight(DrawerRoomUnderPoster(drawerBottomY, fold ? full - detailsH : full, sticker), dev, out unused);
+        }
+
+        /// <summary>
+        /// Найменша висота прокрутки шухляди: <see cref="DevScrollMinH"/>, а коли тісно — скільки лишають шапка й підвал, але не менше
+        /// за рядок (<see cref="DrawerScrollMinTight"/>): так шапка з дворядковою підказкою не виштовхує підвал на канати.
+        /// </summary>
+        public static float DrawerScrollMin(float maxHeight, float headH, float footH)
+        {
+            if (float.IsNaN(headH) || headH <= 0f) headH = DrawerHeadH;
+            if (float.IsNaN(footH) || footH < 0f) footH = 0f;
+            return Math.Max(DrawerScrollMinTight, Math.Min(DevScrollMinH, maxHeight - headH - footH));
         }
 
         /// <summary>
@@ -240,8 +309,42 @@ namespace Game.Gameplay.Ring.Models
         public const float WedgeTaper = 0.38f;
         /// <summary>Частка клина титулу (права третина — рингу) і найбільша, до якої його розширює підпис на вузькій панелі.</summary>
         public const float TitleWedge = 0.46f, TitleWedgeMax = 0.62f;
-        /// <summary>Від кінця підпису титулу до краю клина — не менше (на 4:3 підпис виходив за клин, кадр m4x3\053 слоту 30).</summary>
-        public const float TitleTagClear = 40f;
+        /// <summary>
+        /// Темна смуга вздовж краю клина (MenuBackdrop, ACC-03): її правий край угорі — <c>WedgeInnerTop · ww</c>, унизу —
+        /// <c>WedgeInnerBottom · ww</c>. Між нею й краєм клина — світліший кармін, крізь який видно ринг, і напівтон.
+        /// </summary>
+        public const float WedgeInnerTop = 0.86f, WedgeInnerBottom = 0.50f;
+        /// <summary>
+        /// Від кінця підпису титулу до краю ТЕМНОЇ СМУГИ клина — не менше. Було 40 від краю клина: на 4:3 кінець підпису «…СЕЗОНОМ»
+        /// лягав на напівтон і світлий кармін, крізь який видно стійку рингу й борця, і зливався з тлом (огляд слоту 33, ПМ 13.11.2026,
+        /// кадри m4x3 004–010; раніше — m4x3\053 слоту 30, коли підпис виходив за клин).
+        /// </summary>
+        public const float TitleTagClear = 16f;
+
+        /// <summary>x правого краю темної смуги клина на висоті y.</summary>
+        public static float WedgeInnerEdge(float panelW, float panelH, float wedgeWidth, float y)
+        {
+            float f = panelH <= 0f ? 0f : Math.Min(1f, Math.Max(0f, y / panelH));
+            return panelW * wedgeWidth * (WedgeInnerTop + (WedgeInnerBottom - WedgeInnerTop) * f);
+        }
+
+        /// <summary>
+        /// Підпис титулу на вузькій панелі (4:3, 16:10) — двома рядками: одним рядком він тягнув клин на пів екрана або лягав на
+        /// напівтон (огляд слоту 33). Розрив — на тому роздільнику « · », за якого довший рядок найкоротший; сам роздільник на розриві не
+        /// лишається. Широка панель, текст без роздільника — як є.
+        /// </summary>
+        public static string TitleTagLines(string tag, float panelW)
+        {
+            const string sep = " · ";
+            if (string.IsNullOrEmpty(tag) || panelW <= 0f || !Narrow(panelW)) return tag;
+            int best = -1, bestLen = int.MaxValue;
+            for (int i = tag.IndexOf(sep, StringComparison.Ordinal); i >= 0; i = tag.IndexOf(sep, i + 1, StringComparison.Ordinal))
+            {
+                int longer = Math.Max(i, tag.Length - i - sep.Length);
+                if (longer < bestLen) { bestLen = longer; best = i; }
+            }
+            return best < 0 ? tag : tag.Substring(0, best) + "\n" + tag.Substring(best + sep.Length);
+        }
 
         /// <summary>x правого краю клина на висоті y.</summary>
         public static float WedgeEdge(float panelW, float panelH, float wedgeWidth, float y)
@@ -252,13 +355,13 @@ namespace Game.Gameplay.Ring.Models
 
         /// <summary>
         /// Частка клина титулу, за якої підпис (правий край <paramref name="textRight"/>, низ <paramref name="textBottom"/>) лежить на
-        /// клині з запасом <see cref="TitleTagClear"/>: не менше <see cref="TitleWedge"/> (широкі панелі — без змін), не більше
-        /// <see cref="TitleWedgeMax"/>.
+        /// темній смузі клина з запасом <see cref="TitleTagClear"/>: не менше <see cref="TitleWedge"/> (широкі панелі — без змін), не
+        /// більше <see cref="TitleWedgeMax"/>. Смуга звужується донизу, тож межа — на висоті низу підпису.
         /// </summary>
         public static float FitTitleWedge(float panelW, float panelH, float textRight, float textBottom)
         {
             if (panelW <= 0f || panelH <= 0f || textRight <= 0f) return TitleWedge;
-            float k = 1f - WedgeTaper * Math.Min(1f, Math.Max(0f, textBottom / panelH));
+            float k = WedgeInnerEdge(1f, panelH, 1f, textBottom);
             float need = (textRight + TitleTagClear) / (k * panelW);
             return Math.Min(TitleWedgeMax, Math.Max(TitleWedge, need));
         }
@@ -287,16 +390,154 @@ namespace Game.Gameplay.Ring.Models
         public static float CreateRowWidth(float panelWidth) { return RowWidth(panelWidth); }
 
         /// <summary>
-        /// Ширина плитки ряду створення героя: широка панель — усі плитки в ряд (ґіміки й ролі); вузька — рівно
-        /// <see cref="CreatePerRowNarrow"/> у ряд без росту (ґіміки, ролі другим рядом за підписом «РОЛЬ»).
+        /// Ширина плитки ряду створення героя за кількістю ґіміків на екрані. До чотирьох ґіміків широка панель ставить у ряд
+        /// ґіміки й дві ролі, вузька — рівно <see cref="CreatePerRowNarrow"/> у ряд без росту (ролі окремим рядом за підписом
+        /// «РОЛЬ»). Від п'яти (<see cref="CreateEight"/>, Б4-1) на будь-якій панелі — ґіміки по чотири у два ряди, ролі — у колонці
+        /// золотої плити.
         /// </summary>
-        public static float CreateTileWidth(float panelWidth, int tiles)
+        public static float CreateTileWidth(float panelWidth, int gimmicks)
         {
             float row = CreateRowWidth(panelWidth);
-            if (Narrow(panelWidth))   // рівно чотири в ряд — із запасом на округлення до пікселя (див. CreateRowSlack)
+            if (Narrow(panelWidth) || CreateEight(gimmicks))   // рівно чотири в ряд — із запасом на округлення до пікселя (CreateRowSlack)
                 return (row - TileGap * CreatePerRowNarrow - CreateRowSlack) / CreatePerRowNarrow;
-            int n = Math.Max(1, tiles);
+            int n = Math.Max(1, gimmicks) + 2;
             return (row - TileGap * n) / n;
+        }
+
+        // ---- Б4-1: вісім ґіміків — ролі в колонці золотої плити (ПМ і арт-директор 14.11.2026) ----
+
+        /// <summary>
+        /// Ґіміків більше, ніж <see cref="CreateGimmicksPerRow"/>: розкладка Б4-1 — ґіміки 4 + 4 у два ряди на всіх панелях, ролі —
+        /// дві низькі плити над «Почати кар'єру», вкладка «Прийоми» над піднятими канатами, рядки афіші стиснені (як на 4:3).
+        /// </summary>
+        public static bool CreateEight(int gimmicks) { return gimmicks > CreateGimmicksPerRow; }
+
+        /// <summary>Між рядами плиток створення; на стільки ж (і на ряд) піднімаються канати й шапка ряду.</summary>
+        public const float CreateRowsGap = 12f;
+
+        /// <summary>Підйом канатів, шапки й вкладки «Прийоми», коли плитки створення стоять двома рядами (вузька панель чи Б4-1).</summary>
+        public const float CreateLift = TileH + CreateRowsGap;
+
+        /// <summary>
+        /// Плита ролі в колонці золотої плити (Б4-1): низька — лише назва й ключ; між двома плитами — проміжок, більший за підйом
+        /// плитки у фокусі (7), щоб нижня у фокусі не лягала на верхню.
+        /// </summary>
+        public const float CreateRoleChipH = 35f, CreateRoleChipGap = 8f;
+
+        /// <summary>Колонка плит ролей: дві плити й проміжок між ними.</summary>
+        public const float CreateRoleColumnH = 2f * CreateRoleChipH + CreateRoleChipGap;
+
+        /// <summary>
+        /// Просвіт між плитами ролей і золотою плитою (Б4-1): ряди ґіміків заввишки дві плитки й проміжок, колонка праворуч — золота
+        /// плита, просвіт і дві плити ролей, тож просвіт — решта висоти. Арт-директор 14.11.2026: «кобальт не торкається золота» —
+        /// просвіт не менше <see cref="CreateRoleGoldClear"/>; рядок «чому не можна почати» стоїть саме в ньому.
+        /// </summary>
+        public const float CreateRoleZone = TileH + CreateRowsGap - CreateRoleColumnH;
+
+        /// <summary>Найменший просвіт між плитами ролей і золотою плитою (арт-директор 14.11.2026).</summary>
+        public const float CreateRoleGoldClear = 12f;
+
+        /// <summary>Рядок причини в просвіті Б4-1: від золотої плити — 4, згори — до нижньої плити ролі.</summary>
+        public const float CreateReasonGap = 4f, CreateRoleReasonH = CreateRoleZone - CreateReasonGap;
+
+        /// <summary>
+        /// Низька плитка (плита ролі Б4-1, ActionTile.SetLow): назва компактним кеглем і ключ компактного розміру в одному рядку по
+        /// центру висоти; галочка вибору — ліворуч від ключа, теж по центру.
+        /// </summary>
+        public const float LowBodyTop = (CreateRoleChipH - CompactKeyBox) / 2f;
+        public const float LowCheckTop = (CreateRoleChipH - CheckH) / 2f;
+        public const float LowCheckRight = CompactBodyRight + CompactKeyBox + KeyGap;
+
+        // ---- Б4: вісім ґіміків на створенні (власник 13.11.2026, «Так, усі 7») ----
+
+        /// <summary>Ґіміків в одному ряду створення (Б4: верхній ряд — чотири ґіміки й ролі, решта ґіміків — під ними).</summary>
+        public const int CreateGimmicksPerRow = 4;
+
+        /// <summary>Клавіша «0» — у плитки та в <see cref="KeyLabel"/>; цифри 1–9 — самі собою.</summary>
+        public const int KeyZero = 10;
+
+        /// <summary>Напис квадрата клавіші плитки: 1–9, <see cref="KeyZero"/> — «0», без клавіші (0 і менше) — порожньо.</summary>
+        public static string KeyLabel(int key) { return key == KeyZero ? "0" : key > 0 ? key.ToString() : ""; }
+
+        /// <summary>
+        /// Клавіші ролей на створенні. Поки ґіміків не більше <see cref="CreateGimmicksPerRow"/> — 5 і 6, як у М1; з п'ятим
+        /// ґіміком ролі переходять на 9 і 0 — інакше зіткнулися б із ґіміками 5–6 (Б4, власник 13.11.2026).
+        /// </summary>
+        public static void CreateRoleKeys(int gimmicks, out int hero, out int villain)
+        {
+            if (gimmicks > CreateGimmicksPerRow) { hero = 9; villain = KeyZero; }
+            else { hero = 5; villain = 6; }
+        }
+
+        /// <summary>
+        /// Що робить цифра на створенні: індекс ґіміка в порядку плиток (0…), <see cref="CreateDigitHero"/>,
+        /// <see cref="CreateDigitVillain"/> чи <see cref="CreateDigitNone"/>. Ґіміки — 1…кількість (не більше 8), ролі —
+        /// <see cref="CreateRoleKeys"/>.
+        /// </summary>
+        public static int CreateDigit(int n, int gimmicks)
+        {
+            int hero, villain;
+            CreateRoleKeys(gimmicks, out hero, out villain);
+            if (n == hero) return CreateDigitHero;
+            if (n == villain) return CreateDigitVillain;
+            if (n >= 1 && n <= Math.Min(gimmicks, 8)) return n - 1;
+            return CreateDigitNone;
+        }
+
+        public const int CreateDigitNone = -1, CreateDigitHero = -2, CreateDigitVillain = -3;
+
+        /// <summary>
+        /// Порядок частин ефекту плитки ґіміка (V8 3d7345e6, ПМ 13.11.2026): у плитці з трьома й більше частинами найдовша стає
+        /// останньою, решта — у звичному порядку. Тоді дві коротші стають в один рядок: у Шоумена «Сила −1 · Харизма +3» /
+        /// «Витривалість +1» — два рядки замість трьох (текст плитки 164–166). Якщо найдовша вже остання (Монстр, Летун) чи частин
+        /// менше трьох — порядок той самий. Довжина — кількість знаків (тут шрифту немає); що два рядки справді влазять, міряє
+        /// <c>CareerTextFitTests</c> шрифтом гри. З <paramref name="values"/> (бонуси частин) серед частин, що стоять перед
+        /// найдовшою, першою стає підписна — найбільший бонус (арт-директор 14.11.2026, Ш-1: «Харизма +3 · Сила −1» /
+        /// «Витривалість +1» — Шоумена читаємо за Харизмою; ширина рядка та сама). Порядок без перестановки найдовшої не чіпає.
+        /// </summary>
+        public static List<string> CreateEffectOrder(IList<string> parts, IList<int> values = null)
+        {
+            var res = new List<string>();
+            if (parts == null) return res;
+            res.AddRange(parts);
+            if (res.Count < 3) return res;
+            int longest = 0;
+            for (int i = 1; i < res.Count; i++) if ((res[i] ?? "").Length >= (res[longest] ?? "").Length) longest = i;   // рівні — остання
+            if (longest == res.Count - 1) return res;
+            var order = new List<int>();
+            for (int i = 0; i < res.Count; i++) if (i != longest) order.Add(i);
+            if (values != null && values.Count == res.Count)
+            {
+                int best = 0;   // рівні — перша
+                for (int k = 1; k < order.Count; k++) if (values[order[k]] > values[order[best]]) best = k;
+                int b = order[best];
+                order.RemoveAt(best);
+                order.Insert(0, b);
+            }
+            order.Add(longest);
+            var sorted = new List<string>();
+            foreach (int i in order) sorted.Add(res[i]);
+            return sorted;
+        }
+
+        /// <summary>Клітинка шкали характеристики на афіші створення.</summary>
+        public enum AttrCell { Empty = 0, Filled = 1, Negative = 2, Free = 3 }
+
+        /// <summary>
+        /// Шкала характеристики афіші: [0] — мінусовий блок, [1…max] — додатні. Основа нижче нуля — мінусовий блок сигнальний;
+        /// вільні бали (до двох у Самородка, Б4) — золоті клітинки над основою: перший бал при мінусовій основі закриває мінусовий
+        /// блок, решта — додатні клітинки від 1. Стеля — <paramref name="max"/>.
+        /// </summary>
+        public static AttrCell[] CreateAttrCells(int baseValue, int freeCount, int max)
+        {
+            max = Math.Max(1, max);
+            freeCount = Math.Max(0, freeCount);
+            var c = new AttrCell[max + 1];
+            c[0] = baseValue < 0 ? (freeCount >= 1 ? AttrCell.Free : AttrCell.Negative) : AttrCell.Empty;
+            int top = baseValue + freeCount;
+            for (int k = 1; k <= max; k++)
+                c[k] = k <= baseValue ? AttrCell.Filled : k > Math.Max(baseValue, 0) && k <= top ? AttrCell.Free : AttrCell.Empty;
+            return c;
         }
 
         /// <summary>Ширина плитки ряду показу: <paramref name="wide"/> на широкій панелі, <paramref name="narrow"/> — на вузькій.</summary>
