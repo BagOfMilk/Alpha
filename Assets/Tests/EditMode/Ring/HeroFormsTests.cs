@@ -75,6 +75,7 @@ namespace Game.Tests.EditMode
         {
             "c.card.rematch", "c.card.rival_strong", "c.delta.rival",
             "c.card.vs", "c.card.rival_place", "c.card.rival_form",   // та сама картка тижня (CareerScreens: рядок суперника й сили)
+            "c.delta.opponent",   // Б6 «Меню»: підсумок сцени, що переписала картку (OpponentChanged) — суперник уже той, що в картці
         };
 
         /// <summary>Ключі про суперника в чоловічому роді, яким «.rf» не потрібна, — з причиною.</summary>
@@ -297,6 +298,20 @@ namespace Game.Tests.EditMode
             Assert.IsEmpty(RivalMasc.Matches(all["rumor.next_opponent"]).Cast<Match>().Select(m => m.Value).ToList(), "чутка — нейтрально (суперник може змінитися)");
             Assert.IsFalse(all.ContainsKey("rumor.next_opponent.rf"));
             Assert.IsFalse(all.ContainsKey("bs.booker_talk.p2.rf"));
+        }
+
+        /// <summary>
+        /// Рядок підсумку тижня «c.delta.opponent» (Б6 «Меню», ПМ 14.11.2026) — про суперника, якого сцена щойно поставила в
+        /// картку: <c>WeekActionResult.OpponentChanged</c> стає true лише тоді, коли картку переписано тим самим кроком
+        /// (BackstageVeteranTests.Betrayal_FightOrBooker_PutsStalevyiOnThisWeeksCard_LetLeavesTheCard; на великому шоу розплата
+        /// чекає, і рядка немає). На екрані один суперник — той, що в картці, тож «.rf» цього ключа — у білому переліку.
+        /// </summary>
+        [Test]
+        public void RivalWhitelist_AdmitsTheOpponentLineOfTheWeekSummary()
+        {
+            CollectionAssert.Contains(RivalWhitelist, "c.delta.opponent");
+            Assert.IsTrue(RivalPrefixes.Any(p => "c.delta.opponent".StartsWith(p, StringComparison.Ordinal)), "ключ — у полі зору охоронця роду суперника");
+            Assert.AreEqual(RivalWhitelist.Length, RivalWhitelist.Distinct().Count(), "без повторів");
         }
 
         [Test]
