@@ -88,8 +88,7 @@
     "crossface"
    ],
    "signature": "old_school",
-   "finisherMove": "last_lesson",
-   "onCreationScreen": false
+   "finisherMove": "last_lesson"
   },
   {
    "id": "hardcore",
@@ -107,8 +106,7 @@
     "clubbing_blow"
    ],
    "signature": "floor_slam",
-   "finisherMove": "scar_maker",
-   "onCreationScreen": false
+   "finisherMove": "scar_maker"
   },
   {
    "id": "rookie",
@@ -127,7 +125,6 @@
    ],
    "signature": "upstart",
    "finisherMove": "first_break",
-   "onCreationScreen": false,
    "freePoints": 2,
    "startMoves": 0
   },
@@ -147,8 +144,7 @@
     "bear_hug"
    ],
    "signature": "anvil",
-   "finisherMove": "titan_press",
-   "onCreationScreen": false
+   "finisherMove": "titan_press"
   }
  ]
 }

@@ -103,12 +103,13 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void Gimmicks_AreEight_FourOnTheCreationScreen_EachWithTwoMovesSignatureAndFinisherOfItsOwn()
+        public void Gimmicks_AreEight_AllOnTheCreationScreen_EachWithTwoMovesSignatureAndFinisherOfItsOwn()
         {
             var c = CareerKit.Content();
             Assert.AreEqual(8, c.Gimmicks.Count);
-            CollectionAssert.AreEqual(new[] { Gimmick.Monster, Gimmick.Flyer, Gimmick.Technician, Gimmick.Showman },
-                c.Gimmicks.Where(g => g.OnCreationScreen).Select(g => g.Id).ToArray(), "ґіміки 5–8 — на екрані лише після У0 власника");
+            // Б4, крок 3 (власник 13.11.2026, «Так, усі 7», п. 5 — створення з вісьмома ґіміками; ПМ 14.11.2026): усі вісім на екрані
+            CollectionAssert.AreEqual(Enum.GetValues(typeof(Gimmick)).Cast<Gimmick>().ToArray(),
+                c.Gimmicks.Where(g => g.OnCreationScreen).Select(g => g.Id).ToArray(), "на екрані створення — усі вісім ґіміків");
             Assert.AreEqual(Enum.GetValues(typeof(Gimmick)).Length, c.Gimmicks.Select(g => g.Id).Distinct().Count(), "кожен ґімік enum — у даних");
             foreach (var g in c.Gimmicks)
             {

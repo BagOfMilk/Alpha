@@ -275,7 +275,7 @@ namespace Game.Core.Ring.Career
             var v = new CreationView { CostumeCount = CostumeCount, MaxNameLength = MaxNameLength };
             foreach (var g in Content.Gimmicks)
             {
-                // ґіміки 5–8 — на екран створення після У0 власника (onCreationScreen у даних; рішення ПМ 12.11.2026)
+                // прапор даних onCreationScreen (без поля — так): 5–8 на екрані з Б4 (власник 13.11.2026, «Так, усі 7», п. 5)
                 if (!g.OnCreationScreen) continue;
                 var gv = new GimmickView { Def = g, BaseAttr = (int[])g.Attr.Clone(), FreePoints = g.FreePoints };
                 foreach (var id in StartMoveIds(g)) gv.StartMoves.Add(Content.Moves.Get(id));
