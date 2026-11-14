@@ -105,6 +105,8 @@
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/EntranceProfile.cs" />
     <!-- Ринг: зал і місце пари «за рингом» (RingVenue) — чистий C#, охоронці RingVenueTests на якорях трьох залів. -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingVenue.cs" />
+    <!-- Ринг: люди кар'єри поза рингом (букери, гості закулісся, менеджерка) — чистий C#, охоронці BackstageCastTests (вигляд NPC — CareerLooks вище). -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/BackstageCast.cs" />
   </ItemGroup>
 
   <ItemGroup>

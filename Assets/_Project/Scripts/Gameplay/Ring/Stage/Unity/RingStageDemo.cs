@@ -328,6 +328,7 @@ namespace Game.Gameplay.Ring.Stage
             ApplySex(stage);
             if (RingStage3D.ReadArg("-ring-outside") != null) { yield return OutsideReview(stage, folder); yield break; }
             if (RingStage3D.ReadArg("-ring-faces") != null) { yield return FacesReview(stage, folder); yield break; }
+            if (RingStage3D.ReadArg("-ring-cast") != null) { yield return CastReview(stage, folder); yield break; }
 
             // ---- промо ----
             bool probe = RingStage3D.ReadArg("-ring-probe") != null;
@@ -665,7 +666,7 @@ namespace Game.Gameplay.Ring.Stage
         /// крім голови й шиї цієї постаті) чи мат — ближче (0,6 / 0,45 / 0,35 м); не вийшло — кадр на 0,8 м з позначкою в журналі.
         /// У журнал — кут між шиєю (шия → голова) і грудьми (верх грудей → шия): 0° — голова на продовженні тулуба.
         /// </summary>
-        private static IEnumerator Faces(RingStage3D stage, string folder, string tag, RingActor a)
+        private static IEnumerator Faces(RingStage3D stage, string folder, string tag, RingActor a, bool showCam = false)
         {
             yield return null;
             yield return null;
@@ -706,7 +707,9 @@ namespace Game.Gameplay.Ring.Stage
                 }
                 Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] обличчя {0} {1}: камера {2:0.00} м{3}",
                     tag, FaceViewNames[i], dist, why != null ? " — ЗАГОРОДЖЕНО: " + why : ""));
-                stage.Cine(target + dirs[i] * dist, target, 24f, true);
+                // У роздягальні камеру веде показ (RingShow), а не кіноплан рингу.
+                if (showCam) stage.Show.ReviewLook(target + dirs[i] * dist, target, 24f);
+                else stage.Cine(target + dirs[i] * dist, target, 24f, true);
                 yield return Shot(folder, "face_" + tag + "_" + FaceViewNames[i] + (why != null ? "_blocked" : ""), 0.25f);
             }
         }
@@ -745,6 +748,155 @@ namespace Game.Gameplay.Ring.Stage
             yield return new WaitForSeconds(wait);
             Capture(folder, tag);
             yield return new WaitForSeconds(0.2f);
+        }
+
+        // ============================ огляд людей кар'єри поза рингом ============================
+
+        /// <summary>
+        /// Люди кар'єри поза рингом (<c>-ring-demo &lt;тека&gt; -ring-cast 1 [-ring-venue hall|arena]</c>; рішення власника
+        /// 12.11.2026, № 10 і № 8; приймання У2). Закулісся: кожен букер федерації (Ліна, Агата, Девід, Хіроко) — загальний план,
+        /// букер говорить, герой відповідає, крупні плани обличчя; події з гостем (менеджерка, скаут, ветеран; зрада — гість
+        /// поруч із букером). Ринг великого шоу з найнятою менеджеркою в кутку героя: загальний план, ближче, кіноплани на неї,
+        /// обличчя, вихід героя (найближче тіло героя до неї — у журнал), пара за рингом і герой на своєму куті; наостанок —
+        /// щотижневе шоу й велике без найму: її немає.
+        /// </summary>
+        private static IEnumerator CastReview(RingStage3D stage, string folder)
+        {
+            string v = RingStage3D.Venue.Id;
+            var show = stage.Show;
+
+            // ---- закулісся: букери федерацій ----
+            foreach (var p in BackstageCast.AllBookers)
+            {
+                stage.SetCareerCast(p.Speaker, false);
+                stage.ShowBackstage();
+                stage.SetBackstageScene(null);
+                yield return Shot(folder, v + "_bs_" + p.Speaker + "_wide", 1.0f);
+                stage.SetPromoSpeaker(p.Speaker);
+                yield return Shot(folder, v + "_bs_" + p.Speaker + "_talk", 0.8f);
+                stage.SetPromoSpeaker("player");
+                yield return Shot(folder, v + "_bs_" + p.Speaker + "_hero", 0.8f);
+                Debug.Log("[Ринг] огляд людей: букер " + p.Speaker + " у роздягальні — " + (show.Booker != null ? show.BookerId + ", " + p.Body + ", " + p.Hair : "НЕМАЄ"));
+                if (show.Booker != null) yield return Faces(stage, folder, v + "_" + p.Speaker, show.Booker, true);
+            }
+
+            // ---- закулісся: події з гостем ----
+            stage.SetCareerCast(BackstageCast.DefaultBooker, false);
+            foreach (var ev in new[] { "ev_manager", "ev_scout", "ev_veteran", "ev_betrayal" })
+            {
+                stage.ShowBackstage();
+                stage.SetBackstageScene(ev);
+                string guest = BackstageCast.GuestSpeaker(ev);
+                yield return Shot(folder, v + "_" + ev + "_wide", 1.0f);
+                stage.SetPromoSpeaker(guest);
+                yield return Shot(folder, v + "_" + ev + "_" + guest, 0.8f);
+                if (BackstageCast.GuestWithBooker(ev))
+                {
+                    stage.SetPromoSpeaker(BackstageCast.DefaultBooker);
+                    yield return Shot(folder, v + "_" + ev + "_booker", 0.8f);
+                }
+                stage.SetPromoSpeaker("player");
+                yield return Shot(folder, v + "_" + ev + "_hero", 0.8f);
+                Debug.Log(string.Format("[Ринг] огляд людей: {0} — гість {1} {2}, букер {3}", ev, guest, show.Guest != null ? "є" : "НЕМАЄ",
+                    show.Booker != null && show.Booker.Model.activeSelf ? "у кадрі" : "схований"));
+                if (ev == "ev_manager" && show.Guest != null) yield return Faces(stage, folder, v + "_ev_manager", show.Guest, true);
+                stage.SetBackstageScene(null);
+            }
+
+            // ---- ринг великого шоу: менеджерка в кутку героя ----
+            stage.SetCareerCast(BackstageCast.DefaultBooker, true);
+            stage.SetBigShow(true);
+            stage.ShowIdle();
+            yield return Shot(folder, v + "_ring_big_overview", 1.5f);
+            Vector3 at;
+            bool spot = stage.ManagerSpot(out at);
+            Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] огляд людей: менеджерка в кутку — {0}, місце ({1:0.00}; {2:0.00}; {3:0.00}), видно: {4}",
+                spot ? "є місце" : "МІСЦЯ НЕМАЄ", at.x, at.y, at.z, stage.ManagerShown ? "так" : "НІ"));
+            if (spot && stage.Manager != null)
+            {
+                var m = stage.Manager;
+                stage.SetShot(StageCam.Close);
+                yield return Shot(folder, v + "_ring_big_close", 1.2f);
+                stage.SetShot(StageCam.Big);
+                yield return Shot(folder, v + "_ring_big_big", 1.2f);
+                // Вона на весь зріст: з боку рингу (за нею зала) і з боку зали (за нею ринг).
+                Vector3 toRing = -at;
+                toRing.y = 0f;
+                toRing.Normalize();
+                Vector3 mid = at + Vector3.up * 0.95f;
+                stage.Cine(mid + toRing * 3.2f + Vector3.up * 0.6f, mid, 38f, true);
+                yield return Shot(folder, v + "_ring_manager_fromring", 0.8f);
+                stage.Cine(mid - toRing * 3.2f + Vector3.up * 0.9f, mid, 38f, true);
+                yield return Shot(folder, v + "_ring_manager_fromhall", 0.8f);
+                yield return Faces(stage, folder, v + "_manager", m);
+
+                // Вихід героя: найближче, куди тіло героя підходить до неї (таз), — у журнал.
+                stage.BeginEntrance(true, null, null, CareerLooks.CostumeRgb(0));
+                var hero = stage.Actor(MatchSide.Player);
+                float near = float.MaxValue, next = 0f;
+                for (float t = 0f; t < 40f && stage.ShowBusy; t += Time.deltaTime)
+                {
+                    yield return null;
+                    near = Mathf.Min(near, Flat(hero.PosePos, at));
+                    if (t >= next) { Capture(folder, v + "_ring_entrance_" + Mathf.RoundToInt(t)); next += 2f; }
+                }
+                stage.SkipShow();
+                Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] огляд людей: вихід героя — найближче до менеджерки {0:0.00} м (тіло — {1:0.00} м)",
+                    near, RingVenue.CornerBody));
+
+                // Пара за рингом і герой на своєму куті — менеджерка не в смузі пари й не під кутом.
+                stage.BeginDemoMatch();
+                RingActor pl = stage.Actor(MatchSide.Player), rv = stage.Actor(MatchSide.Rival), rf = stage.Referee;
+                stage.Place(pl, RingStage3D.PairPos(MatchSide.Player, true), RingStage3D.PairYaw(MatchSide.Player, true), "Ring_Stance_Loop");
+                stage.Place(rv, RingStage3D.PairPos(MatchSide.Rival, true), RingStage3D.PairYaw(MatchSide.Rival, true), "Ring_Stance_Loop");
+                stage.Place(rf, RingStage3D.OutsideRefPos, RingStage3D.YawTo(RingStage3D.OutsideRefPos, RingStage3D.OutsideAnchor), "Ref_Count_Outside_Loop");
+                Forget(stage);
+                _outYaw = null;
+                yield return OutsideFrame(stage, folder, v + "_ring_outside_stance", 0.8f);
+                stage.SetShot(StageCam.Overview);
+                yield return Shot(folder, v + "_ring_outside_overview", 0.8f);
+                Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] огляд людей: пара за рингом (бік {0}) — до менеджерки гравець {1:0.00} м, суперник {2:0.00} м",
+                    RingStage3D.Outside.Side, Flat(pl.PosePos, at), Flat(rv.PosePos, at)));
+
+                stage.Place(rv, RingStage3D.PairPos(MatchSide.Rival, false), -90f, "Ring_Stance_Loop");
+                stage.Place(rf, RingStage3D.RefPos, 180f, "Ref_Idle_Loop");
+                string clip = RingClipTable.DefaultPerch(MoveStaging.Corner);
+                float yaw;
+                Vector3 p0 = stage.PerchPos(MatchSide.Player, MoveStaging.Corner, clip, out yaw);
+                var c = stage.Clip(clip, stage.IsFemale(pl));
+                if (c != null)
+                {
+                    pl.Slot.position = p0;
+                    pl.SetHeight(p0.y);
+                    pl.PlayAt(c, false, p0, yaw, RingStage3D.PlaySpeed);
+                    Forget(stage);
+                    stage.SetShot(StageCam.Big);
+                    float len = c.length / RingStage3D.PlaySpeed, nearC = float.MaxValue;
+                    int shots = 0;
+                    for (float t = 0f; t < len + 0.3f; t += Time.deltaTime)
+                    {
+                        yield return null;
+                        nearC = Mathf.Min(nearC, Flat(pl.PosePos, at));
+                        if (shots < 3 && t >= shots * len / 2f) { Capture(folder, v + "_ring_corner_" + clip + "_" + shots); shots++; }
+                    }
+                    Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] огляд людей: герой на своєму куті ({0}) — до менеджерки найближче {1:0.00} м", clip, nearC));
+                }
+                else Debug.LogWarning("[Ринг] огляд людей: немає кліпа " + clip);
+            }
+
+            // ---- щотижневе шоу й велике без найму: менеджерки немає ----
+            stage.SetBigShow(false);
+            stage.ShowIdle();
+            yield return Shot(folder, v + "_ring_weekly_none", 1.2f);
+            bool weekly = stage.ManagerShown;
+            stage.SetBigShow(true);
+            stage.SetCareerCast(BackstageCast.DefaultBooker, false);
+            stage.ShowIdle();
+            yield return Shot(folder, v + "_ring_big_nohire", 1.2f);
+            Debug.Log(string.Format("[Ринг] огляд людей: менеджерка на щотижневому — {0}, на великому без найму — {1}",
+                weekly ? "Є (ВАДА)" : "немає", stage.ManagerShown ? "Є (ВАДА)" : "немає"));
+            Debug.Log("[Ринг] огляд людей: знято " + _n + " кадрів");
+            HardExit.Now(0);
         }
 
         // ============================ огляд виходів ============================

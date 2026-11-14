@@ -115,6 +115,15 @@ namespace Game.Gameplay.Ring.Stage
         void SetBackstageScene(string sceneId);
 
         /// <summary>
+        /// Люди кар'єри поза рингом (рішення власника 12.11.2026, № 10 і № 8): <paramref name="bookerId"/> — мовець букера
+        /// федерації в закуліссі (<c>FederationDef.Booker</c>: booker — Ліна Ворон, booker2 — Агата Новак, booker3 — Девід
+        /// Окоро, booker4 — Хіроко Танака; порожньо — Ліна); <paramref name="manager"/> — менеджерка Марта Ріос найнята
+        /// (<c>CareerSession.HasManager</c>): тоді вона в кутку героя на великих шоу (<see cref="SetBigShow"/>). Той самий
+        /// склад — без перебудови; кликати щоразу разом із <see cref="SetWrestlers"/>.
+        /// </summary>
+        void SetCareerCast(string bookerId, bool manager);
+
+        /// <summary>
         /// Хто на рингу: тіла набору (<c>body_m_latin</c>…), колір екіпіровки 0xRRGGBB, зачіска (ключ частини набору або
         /// порожньо), масштаб суперника (1 — як герой). Та сама зовнішність — без перебудови.
         /// </summary>
