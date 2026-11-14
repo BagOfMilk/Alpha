@@ -638,6 +638,104 @@ namespace Game.Gameplay.Ring.Stage
             return n;
         }
 
+        // ============================ біля кута ============================
+
+        /// <summary>Радіус постаті, що стоїть на підлозі біля рингу (менеджер у кутку), м.</summary>
+        public const float CornerBody = 0.3f;
+        /// <summary>Від краю платформи назовні: найближче й найдалі, м (ближче — спідниця рингу, далі — перший ряд).</summary>
+        public const float CornerOutMin = 0.45f, CornerOutMax = 1.25f;
+        /// <summary>Уздовж боку від кута платформи: за кут (−) і до середини боку (+), м.</summary>
+        public const float CornerAlongMin = -0.6f, CornerAlongMax = 1.6f;
+        /// <summary>Запас від смуги пари за рингом, м: бійка за рингом того, хто в кутку, не зачіпає.</summary>
+        public const float CornerPairPad = 0.4f;
+        /// <summary>Від шляху виходу (завіса → сходи), м: борець на виході проходить повз, а не крізь.</summary>
+        public const float CornerPathClear = 0.7f;
+
+        /// <summary>
+        /// Місце на підлозі біля кута рингу (x, z) — менеджер у кутку героя на великих шоу (рішення власника 12.11.2026, № 8).
+        /// Кут платформи — (<paramref name="sx"/>·Plat; <paramref name="sz"/>·Plat); свій кут гравця — північно-західний (−1; +1),
+        /// як у кліпах <c>Move_Corner_*</c>. Кандидати — назовні від обох боків кута (<see cref="CornerOutMin"/>…
+        /// <see cref="CornerOutMax"/> від краю платформи) і вздовж них (<see cref="CornerAlongMin"/>…<see cref="CornerAlongMax"/>);
+        /// кращий — ближчий до кута (уздовж важить удвічі більше, ніж назовні). Місце вільне: коло <see cref="CornerBody"/> без
+        /// перешкод карти підлоги (сходи, столи, зброя, стільці, глядачі, у грі — огорожа), не ближче <see cref="CornerPathClear"/>
+        /// до шляху виходу (<see cref="PathPoints"/>), поза смугою пари <paramref name="pair"/> із запасом <see cref="CornerPairPad"/>
+        /// і не на операторах камер. false — вільного місця біля кута немає (тоді в кутку нікого — сцена пише це в журнал).
+        /// </summary>
+        public bool CornerSpot(OutsideSpot pair, float sx, float sz, out float x, out float z)
+        {
+            x = z = 0f;
+            float px0, pz0, px1, pz1;
+            pair.Rect(Plat, CornerPairPad, out px0, out pz0, out px1, out pz1);
+            var path = PathPoints();
+            float best = float.MaxValue;
+            int no = (int)Math.Round((CornerOutMax - CornerOutMin) / Cell), na = (int)Math.Round((CornerAlongMax - CornerAlongMin) / Cell);
+            for (int side = 0; side < 2; side++)
+                for (int io = 0; io <= no; io++)
+                    for (int ia = 0; ia <= na; ia++)
+                    {
+                        float o = CornerOutMin + io * Cell, a = CornerAlongMin + ia * Cell;
+                        float cost = Math.Abs(a) + 0.5f * o;
+                        if (cost >= best) continue;
+                        // side 0 — назовні від західного/східного боку (x), side 1 — від північного/південного (z).
+                        float cx = side == 0 ? sx * (Plat + o) : sx * (Plat - a);
+                        float cz = side == 0 ? sz * (Plat - a) : sz * (Plat + o);
+                        if (Math.Abs(cx) > _ext - CornerBody || Math.Abs(cz) > _ext - CornerBody) continue;
+                        if (cx >= px0 && cx <= px1 && cz >= pz0 && cz <= pz1) continue;
+                        if (TopDisc(cx, cz, CornerBody) > 0f) continue;
+                        if (PathDist(path, cx, cz) < CornerPathClear) continue;
+                        if (NearSoft(cx, cz, CornerBody)) continue;
+                        best = cost; x = cx; z = cz;
+                    }
+            return best < float.MaxValue;
+        }
+
+        /// <summary>
+        /// Шлях виходу на підлозі (x, z): якорі <c>anchor_path_NN</c> за порядком назв і найближчі до останнього з них сходи
+        /// (<c>anchor_steps_*</c>) — ними борець піднімається на фартух. Порожньо — у тексті залу шляху немає.
+        /// </summary>
+        public List<float[]> PathPoints()
+        {
+            var names = new List<string>();
+            foreach (var k in _anchors.Keys) if (k.StartsWith("anchor_path_", StringComparison.Ordinal)) names.Add(k);
+            names.Sort(StringComparer.Ordinal);
+            var pts = new List<float[]>();
+            foreach (var n in names) pts.Add(new[] { _anchors[n][0], _anchors[n][2] });
+            if (pts.Count == 0) return pts;
+            var last = pts[pts.Count - 1];
+            float[] steps = null;
+            float bestD = float.MaxValue;
+            foreach (var kv in _anchors)
+            {
+                if (!kv.Key.StartsWith("anchor_steps_", StringComparison.Ordinal)) continue;
+                float dx = kv.Value[0] - last[0], dz = kv.Value[2] - last[1], d = dx * dx + dz * dz;
+                if (d < bestD) { bestD = d; steps = new[] { kv.Value[0], kv.Value[2] }; }
+            }
+            if (steps != null) pts.Add(steps);
+            return pts;
+        }
+
+        /// <summary>Відстань від точки до ламаної шляху (м); шляху немає — дуже далеко.</summary>
+        public static float PathDist(List<float[]> path, float x, float z)
+        {
+            if (path == null || path.Count == 0) return float.MaxValue;
+            if (path.Count == 1) return SegDist(x, z, path[0][0], path[0][1], path[0][0], path[0][1]);
+            float best = float.MaxValue;
+            for (int i = 0; i + 1 < path.Count; i++)
+                best = Math.Min(best, SegDist(x, z, path[i][0], path[i][1], path[i + 1][0], path[i + 1][1]));
+            return best;
+        }
+
+        /// <summary>Чи коло (x, z, <paramref name="r"/>) зачіпає «м'яку» перешкоду (оператора камери).</summary>
+        public bool NearSoft(float x, float z, float r)
+        {
+            foreach (var s in _soft)
+            {
+                float dx = s[0] - x, dz = s[1] - z, rr = s[2] + r;
+                if (dx * dx + dz * dz < rr * rr) return true;
+            }
+            return false;
+        }
+
         public override string ToString()
         {
             return string.Format(CultureInfo.InvariantCulture, "{0}: мат {1:0.000}, канат {2:0.000}, стійка {3:0.000}, платформа {4:0.000}",

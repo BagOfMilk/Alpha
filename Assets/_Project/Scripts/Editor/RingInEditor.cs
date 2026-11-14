@@ -85,6 +85,9 @@ namespace Game.Gameplay.EditorTools
             gameView.ShowTab();
             string sizeNote = AutoplayInEditor.TrySetGameViewSize(gameView, ShotWidth, ShotHeight);
             RingLaunchArgs.WriteEditorArgs(args ?? new string[0]);
+            // Огляди й гра в редакторі — без звуку (власник 08.11.2026 через ПМ: «Почему снова звуки есть?»): перемикач
+            // «Mute Audio» вкладки Game; другий запобіжник — Core Audio в tools/ring-editor.ps1.
+            EditorUtility.audioMasterMute = true;
             EditorApplication.isPlaying = true;
             return "started" + sizeNote + (args != null && args.Length > 0 ? ": " + string.Join(" ", args) : "");
         }
