@@ -85,7 +85,7 @@ New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $log = Join-Path $ProjectPath "Logs\ring_build_$($Method)_$stamp.log"
 New-Item -ItemType Directory -Force -Path (Split-Path $log) | Out-Null
-$before = if (Test-Path $exe) { (Get-Item $exe).LastWriteTimeUtc } else { [DateTime]::MinValue }
+$before = [DateTime]::UtcNow.AddSeconds(-2)   # початок запуску: level0 збірки має бути новішим (запас на точність ФС)
 
 function Invoke-Unity([string]$UnityArgs, [string]$What) {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
@@ -137,7 +137,10 @@ if ($csErr.Count) {
     $csErr | Select-Object -First 15 | ForEach-Object { Write-Host "  $_" }
     exit 6
 }
-if ($code -ne 0 -or -not (Test-Path $exe) -or (Get-Item $exe).LastWriteTimeUtc -le $before) {
+# Свіжість — за Ring_Data/level0 (сцена), не за Ring.exe: збірка Unity інкрементальна, і незмінні за вмістом файли
+# (Ring.exe-заглушка, lib_burst_generated.dll) лишає зі старим часом (14.11.2026: збірка вдалась, а скрипт дав 12).
+$level0 = Join-Path (Split-Path $exe) 'Ring_Data\level0'
+if ($code -ne 0 -or -not (Test-Path $exe) -or -not (Test-Path $level0) -or (Get-Item $level0).LastWriteTimeUtc -le $before) {
     Write-Host "Збірка не вдалась. Останні рядки з помилками:"
     $lines | Where-Object { $_ -match '(?i)error|exception|failed' } | Select-Object -Last 15 | ForEach-Object { Write-Host "  $_" }
     exit 12

@@ -140,7 +140,13 @@ function Assert-Muted($proc) {
         Write-Host "Звук редактора не вдалося заглушити — Play Mode зупинено: $why"
         exit 125
     }
+    # Доказ у журналі (14.11.2026: 12.11 рядка не було, і глушник не вдалося підтвердити) — як у run-offscreen.ps1.
+    if ($m -gt $script:editorMutedSessions) {
+        $script:editorMutedSessions = $m
+        Write-Host ("Звук редактора заглушено: сесій {0} (гучність 0, GetMute = так), {1:HH:mm:ss}." -f $m, (Get-Date))
+    }
 }
+$script:editorMutedSessions = 0
 
 function Read-Status {
     if (-not (Test-Path $statusFile)) { return $null }
