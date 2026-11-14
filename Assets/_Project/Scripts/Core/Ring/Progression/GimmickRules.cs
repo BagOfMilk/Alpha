@@ -20,6 +20,12 @@ namespace Game.Core.Ring
         private static readonly string[] VeteranPerks = { PerkCatalog.Veteran };
         private static readonly string[] NoPerks = new string[0];
 
+        /// <summary>
+        /// Бувалий «читає суперника» — і ловить момент для контрприйому: + до кидка реверсу. Власник 14.11.2026 — «так бувалий» на
+        /// пропозицію «Кар'єри» (замір: показ наміру й зайві жетони сили не додавали, перший матч Бувалого 43,3 → 47,1 %).
+        /// ПЛЕЙСХОЛДЕР.
+        /// </summary>
+        public const int VeteranReverseBonus = 1;
         /// <summary>Хардкорник терпить біль: пороги ушкодження в матчі зсунуті (як у перка «Залізна щелепа»).</summary>
         public const int HardcoreDamageShift = 1;
         /// <summary>Хардкорник: травма зони в кар'єрі — з накопиченого ушкодження, більшого на стільки.</summary>
@@ -48,7 +54,10 @@ namespace Game.Core.Ring
             if (m == null) return;
             switch (g)
             {
-                case Gimmick.Veteran: m.ReadsRival = true; break;   // показ наміру суперника — рушій бою (лише показ, на кидки не впливає)
+                case Gimmick.Veteran:
+                    m.ReadsRival = true;                       // показ наміру суперника — рушій бою (сам прапорець на кидки не впливає)
+                    m.ReverseBonus += VeteranReverseBonus;     // а ось реверс — так: + до кидка (MatchEngine.ReverseMod)
+                    break;
                 case Gimmick.Hardcore: m.DamageThresholdShift += HardcoreDamageShift; break;
                 case Gimmick.Strongman: m.StartMomentumBonus += StrongmanStartMomentum; break;
             }

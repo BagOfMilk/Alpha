@@ -430,6 +430,65 @@ namespace Game.Tests.EditMode
             }
         }
 
+        [Test]
+        public void Veteran_PlusOneToTheReverseRoll_InApplyToAndForRival_TheOtherSevenNothing()
+        {
+            // власник 14.11.2026: «так бувалий» — Бувалий +1 до кидка реверсу (MatchModifiers.ReverseBonus, рушій — MatchEngine.ReverseMod)
+            Assert.AreEqual(1, GimmickRules.VeteranReverseBonus);
+            foreach (Gimmick g in Enum.GetValues(typeof(Gimmick)))
+            {
+                int want = g == Gimmick.Veteran ? GimmickRules.VeteranReverseBonus : 0;
+                var m = new MatchModifiers();
+                GimmickRules.ApplyTo(m, g);
+                Assert.AreEqual(want, m.ReverseBonus, "ApplyTo " + g);
+                Assert.AreEqual(want, GimmickRules.ForRival(g).ReverseBonus, "ForRival " + g);
+            }
+            var stacked = new MatchModifiers { ReverseBonus = 2 };
+            GimmickRules.ApplyTo(stacked, Gimmick.Veteran);
+            Assert.AreEqual(2 + GimmickRules.VeteranReverseBonus, stacked.ReverseBonus, "додається до того, що вже є, а не перезаписує");
+        }
+
+        [Test]
+        public void Veteran_ReverseBonus_ReachesEveryMatch_WeeklyShowBothSides_FeudMatch_AndTheHammer()
+        {
+            // тиждень: гравець-Бувалий і суперник-Бувалий
+            var s = Hero(6, Gimmick.Technician);
+            s.EndWeek();
+            string opp = s.State.Opponent;
+            string blob = s.CaptureState();
+            var plain = AsGimmick(s, 6, Gimmick.Technician).StartShow();
+            Assert.AreEqual(0, plain.Setup.PlayerMods.ReverseBonus);
+            Assert.AreEqual(0, plain.Setup.RivalMods.ReverseBonus, "суперник тижня — не Бувалий");
+            Assert.AreEqual(GimmickRules.VeteranReverseBonus, AsGimmick(s, 6, Gimmick.Veteran).StartShow().Setup.PlayerMods.ReverseBonus, "гравець, тиждень");
+            var c = CareerKit.Content();
+            c.FindNpc(opp).Gimmick = Gimmick.Veteran;
+            var t = CareerKit.Fresh(6, c);
+            t.RestoreState(blob);
+            var ev = t.StartShow();
+            Assert.AreEqual(GimmickRules.VeteranReverseBonus, ev.Setup.RivalMods.ReverseBonus, "суперник тижня — моди NPC");
+            Assert.AreEqual(0, ev.Setup.PlayerMods.ReverseBonus, "лише своїй стороні");
+
+            // матч ворожнечі: гравець — через BuildMatchSetup, Молот — через ручне злиття в StartFeudMatch
+            var f = AtFeudMatch(80, Gimmick.Technician);
+            string fblob = f.CaptureState();
+            var fplain = AsGimmick(f, 80, Gimmick.Technician).StartFeudMatch();
+            Assert.AreEqual(0, fplain.Setup.PlayerMods.ReverseBonus);
+            Assert.AreEqual(0, fplain.Setup.RivalMods.ReverseBonus, "Молот — не Бувалий");
+            Assert.AreEqual(GimmickRules.VeteranReverseBonus, AsGimmick(f, 80, Gimmick.Veteran).StartFeudMatch().Setup.PlayerMods.ReverseBonus, "гравець, ворожнеча");
+            var c2 = CareerKit.Content();
+            c2.FindNpc(CareerContent.HammerId).Gimmick = Gimmick.Veteran;
+            var u = CareerKit.Fresh(80, c2);
+            u.RestoreState(fblob);
+            var hv = u.StartFeudMatch();
+            Assert.AreEqual(GimmickRules.VeteranReverseBonus, hv.Setup.RivalMods.ReverseBonus, "Молот-Бувалий: бонус не губиться в ручному злитті");
+            Assert.AreEqual(0, hv.Setup.PlayerMods.ReverseBonus);
+
+            // окрема ворожнеча (без кар'єри): з ґіміком — так, без — ні
+            var camp = RingCampaign.New(c.Feud, new Game.Gameplay.Combat.SeededDiceRoller(3));
+            Assert.AreEqual(0, camp.State.BuildMatchSetup(c.Feud).PlayerMods.ReverseBonus);
+            Assert.AreEqual(GimmickRules.VeteranReverseBonus, camp.State.BuildMatchSetup(c.Feud, LateRole.None, Gimmick.Veteran).PlayerMods.ReverseBonus);
+        }
+
         // ---------------- матч ворожнечі ----------------
 
         [Test]

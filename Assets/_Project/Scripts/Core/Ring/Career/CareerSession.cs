@@ -1276,6 +1276,7 @@ namespace Game.Core.Ring.Career
             rm.KickOutBonus += over.KickOutBonus;
             rm.DamageThresholdShift += over.DamageThresholdShift;
             rm.ReadsRival |= over.ReadsRival;
+            rm.ReverseBonus += over.ReverseBonus;   // Бувалий-NPC: + до кидка реверсу (інакше губився б саме тут, у ручному злитті)
             e.State.Rival.ReversalTokens += over.ExtraReversalTokens;
             e.State.Rival.Momentum = Math.Min(MatchRules.MaxMomentum, e.State.Rival.Momentum + over.StartMomentumBonus);
             // костюм рівня федерації — і на великому шоу ворожнечі (П5: раніше лише в StartShow)
