@@ -66,7 +66,7 @@ namespace Game.Tests.EditMode
         // ---------------- дані ----------------
 
         [Test]
-        public void TheFourNewGimmicks_FollowTheDesignTable_AndWaitForTheOwnersU0BeforeTheCreationScreen()
+        public void TheFourNewGimmicks_FollowTheDesignTable_AndAreOnTheCreationScreen()
         {
             var c = CareerKit.Content();
             Assert.AreEqual(CareerKit.GimmickCount, c.Gimmicks.Count);
@@ -83,26 +83,30 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(0, c.GimmickOf(Gimmick.Rookie).StartGimmickMoves, "мало прийомів");
             foreach (var g in c.Gimmicks)
             {
-                bool mvp = !New.Contains(g.Id);
-                Assert.AreEqual(mvp, g.OnCreationScreen, g.Key + ": на екрані створення — лише MVP, решта після У0");
+                Assert.IsTrue(g.OnCreationScreen, g.Key + ": на екрані створення (Б4, власник 13.11.2026 «Так, усі 7», п. 5)");
                 if (g.Id != Gimmick.Rookie) { Assert.AreEqual(1, g.FreePoints, g.Key); Assert.AreEqual(-1, g.StartGimmickMoves, g.Key); }
                 Assert.IsTrue(c.Roster.Any(n => n.Gimmick == g.Id), "у ростері є борець ґіміка " + g.Key);
             }
             foreach (var g in New)
                 Assert.IsTrue(c.Roster.Where(n => n.Gimmick == g).All(n => n.Tier >= 2), g + ": NPC — у федераціях 2–4, М1 федерації 1 той самий");
-            var v = CareerKit.NewAtCreate(1).GetCreationView();
-            CollectionAssert.AreEqual(new[] { Gimmick.Monster, Gimmick.Flyer, Gimmick.Technician, Gimmick.Showman }, v.Gimmicks.Select(x => x.Def.Id).ToArray());
-
-            // після У0 власник (через ПМ) перемикає прапор у даних — і ґімік з'являється з усім своїм
-            var open = Load(Gimmicks().Replace("\"onCreationScreen\": false", "\"onCreationScreen\": true"));
-            var s = CareerSession.New(open, new Game.Gameplay.Combat.SeededDiceRoller(1), 1);
-            s.StartNewGame();
-            var all = s.GetCreationView();
-            Assert.AreEqual(CareerKit.GimmickCount, all.Gimmicks.Count);
+            // екран створення — усі вісім у порядку переліку (Б4: ряд MVP, під ним 5–8), кожен з усім своїм
+            var all = CareerKit.NewAtCreate(1).GetCreationView();
+            CollectionAssert.AreEqual(Enum.GetValues(typeof(Gimmick)).Cast<Gimmick>().ToArray(), all.Gimmicks.Select(x => x.Def.Id).ToArray());
             var rookie = all.Gimmicks.Single(x => x.Def.Id == Gimmick.Rookie);
             Assert.AreEqual(2, rookie.FreePoints);
             Assert.AreEqual(8, rookie.StartMoves.Count, "6 базових + коронний + фінішер");
             Assert.AreEqual(1, all.Gimmicks.Single(x => x.Def.Id == Gimmick.Veteran).FreePoints);
+            foreach (var g in New) CollectionAssert.AreEqual(c.GimmickOf(g).Attr, all.Gimmicks.Single(x => x.Def.Id == g).BaseAttr, g + ": основа на плитці — з даних");
+
+            // прапор «onCreationScreen» лишається механізмом даних для майбутніх ґіміків: false ховає ґімік з екрана, решта на місці
+            string json = Gimmicks();
+            const string rookieId = "\"id\": \"rookie\",";
+            Assert.AreEqual(1, json.Split(new[] { rookieId }, StringSplitOptions.None).Length - 1);
+            var hidden = Load(json.Replace(rookieId, rookieId + " \"onCreationScreen\": false,"));
+            var h = CareerSession.New(hidden, new Game.Gameplay.Combat.SeededDiceRoller(1), 1);
+            h.StartNewGame();
+            CollectionAssert.AreEqual(Enum.GetValues(typeof(Gimmick)).Cast<Gimmick>().Where(g => g != Gimmick.Rookie).ToArray(),
+                h.GetCreationView().Gimmicks.Select(x => x.Def.Id).ToArray(), "onCreationScreen: false — ґіміка на екрані немає");
         }
 
         [Test]

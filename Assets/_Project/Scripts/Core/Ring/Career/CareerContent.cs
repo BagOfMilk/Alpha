@@ -131,7 +131,10 @@ namespace Game.Core.Ring.Career
         /// Решту вивчає за очки розвитку. Новачок — 0: «мало прийомів».
         /// </summary>
         public int StartGimmickMoves = -1;
-        /// <summary>Чи показувати ґімік на екрані створення (у JSON — «onCreationScreen», без поля — так). Ґіміки 5–8 — після У0 власника.</summary>
+        /// <summary>
+        /// Чи показувати ґімік на екрані створення (у JSON — «onCreationScreen», без поля — так). З Б4 (власник 13.11.2026, «Так, усі 7»,
+        /// п. 5) на екрані всі вісім; прапор — механізм даних для майбутніх ґіміків до У0.
+        /// </summary>
         public bool OnCreationScreen = true;
     }
 

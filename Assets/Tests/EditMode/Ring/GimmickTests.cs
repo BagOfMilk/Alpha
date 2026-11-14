@@ -91,12 +91,14 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void CreationView_ListsFourGimmicks_WithBaseAttrsAndTenStartMoves()
+        public void CreationView_ListsEightGimmicks_WithBaseAttrsAndStartMoves()
         {
+            // Б4, крок 3 (власник 13.11.2026, «Так, усі 7», п. 5): на екрані створення — усі вісім ґіміків
             var v = CareerKit.NewAtCreate(1).GetCreationView();
-            Assert.AreEqual(4, v.Gimmicks.Count);
+            Assert.AreEqual(CareerKit.GimmickCount, v.Gimmicks.Count);
             Assert.AreEqual(1, v.FreePoints);
-            foreach (var g in v.Gimmicks) Assert.AreEqual(10, g.StartMoves.Count);
+            // 6 базових + 2 ґімік-прийоми + коронний + фінішер; Самородок ґімік-прийоми вчить з нуля — 8
+            foreach (var g in v.Gimmicks) Assert.AreEqual(g.Def.Id == Gimmick.Rookie ? 8 : 10, g.StartMoves.Count, g.Def.Key);
         }
 
         [Test]
