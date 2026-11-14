@@ -524,18 +524,18 @@ namespace Game.Tests.EditMode
         /// Назва ґіміка обох родів (ПМ 13.11.2026, RingLabels.GimmickName) на афіші створення: велика назва (display Black 52, розрядка
         /// 0,01) і плашка ролі (display Black 26, розрядка 0,04, поля 24 і 22) в одному рядку колонки афіші (стрічка 410 без полів 26
         /// і 22), з проміжком 8. Жіночі назви на 52 не влазили (ТЕХНІКИНЯ + ЛИХОДІЙКА) — кегль назви меншає тією самою функцією, що й
-        /// на екрані (CareerTileLayout.FitPosterName, не нижче токена TypeTitle 28): на ньому назва мусить влізти. Усі вісім ґіміків —
-        /// і ті, що з'являться на екрані після Б4. Чоловічі назви ґіміків, що вже на екрані, лишаються на 52 (вигляд не змінився).
+        /// на екрані (CareerTileLayout.FitPosterName, не нижче токена TypeTitle 28): на ньому назва мусить влізти. Усі вісім ґіміків.
+        /// Правило одне для всіх ґіміків і обох родів (ПМ 14.11.2026, варіант «а», Б4: на екрані всі вісім; назви — таблиця §5.2):
+        /// назва, що влазить, — повним кеглем 52; що не влазить — стискається рівно до вміщення, не більше, і не нижче токена display
+        /// 28. Так ХАРДКОРНИК + ГЕРОЙ — 42, + ЛИХОДІЙ — 37; САМОРОДОК — 45 і 40; ХАРДКОРНИЦЯ + ЛИХОДІЙКА — 29. Вигляд стиснутих назв
+        /// — на У2 арт-директора; якщо на кадрах афіша стиснута — варіант (роль під назвою) власнику.
         /// </summary>
         [Test]
         public void Create_PosterHead_GimmickNameAndRolePlate_FitOneLine_BothSexes()
         {
             var bad = new List<string>();
             float row = CareerTileLayout.StripW - CareerTileLayout.CreatePosterPadLeft - CareerTileLayout.CreatePosterPadRight;
-            var onScreen = new HashSet<string>();
-            foreach (var g in CareerKit.NewAtCreate(1).GetCreationView().Gimmicks) onScreen.Add(g.Def.Key);
-            Assert.That(onScreen.Count, Is.GreaterThanOrEqualTo(4), "екран створення без ґіміків — охоронець нічого не міряє");
-            int shrunk = 0;
+            int shrunk = 0, full = 0;
             foreach (var g in CareerKit.Content().Gimmicks)
                 foreach (bool female in new[] { false, true })
                     foreach (var path in new[] { RingPath.Face, RingPath.Heel })
@@ -550,13 +550,20 @@ namespace Game.Tests.EditMode
                         float fitted = natural * size / CareerTileLayout.PosterNameSize;
                         if (fitted > avail)
                             bad.Add(string.Format("афіша: «{0}» + «{1}» — {2:0} > {3:0} навіть на {4:0}", name, role, fitted, avail, size));
-                        if (size < CareerTileLayout.PosterNameSize) shrunk++;
-                        // чоловічі назви ґіміків, що вже є на екрані, — тим самим кеглем 52, що й до родових назв (вигляд не змінився)
-                        if (!female && onScreen.Contains(g.Key) && size < CareerTileLayout.PosterNameSize)
-                            bad.Add(string.Format("афіша: «{0}» + «{1}» стиснуто до {2:0} — чоловіча назва мала влазити на 52", name, role, size));
+                        if (size < CareerTileLayout.PosterNameSize) shrunk++; else full++;
+                        if (size < CareerTileLayout.PosterNameMinSize)
+                            bad.Add(string.Format("афіша: «{0}» + «{1}» — кегль {2:0} нижче токена display {3:0}", name, role, size, CareerTileLayout.PosterNameMinSize));
+                        // що влазить — повним кеглем (і назви М1 лишаються на 52: вигляд не змінився)
+                        if (natural <= avail && size != CareerTileLayout.PosterNameSize)
+                            bad.Add(string.Format("афіша: «{0}» + «{1}» влазить на 52, а стиснуто до {2:0}", name, role, size));
+                        // що не влазить — рівно до вміщення: кеглем на одиницю більшим уже не влазить (не стискати зайве)
+                        if (size < CareerTileLayout.PosterNameSize && size > CareerTileLayout.PosterNameMinSize
+                            && natural * (size + 1f) / CareerTileLayout.PosterNameSize <= avail)
+                            bad.Add(string.Format("афіша: «{0}» + «{1}» стиснуто до {2:0}, а влазить і на {3:0}", name, role, size, size + 1f));
                         if (WordFont.Missing(name).Count > 0) bad.Add("афіша: у шрифті немає гліфів «" + name + "»");
                     }
             Assert.That(shrunk, Is.GreaterThan(0), "жодна назва не стискається — міра афіші, певно, не та (ТЕХНІКИНЯ + ЛИХОДІЙКА на 52 не влазить)");
+            Assert.That(full, Is.GreaterThan(0), "жодна назва не йде на 52 — міра афіші, певно, не та (МОНСТР + ГЕРОЙ влазить)");
             // екран рахує тією самою функцією, а не своєю: інакше охоронець міряв би не те, що на афіші
             string create = System.IO.File.ReadAllText(System.IO.Path.Combine(UnityEngine.Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI", "Career", "CreateScreenView.cs"));
             if (!create.Contains("FitPosterName(head, gname, plate);") || !create.Contains("CareerTileLayout.FitPosterName(w * CareerTileLayout.PosterNameSize / cur,"))
@@ -769,6 +776,11 @@ namespace Game.Tests.EditMode
                 Ui("c.late.next", Ui("c.late.star")) + ". " + Ui("c.late.star.desc", 999, 999) + ".",
                 Ui("c.late.next", Ui("c.late.none")) + ".");
             h += 2f + Para(note, BrandTokens.TypeMinInfo, col);
+            // Б5: на останньому кроці кінців сезонів 3 і 6 — «Тіло старіє: …» одним рядком (ПМ 14.11.2026; на екран — після У0
+            // арт-директора; мітка TypeMinInfo, напівжирна, відступ 8 — як інші рядки паперу)
+            int ageLines;
+            h += 8f + Para(Longest(Ui("c.age.next", 4, 4), Ui("c.age.next.many", 4, 5)), BrandTokens.TypeMinInfo, col, out ageLines);
+            Assert.AreEqual(1, ageLines, "рядок «Тіло старіє…» — один рядок паперу");
             h += PaperPadB;
             Assert.LessOrEqual(rows, 2, "кнопки ролей — щонайбільше два рядки");
             Assert.LessOrEqual(top + h, ropesY - PaperClear,
@@ -1307,6 +1319,77 @@ namespace Game.Tests.EditMode
                 }
             }
             Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+        /// <summary>
+        /// Рядок-підказка шапки шухляди «Розвиток» / «Витрати» (WeekScreenView.Drawer: шухляда 560, поля 18 і 24, заголовок display 25
+        /// ВЕЛИКИМИ, підказка праворуч із відступом 16, текст 12 — RingUi.HintLine). Саме тут при наведенні стоять підказки атрибутів
+        /// (CareerScreenLines.AttrBuyHint, з причиною «чому не можна») і тренерів (CoachHint) — справжні рядки з сесій сезонів 1, 4 і 7
+        /// (Б5: хвіст «тіло старіє»), обидві форми (героїня — «.f»; зараз у цих ключів «.f» немає — прогін стереже ту, що з'явиться;
+        /// причини — усі dev.reason.*, і недосяжні для атрибута: так межа лише суворіша). Без хвоста — до двох рядків (шапка 56, кадри
+        /// слоту 30); хвіст
+        /// старіння витривалості дає третій (виміряно 14.11.2026: шапка росте, прокрутка стискається) — більше трьох не можна.
+        /// </summary>
+        [Test]
+        public void DrawerHead_Hint_AttrAndCoachLines_WithTheAgeingTail_FitTheirLines()
+        {
+            const float drawerW = 560f, padL = 18f, padR = 24f, gap = 16f, hintSize = 12f;
+            // атрибути — у шухляді «Розвиток», тренери — у «Витратах» (WeekScreenView.Drawer: заголовок за _dev)
+            float devW = drawerW - padL - padR - gap - WordFont.Width(Caps(Ui("dev.title")), 25f, 0.02f) - RenderSlack;
+            float shopW = drawerW - padL - padR - gap - WordFont.Width(Caps(Ui("c.hub.shop")), 25f, 0.02f) - RenderSlack;
+            var bad = new List<string>();
+            var reasons = new List<string> { null };
+            if (_ui == null) Ui("dev.title");
+            foreach (var kv in _ui) if (kv.Key.StartsWith("dev.reason.", StringComparison.Ordinal) && kv.Value is string) reasons.Add(kv.Key.Substring("dev.reason.".Length));
+            var heroine = RingText.FromJson(CareerKit.Read("ui_uk.json"));
+            HeroForms.Apply(heroine, true);
+            var s1 = CareerKit.NewHero(9);
+            for (int i = 0; i < 5; i++) s1.Player.Set((RingAttr)i, 0);   // на стелі ціни немає (п. 6) — тут міряється рядок із ціною
+            int checkedTail = 0;
+            foreach (int season in new[] { 1, 4, 7 })
+            {
+                var s = SessionInSeason(s1, season);
+                foreach (var t in new[] { T, heroine })
+                {
+                    for (int i = 0; i < 5; i++)
+                    {
+                        var a = (RingAttr)i;
+                        foreach (var r in reasons)
+                        {
+                            string h = CareerScreenLines.AttrBuyHint(t, s, a, r);
+                            bool tail = h.Contains(Ui("c.age.attr", 1).Substring(0, 12));
+                            if (tail) checkedTail++;
+                            DrawerHint(bad, "Розвиток, сезон " + season + ", " + a, h, hintSize, devW, tail ? 3 : 2);
+                        }
+                    }
+                    for (int k = 0; k < CareerRules.Coaches.Length; k++)
+                    {
+                        string h = CareerScreenLines.CoachHint(t, s, k);
+                        bool tail = h.Contains(Ui("c.age.coach", 1).Substring(0, 12));
+                        if (tail) checkedTail++;
+                        DrawerHint(bad, "Витрати, сезон " + season + ", тренер " + CareerRules.Coaches[k], h, hintSize, shopW, tail ? 3 : 2);
+                    }
+                }
+            }
+            Assert.Greater(checkedTail, 0, "хвіст старіння справді міряється (сезони 4 і 7)");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        private static void DrawerHint(List<string> bad, string where, string s, float size, float width, int maxLines)
+        {
+            float widest;
+            if (s.IndexOf('⟦') >= 0) bad.Add(where + ": немає тексту ключа в «" + s + "»");
+            int lines = TextFont.Lines(TextBreak.GlueDashes(s), size, width, 0f, out widest);
+            if (lines > maxLines) bad.Add(string.Format("{0}: «{1}» — {2} рядки у {3:0} (можна {4})", where, s, lines, width, maxLines));
+        }
+
+        /// <summary>Та сама кар'єра в сезоні <paramref name="season"/> (через зліпок, як сейв гравця: надбавку ставить Sync відновлення).</summary>
+        private static CareerSession SessionInSeason(CareerSession s, int season)
+        {
+            string blob = s.CaptureState(), from = "|season=" + s.State.Season + "|";
+            var t = CareerKit.Fresh(s.State.Seed, s.Content);
+            t.RestoreState(blob.Replace(from, "|season=" + season + "|"));
+            Assert.AreEqual(season, t.State.Season, "сезон відновлено");
+            return t;
         }
     }
 }

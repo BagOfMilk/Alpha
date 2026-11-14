@@ -42,13 +42,14 @@ namespace Game.Gameplay.Ring.UI
 
         /// <summary>
         /// Курсор у поле імені — кадром пізніше за натискання, що його попросило (ціль фокусу «name»). Клавіша «0» — тут: цифри 1–9
-        /// роздає хост (RingGameBootstrap), а «0» — лише створенню (лиходій, коли ґіміків понад чотири, Б4); поки друкується ім'я,
-        /// «0» іде в поле, як і цифри хоста (PollTyping).
+        /// роздає хост (RingGameBootstrap), а «0» — лише створенню (лиходій, коли ґіміків понад чотири, Б4). Ворота ті самі, що в
+        /// цифр хоста (<see cref="ICareerHost.KeysFree"/>): під завантаженням, розрізом і паузою, і коли ввід кадру забрало меню чи
+        /// поле імені, «0» нічого не робить (рев'ю ПМ 14.11.2026: роль тихо ставала «Лиходій» під оверлеєм).
         /// </summary>
         public override void Tick(float unscaledDeltaTime)
         {
             base.Tick(unscaledDeltaTime);
-            if (Input.GetKeyDown(KeyCode.Alpha0) && !Typing()) OnDigit(CareerTileLayout.KeyZero);
+            if (Input.GetKeyDown(KeyCode.Alpha0) && Host != null && Host.KeysFree && !Typing()) OnDigit(CareerTileLayout.KeyZero);
             if (_focusNameAfter < 0 || Time.frameCount <= _focusNameAfter) return;
             _focusNameAfter = -1;
             if (_nameField != null && _nameField.panel != null) _nameField.Focus();
