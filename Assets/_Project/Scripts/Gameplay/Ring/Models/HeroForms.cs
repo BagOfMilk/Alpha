@@ -40,6 +40,28 @@ namespace Game.Gameplay.Ring.Models
 
         private static readonly ConditionalWeakTable<RingText, Mode> Modes = new ConditionalWeakTable<RingText, Mode>();
 
+        /// <summary>Ключ імені героя: табло матчу, екран виходу, промо (WrestlerStats гравця в ядрі — той самий ключ).</summary>
+        public const string PlayerNameKey = "w.player.name";
+
+        /// <summary>Текст імені за замовчуванням («Новачок») кожного екземпляра — запам'ятовується до першого запису імені.</summary>
+        private static readonly ConditionalWeakTable<RingText, string> DefaultNames = new ConditionalWeakTable<RingText, string>();
+
+        /// <summary>
+        /// Ім'я героя кар'єри → <see cref="PlayerNameKey"/>; порожнє (титул, екран створення) — текст за замовчуванням, тож нова
+        /// кар'єра не несе ім'я попередньої. Хост кличе з кожного MakeView разом із формами. Баг М1 14.11.2026 («Відео огляд»):
+        /// ім'я ставилось лише в Rebind — у NewGame воно ще порожнє, — і після створення героя табло матчу й екран виходу
+        /// показували «Новачок», доки гравець не натискав «Продовжити».
+        /// </summary>
+        public static void ApplyName(RingText text, string ringName)
+        {
+            if (text == null) return;
+            var d = text.AsDictionary();
+            string def = DefaultNames.GetValue(text, t => { string v; return t.AsDictionary().TryGetValue(PlayerNameKey, out v) ? v : ""; });
+            string name = (ringName ?? "").Trim();
+            if (name.Length > 0) d[PlayerNameKey] = name;
+            else if (def.Length > 0) d[PlayerNameKey] = def;
+        }
+
         public static string FemaleKey(string key) { return key + FemaleSuffix; }
         public static string RivalKey(string key) { return key + RivalSuffix; }
 

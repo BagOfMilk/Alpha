@@ -216,7 +216,7 @@ namespace Game.Gameplay.Ring
                 StartFeudMatch = () => { _career.StartFeudMatch(); },
                 AfterDevelopment = () => { _career.FinishBigShow(); Save(); }
             };
-            if (!string.IsNullOrEmpty(_career.State.RingName)) _text.Add("w.player.name", _career.State.RingName);
+            HeroForms.ApplyName(_text, _career.State.RingName);   // і в MakeView (ApplyHeroForms): після CreateHero Rebind не кличуть
             // -ring-hero-name: ім'я, яке екран створення підставляє в поле (той самий ключ, що й «Новачок» за замовчуванням)
             ReadCareerShotArgs();
             if (_shotHeroName != null) _text.Add("c.create.default_name", _shotHeroName);
@@ -638,7 +638,8 @@ namespace Game.Gameplay.Ring
         /// <summary>
         /// Жіночі форми звертання (П5): героїні — «ключ.f» замість чоловічого роду в промо, закулісся, кінцівках і кар'єрі; на створенні —
         /// за вибраним тілом (<see cref="HeroForms.IsHeroine"/>). Суперниця тижня — «ключ.rf» (картка, чутки, розмова з букером);
-        /// кличеться з кожного MakeView, тож новий суперник нового тижня підхоплюється з першим же екраном.
+        /// кличеться з кожного MakeView, тож новий суперник нового тижня підхоплюється з першим же екраном. Тут же — ім'я героя
+        /// (<see cref="HeroForms.ApplyName"/>): після CreateHero перший же екран тижня несе його на табло матчу й екран виходу.
         /// </summary>
         private void ApplyHeroForms()
         {
@@ -646,7 +647,12 @@ namespace Game.Gameplay.Ring
             bool female = HeroForms.IsHeroine(_career, _heroBody);
             bool rival = HeroForms.OpponentIsWoman(_career);
             HeroForms.Apply(_text, female, rival);
-            if (_ctx != null && _ctx.Text != null && !ReferenceEquals(_ctx.Text, _text)) HeroForms.Apply(_ctx.Text, female, rival);
+            HeroForms.ApplyName(_text, _career.State.RingName);
+            if (_ctx != null && _ctx.Text != null && !ReferenceEquals(_ctx.Text, _text))
+            {
+                HeroForms.Apply(_ctx.Text, female, rival);
+                HeroForms.ApplyName(_ctx.Text, _career.State.RingName);
+            }
         }
 
         /// <summary>
