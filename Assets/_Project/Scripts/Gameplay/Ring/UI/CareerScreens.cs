@@ -22,6 +22,12 @@ namespace Game.Gameplay.Ring.UI
         int HeroBody { get; set; }
         int HeroHair { get; set; }
         WeekActionResult LastWeekResult { get; set; }
+        /// <summary>
+        /// Клавіші екрана цього кадру ще вільні: немає завантаження чи розрізу, паузи, і ввід меню (поле вводу, фокус без миші)
+        /// кадру не забрав — ті самі ворота, що й для цифр 1–9 у <c>RingGameBootstrap.HandleKeys</c>. Екран, що сам читає клавішу
+        /// (створення: «0», Б4), питає хоста тут: <c>Tick</c> екрана хост кличе й тоді, коли клавіші вже забрано (ПМ 14.11.2026).
+        /// </summary>
+        bool KeysFree { get; }
     }
 
     /// <summary>Основа екранів кар'єри: прозорий корінь над 3D, доступ до кар'єри й хоста.</summary>

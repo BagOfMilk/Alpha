@@ -1788,10 +1788,10 @@ namespace Game.Tests.EditMode
             var last = new List<SeasonEndAction> { SeasonEndAction.NextSeason };
             var s1 = CareerKit.NewHero(8);
             var s3 = InSeason(s1, 3);
-            Assert.AreEqual("Тіло старіє: з наступного сезону витривалість — 3 оч., тренер витривалості — 4 тренування.",
-                CareerScreenLines.AgeingNextLine(T, s3, last), "кінець сезону 3 — текст У0");
+            Assert.AreEqual("Тіло старіє: витривалість — 3 оч., тренер — 4 тренування.",
+                CareerScreenLines.AgeingNextLine(T, s3, last), "кінець сезону 3 — однорядковий текст (ПМ 14.11.2026)");
             var s6 = InSeason(s1, 6);
-            Assert.AreEqual("Тіло старіє: з наступного сезону витривалість — 4 оч., тренер витривалості — 5 тренувань.",
+            Assert.AreEqual("Тіло старіє: витривалість — 4 оч., тренер — 5 тренувань.",
                 CareerScreenLines.AgeingNextLine(T, s6, last), "кінець сезону 6: 5 — «тренувань»");
             // ціни — ті, що спише покупка наступного сезону (сесія того сезону)
             foreach (var n in new[] { 3, 6 })
@@ -1878,7 +1878,12 @@ namespace Game.Tests.EditMode
                 bad.Add("CreateScreenView: плитка ґіміка не з CreateTileParts (Ш-1, «+2 вільні бали»)");
             if (!CodeLine(create, "CareerTileLayout.CreateRoleKeys(_v.Gimmicks.Count, out heroKey, out villainKey);")) bad.Add("CreateScreenView: клавіші ролей не з моделі");
             if (!CodeLine(create, "int d = CareerTileLayout.CreateDigit(n, _v.Gimmicks.Count);")) bad.Add("CreateScreenView: цифри не з моделі");
-            if (!CodeLine(create, "if (Input.GetKeyDown(KeyCode.Alpha0) && !Typing()) OnDigit(CareerTileLayout.KeyZero);")) bad.Add("CreateScreenView: «0» не ловиться");
+            if (!CodeLine(create, "if (Input.GetKeyDown(KeyCode.Alpha0) && Host != null && Host.KeysFree && !Typing()) OnDigit(CareerTileLayout.KeyZero);"))
+                bad.Add("CreateScreenView: «0» не ловиться або обходить ворота клавіш хоста (завантаження, розріз, пауза, ввід меню)");
+            string menus = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "RingGameBootstrap.Menus.cs"));
+            if (!menus.Contains("public bool KeysFree { get { return !MenuOverlayBusy && !Paused && _keysTakenFrame != Time.frameCount; } }")
+                || !menus.Contains("return Took(true);") || !menus.Contains("return Took(PollTyping());") || !menus.Contains("return Took(PollCareerPad());"))
+                bad.Add("RingGameBootstrap.Menus: KeysFree не за воротами HandleKeys (оверлей, пауза, ввід меню кадру)");
             if (!create.Contains("CareerScreenLines.PlaceFreePoint(_d, freePoints, baseValue, _v.MaxAttr, a)")
                 || !create.Contains("CareerScreenLines.FreePointsIn(_d, Current.FreePoints, a)")) bad.Add("CreateScreenView: вільні бали не з моделі");
             if (!create.Contains("CareerTileLayout.CreateAttrCells(baseValue, free, _v.MaxAttr)")) bad.Add("CreateScreenView: клітинки шкали не з моделі");
@@ -1891,7 +1896,17 @@ namespace Game.Tests.EditMode
             if (!week.Contains("CareerScreenLines.ScarTail(T, T.Format(\"c.injury.tile\"") || !CodeLine(week, "i.ScarWeeks);   // Б5: слід"))
                 bad.Add("WeekScreenView: ризик травми без сліду");
             if (!CodeLine(week, "string opp = CareerScreenLines.OpponentLine(T, r, OpponentName());")) bad.Add("WeekScreenView: Б6 — без рядка суперника");
-            if (show.Contains("AgeingNextLine")) bad.Add("ShowScreens: рядок «Тіло старіє…» на папері — місце ще на рішенні власника (папір сягав канатів)");
+            if (show.Contains("AgeingNextLine")) bad.Add("ShowScreens: рядок «Тіло старіє…» на папері — лише після У0 арт-директора (ПМ 14.11.2026)");
+            // шапка шухляди — ті розміри, за якими CareerTextFitTests.DrawerHead_Hint_… міряє підказки атрибутів і тренерів
+            string rui = File.ReadAllText(Path.Combine(ui, "RingUi.cs"));
+            if (!week.Contains("ArenaKit.Abs(null, null, ArenaKit.Edge, CareerTileLayout.DrawerBottom, 560f, null)")
+                || !CodeLine(week, "top.style.paddingLeft = 18f; top.style.paddingRight = 24f;")
+                || !CodeLine(week, "var head = MenuKit.Display(_dev ? T.Get(\"dev.title\") : T.Get(\"c.hub.shop\"), 25f, RingTheme.Text, RingFontRole.Display900, 0.02f);")
+                || !CodeLine(week, "hint.style.marginTop = 0f; hint.style.marginLeft = 16f;")
+                || !CodeLine(week, "hint.style.flexGrow = 1f; hint.style.flexShrink = 1f;") || !CodeLine(week, "head.style.flexShrink = 0f;")
+                || !CodeLine(week, "var hint = MakeHint();") || week.Contains("DevFooterHint(")
+                || !CodeLine(rui, "var h = Lbl(\"\", 12f, Dim);"))
+                bad.Add("WeekScreenView: шапка шухляди змінилась — онови вимір підказок (CareerTextFitTests.DrawerHead_Hint_…)");
             if (!CodeLine(create, "t.ReserveCheck = true;   // назва не заходить під галочку вибору (Б4-1: «ХАРДКОРНИЦЯ» на 4:3)")
                 || !kit.Contains("CareerTileLayout.TitleWidthBeforeCheck(faceW, left, checkR)") || !CodeLine(kit, "if (ReserveCheck && !float.IsNaN(faceW) && faceW > 0f)")
                 || !CodeLine(kit, "float checkR = _low ? CareerTileLayout.LowCheckRight : CareerTileLayout.CheckRight(_compact);")) bad.Add("CreateScreenView / ArenaKit: назва плитки створення — не до галочки");
