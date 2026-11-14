@@ -23,6 +23,43 @@ namespace Game.Tests.EditMode
 
         private static EntranceProfile C(EntranceInput i) { return EntranceProfile.Compose(i); }
 
+        /// <summary>Усі ґіміки ядра, а не чотири перші: ґіміки 5–8 «Кар'єри» теж виходять (рев'ю ПМ 12.11.2026).</summary>
+        private static readonly Gimmick[] AllGimmicks = (Gimmick[])System.Enum.GetValues(typeof(Gimmick));
+
+        /// <summary>
+        /// Кожен ґімік має явне сімейство виходу — один із чотирьох, для яких зняті кліпи й пули. Ґіміки 5–8: Бувалий — технік,
+        /// Хардкорник і Силач — монстр, Самородок — шоумен. Ґімік у сімействі виходить точно як сімейство за тих самих даних (кліп завіси,
+        /// хода, вхід, поза, темп) — тож нових кліпів не треба, а «default» більше нікого мовчки не ловить.
+        /// </summary>
+        [Test]
+        public void EveryGimmick_HasExplicitFamily_AndExitsExactlyAsIt()
+        {
+            Assert.GreaterOrEqual(AllGimmicks.Length, 8, "ґіміків ядра менше восьми — тест бачить не той перелік");
+            foreach (var fam in EntranceProfile.FamilyGimmicks)
+                Assert.AreEqual(fam, EntranceProfile.Family(fam), fam + ": ґімік із власними кліпами — сам собі сімейство");
+            Assert.AreEqual(Gimmick.Technician, EntranceProfile.Family(Gimmick.Veteran));
+            Assert.AreEqual(Gimmick.Monster, EntranceProfile.Family(Gimmick.Hardcore));
+            Assert.AreEqual(Gimmick.Showman, EntranceProfile.Family(Gimmick.Rookie));
+            Assert.AreEqual(Gimmick.Monster, EntranceProfile.Family(Gimmick.Strongman));
+            foreach (var g in AllGimmicks)
+            {
+                Assert.IsTrue(EntranceProfile.HasFamily(g), g + ": немає рядка в таблиці сімейств виходу — він вийшов би запасним Шоуменом");
+                var fam = EntranceProfile.Family(g);
+                CollectionAssert.Contains(EntranceProfile.FamilyGimmicks, fam, g + ": сімейство без власних кліпів");
+                foreach (RingPath p in new[] { RingPath.Face, RingPath.Heel, RingPath.Rebel })
+                    for (int s = -1; s <= 3; s++)
+                    {
+                        var mine = C(In(g, p, s, s, s, s));
+                        var theirs = C(In(fam, p, s, s, s, s));
+                        CollectionAssert.AreEqual(theirs.Clips(), mine.Clips(), g + "/" + p + "/" + s + ": кліпи не як у сімейства " + fam);
+                        Assert.AreEqual(theirs.Entry, mine.Entry, g + "/" + p + "/" + s + ": вхід у ринг");
+                        Assert.AreEqual(theirs.PoseSpot, mine.PoseSpot, g + "/" + p + "/" + s + ": місце пози");
+                        Assert.AreEqual(theirs.EntrySpeed, mine.EntrySpeed, 1e-6, g + "/" + p + "/" + s + ": швидкість входу");
+                        Assert.AreEqual(theirs.Bpm, mine.Bpm, g + "/" + p + "/" + s + ": темп");
+                    }
+            }
+        }
+
         [Test]
         public void Curtain_GimmickGesture_ThenPathGestureFromCharismaOne()
         {
@@ -127,7 +164,7 @@ namespace Game.Tests.EditMode
         [Test]
         public void Show_HeadColoursAreTokens_GoldOnlyForThePlayer()
         {
-            foreach (Gimmick g in new[] { Gimmick.Monster, Gimmick.Flyer, Gimmick.Technician, Gimmick.Showman })
+            foreach (Gimmick g in AllGimmicks)
                 foreach (RingPath p in new[] { RingPath.Face, RingPath.Heel, RingPath.Rebel })
                     foreach (bool player in new[] { false, true })
                     {
@@ -158,7 +195,7 @@ namespace Game.Tests.EditMode
             var m = Manifest("ring_entrance_manifest.txt");
             var f = Manifest("ring_entrance_f_manifest.txt");
             var all = new HashSet<string>();
-            foreach (Gimmick g in new[] { Gimmick.Monster, Gimmick.Flyer, Gimmick.Technician, Gimmick.Showman })
+            foreach (Gimmick g in AllGimmicks)
                 foreach (RingPath p in new[] { RingPath.Face, RingPath.Heel, RingPath.Rebel })
                     for (int s = -1; s <= 3; s++)
                         foreach (bool inj in new[] { false, true })

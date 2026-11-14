@@ -901,12 +901,23 @@ namespace Game.Gameplay.Ring.Stage
 
         // ============================ огляд виходів ============================
 
-        // Тег екрана в огляді — ті самі слова, що в ui_uk.json (gimmick.*, path.*); у грі — ключами перекладу.
-        private static readonly string[] UaGimmick = { "Монстр", "Летун", "Технік", "Шоумен" };
-        private static readonly string[] UaPath = { "Герой", "Лиходій", "Бунтар" };
+        // Тег екрана в огляді — тими самими ключами й тим самим тегом у роді борця, що в грі (EntranceScreenSlots.Tag). Раніше тут
+        // був масив чотирьох слів: на ґіміках 5–8 — IndexOutOfRange (рев'ю ПМ 12.11.2026).
+        private static Game.Gameplay.Ring.Models.RingText _demoText;
+
+        private static Game.Gameplay.Ring.Models.RingText DemoText()
+        {
+            if (_demoText != null) return _demoText;
+            var strings = Resources.Load<TextAsset>("Ring/strings_uk");
+            var ui = Resources.Load<TextAsset>("Ring/ui_uk");
+            _demoText = Game.Gameplay.Ring.Models.RingText.FromJson(strings != null ? strings.text : "{}", ui != null ? ui.text : "{}");
+            return _demoText;
+        }
 
         private sealed class EntranceCase
         {
+            /// <summary>NPC ростеру: тіло, колір, зачіска, зріст — з CareerLooks, ім'я — ключем тексту (ґіміки 5–8 «Кар'єри»).</summary>
+            public string Npc;
             public string Id, Body, Name, Tier;
             public Game.Core.Ring.Career.Gimmick Gimmick;
             public RingPath Path;
@@ -955,12 +966,25 @@ namespace Game.Gameplay.Ring.Stage
                 new EntranceCase { Id = "f_showman_heel_champ", Body = "body_m_mediterranean", Name = "Олівер «Барон» Вінслоу", Gimmick = S, Path = RingPath.Heel, Cha = 2, Heat = 2, Champion = true, Tier = "hall", Rgb = 0x6B4A12 },
                 new EntranceCase { Id = "g_monster_face", Body = "body_m_ukrainian", Name = "Богдан «Сталевий» Дуб", Gimmick = M, Path = RingPath.Face, Str = 1, Pop = 2, Tier = "gym", Rgb = 0x24466E },
                 new EntranceCase { Id = "h_repeat_monster_heel", Body = "body_m_nordic", Name = "Тарас «Молот» Гребінь", Gimmick = M, Path = RingPath.Heel, Str = 3, Cha = 2, Heat = 3, Main = true, Tier = "arena", Rgb = 0x5A1A14 },
+                // Ґіміки 5–8 — наявним сімейством виходу (EntranceProfile.Family), назва в тезі своя й у роді борця.
+                new EntranceCase { Id = "i_veteran_heel", Npc = "kharakternyk", Gimmick = Game.Core.Ring.Career.Gimmick.Veteran, Path = RingPath.Heel, Tech = 2, Cha = 2, Heat = 2, Tier = "hall" },
+                new EntranceCase { Id = "j_hardcore_face", Npc = "buivol", Gimmick = Game.Core.Ring.Career.Gimmick.Hardcore, Path = RingPath.Face, Str = 2, Pop = 4, Tier = "hall" },
+                new EntranceCase { Id = "k_rookie_face_f", Npc = "blyskavka", Gimmick = Game.Core.Ring.Career.Gimmick.Rookie, Path = RingPath.Face, Agi = 1, Pop = 2, Tier = "gym" },
+                new EntranceCase { Id = "l_strongman_face_f_player", Body = "body_f_nordic", Gimmick = Game.Core.Ring.Career.Gimmick.Strongman, Path = RingPath.Face, Str = 3, Cha = 1, Pop = 5, Main = true, Tier = "arena", Rgb = CareerLooks.CostumeRgb(3), Player = true, Name = "Ґанна «Їжачиха» Євтушенко-Підгірна" },
+                new EntranceCase { Id = "m_strongman_heel", Npc = "atlant", Gimmick = Game.Core.Ring.Career.Gimmick.Strongman, Path = RingPath.Heel, Str = 3, Heat = 2, Main = true, Tier = "arena" },
             };
+            var text = DemoText();
             string only = RingStage3D.ReadArg("-ring-entrance-only");
             foreach (var c in cases)
             {
                 if (only != null && !c.Id.StartsWith(only)) continue;
-                stage.SetWrestlers(c.Body, c.Rgb, "", "body_m_nordic", 0x5A1A14, "", 1f);
+                string hair = "";
+                if (c.Npc != null)
+                {
+                    var look = CareerLooks.ForNpc(c.Npc);
+                    c.Body = look.Body; c.Rgb = look.Rgb; hair = look.Hair; c.Name = text.Get("w." + c.Npc + ".name");
+                }
+                stage.SetWrestlers(c.Body, c.Rgb, hair, "body_m_nordic", 0x5A1A14, "", 1f);
                 yield return null;
                 var input = new EntranceInput
                 {
@@ -972,7 +996,8 @@ namespace Game.Gameplay.Ring.Stage
                 var rec = new EntranceRecipe
                 {
                     Gimmick = EntranceScreenSlots.GimmickKey(c.Gimmick), Role = EntranceScreenSlots.RoleOf(c.Path), Tier = c.Tier,
-                    Name = c.Name, Player = c.Player, TagText = UaGimmick[(int)c.Gimmick] + " · " + UaPath[(int)c.Path],
+                    Name = c.Name, Player = c.Player,
+                    TagText = EntranceScreenSlots.Tag(text, EntranceScreenSlots.GimmickTextKey(c.Gimmick), c.Path, c.Body.StartsWith("body_f_")),
                 };
                 stage.BeginEntrance(true, rec, prof, c.Rgb);
                 yield return null;

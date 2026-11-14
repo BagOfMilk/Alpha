@@ -434,16 +434,42 @@ namespace Game.Gameplay.Ring.Stage
             }
         }
 
-        /// <summary>Ключ ґіміка екрана.</summary>
+        /// <summary>
+        /// Ключ пулу екрана для ґіміка — за сімейством виходу (<see cref="EntranceProfile.Family"/>): пули є лише в чотирьох
+        /// (<see cref="Gimmicks"/>, 36 = 4 × 3 × 3), нових рядкових ключів без арт-директора не додаємо (kits.json і ще 36 пулів).
+        /// Бувалий — «technician», Хардкорник і Силач — «monster», Самородок — «showman». Назва ґіміка в тезі — не звідси, а своїм
+        /// ключем тексту (<see cref="Tag"/>): Силача оголошують Силачем, лише ролик у нього монстра. Охоронець —
+        /// <c>EntranceScreenTests.EveryGimmick_LeadsToAPoolKey_AndOwnTagName</c>.
+        /// </summary>
         public static string GimmickKey(Game.Core.Ring.Career.Gimmick g)
         {
-            switch (g)
+            switch (EntranceProfile.Family(g))
             {
                 case Game.Core.Ring.Career.Gimmick.Monster: return "monster";
                 case Game.Core.Ring.Career.Gimmick.Flyer: return "flyer";
                 case Game.Core.Ring.Career.Gimmick.Technician: return "technician";
+                case Game.Core.Ring.Career.Gimmick.Showman:
                 default: return "showman";
             }
+        }
+
+        /// <summary>
+        /// Ключ тексту ґіміка («gimmick.&lt;ключ&gt;»): id у <c>career_gimmicks.json</c> — ім'я значення малими літерами
+        /// («strongman»). Гра бере його з контенту (<c>GimmickDef.Key</c>); цей — для оглядів без кар'єри (RingStageDemo). Збіг із
+        /// контентом на кожному значенні тримає охоронець.
+        /// </summary>
+        public static string GimmickTextKey(Game.Core.Ring.Career.Gimmick g) { return g.ToString().ToLowerInvariant(); }
+
+        /// <summary>
+        /// Тег екрана виходу «ґімік · шлях» у роді борця (рев'ю ПМ 13.11.2026: героїню оголошували «Силач · Герой»): «Силачка ·
+        /// Героїня», «Силач · Лиходій». Ключі «.fem» (<see cref="RingLabels.GimmickName"/>, <see cref="RingLabels.PathName(RingText, RingPath, bool)"/>), не «.f»:
+        /// на одному шоу виходять обидва борці, і форми героїні (<see cref="HeroForms"/>) не мають підміняти тег суперника.
+        /// Стать: герой — <see cref="HeroForms.ShowsHeroine"/>, суперник — <c>NpcDef.Female</c>.
+        /// </summary>
+        public static string Tag(RingText t, string gimmickTextKey, RingPath path, bool female)
+        {
+            if (t == null) return "";
+            return RingLabels.GimmickName(t, gimmickTextKey, female) + " · " + RingLabels.PathName(t, path, female);
         }
     }
 
