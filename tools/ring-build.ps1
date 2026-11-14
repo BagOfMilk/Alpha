@@ -24,10 +24,16 @@
   Запуск (з Bash-інструмента):
     powershell -ExecutionPolicy Bypass -File tools/ring-build.ps1                     # Build/Ring/Ring.exe
     powershell -ExecutionPolicy Bypass -File tools/ring-build.ps1 -Method BuildPlayerShow
+    powershell -ExecutionPolicy Bypass -File tools/ring-build.ps1 -ReviewVenues          # + клубна зала й палац (-ring-venue hall|arena)
+
+  -ReviewVenues: Unity отримує RING_REVIEW_VENUES=1 — у сцені, крім спортзалу, ще клубна зала й палац (RingStageSceneSetup,
+  лише для оглядів і заміру FPS у палаці; гра й звичайні збірки — без них, Статут PERF-01). Без перемикача змінна
+  примусово прибирається, навіть якщо є в оболонці, — звичайна збірка не тягне зайвих FBX.
 
   Коди виходу: 0 — зібрано з Burst; 5 — Unity не знайдено або прохід компіляції впав; 6 — помилки компіляції C#; 9 — тайм-аут;
   10 — проєкт зайнятий іншим Unity; 11 — Burst вимкнено в налаштуваннях; 12 — збірка не вдалась;
-  13 — зібрано, але без коду Burst або з помилками Burst у журналі; 14 — у збірці лишився мережевий порт.
+  13 — зібрано, але без коду Burst або з помилками Burst у журналі; 14 — у збірці лишився мережевий порт;
+  15 — з -ReviewVenues, а клубної зали й палацу в сцені немає.
 #>
 param(
     [ValidateSet('BuildPlayer', 'BuildPlayerShow', 'BuildPlayerDev')]
@@ -36,7 +42,8 @@ param(
     [string]$UnityPath = 'C:\Program Files\Unity\Hub\Editor\6000.4.10f1\Editor\Unity.exe',
     [int]$TimeoutMinutes = 90,
     [switch]$AllowNoBurst,
-    [switch]$SkipCompilePass
+    [switch]$SkipCompilePass,
+    [switch]$ReviewVenues
 )
 
 $ErrorActionPreference = 'Stop'
@@ -87,6 +94,8 @@ function Invoke-Unity([string]$UnityArgs, [string]$What) {
     $psi.UseShellExecute = $false
     $psi.EnvironmentVariables['TMP'] = $tmp
     $psi.EnvironmentVariables['TEMP'] = $tmp
+    if ($ReviewVenues) { $psi.EnvironmentVariables['RING_REVIEW_VENUES'] = '1' }
+    else { [void]$psi.EnvironmentVariables.Remove('RING_REVIEW_VENUES') }
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $p = [System.Diagnostics.Process]::Start($psi)
     Write-Host "$What (PID $($p.Id))…"
@@ -147,6 +156,10 @@ if ($burstErr.Count) {
     Write-Host "Рядки журналу про Burst з помилками ($($burstErr.Count)):"
     $burstErr | Select-Object -First 10 | ForEach-Object { Write-Host "  $_" }
 }
+$venueLine = @($lines | Where-Object { $_ -match 'RING_REVIEW_VENUES=1 — у сцені ще й зали (\d+)' } | Select-Object -Last 1)
+$venueCount = if ($venueLine.Count) { [int]([regex]::Match($venueLine[0], 'зали (\d+)').Groups[1].Value) } else { 0 }
+Write-Host ("Зали огляду в сцені (клубна зала, палац): " + $(if ($ReviewVenues) { "$venueCount з 2" } else { 'ні (лише спортзал)' }))
 if ($netPort -and $Method -ne 'BuildPlayerDev') { exit 14 }
+if ($ReviewVenues -and $venueCount -lt 2) { Write-Host 'Просили -ReviewVenues, а в журналі сцени немає обох залів — палацу в збірці немає.'; exit 15 }
 if (-not $burstOff -and (-not $hasBurst -or $burstErr.Count)) { exit 13 }
 exit 0
