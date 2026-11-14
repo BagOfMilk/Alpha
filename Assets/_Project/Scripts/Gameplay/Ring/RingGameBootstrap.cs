@@ -343,7 +343,9 @@ namespace Game.Gameplay.Ring
                 var input = player ? EntranceInput.ForPlayer(_career, female)
                     : npc != null ? EntranceInput.ForNpc(_career, npc, female) : new EntranceInput { Female = female };
                 if (!player && npc == null && f != null) input.SetStats(f.Stats);
-                stage.BeginEntrance(player, EntranceRecipeFor(input, name), EntranceProfile.Compose(input), rgb);
+                // Рід тегу «ґімік · шлях»: герой — за формами героїні, суперник — за NpcDef.Female (тіло — запасне, без NPC).
+                bool tagFemale = player ? HeroForms.ShowsHeroine(_text) : npc != null ? npc.Female : female;
+                stage.BeginEntrance(player, EntranceRecipeFor(input, name, tagFemale), EntranceProfile.Compose(input), rgb);
             }
             // Лише шоу (вступ, вихід) ховає UI; кліпи матчу йдуть під панеллю матчу.
             bool showing = stage.ShowBusy || _entrances.Count > 0 || _openPending;
@@ -388,18 +390,18 @@ namespace Game.Gameplay.Ring
         }
 
         /// <summary>
-        /// Рецепт екрана виходу (ТЗ B07): ґімік і роль борця, тег «ґімік · шлях» ключами перекладу. Щабель — спортзал; велике шоу —
-        /// зала, титул — арена (багатший ролик екрана, плейтест 08.11.2026, P1-7).
+        /// Рецепт екрана виходу (ТЗ B07): ґімік і роль борця, тег «ґімік · шлях» ключами перекладу в роді борця
+        /// (<see cref="EntranceScreenSlots.Tag"/>). Пул ролика — за сімейством ґіміка (Силач — монстр), назва в тезі — своя. Щабель —
+        /// спортзал; велике шоу — зала, титул — арена (багатший ролик екрана, плейтест 08.11.2026, P1-7).
         /// </summary>
-        private EntranceRecipe EntranceRecipeFor(EntranceInput input, string name)
+        private EntranceRecipe EntranceRecipeFor(EntranceInput input, string name, bool female)
         {
             string g = EntranceScreenSlots.GimmickKey(input.Gimmick);
-            string pathKey = input.Path == RingPath.Heel ? "path.heel" : input.Path == RingPath.Rebel ? "path.rebel" : "path.face";
             string tier = !BigShowNow ? "gym" : _career.State.IsTitle ? "arena" : "hall";
             return new EntranceRecipe
             {
                 Gimmick = g, Role = EntranceScreenSlots.RoleOf(input.Path), Tier = tier, Name = name, Seed = 0, Player = input.Player,
-                TagText = _text.Get("gimmick." + _content.GimmickOf(input.Gimmick).Key) + " · " + _text.Get(pathKey),
+                TagText = EntranceScreenSlots.Tag(_text, _content.GimmickOf(input.Gimmick).Key, input.Path, female),
             };
         }
 
@@ -437,6 +439,9 @@ namespace Game.Gameplay.Ring
                 var opp = CareerLooks.ForNpc(_career.State.Opponent);
                 stage.SetWrestlers(CareerLooks.HeroBodies[HeroBody], CareerLooks.CostumeRgb(_career.State.Costume), CareerLooks.HeroHair[HeroHair],
                     opp.Body, opp.Rgb, opp.Hair, opp.Scale);
+                // Люди кар'єри поза рингом (рішення власника 12.11.2026, № 10 і № 8): букер федерації в закуліссі, менеджерка в кутку.
+                var fed = _career.Federation;
+                stage.SetCareerCast(fed != null ? fed.Booker : null, _career.HasManager);
             }
             stage.SetBigShow(!_onTitle && BigShowNow);
             if (!_onTitle && _career.Stage == CareerStage.SeasonEnd)

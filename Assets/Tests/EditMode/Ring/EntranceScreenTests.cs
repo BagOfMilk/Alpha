@@ -242,5 +242,49 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(1.0 / 6 * 2, EntranceScreenMath.ShownBeat(0.25, 120, 6), 1e-9);
             Assert.AreEqual(0, EntranceScreenMath.ShownBeat(0.1, 120, 6), 1e-9);
         }
+
+        /// <summary>
+        /// Ґіміки 5–8 на екрані виходу (рев'ю ПМ 12–13.11.2026): кожне значення <see cref="Game.Core.Ring.Career.Gimmick"/> веде до
+        /// ключа пулу з <see cref="EntranceScreenSlots.Gimmicks"/> — за сімейством виходу (Силач — «monster»), нових пулів немає; а назва в
+        /// тезі — своя, ключем ґіміка з контенту, і в роді борця. Героїня-Силачка й суперник-Силач на одному шоу: «Силачка · Героїня» і
+        /// «Силач · Лиходій» — форми героїні тег суперника не підміняють. Гра й огляд кличуть той самий <see cref="EntranceScreenSlots.Tag"/>.
+        /// </summary>
+        [Test]
+        public void EveryGimmick_LeadsToAPoolKey_AndOwnTagName()
+        {
+            var content = CareerKit.Content();
+            var t = RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json"));   // свій текст: Apply міняє його
+            foreach (Game.Core.Ring.Career.Gimmick g in Enum.GetValues(typeof(Game.Core.Ring.Career.Gimmick)))
+            {
+                string pool = EntranceScreenSlots.GimmickKey(g);
+                CollectionAssert.Contains(EntranceScreenSlots.Gimmicks, pool, g + ": ключ пулу «" + pool + "» — пулів такого ґіміка немає");
+                Assert.AreEqual(EntranceScreenSlots.GimmickKey(EntranceProfile.Family(g)), pool, g + ": пул не свого сімейства виходу");
+                string key = EntranceScreenSlots.GimmickTextKey(g);
+                Assert.AreEqual(content.GimmickOf(g).Key, key, g + ": ключ тексту огляду не той, що в контенті");
+                Assert.IsTrue(t.Has("gimmick." + key), g + ": немає назви gimmick." + key);
+                Assert.IsTrue(t.Has("gimmick." + key + ".fem"), g + ": немає жіночої назви gimmick." + key + ".fem");
+            }
+            Assert.AreEqual("monster", EntranceScreenSlots.GimmickKey(Game.Core.Ring.Career.Gimmick.Strongman));
+            Assert.AreEqual("technician", EntranceScreenSlots.GimmickKey(Game.Core.Ring.Career.Gimmick.Veteran));
+
+            // героїня-Силачка проти суперника-Силача на одному шоу
+            HeroForms.Apply(t, true, false);
+            string strong = content.GimmickOf(Game.Core.Ring.Career.Gimmick.Strongman).Key;
+            string heroine = EntranceScreenSlots.Tag(t, strong, RingPath.Face, HeroForms.ShowsHeroine(t));
+            string rival = EntranceScreenSlots.Tag(t, strong, RingPath.Heel, false);
+            Assert.AreEqual(t.Get("gimmick.strongman.fem") + " · " + t.Get("path.face.fem"), heroine);
+            Assert.AreEqual("Силачка · " + t.Get("path.face.fem"), heroine, "героїню не оголошують «Силач · Герой»");
+            Assert.AreEqual(t.Get("gimmick.strongman") + " · " + t.Get("path.heel"), rival, "суперник — у своєму, чоловічому роді");
+            StringAssert.StartsWith("Силач · ", rival);
+            Assert.AreNotEqual(heroine.Split('·')[0], rival.Split('·')[0]);
+
+            // гра бере той самий тег і рід борця: герой — за формами героїні, суперник — за NpcDef.Female; огляд — без масиву слів
+            string boot = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "RingGameBootstrap.cs"));
+            StringAssert.Contains("EntranceScreenSlots.Tag(_text, _content.GimmickOf(input.Gimmick).Key, input.Path, female)", boot);
+            StringAssert.Contains("player ? HeroForms.ShowsHeroine(_text) : npc != null ? npc.Female : female", boot);
+            string demo = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "Stage", "Unity", "RingStageDemo.cs"));
+            StringAssert.Contains("EntranceScreenSlots.Tag(text, EntranceScreenSlots.GimmickTextKey(c.Gimmick)", demo);
+            StringAssert.DoesNotContain("UaGimmick", demo, "огляд виходів знову тримає слова ґіміків масивом — на ґіміках 5–8 він падав");
+        }
     }
 }
