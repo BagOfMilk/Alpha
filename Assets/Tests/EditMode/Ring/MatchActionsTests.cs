@@ -425,6 +425,35 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void ReverseBonus_AddsToTheReverseRoll_OnlyForItsOwnSide()
+        {
+            // Ґімік «Бувалий» (власник 14.11.2026, «так бувалий»): +1 до кидка реверсу. Кидок 9 без бонусу — 7–9 (прийом зірвано),
+            // з бонусом — 10 (прийом твій). Той самий модифікатор — у шансах на кнопці реверсу.
+            var e = MatchKit.Engine(true, new[] { 9 }, s => s.RivalMods.ReverseBonus = 1);
+            e.Perform(MatchActionId.Throw);
+            Assert.AreEqual(1, e.PendingReaction.ReverseModifier);
+            CollectionAssert.AreEqual(TwoD6.ChancesOf36(1), e.PendingReaction.ReverseChances);
+            var rev = e.React(ReactionChoice.Reverse).First(x => x.Kind == MatchEventKind.Reverse);
+            Assert.AreEqual(1, rev.Modifier);
+            Assert.AreEqual(10, rev.Total);
+            Assert.AreEqual(RollTier.Strong, rev.Tier);
+
+            var plain = MatchKit.Engine(true, new[] { 9 });
+            plain.Perform(MatchActionId.Throw);
+            Assert.AreEqual(RollTier.Partial, plain.React(ReactionChoice.Reverse).First(x => x.Kind == MatchEventKind.Reverse).Tier,
+                "без бонусу той самий кидок — 7–9");
+
+            var other = MatchKit.Engine(true, null, s => s.PlayerMods.ReverseBonus = 1);
+            other.Perform(MatchActionId.Throw);
+            Assert.AreEqual(0, other.PendingReaction.ReverseModifier, "бонус нападника не діє на реверс захисника");
+
+            var fin = MatchKit.Engine(true, null, s => s.RivalMods.ReverseBonus = 1);
+            fin.State.Player.Momentum = 5; fin.State.Hype = 4; fin.State.Rival.Damage = 6; fin.State.Round = MatchRules.FinisherMinRound;
+            fin.Perform(MatchActionId.Finisher);
+            Assert.AreEqual(-2, fin.PendingReaction.ReverseModifier, "проти фінішера: -2, -1 за ушкодження 6 і +1 бонусу");
+        }
+
+        [Test]
         public void NoReversal_AgainstPin()
         {
             var e = MatchKit.Engine(true, new[] { 12 });

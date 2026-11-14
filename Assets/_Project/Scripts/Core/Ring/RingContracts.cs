@@ -68,6 +68,12 @@ namespace Game.Core.Ring
         public int RiskyMoveBonus;
         /// <summary>«Ветеран»: + жетонів реверсу.</summary>
         public int ExtraReversalTokens;
+        /// <summary>
+        /// + до кидка реверсу (ґімік «Бувалий»: читає суперника, тож ловить момент для контрприйому). Власник 14.11.2026 — «так
+        /// бувалий» на пропозицію «Кар'єри» +1 (перший матч Бувалого 43,3 → 47,1 %). Додається в <c>MatchEngine.ReverseMod</c>, тож
+        /// відсотки на кнопці реверсу й у намірі суперника рахуються з того самого числа.
+        /// </summary>
+        public int ReverseBonus;
         /// <summary>«Залізна щелепа»: зсув порогів ушкодження (6/10 → 6+N/10+N).</summary>
         public int DamageThresholdShift;
         /// <summary>«Камбек»: друге вирване утримання за матч дає жетон реверсу.</summary>

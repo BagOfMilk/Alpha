@@ -359,7 +359,8 @@ namespace Game.Core.Ring.Match
 
         private int ReverseMod(Fighter def, bool vsFinisher)
         {
-            return def.Stats.Get(RingAttr.Technique) - Threshold(def) + (vsFinisher ? MatchRules.ReverseVsFinisherPenalty : 0);
+            return def.Stats.Get(RingAttr.Technique) - Threshold(def) + (vsFinisher ? MatchRules.ReverseVsFinisherPenalty : 0)
+                + Mods(def.Side).ReverseBonus;
         }
 
         // ---------- публічні команди ----------
