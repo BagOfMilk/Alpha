@@ -573,7 +573,8 @@ namespace Game.Gameplay.Ring.UI
             var z = WorstZone(w);
             foreach (var i in w.Injuries)
                 if (i.Zone == z && i.WeeksLeft > 0)
-                    return T.Format("c.injury.tile", T.Get("bodyzone." + (int)i.Zone), C.State.InjuryPenaltyFor(i.Zone), i.WeeksLeft);
+                    return CareerScreenLines.ScarTail(T, T.Format("c.injury.tile", T.Get("bodyzone." + (int)i.Zone), C.State.InjuryPenaltyFor(i.Zone), i.WeeksLeft),
+                        i.ScarWeeks);   // Б5: слід — з сезону 4
             return null;
         }
 
@@ -614,6 +615,8 @@ namespace Game.Gameplay.Ring.UI
             if (r.LockerDelta != 0) parts.Add(T.Format("c.delta.locker", Signed(r.LockerDelta)));
             if (r.ActionsDelta != 0) parts.Add(T.Format("c.delta.actions", Signed(r.ActionsDelta)));
             if (r.PlanChanged) parts.Add(T.Get("c.delta.plan"));
+            string opp = CareerScreenLines.OpponentLine(T, r, OpponentName());   // Б6: сцена вписала суперника
+            if (opp != null) parts.Add(opp);
             if (r.CoachRaised) parts.Add(T.Get("c.delta.coach"));
             string turn = CareerScreenLines.TurnLine(T, r, HeroForms.ShowsHeroine(T));   // №11: сцена повернула роль
             if (turn != null) parts.Add(turn);
@@ -621,6 +624,13 @@ namespace Game.Gameplay.Ring.UI
             string s = string.Join(" · ", parts);
             if (!string.IsNullOrEmpty(r.RumorKey)) s += "\n" + T.Get(r.RumorKey);
             return s;
+        }
+
+        /// <summary>Ім'я суперника найближчого шоу з картки тижня (як «Суперник: …» на картці вечора); немає картки — null.</summary>
+        private string OpponentName()
+        {
+            var w = C.GetWeekView();
+            return w != null && w.Card != null && w.Card.Opponent != null ? T.Get(w.Card.Opponent.NameKey) : null;
         }
 
         public override void OnDigit(int n)

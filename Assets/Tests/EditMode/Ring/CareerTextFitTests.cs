@@ -179,7 +179,12 @@ namespace Game.Tests.EditMode
             all.Add(new TileText(Ui("c.week.train_coach"),
                 new[] { Ui("c.week.pay.coach", CareerRules.TrainingPoints + CareerRules.TrainerExtraPoints, CareerRules.TrainerCost) }, train));
             var injuries = new List<string>(spent);
-            for (int z = 0; z < 3; z++) injuries.Add(Ui("c.injury.tile", Ui("bodyzone." + z), 9, 99));
+            for (int z = 0; z < 3; z++)
+            {
+                injuries.Add(Ui("c.injury.tile", Ui("bodyzone." + z), 9, 99));
+                // Б5: з сезону 4 — слід травми (WeekScreenView.InjuryWarn, CareerScreenLines.ScarTail)
+                injuries.Add(Ui("c.injury.tile", Ui("bodyzone." + z), 9, 99) + " " + Ui("c.injury.scar", Ageing.ScarExtraWeeks));
+            }
             all.Add(new TileText(Ui("week.action.1"), new[] { Ui("c.week.pay.recover", CareerRules.RecoverZoneHeal), Ui("c.week.pay.healthy") }, injuries.ToArray()));
             all.Add(new TileText(Ui("week.action.2"), new[] { Ui("c.week.pay.promo") }, spent) { Chances = true });
             all.Add(new TileText(Ui("week.action.3"), new[] { Ui("c.week.pay.backstage") }, spent) { Chances = true });
@@ -302,18 +307,21 @@ namespace Game.Tests.EditMode
         public void Create_NarrowRow_FourTilesFit_AfterPixelRounding()
         {
             var bad = new List<string>();
+            // Б4-1 (вісім ґіміків) — по чотири в ряд і на широких панелях: 16:9, 21:9
             var screens = new[] { new[] { 800, 600 }, new[] { 1024, 768 }, new[] { 1280, 960 }, new[] { 1600, 1200 },
-                new[] { 1280, 800 }, new[] { 1440, 900 }, new[] { 1680, 1050 }, new[] { 1920, 1200 } };
-            int tiles = CreateTiles().Count;
+                new[] { 1280, 800 }, new[] { 1440, 900 }, new[] { 1680, 1050 }, new[] { 1920, 1200 },
+                new[] { 1280, 720 }, new[] { 1366, 768 }, new[] { 1920, 1080 }, new[] { 2560, 1440 }, new[] { 2560, 1080 }, new[] { 3440, 1440 } };
+            int onScreen = CreateGimmicks(false).Count, eight = CreateGimmicks(true).Count;
             foreach (var s in screens)
+            foreach (int gimmicks in new[] { onScreen, eight })
             {
                 float scale = s[1] / 900f, panel = s[0] / scale;
-                if (!CareerTileLayout.Narrow(panel)) continue;
-                float row = CareerTileLayout.CreateRowWidth(panel), tileW = CareerTileLayout.CreateTileWidth(panel, tiles);
+                if (!CareerTileLayout.Narrow(panel) && !CareerTileLayout.CreateEight(gimmicks)) continue;
+                float row = CareerTileLayout.CreateRowWidth(panel), tileW = CareerTileLayout.CreateTileWidth(panel, gimmicks);
                 int rowPx = (int)Math.Floor(row * scale);
                 int stepPx = (int)Math.Ceiling(tileW * scale - 0.001f) + (int)Math.Ceiling(CareerTileLayout.TileGap * scale - 0.001f);
                 if (stepPx * CareerTileLayout.CreatePerRowNarrow > rowPx)
-                    bad.Add(string.Format("{0}×{1}: {2} плитки по {3} px > ряд {4} px", s[0], s[1], CareerTileLayout.CreatePerRowNarrow, stepPx, rowPx));
+                    bad.Add(string.Format("{0}×{1}, ґіміків {5}: {2} плитки по {3} px > ряд {4} px", s[0], s[1], CareerTileLayout.CreatePerRowNarrow, stepPx, rowPx, gimmicks));
             }
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
@@ -385,42 +393,64 @@ namespace Game.Tests.EditMode
         /// <summary>
         /// Плитки створення (як у CreateScreenView): ґіміки екрана створення — той самий вид, що бере екран (<c>GetCreationView</c>: ґіміки
         /// 5–8 з <c>onCreationScreen = false</c> до У0 власника не показуються, злиття «Кар'єри» a3fd3fd5), з бонусами характеристик тією
-        /// самою функцією, що й гра, і дві ролі. Розкладка восьми — окремий пункт (Б4) після У0.
+        /// самою функцією, що й гра (CareerScreenLines.CreateTileParts: Ш-1, «+2 вільні бали»), і дві ролі. <paramref name="eight"/> —
+        /// усі вісім ґіміків (Б4-1, після вмикання «Кар'єрою»): ролі тоді — низькі плити в колонці золотої плити, їх міряє
+        /// <see cref="Create_Eight_RoleChips_TitleClearsTheCheck_AndTheZoneHoldsTheReason"/>.
         /// </summary>
-        private static List<TileText> CreateTiles(bool female = false)
+        private static List<TileText> CreateTiles(bool female = false, bool eight = false)
         {
             var all = new List<TileText>();
-            foreach (var gv in CareerKit.NewAtCreate(1).GetCreationView().Gimmicks)
+            foreach (var g in CreateGimmicks(eight))
             {
-                var g = gv.Def;
                 // назва — за тілом на екрані (ПМ 13.11.2026, RingLabels.GimmickName): «ТЕХНІКИНЯ», «ШОУВУМЕН» довші за чоловічі
-                all.Add(new TileText(RingLabels.GimmickName(T, g.Key, female), new[] { "" }, new string[0]) { Parts = RingLabels.AttrBonusParts(T, g.Attr) });
+                all.Add(new TileText(RingLabels.GimmickName(T, g.Key, female), new[] { "" }, new string[0])
+                    { Parts = CareerScreenLines.CreateTileParts(T, g.Attr, g.FreePoints).ToArray() });
             }
+            if (eight) return all;
             // ролі героїні — «.f» (HeroForms підставляє їх на екрані створення за тілом)
             all.Add(new TileText(Ui(female ? "role.hero.f" : "role.hero"), new[] { "" }, new string[0]));
             all.Add(new TileText(Ui(female ? "role.villain.f" : "role.villain"), new[] { "" }, new string[0]));
             return all;
         }
 
+        /// <summary>Ґіміки екрана створення: ті, що на екрані зараз (GetCreationView), або всі вісім (Б4-1).</summary>
+        private static List<GimmickDef> CreateGimmicks(bool eight)
+        {
+            var s = CareerKit.NewAtCreate(1);
+            var list = new List<GimmickDef>();
+            if (eight) list.AddRange(s.Content.Gimmicks);
+            else foreach (var gv in s.GetCreationView().Gimmicks) list.Add(gv.Def);
+            return list;
+        }
+
         /// <summary>Плитки створення обох родів (герой і героїня): кількість та сама, назви — свого роду.</summary>
-        private static IEnumerable<List<TileText>> CreateTilesBothSexes() { yield return CreateTiles(false); yield return CreateTiles(true); }
+        private static IEnumerable<List<TileText>> CreateTilesBothSexes(bool eight = false) { yield return CreateTiles(false, eight); yield return CreateTiles(true, eight); }
 
         [Test]
         public void Create_Tiles_TitleOneLine_BodyTwoLines_FitFixedHeight_OnEveryPanel()
         {
             var bad = new List<string>();
-            foreach (var tiles in CreateTilesBothSexes())
-            foreach (var p in Panels)
+            Assert.AreEqual(CareerKit.GimmickCount, CreateGimmicks(true).Count, "Б4-1: міряються всі вісім ґіміків");
+            foreach (bool eight in new[] { false, true })
             {
-                float tileW = CareerTileLayout.CreateTileWidth(p.Value, tiles.Count);
-                foreach (var t in tiles)
+                int gimmicks = CreateGimmicks(eight).Count;
+                foreach (var tiles in CreateTilesBothSexes(eight))
+                foreach (var p in Panels)
                 {
-                    CheckTitle(bad, "створення " + p.Key, t.Title, tileW, true);
-                    CheckBody(bad, "створення " + p.Key, t, tileW);
-                    float h = NeededHeight(t, tileW);   // ряд створення не росте: плитка — рівно TileH
-                    if (h > CareerTileLayout.TileH)
-                        bad.Add(string.Format("створення {0}: «{1}» потребує {2:0} > {3:0}", p.Key, t.Title, h, CareerTileLayout.TileH));
+                    string where = (eight ? "створення Б4-1 " : "створення ") + p.Key;
+                    float tileW = CareerTileLayout.CreateTileWidth(p.Value, gimmicks);
+                    foreach (var t in tiles)
+                    {
+                        CheckTitle(bad, where, t.Title, tileW, true);
+                        CheckBody(bad, where, t, tileW);
+                        float h = NeededHeight(t, tileW);   // ряд створення не росте: плитка — рівно TileH
+                        if (h > CareerTileLayout.TileH)
+                            bad.Add(string.Format("{0}: «{1}» потребує {2:0} > {3:0}", where, t.Title, h, CareerTileLayout.TileH));
+                    }
                 }
+            }
+            foreach (var tiles in CreateTilesBothSexes(true))
+            {
                 foreach (var t in tiles)
                     if (t.Parts != null)
                         foreach (var e in t.Parts)
@@ -440,9 +470,15 @@ namespace Game.Tests.EditMode
             var bad = new List<string>();
             var tiles = CreateTiles();
             tiles.AddRange(CreateTiles(true));   // назви героїні — та сама ширина плитки (кількість плиток рахує екран, не цей список)
-            int onScreen = CreateTiles().Count;
+            tiles.AddRange(CreateTiles(false, true));   // Б4-1: усі вісім ґіміків обох родів
+            tiles.AddRange(CreateTiles(true, true));
+            int onScreen = CreateGimmicks(false).Count, eight = CreateGimmicks(true).Count;
             var widths = new List<KeyValuePair<string, float>>();
-            foreach (var p in Panels) widths.Add(new KeyValuePair<string, float>(p.Key, CareerTileLayout.CreateTileWidth(p.Value, onScreen)));
+            foreach (var p in Panels)
+            {
+                widths.Add(new KeyValuePair<string, float>(p.Key, CareerTileLayout.CreateTileWidth(p.Value, onScreen)));
+                widths.Add(new KeyValuePair<string, float>(p.Key + " Б4-1", CareerTileLayout.CreateTileWidth(p.Value, eight)));
+            }
             // обидва стани розкладки, навіть якщо жодна панель зі списку не дає компактної плитки
             widths.Add(new KeyValuePair<string, float>("компактна", CareerTileLayout.CompactTileW - 1f));
             widths.Add(new KeyValuePair<string, float>("некомпактна", CareerTileLayout.CompactTileW));
@@ -469,7 +505,9 @@ namespace Game.Tests.EditMode
                     bad.Add(string.Format("{0} (плитка {1:0}): галочка {2:0}–{3:0} × {4:0}–{5:0} ближче {6:0} до ключа {7:0}–{8:0} × {9:0}–{10:0}",
                         p.Key, w, checkL, checkR, checkT, checkB, CheckClear, keyL, keyR, keyT, keyB));
                 float left = compact ? CareerTileLayout.CompactBodyLeft : CareerTileLayout.BodyLeft;
-                float baseSize = CareerTileLayout.TitleBaseSize(w), avail = CareerTileLayout.TitleWidth(w, true);
+                // назва плитки створення — до галочки (ActionTile.ReserveCheck), а не до ключа
+                float baseSize = CareerTileLayout.TitleBaseSize(w);
+                float avail = Math.Min(CareerTileLayout.TitleWidth(w, true), CareerTileLayout.TitleWidthBeforeCheck(w, left, CareerTileLayout.CheckRight(compact)));
                 foreach (var t in tiles)
                 {
                     string title = Caps(t.Title);
@@ -859,7 +897,11 @@ namespace Game.Tests.EditMode
                 }
             var all = new List<string>();
             for (int i = 0; i < 5; i++)
-                all.Add(string.Format(UiForms("dev.attr.buy"), 99) + " — " + UiForms("c.dev.attr.why." + i) + " · " + reason);
+            {
+                // Б5: з сезону 4 у витривалості — «тіло старіє: +N оч.» перед причиною (CareerScreenLines.AttrBuyHint)
+                string age = (RingAttr)i == RingAttr.Stamina ? " · " + Ui("c.age.attr", Ageing.MaxStaminaSurcharge) : "";
+                all.Add(string.Format(UiForms("dev.attr.buy"), 99) + " — " + UiForms("c.dev.attr.why." + i) + age + " · " + reason);
+            }
             foreach (var kv in _ui)
             {
                 string k = kv.Key;
@@ -1216,6 +1258,54 @@ namespace Game.Tests.EditMode
                 "style.width = CareerTileLayout.CheckW; style.height = CareerTileLayout.CheckH;",
             };
             foreach (var n in need) if (!CodeLine(src, n)) bad.Add("ArenaKit.cs: немає «" + n + "»");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+        /// <summary>
+        /// Б4-1 (ПМ і арт-директор 14.11.2026): з п'ятим ґіміком ролі — дві низькі плити над «Почати кар'єру». Колонка (золота плита,
+        /// просвіт, дві плити) рівно заввишки два ряди ґіміків; просвіт не менший за 12 (кобальт не торкається золота) і вміщає рядок
+        /// причини (кожна з create.reason.* — не більше двох рядків у ширину золотої плити); проміжок плит більший за підйом у фокусі
+        /// (7). Назва ролі обох родів на компактному кеглі не сягає галочки вибору ліворуч від ключа.
+        /// </summary>
+        [Test]
+        public void Create_Eight_RoleChips_TitleClearsTheCheck_AndTheZoneHoldsTheReason()
+        {
+            var bad = new List<string>();
+            Assert.AreEqual(2f * CareerTileLayout.TileH + CareerTileLayout.CreateRowsGap,
+                CareerTileLayout.TileH + CareerTileLayout.CreateRoleZone + CareerTileLayout.CreateRoleColumnH, 0.01f, "колонка — висота двох рядів");
+            Assert.GreaterOrEqual(CareerTileLayout.CreateRoleZone, CareerTileLayout.CreateRoleGoldClear, "просвіт до золота ≥ 12");
+            Assert.Greater(CareerTileLayout.CreateRoleChipGap, 7f, "нижня плита у фокусі (−7) не лягає на верхню");
+            Assert.AreEqual(CareerTileLayout.TileH + CareerTileLayout.CreateRowsGap, CareerTileLayout.CreateLift, 0.01f);
+            float lh = SemiFont.LineHeight(Body);   // причина — MenuKit.Body(…, bold: true)
+            if (CareerTileLayout.CreateRoleReasonH < 2f * lh)
+                bad.Add(string.Format("просвіт під причину {0:0.0} < два рядки {1:0.0}", CareerTileLayout.CreateRoleReasonH, 2f * lh));
+            if (_ui == null) Ui("c.create.role");
+            var reasons = new List<string>();
+            foreach (var kv in _ui) if (kv.Key.StartsWith("create.reason.", StringComparison.Ordinal) && kv.Value is string) reasons.Add((string)kv.Value);
+            Assert.Greater(reasons.Count, 4, "причин create.reason.* — кілька");
+            foreach (var p in Panels)
+            {
+                float gw = CareerTileLayout.GoldWidth(p.Value);
+                foreach (var r in reasons)
+                {
+                    float widest;
+                    int n = SemiFont.Lines(TextBreak.GlueDashes(r), Body, gw - RenderSlack, 0f, out widest);
+                    if (n > 2) bad.Add(string.Format("{0}: причина «{1}» — {2} рядки у {3:0}", p.Key, r, n, gw));
+                }
+                float checkL = gw - CareerTileLayout.LowCheckRight - CareerTileLayout.CheckW;
+                float keyL = gw - CareerTileLayout.CompactBodyRight - CareerTileLayout.CompactKeyBox;
+                if (checkL + CareerTileLayout.CheckW + CheckClear > keyL) bad.Add(p.Key + ": галочка плити ролі на ключі");
+                if (CareerTileLayout.LowCheckTop < 0f || CareerTileLayout.LowCheckTop + CareerTileLayout.CheckH > CareerTileLayout.CreateRoleChipH)
+                    bad.Add("галочка плити ролі виходить за плиту");
+                foreach (var key in new[] { "role.hero", "role.hero.f", "role.villain", "role.villain.f" })
+                {
+                    string title = Caps(Ui(key));
+                    float right = CareerTileLayout.CompactBodyLeft + TitleFont.Width(title, CareerTileLayout.CompactTitleSize, CareerTileLayout.TitleTrack) + RenderSlack;
+                    if (right > checkL - CheckClear)
+                        bad.Add(string.Format("{0}: «{1}» на {2:0} сягає {3:0}, галочка — від {4:0}", p.Key, title, CareerTileLayout.CompactTitleSize, right, checkL));
+                    if (TitleFont.LineHeight(CareerTileLayout.CompactTitleSize) > CareerTileLayout.CreateRoleChipH - 2f * CareerTileLayout.LowBodyTop + 6f)
+                        bad.Add("назва ролі вища за плиту");
+                }
+            }
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
     }

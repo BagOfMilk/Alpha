@@ -429,7 +429,7 @@ namespace Game.Gameplay.Ring.UI
         private readonly VisualElement _keyBox, _chances, _legendRow, _parts, _body, _head, _face;
         private readonly List<Label> _partLabels = new List<Label>();
         private readonly bool _enabled;
-        private bool _compact;
+        private bool _compact, _low;
         /// <summary>Золотий сегмент смуги шансів: на золотій заливці (фокус) — темний, інакше зникав би (кадри слоту 28).</summary>
         private VisualElement _strongSeg;
         private float _slantInset = -1f;
@@ -450,6 +450,8 @@ namespace Game.Gameplay.Ring.UI
         public bool SelectDarkText = true;
         /// <summary>Вибір не заливкою, а краєм: плитка лишається темною, смужка й обводка — <see cref="SelectColor"/> (№4, 12.11.2026).</summary>
         public bool SelectAsEdge;
+        /// <summary>Плитку можна вибрати (створення): назва вміщається до галочки (<see cref="CareerTileLayout.TitleWidthBeforeCheck"/>).</summary>
+        public bool ReserveCheck;
 
         public ActionTile(int key, string title, string effect, string risk, bool enabled, string reason = null)
         {
@@ -495,7 +497,7 @@ namespace Game.Gameplay.Ring.UI
             _keyBox.style.justifyContent = Justify.Center; _keyBox.style.alignItems = Align.Center;
             _keyBox.style.marginLeft = CareerTileLayout.KeyGap;
             _keyBox.pickingMode = PickingMode.Ignore;
-            _key = MenuKit.Display(key > 0 ? key.ToString() : "", 21f, RingTheme.Bg, RingFontRole.Display900, 0f);
+            _key = MenuKit.Display(CareerTileLayout.KeyLabel(key), 21f, RingTheme.Bg, RingFontRole.Display900, 0f);
             _key.style.unityTextAlign = TextAnchor.MiddleCenter;
             _keyBox.Add(_key);
             if (key > 0) head.Add(_keyBox);
@@ -550,6 +552,7 @@ namespace Game.Gameplay.Ring.UI
             _legendRow.RegisterCallback<GeometryChangedEvent>(e => FitSlant());
             _parts.RegisterCallback(changed);
             _title.RegisterCallback<GeometryChangedEvent>(e => FitTitle());
+            _face.RegisterCallback<GeometryChangedEvent>(e => { if (ReserveCheck) FitTitle(); });
             _titleProbe.RegisterCallback<GeometryChangedEvent>(e => FitTitle());
             _check = new CheckMark();   // галочка малюється: у display-шрифті немає U+2713 (перевірено fontTools 08.11.2026)
             _check.style.position = Position.Absolute;
@@ -593,7 +596,7 @@ namespace Game.Gameplay.Ring.UI
         /// <returns>true — режим змінився (розкладка тексту оновиться в наступному кадрі).</returns>
         public bool SetCompact(bool on)
         {
-            if (_compact == on) return false;
+            if (_low || _compact == on) return false;   // низька плитка (SetLow) свій розмір тримає сама
             _compact = on;
             float size = on ? CareerTileLayout.CompactTitleSize : CareerTileLayout.TitleSize;
             SetTitleSize(size);
@@ -624,6 +627,34 @@ namespace Game.Gameplay.Ring.UI
             _check.style.right = CareerTileLayout.CheckRight(on);
             FitSlant();
             return true;
+        }
+
+        /// <summary>
+        /// Низька плитка (Б4-1, арт-директор 14.11.2026): плита ролі над золотою «Почати кар'єру» — заввишки
+        /// <see cref="CareerTileLayout.CreateRoleChipH"/>, лише назва й ключ в одному рядку по центру (кегль і ключ — компактні),
+        /// без ефекту; галочка вибору — ліворуч від ключа. Ширину дає колонка, а не ряд.
+        /// </summary>
+        public void SetLow()
+        {
+            if (_low) return;
+            _low = true;
+            _compact = false;
+            style.height = CareerTileLayout.CreateRoleChipH;
+            style.flexGrow = 0f; style.flexShrink = 0f; style.flexBasis = StyleKeyword.Auto;
+            style.marginRight = 0f;
+            float size = CareerTileLayout.CompactTitleSize;
+            SetTitleSize(size);
+            _titleProbe.style.fontSize = size;
+            _titleProbe.style.letterSpacing = new Length(size * CareerTileLayout.TitleTrack);
+            _body.style.left = CareerTileLayout.CompactBodyLeft; _body.style.right = CareerTileLayout.CompactBodyRight;
+            _bodyTop = CareerTileLayout.LowBodyTop;
+            _body.style.top = _bodyTop; _body.style.bottom = 0f;
+            _head.style.alignItems = Align.Center;
+            _keyBox.style.width = CareerTileLayout.CompactKeyBox; _keyBox.style.height = CareerTileLayout.CompactKeyBox;
+            _key.style.fontSize = 17f;
+            _effect.style.display = DisplayStyle.None;
+            _parts.style.display = DisplayStyle.None;
+            _check.style.top = CareerTileLayout.LowCheckTop; _check.style.right = CareerTileLayout.LowCheckRight;
         }
 
         /// <summary>
@@ -694,8 +725,16 @@ namespace Game.Gameplay.Ring.UI
         /// <summary>Назва в один рядок: базовий кегль або менший — за шириною проби (див. <see cref="CareerTileLayout.FitTitle"/>).</summary>
         private void FitTitle()
         {
-            float baseSize = _compact ? CareerTileLayout.CompactTitleSize : CareerTileLayout.TitleSize;
-            float s = CareerTileLayout.FitTitle(baseSize, _titleProbe.layout.width, _title.layout.width);
+            float baseSize = _compact || _low ? CareerTileLayout.CompactTitleSize : CareerTileLayout.TitleSize;
+            float avail = _title.layout.width;
+            float faceW = _face.layout.width;
+            if (ReserveCheck && !float.IsNaN(faceW) && faceW > 0f)
+            {
+                float left = _compact || _low ? CareerTileLayout.CompactBodyLeft : CareerTileLayout.BodyLeft;
+                float checkR = _low ? CareerTileLayout.LowCheckRight : CareerTileLayout.CheckRight(_compact);
+                avail = Math.Min(avail, CareerTileLayout.TitleWidthBeforeCheck(faceW, left, checkR));
+            }
+            float s = CareerTileLayout.FitTitle(baseSize, _titleProbe.layout.width, avail);
             if (float.IsNaN(s) || Math.Abs(s - _titleSize) < 0.01f) return;
             SetTitleSize(s);
         }
