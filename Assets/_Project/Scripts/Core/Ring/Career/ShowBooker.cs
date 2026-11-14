@@ -19,10 +19,14 @@ namespace Game.Core.Ring.Career
 
         /// <summary>
         /// Те саме, а щаблі понад межу атрибутів переходять у витримку суперника <paramref name="mods"/> (коли не null): по черзі
-        /// +1 стартового імпульсу (раніше до фінішера), +1 до «Вирватися», «залізна щелепа» (поріг ушкодження +1), +1 жетон реверсу.
+        /// +1 до «Вирватися», «залізна щелепа» (поріг ушкодження +1), +1 жетон реверсу.
+        /// П5, 11.11.2026 (рушій P2-1: фінішер не раніше 8-ї дії): стартовий імпульс із черги прибрано — він більше не наближав
+        /// фінішер, і кожен четвертий щабель пропадав; замір 200 кар'єр: тижневі на національній і світовій 69 / 73 % → 60 / 63 %.
+        /// Кожна витримка окремо слабша за чергу з трьох (лише жетони — суперник навіть слабшає: 85 %).
         /// </summary>
         public static int Strengthen(WrestlerStats s, int steps, MatchModifiers mods)
         {
+            if (steps < 0) return -Weaken(s, -steps);
             // Лише атрибути, що б'ють у кожному матчі; Спритність і Харизма (політ, дражнити) майже не додають сили — замір 06.11.2026:
             // пізні щаблі туди не робили суперника сильнішим. Далі — витримка й імпульс (mods).
             var order = new[] { s.FinisherAttr, RingAttr.Stamina, RingAttr.Technique, RingAttr.Strength };
@@ -40,17 +44,41 @@ namespace Game.Core.Ring.Career
                 if (!done)
                 {
                     if (mods == null) break;
-                    switch (applied % 4)
+                    switch (applied % 3)
                     {
-                        case 0: mods.StartMomentumBonus++; break;
-                        case 1: mods.KickOutBonus++; break;
-                        case 2: mods.DamageThresholdShift++; break;
+                        case 0: mods.KickOutBonus++; break;
+                        case 1: mods.DamageThresholdShift++; break;
                         default: mods.ExtraReversalTokens++; break;
                     }
                 }
                 applied++;
             }
             return applied;
+        }
+
+        /// <summary>
+        /// Від'ємні щаблі (пік сили — реванш, «переріс щабель», CareerRules «Піки сили»): суперник слабший за базу ростеру — по
+        /// атрибуту з кінця черги посилення (Сила → Техніка → Витривалість), не нижче 0; атрибут фінішера не чіпаємо — це його прийом.
+        /// Повертає, скільки атрибутів опущено.
+        /// </summary>
+        public static int Weaken(WrestlerStats s, int steps)
+        {
+            var order = new[] { RingAttr.Strength, RingAttr.Technique, RingAttr.Stamina };
+            int lowered = 0;
+            for (int i = 0; i < steps; i++)
+            {
+                bool done = false;
+                foreach (var a in order)
+                {
+                    if (a == s.FinisherAttr || s.Get(a) <= 0) continue;
+                    s.Set(a, s.Get(a) - 1);
+                    done = true;
+                    break;
+                }
+                if (!done) break;
+                lowered++;
+            }
+            return lowered;
         }
 
         /// <summary>Хеш (splitmix) — замість System.Random: те саме зерно й аргументи дають те саме число.</summary>
@@ -67,51 +95,59 @@ namespace Game.Core.Ring.Career
         }
 
         /// <summary>Рівень суперника, якого букер вважає «рівним» для такої популярності: 0 → 1, 10 → 6.</summary>
-        public static int TargetRank(int popularity)
+        public static int TargetRank(int popularity) { return TargetRank(popularity, 0, CareerRules.MaxPopularity); }
+
+        /// <summary>
+        /// Рівень «рівного» суперника у федерації (П5): популярність між підлогою й стелею федерації → ранг 1…6 її ростеру.
+        /// </summary>
+        public static int TargetRank(int popularity, int floor, int ceiling)
         {
-            int r = 1 + popularity * 5 / CareerRules.MaxPopularity;
+            int span = Math.Max(1, ceiling - floor);
+            int r = 1 + (popularity - floor) * 5 / span;
             return Math.Max(1, Math.Min(6, r));
         }
 
-        public static int Fee(CardPosition pos, bool big)
+        public static int Fee(CardPosition pos, bool big) { return Fee(pos, big, 100); }
+
+        /// <summary>Гонорар за місцем у картці з множником федерації (П5: ×1 / ×2 / ×3,5 / ×6 — у відсотках).</summary>
+        public static int Fee(CardPosition pos, bool big, int feePercent)
         {
-            int f = CareerRules.FeeByPosition[(int)pos];
+            int f = CareerRules.FeeByPosition[(int)pos] * feePercent / 100;
             return big ? f * CareerRules.BigShowFeePercent / 100 : f;
         }
 
         /// <summary>Суперник звичайного шоу: близький за рівнем, із продовженням гарячих ворожнеч, не той самий двічі поспіль.</summary>
-        public static NpcDef ChooseWeekly(CareerContent content, CareerState st, int popularity, bool hammerAvailable, Func<string, int> feudLevel)
+        public static NpcDef ChooseWeekly(IReadOnlyList<NpcDef> pool, FederationDef fed, CareerState st, int popularity, bool hammerAvailable, Func<string, int> feudLevel)
         {
-            return Choose(content, st, popularity, hammerAvailable, feudLevel, null, st.Week);
+            return Choose(pool, fed, st, popularity, hammerAvailable, feudLevel, null, st.Week);
         }
 
         /// <summary>
         /// Суперник великого шоу після Молота: найгарячіша ворожнеча (рівень ≥ 1), інакше найближчий за рівнем. Чемпіон-гравець
         /// захищає пояс від найгарячішого претендента.
         /// </summary>
-        public static NpcDef ChooseBig(CareerContent content, CareerState st, int popularity, bool hammerAvailable, Func<string, int> feudLevel)
+        public static NpcDef ChooseBig(IReadOnlyList<NpcDef> pool, FederationDef fed, CareerState st, int popularity, bool hammerAvailable, Func<string, int> feudLevel)
         {
             NpcDef best = null; int bestLevel = -1;
-            foreach (var n in content.Roster)
+            foreach (var n in pool)
             {
                 if (!Eligible(n, st, hammerAvailable)) continue;
                 int lv = feudLevel(n.Id);
                 if (lv > bestLevel || (lv == bestLevel && best != null && n.Rank > best.Rank)) { best = n; bestLevel = lv; }
             }
             if (best != null && bestLevel >= 1) return best;
-            return Choose(content, st, popularity, hammerAvailable, feudLevel, null, st.Week + 100);
+            return Choose(pool, fed, st, popularity, hammerAvailable, feudLevel, null, st.Week + 100);
         }
 
-        /// <summary>Суперник титульного матчу: чинний чемпіон (NPC); якщо пояс у гравця — найгарячіший претендент.</summary>
-        public static NpcDef ChooseTitle(CareerContent content, CareerState st, bool hammerAvailable, Func<string, int> feudLevel)
+        /// <summary>
+        /// Суперник титульного матчу: чинний чемпіон дивізіону героя (NPC); якщо пояс у гравця чи вакантний — найгарячіший
+        /// претендент дивізіону.
+        /// </summary>
+        public static NpcDef ChooseTitle(IReadOnlyList<NpcDef> pool, CareerState st, bool hammerAvailable, Func<string, int> feudLevel)
         {
-            if (st.BeltHolder != CareerState.PlayerHolder)
-            {
-                var holder = content.FindNpc(st.BeltHolder);
-                if (holder != null) return holder;
-            }
+            foreach (var n in pool) if (n.Id == st.BeltHolder) return n;
             NpcDef best = null; int bestKey = -1;
-            foreach (var n in content.Roster)
+            foreach (var n in pool)
             {
                 if (n.Id == st.BeltHolder) continue;
                 if (n.Id == CareerContent.HammerId && !hammerAvailable) continue;
@@ -127,12 +163,12 @@ namespace Game.Core.Ring.Career
             return true;
         }
 
-        private static NpcDef Choose(CareerContent content, CareerState st, int popularity, bool hammerAvailable, Func<string, int> feudLevel,
-            string exclude, int salt)
+        private static NpcDef Choose(IReadOnlyList<NpcDef> pool, FederationDef fed, CareerState st, int popularity, bool hammerAvailable,
+            Func<string, int> feudLevel, string exclude, int salt)
         {
-            int target = TargetRank(popularity);
+            int target = TargetRank(popularity, fed.Floor, fed.Ceiling);
             NpcDef best = null; int bestScore = int.MinValue;
-            foreach (var n in content.Roster)
+            foreach (var n in pool)
             {
                 if (!Eligible(n, st, hammerAvailable) || n.Id == exclude) continue;
                 int score = 20 - 3 * Math.Abs(n.Rank - target) + 2 * feudLevel(n.Id) + Mix(st.Seed, salt, n.Rank) % 3;
@@ -147,10 +183,12 @@ namespace Game.Core.Ring.Career
         /// План букера: довіра 0–1 — плану немає; якщо суперник помітно сильніший за цільового — «програй чисто» (із довірою ≥ 3 м'якше:
         /// «не програй чисто»); помітно слабший — «виграй чисто»; інакше «просто виграй».
         /// </summary>
-        public static BookerPlan PlanFor(NpcDef opp, int popularity, int trust)
+        public static BookerPlan PlanFor(NpcDef opp, int popularity, int trust) { return PlanFor(opp, popularity, trust, 0, CareerRules.MaxPopularity); }
+
+        public static BookerPlan PlanFor(NpcDef opp, int popularity, int trust, int floor, int ceiling)
         {
             if (trust < 2) return BookerPlan.None;
-            int target = TargetRank(popularity);
+            int target = TargetRank(popularity, floor, ceiling);
             if (opp.Rank >= target + 2) return trust >= 3 ? BookerPlan.NoCleanLoss : BookerPlan.LoseClean;
             if (opp.Rank <= target - 2) return BookerPlan.WinClean;
             return BookerPlan.WinAny;
@@ -163,11 +201,11 @@ namespace Game.Core.Ring.Career
         }
 
         /// <summary>Чи заслуговує гравець титульного шансу: довіра ≥ 4, ворожнеча 4 з будь-ким або чемпіон (захист).</summary>
-        public static bool TitleEligible(CareerContent content, CareerState st, int trust, bool hammerAvailable, Func<string, int> feudLevel)
+        public static bool TitleEligible(IReadOnlyList<NpcDef> pool, CareerState st, int trust, bool hammerAvailable, Func<string, int> feudLevel)
         {
             if (st.BeltHolder == CareerState.PlayerHolder) return true;
             if (trust >= CareerRules.TitleShotTrust) return true;
-            foreach (var n in content.Roster)
+            foreach (var n in pool)
             {
                 if (n.Id == CareerContent.HammerId && !hammerAvailable) continue;
                 if (feudLevel(n.Id) >= CareerRules.MaxFeud) return true;

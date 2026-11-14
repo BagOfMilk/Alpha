@@ -33,6 +33,21 @@ namespace Game.Gameplay.Ring.Stage
         public AnimationClip[] crowdClips = new AnimationClip[0];
         public Avatar crowdAvatar;
         public TextAsset venueAnchors, venueProps, venueCrowd;
+
+        /// <summary>Зал: FBX і його тексти (якорі, реквізит, натовп).</summary>
+        [System.Serializable]
+        public sealed class VenueSet
+        {
+            public string id;
+            public GameObject venue;
+            public TextAsset anchors, props, crowd;
+        }
+
+        /// <summary>
+        /// Інші зали (клубна зала, палац спорту) — для огляду «за рингом» у трьох залах (<c>-ring-venue hall|arena</c>); у грі
+        /// досі спортзал (<see cref="venue"/>). Зали за рівнем федерації — окремий пункт.
+        /// </summary>
+        public VenueSet[] venueSets = new VenueSet[0];
         /// <summary>
         /// Процедурні набори текстур арени (Art/Ring/Textures, manifest): ім'я, карта кольору, нормаль, плитка (м) — для
         /// матеріалів Kit_* (<see cref="RingVenueKit"/>).
@@ -56,12 +71,12 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Матеріали частинок (URP Particles/Unlit): адитивний — іскри й піро, прозорий — CO2 і конфеті.</summary>
         public Material particleAdd, particleAlpha;
 
-        /// <summary>Усі кліпи RING_Moves і RING_Promo (за іменем із маніфесту).</summary>
+        /// <summary>Чоловічі кліпи: усі RING_*.fbx теки анімацій без «_F» — RING_Moves, RING_Promo, RING_Entrance, далі решта (за іменем із маніфесту).</summary>
         public AnimationClip[] clips = new AnimationClip[0];
 
         /// <summary>
-        /// Жіночий набір виходу (RING_Entrance_F.fbx — ті самі імена, що й у чоловічому; таз нижче на ~0,1 м): постаті з тілом
-        /// body_f_* виходять ним (docs/ring/ENTRANCE_PROFILE.md, «стать»).
+        /// Жіночі кліпи: усі RING_*_F.fbx (RING_Moves_F, RING_Promo_F, RING_Entrance_F — ті самі імена, що й у чоловічих; таз
+        /// нижче на ~0,1 м): постаті з тілом body_f_* грають ними (docs/ring/ENTRANCE_PROFILE.md, «стать»; запит ПМ №8, 09.11.2026).
         /// </summary>
         public AnimationClip[] clipsFemale = new AnimationClip[0];
 
@@ -84,6 +99,8 @@ namespace Game.Gameplay.Ring.Stage
         public AudioClip[] sndSlam = new AudioClip[0];
 
         public TextAsset manifest;
+        /// <summary>Маніфест жіночого набору прийомів (ring_anims_f_manifest.txt): зсуви пар жіночих тіл подекуди інші.</summary>
+        public TextAsset manifestF;
         public TextAsset promoManifest;
         public TextAsset entranceManifest;
 

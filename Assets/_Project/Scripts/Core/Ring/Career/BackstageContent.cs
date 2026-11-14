@@ -7,9 +7,16 @@ namespace Game.Core.Ring.Career
     public enum BackstageKind { Booker = 0, Event = 1 }
 
     /// <summary>
+    /// Коли подія відкривається сама, без «Закулісся»: <see cref="FeudFirst"/> — на початку тижня першого шоу ворожнечі з Молотом
+    /// (подія мішаного матчу, P2-6: героїня проти Молота). Дії тижня не витрачає.
+    /// </summary>
+    public enum BackstageAuto { None = 0, FeudFirst = 1 }
+
+    /// <summary>
     /// Закулісна сцена кар'єри (TRPG_DESIGN §6.1, §7): граф у форматі промо + умови появи. Для події: з якого тижня сезону вона
     /// «дозріває» (<see cref="FromWeek"/> + хеш у межах <see cref="Spread"/>), з якого сезону (<see cref="MinSeason"/>) і за яких
-    /// умов стану (<see cref="Requires"/>). Розмови з букером умов розкладу не мають: з них береться перша, чиї умови виконані.
+    /// умов стану (<see cref="Requires"/>). Розмови з букером умов розкладу не мають: береться перша з умовами, що виконані
+    /// (розмова свого букера федерації, <c>{"career":"booker","target":…}</c>), а запасна без умов — коли жодна з них не підходить.
     /// </summary>
     public sealed class BackstageScene
     {
@@ -20,6 +27,16 @@ namespace Game.Core.Ring.Career
         /// <summary>Скільки тижнів розкиду: день появи = FromWeek + хеш(зерно, сезон, сцена) % Spread.</summary>
         public int Spread = 1;
         public int MinSeason = 1;
+        /// <summary>Подія раз на кар'єру (не раз на сезон): після першого показу більше не дозріває (скаут, TRPG_DESIGN §6.4).</summary>
+        public bool Once;
+        /// <summary>Подія відкривається сама (<see cref="BackstageAuto"/>), а не через «Закулісся»; така подія — лише раз на кар'єру.</summary>
+        public BackstageAuto Auto;
+        /// <summary>
+        /// Сюжетна сцена дуги (у JSON — «arc»: true; дуга Сталевого, §7): «Закулісся» перевіряє такі сцени раніше за щосезонні
+        /// події, тож дозріла сцена дуги не чекає, поки інтерв'ю, парковка, контракт, менеджерка й поворот відіграють своє (рев'ю ПМ
+        /// 927b86c). Порядок у файлі не змінюється: від нього залежить день появи (<c>CareerSession.BackstageDueWeek</c>).
+        /// </summary>
+        public bool Arc;
 
         public string Id { get { return Promo.Id; } }
     }
@@ -41,7 +58,7 @@ namespace Game.Core.Ring.Career
         }
 
         /// <summary>
-        /// Схема: {"scenes":[{"id","kind":"booker|event","fromWeek","spread","minSeason","requires":[умови],"title","place","start","nodes":[…]}]}.
+        /// Схема: {"scenes":[{"id","kind":"booker|event","fromWeek","spread","minSeason","once","auto":"feud_first","arc","requires":[умови],"title","place","start","nodes":[…]}]}.
         /// Вузли, ефекти й умови — ті самі, що в промо ворожнечі (плюс умови й ефекти кар'єри, <see cref="CareerFx"/>).
         /// </summary>
         public static BackstageContent Load(string json)
@@ -58,8 +75,17 @@ namespace Game.Core.Ring.Career
                     Kind = MoveCatalog.ParseEnum<BackstageKind>(JsonRead.Str(o, "kind", where), where + ".kind"),
                     FromWeek = JsonRead.Int(o, "fromWeek", where, 1),
                     Spread = Math.Max(1, JsonRead.Int(o, "spread", where, 1)),
-                    MinSeason = JsonRead.Int(o, "minSeason", where, 1)
+                    MinSeason = JsonRead.Int(o, "minSeason", where, 1),
+                    Once = JsonRead.Bool(o, "once", where, false),
+                    Arc = JsonRead.Bool(o, "arc", where, false)
                 };
+                string auto = JsonRead.Str(o, "auto", where, false);
+                if (auto == "feud_first") sc.Auto = BackstageAuto.FeudFirst;
+                else if (auto != null) throw new FormatException(where + ".auto: відоме значення лише feud_first, а не '" + auto + "'");
+                if (sc.Auto != BackstageAuto.None && (sc.Kind != BackstageKind.Event || !sc.Once))
+                    throw new FormatException(where + ": сама відкривається лише подія раз на кар'єру (kind event, once)");
+                if (sc.Arc && (sc.Kind != BackstageKind.Event || sc.Auto != BackstageAuto.None))
+                    throw new FormatException(where + ": «arc» — лише для події, що відкривається через «Закулісся»");
                 foreach (var co in JsonRead.ObjList(o, "requires", where)) sc.Requires.Add(FeudCondition.FromJson(co, where + ".requires"));
                 if (c.Find(sc.Id) != null) throw new FormatException("повторна закулісна сцена " + sc.Id);
                 c.Scenes.Add(sc);

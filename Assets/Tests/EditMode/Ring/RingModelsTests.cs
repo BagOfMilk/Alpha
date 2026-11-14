@@ -72,6 +72,33 @@ namespace Game.Tests.EditMode
             foreach (var kv in ui) Assert.IsFalse(string.IsNullOrWhiteSpace((string)kv.Value), "порожнє значення: " + kv.Key);
         }
 
+        /// <summary>
+        /// Назва ґіміка за статтю борця — кожен із восьми, обидві форми з текстом. Підстановка форм героїні (HeroForms.Apply)
+        /// назву суперника-чоловіка не чіпає: рід дає лише прапорець <c>female</c>.
+        /// </summary>
+        [Test]
+        public void GimmickName_ByTheWrestlersSex_EveryGimmickHasBothForms_HeroFormsDoNotTouchIt()
+        {
+            var t = LoadText();
+            var gimmicks = CareerKit.Content().Gimmicks;
+            Assert.AreEqual(8, gimmicks.Count);
+            var male = new Dictionary<string, string>();
+            foreach (var g in gimmicks)
+            {
+                string m = RingLabels.GimmickName(t, g.Key, false), f = RingLabels.GimmickName(t, g.Key, true);
+                AssertClean(m, g.Key);
+                AssertClean(f, g.Key + ".fem");
+                Assert.AreEqual(t.Get("gimmick." + g.Key), m, "чоловіча форма — та сама, що досі на екранах");
+                male[g.Key] = m;
+            }
+            Assert.AreEqual("Силачка", RingLabels.GimmickName(t, "strongman", true));
+            Assert.AreEqual("Монстр", RingLabels.GimmickName(t, "monster", true), "Монстр — спільного роду");
+            HeroForms.Apply(t, true, true);
+            Assert.IsTrue(HeroForms.ShowsHeroine(t));
+            foreach (var g in gimmicks)
+                Assert.AreEqual(male[g.Key], RingLabels.GimmickName(t, g.Key, false), "суперник героїні лишається в чоловічому роді: " + g.Key);
+        }
+
         [Test]
         public void Labels_EveryEnumValueHasAText()
         {
@@ -86,7 +113,6 @@ namespace Game.Tests.EditMode
             foreach (BookerPlan p in Enum.GetValues(typeof(BookerPlan))) AssertClean(RingLabels.PlanName(t, p), p.ToString());
             foreach (FeudPlanOutcome o in Enum.GetValues(typeof(FeudPlanOutcome))) AssertClean(RingLabels.PlanOutcome(t, o), o.ToString());
             foreach (RollTier x in Enum.GetValues(typeof(RollTier))) AssertClean(RingLabels.TierName(t, x), x.ToString());
-            foreach (Zone z in Enum.GetValues(typeof(Zone))) AssertClean(RingLabels.ZoneName(t, z), z.ToString());
             foreach (Posture z in Enum.GetValues(typeof(Posture))) AssertClean(RingLabels.PostureName(t, z), z.ToString());
             foreach (MatchActionId a in Enum.GetValues(typeof(MatchActionId))) AssertClean(RingLabels.ActionName(t, a), a.ToString());
             foreach (UnavailableReason r in Enum.GetValues(typeof(UnavailableReason))) AssertClean(RingLabels.Unavailable(t, r), r.ToString());
@@ -383,9 +409,12 @@ namespace Game.Tests.EditMode
                 var card = m.Card(side);
                 AssertClean(card.Name, "name");
                 AssertClean(card.DamageText, "damage"); AssertClean(card.MomentumText, "momentum");
-                AssertClean(card.PostureText, "posture"); AssertClean(card.ZoneText, "zone"); AssertClean(card.TokensText, "tokens");
+                AssertClean(card.PostureText, "posture"); AssertClean(card.StaminaText, "stamina"); AssertClean(card.TokensText, "tokens");
             }
-            AssertClean(m.HypeText, "hype"); AssertClean(m.RoundText, "round"); AssertClean(m.ApText, "ap");
+            AssertClean(m.HypeText, "hype"); AssertClean(m.RoundText, "round");
+            if (!m.IsOver) AssertClean(m.InitiativeText, "initiative");
+            if (m.IsOutside) AssertClean(m.PlaceText, "place");
+            if (m.CountText.Length > 0) AssertClean(m.CountText, "count");
             AssertClean(m.RefereeText, "referee"); AssertClean(m.TurnText, "turn");
             foreach (var l in m.LogTexts()) AssertClean(l, "log");
             foreach (var a in m.Actions())
@@ -436,7 +465,7 @@ namespace Game.Tests.EditMode
             while (m.Input == MatchInput.Ai) m.StepAi();
             Assert.AreEqual(MatchInput.PlayerAction, m.Input);
             var rows = m.Actions();
-            Assert.AreEqual(17, rows.Count);
+            Assert.AreEqual(Enum.GetValues(typeof(MatchActionId)).Length - 1, rows.Count, "усі дії рушія, крім «Променя надії»");
             Assert.IsTrue(rows.Where(r => r.Number > 0).All(r => r.Available));
             Assert.AreEqual(rows.Where(r => r.Available).Take(9).Count(), rows.Count(r => r.Number > 0));
             Assert.IsTrue(rows.Where(r => !r.Available).All(r => r.Number == 0 && r.ReasonText.Length > 0));

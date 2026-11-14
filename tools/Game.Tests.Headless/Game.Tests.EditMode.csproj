@@ -94,12 +94,21 @@
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Models/*.cs" />
     <!-- Ринг: таблиця «подія → кліпи» і такт режисера (мітки кліпів) — чистий C#, охоронці RingBeatTests. -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingClipTable.cs" />
+    <!-- Ринг, кар'єра (П5): вигляд NPC — чистий C#, охоронець CareerTransitionTests (у кожного NPC ростеру свій вигляд і стать тіла). -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/CareerLooks.cs" />
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingBeats.cs" />
     <!-- Ринг: геометрія вимірювача контакту (QA, критерій М1 №4) — чистий C#, охоронці RingCapsuleTests. -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingCapsules.cs" />
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingOutsideCourse.cs" />
+    <!-- Ринг: сценарії демо під нове ядро (Ф2, крок 9) — справжній рушій і кубик за сценарієм, охоронці RingDemoScriptTests. -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingDemoScript.cs" />
     <!-- Ринг: екран виходу (ТЗ B07) і персональний вихід (ENTRANCE_PROFILE.md) — чистий C#, охоронці EntranceScreenTests, EntranceProfileTests. -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/EntranceScreen.cs" />
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/EntranceProfile.cs" />
+    <!-- Ринг: зал і місце пари «за рингом» (RingVenue) — чистий C#, охоронці RingVenueTests на якорях трьох залів. -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingVenue.cs" />
+    <!-- Ринг: люди кар'єри поза рингом (букери, гості закулісся, менеджерка) — чистий C#, охоронці BackstageCastTests (вигляд NPC — CareerLooks вище). -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/BackstageCast.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -28,8 +28,9 @@ namespace Game.Core.Ring.Career
         /// <summary>Дії, що доступні завжди й не є прийомами каталогу (системні).</summary>
         public static readonly MatchActionId[] UniversalActions =
         {
-            MatchActionId.Pin, MatchActionId.Desperate, MatchActionId.HopeSpot, MatchActionId.GetUp, MatchActionId.LeaveRing,
-            MatchActionId.ReturnToRing, MatchActionId.Recover, MatchActionId.Ally, MatchActionId.CatchBreath
+            MatchActionId.Pin, MatchActionId.Desperate, MatchActionId.HopeSpot, MatchActionId.GetUp,
+            MatchActionId.LeaveRing, MatchActionId.ReturnToRing, MatchActionId.Weapon,
+            MatchActionId.Recover, MatchActionId.Ally, MatchActionId.CatchBreath
         };
 
         public CareerContent Content { get; }
@@ -48,6 +49,7 @@ namespace Game.Core.Ring.Career
             State = new CareerState { Seed = seed };
             Feud = RingCampaign.New(content.Feud, dice);
             Stage = CareerStage.Title;
+            SyncFederationRules();
         }
 
         public static CareerSession New(CareerContent content, IDiceRoller dice, ulong seed = 1) { return new CareerSession(content, dice, seed); }
@@ -64,11 +66,188 @@ namespace Game.Core.Ring.Career
         public int Season { get { return State.Season; } }
         public int Week { get { return State.Week; } }
         public bool IsChampion { get { return State.BeltHolder == CareerState.PlayerHolder; } }
-        /// <summary>Роль зараз — домінантний шлях (поворот герой ↔ лиходій — подія кар'єри).</summary>
+        // ---------- федерація (П5; власник 11.11.2026 погодив таблиці як ПЛЕЙСХОЛДЕР) ----------
+
+        /// <summary>Рівень федерації: 1 — місцева … 4 — світова. Рівень зали для «Изучение».</summary>
+        public int FederationTier { get { return State.Federation; } }
+        public FederationDef Federation { get { return Content.Federation(State.Federation); } }
+        /// <summary>Стеля популярності федерації (P1-6): вище цієї федерації не піднятися — це сигнал перейти вище.</summary>
+        public int PopularityCeiling { get { return Federation.Ceiling; } }
+        /// <summary>Підлога популярності: нижче на кінці сезону контракт не продовжують — рівень нижче.</summary>
+        public int PopularityFloor { get { return Federation.Floor; } }
+        /// <summary>Проживання й дорога за тиждень у цій федерації (списується наприкінці тижня).</summary>
+        public int WeeklyCost { get { return Federation.LivingCost + Federation.TravelCost; } }
+        /// <summary>Ціна костюма рівня цієї федерації (разово; ажіотаж виходу — лише від костюма не нижчого за рівень федерації).</summary>
+        public int CostumePrice { get { return Federation.CostumeCost; } }
+
+        /// <summary>Чи NPC — чинний чемпіон свого дивізіону своєї федерації (для виходу на ринг і картки).</summary>
+        public bool IsBeltHolder(string npcId)
+        {
+            var n = Content.FindNpc(npcId);
+            return n != null && State.Belt(n.Tier, n.Female) == npcId;
+        }
+
+        /// <summary>
+        /// Суперники, з яких букер складає картку: ростер федерації гравця, дивізіон героя (P2-6: суперник своєї статі). Якщо дивізіону
+        /// у федерації немає — увесь ростер.
+        /// </summary>
+        public List<NpcDef> BookingPool()
+        {
+            var pool = new List<NpcDef>();
+            foreach (var n in Federation.Roster) if (n.Female == State.Female) pool.Add(n);
+            if (pool.Count == 0) pool.AddRange(Federation.Roster);
+            return pool;
+        }
+
+        /// <summary>
+        /// Дивізіон героя (P2-6), коли його не знав екран створення (старий сейв, чернетка без <see cref="CharacterDraft.Female"/>):
+        /// хост проставляє з тіла. Змінити можна лише до першого кроку кар'єри (сезон 1, тиждень 1, жодної дії) — або один раз, поки
+        /// дивізіон невідомий (старий сейв). Пояс героя (зі старого сейву, де пояс був один) переходить у його дивізіон, а пояс
+        /// колишнього дивізіону повертається до стартового чемпіона; у новому дивізіоні пояс у героя, бо в старій кар'єрі він його
+        /// виграв. Картку тижня букер складає наново, лише поки тиждень не почато.
+        /// </summary>
+        public void SetFemale(bool female)
+        {
+            bool changed = State.Female != female;
+            bool fresh = State.Season == 1 && State.Week == 1 && State.ActionsDone.Count == 0 && Feud.Records.Count == 0 && State.Last == null;
+            if (changed && State.FemaleKnown && !fresh)
+                throw new InvalidOperationException("Дивізіон героя змінюють лише до першого тижня");
+            if (changed && State.Belt(State.Federation, State.Female) == CareerState.PlayerHolder)
+            {
+                State.SetBelt(State.Federation, State.Female, Federation.BeltOf(State.Female) ?? "");
+                State.SetBelt(State.Federation, female, CareerState.PlayerHolder);
+            }
+            State.Female = female;
+            State.FemaleKnown = true;
+            if (changed && Stage == CareerStage.Week && State.ActionsDone.Count == 0 && _bs == null) { BookShow(); OpenAutoScene(); }
+        }
+
+        /// <summary>Пояси всіх федерацій і дивізіонів, яких ще немає в стані, — у їхніх стартових чемпіонів.</summary>
+        private void InitBelts()
+        {
+            foreach (var f in Content.Federations)
+                for (int d = 0; d < 2; d++)
+                {
+                    bool female = d == 1;
+                    if (!State.Belts.ContainsKey(CareerState.BeltKey(f.Tier, female))) State.SetBelt(f.Tier, female, f.BeltOf(female) ?? "");
+                }
+        }
+
+        /// <summary>
+        /// Перейти у федерацію рівня <paramref name="tier"/> зі статусом входу: популярність і довіра нового букера. Пояс із гравцем не
+        /// переїжджає; картку тижня букер складає наново. Сам перехід (пропозиція, контракт) — <see cref="AcceptOffer"/>; тут — механіка.
+        /// </summary>
+        internal void EnterFederation(int tier, int popularity, int trust)
+        {
+            tier = Math.Max(1, Math.Min(Content.Federations.Count, tier));
+            if (IsChampion) State.BeltHolder = Federation.BeltOf(State.Female) ?? "";
+            State.Federation = tier;
+            State.ContractExclusive = false; State.ContractEndSeason = 0; State.ContractPenalty = 0;
+            SyncFederationRules();
+            Feud.State.Audience = popularity;
+            Feud.State.Trust = trust;
+            State.TierPos = -1;
+            State.Grudges.Clear();
+            if (Stage == CareerStage.Week && _bs == null) BookShow();
+        }
+
+        /// <summary>Правила федерації в стані ворожнечі (стеля популярності й ажіотаж для неї) — не зберігаються, ставляться тут.</summary>
+        private void SyncFederationRules()
+        {
+            Feud.State.AudienceCap = Federation.Ceiling;
+            Feud.State.AudienceHypeAt = Federation.PopularityHype;
+            // тіло старіє (§5.5): надбавка за сезоном — тут, бо Sync кличуть створення, новий сезон, відновлення й перехід федерації
+            Feud.State.StaminaSurcharge = Ageing.StaminaSurcharge(State.Season);
+            Feud.LateRole = State.LateRole;
+            // ґімік (§5.2) — у матчі ворожнечі й реванші так само, як пізня роль (умова ПМ 12.11.2026, п. 4)
+            Feud.PlayerGimmick = State.Gimmick;
+            // промо ворожнечі з Молотом іде й у федераціях 2–4: «booker» у них — букер цієї федерації (рев'ю ПМ 12.11.2026)
+            Feud.BookerVoice = Federation.Booker;
+        }
+
+        /// <summary>
+        /// Обрати пізню роль (§5.3) — на екрані кінця сезону, з першого: одна на раз, змінити можна в кінці кожного сезону. Обрана діє
+        /// з наступного сезону (рішення ПМ 12.11.2026, власник — «Так, усі 11», №11): кінець сезону триває й до титульного чи
+        /// прощального матчу, і заміна посеред нього давала б Ікону на титул, а Зірку — на весь наступний сезон.
+        /// </summary>
+        public bool CanChooseLateRole { get { return Stage == CareerStage.SeasonEnd; } }
+
+        /// <summary>Пізня роль на наступний сезон (або <see cref="LateRole.None"/> — без неї). false — не кінець сезону.</summary>
+        public bool ChooseLateRole(LateRole role)
+        {
+            if (!CanChooseLateRole || !Enum.IsDefined(typeof(LateRole), role)) return false;
+            State.NextLateRole = role;
+            return true;
+        }
+
+        /// <summary>Зірка поза рингом: тренувань цього тижня вже стільки, скільки дозволено (§5.3 «менше часу на тренування»).</summary>
+        public bool StarTrainingUsed
+        {
+            get
+            {
+                if (State.LateRole != LateRole.OffRingStar) return false;
+                int n = 0;
+                foreach (var k in State.ActionsDone) if (k == (int)WeekActionKind.Training) n++;
+                return n >= LateRoles.StarTrainingsPerWeek;
+            }
+        }
+
+        /// <summary>Роль зараз — домінантний шлях (поворот герой ↔ лиходій — подія кар'єри ev_turn, §5.3; <see cref="Turn"/>).</summary>
         public RingPath CurrentRole { get { return Feud.State.DominantPath(); } }
+
+        /// <summary>
+        /// Найсильніша ворожнеча героя зараз — із суперниками, з яких букер складає картку (федерація й дивізіон героя; Молот — шкалою
+        /// ворожнечі, поки її не розв'язано). Умова повороту ролі (§5.3: «потрібна ворожнеча 3+»).
+        /// </summary>
+        public int MaxFeudLevel
+        {
+            get
+            {
+                int m = 0;
+                foreach (var n in BookingPool()) m = Math.Max(m, FeudLevel(n.Id));
+                // ворожнеча з Молотом, поки не розв'язана, — теж ворожнеча (§5.3), навіть коли його немає в пулі: у героїні (він — у
+                // чоловічому дивізіоні) і у федераціях 2–4, куди ворожнеча переходить (рев'ю ПМ 12.11.2026)
+                if (!State.FeudResolved) m = Math.Max(m, Feud.State.Heat);
+                return m;
+            }
+        }
+
+        /// <summary>
+        /// Поворот ролі (§5.3, ефект сцени <c>turn</c>): очки героя й лиходія міняються місцями — зал перечитує той самий образ навиворіт,
+        /// тож вага образу переходить у нову роль, а куплені перки лишаються. Після повороту нова роль домінує завжди (за рівних очок —
+        /// +1 новій). Лише з протилежної ролі: бунтар (без ролі) не повертається, повернутий удруге в ту саму роль — нічого. Ставить і
+        /// заявлену роль кар'єри. false — повороту не було.
+        /// </summary>
+        public bool Turn(RingPath to)
+        {
+            if (to == RingPath.Rebel) return false;
+            var from = to == RingPath.Face ? RingPath.Heel : RingPath.Face;
+            if (CurrentRole != from) return false;
+            int a = Feud.State.GetPath(from), b = Feud.State.GetPath(to);
+            Feud.State.AddPath(to, a - b);
+            Feud.State.AddPath(from, b - a);
+            while (CurrentRole != to) Feud.State.AddPath(to, 1);
+            State.Role = to == RingPath.Face ? CareerRole.Hero : CareerRole.Villain;
+            return true;
+        }
 
         /// <summary>Матч, що йде зараз: звичайний (окремий) або матч ворожнечі на великому шоу. null — матчу немає.</summary>
         public MatchEngine Engine { get { return State.Phase == ShowPhase.Feud ? Feud.CurrentMatch : _engine; } }
+
+        /// <summary>
+        /// План, яким іде поточний матч: ворожнечі — план кампанії (після підготовки матчу, з планом за замовчуванням), титульний —
+        /// без плану, щотижневий — план букера. Для бота кінцівок огляду (<see cref="FeudBot.GoalFor"/>).
+        /// </summary>
+        public BookerPlan CurrentMatchPlan
+        {
+            get { return State.Phase == ShowPhase.Feud ? Feud.State.Plan : State.IsTitle ? BookerPlan.None : State.Plan; }
+        }
+
+        /// <summary>Поточний матч — розв'язка ворожнечі з Молотом.</summary>
+        public bool CurrentMatchDecisive
+        {
+            get { return State.Phase == ShowPhase.Feud && Feud.Stage == RingStage.Match && Feud.CurrentMatchDef.Decisive; }
+        }
 
         public int FeudLevel(string npcId)
         {
@@ -96,19 +275,22 @@ namespace Game.Core.Ring.Career
             var v = new CreationView { CostumeCount = CostumeCount, MaxNameLength = MaxNameLength };
             foreach (var g in Content.Gimmicks)
             {
-                var gv = new GimmickView { Def = g, BaseAttr = (int[])g.Attr.Clone() };
+                // ґіміки 5–8 — на екран створення після У0 власника (onCreationScreen у даних; рішення ПМ 12.11.2026)
+                if (!g.OnCreationScreen) continue;
+                var gv = new GimmickView { Def = g, BaseAttr = (int[])g.Attr.Clone(), FreePoints = g.FreePoints };
                 foreach (var id in StartMoveIds(g)) gv.StartMoves.Add(Content.Moves.Get(id));
                 v.Gimmicks.Add(gv);
             }
             return v;
         }
 
-        /// <summary>Стартовий набір: 6 базових + 2 ґімік + коронний + фінішер (§5.4).</summary>
+        /// <summary>Стартовий набір: 6 базових + ґімік-прийоми (2; у Новачка — жодного, «мало прийомів») + коронний + фінішер (§5.4).</summary>
         private List<string> StartMoveIds(GimmickDef g)
         {
             var ids = new List<string>();
             foreach (var m in Content.Moves.All) if (m.Kind == MoveKind.Basic) ids.Add(m.Id);
-            ids.AddRange(g.GimmickMoves);
+            int n = g.StartGimmickMoves < 0 ? g.GimmickMoves.Length : Math.Min(g.StartGimmickMoves, g.GimmickMoves.Length);
+            for (int i = 0; i < n; i++) ids.Add(g.GimmickMoves[i]);
             ids.Add(g.SignatureMove);
             ids.Add(g.FinisherMove);
             return ids;
@@ -123,9 +305,19 @@ namespace Game.Core.Ring.Career
             if (name.Length == 0) { reason = "name"; return false; }
             if (name.Length > MaxNameLength) { reason = "name_long"; return false; }
             if (d.CostumeColor < 0 || d.CostumeColor >= CostumeCount) { reason = "costume"; return false; }
-            var g = Content.GimmickOf(d.Gimmick);
-            if (g.Attr[(int)d.FreePoint] + 1 > WrestlerStats.MaxAttr) { reason = "attr_max"; return false; }
+            var g = Content.FindGimmick(d.Gimmick);
+            if (g == null) { reason = "gimmick"; return false; }
+            foreach (int a in AttrsWithFreePoints(g, d)) if (a > WrestlerStats.MaxAttr) { reason = "attr_max"; return false; }
             return true;
+        }
+
+        /// <summary>Основа ґіміка з вільними балами: перший — у FreePoint, другий (лише в ґіміка з двома) — у FreePoint2, без нього — туди ж.</summary>
+        private static int[] AttrsWithFreePoints(GimmickDef g, CharacterDraft d)
+        {
+            var a = (int[])g.Attr.Clone();
+            a[(int)d.FreePoint]++;
+            if (g.FreePoints >= 2) a[(int)(d.FreePoint2 ?? d.FreePoint)]++;
+            return a;
         }
 
         /// <summary>Створити борця й почати кар'єру з тижня 1 сезону 1.</summary>
@@ -135,8 +327,11 @@ namespace Game.Core.Ring.Career
             if (!CanCreate(d, out reason)) throw new InvalidOperationException("Створення неможливе: " + reason);
             var g = Content.GimmickOf(d.Gimmick);
             var stats = new WrestlerStats("player", "w.player.name") { FinisherAttr = g.FinisherAttr };
-            for (int i = 0; i < 5; i++) stats.Set((RingAttr)i, g.Attr[i] + (i == (int)d.FreePoint ? 1 : 0));
+            var attrs = AttrsWithFreePoints(g, d);
+            for (int i = 0; i < 5; i++) stats.Set((RingAttr)i, attrs[i]);
             Feud.State.Player = stats;
+            // перк, вбудований у ґімік (Ветеран — перк «Ветеран»): від старту, без очок; купити вдруге не можна (умова ПМ, п. 4)
+            foreach (var p in GimmickRules.BuiltInPerks(d.Gimmick)) Feud.State.Perks.Add(p);
             Feud.State.AddPath(d.Role == CareerRole.Hero ? RingPath.Face : RingPath.Heel, 1);
 
             State.RingName = d.RingName.Trim();
@@ -146,12 +341,19 @@ namespace Game.Core.Ring.Career
             State.Moves.Clear();
             State.Moves.AddRange(StartMoveIds(g));
             State.Money = CareerRules.StartMoney;
-            State.BeltHolder = Content.BeltHolderId;
+            State.Federation = 1;
+            State.Female = d.Female ?? false;
+            State.FemaleKnown = d.Female.HasValue;
+            State.Belts.Clear();
+            InitBelts();
+            SyncFederationRules();
+            Feud.State.Audience = CareerRules.StartPopularity;
             State.Season = 1; State.Week = 1;
             Array.Clear(State.SeasonRecord, 0, State.SeasonRecord.Length);
             State.SeasonPopStart = Popularity;
+            Stage = CareerStage.Week;   // спершу тиждень, потім картка: обіцяний сценою суперник ставиться лише на тижні
             StartWeek();
-            Stage = CareerStage.Week;
+            OpenAutoScene();
         }
 
         // ---------- тиждень ----------
@@ -167,8 +369,11 @@ namespace Game.Core.Ring.Career
             BookShow();
         }
 
-        /// <summary>Букер складає картку наступного шоу (на початку тижня: гравець бачить суперника й діє під нього).</summary>
-        private void BookShow()
+        /// <summary>
+        /// Букер складає картку наступного шоу (на початку тижня: гравець бачить суперника й діє під нього). internal — для тестів
+        /// картки (обіцяний сценою суперник на великому тижні й на наступному звичайному).
+        /// </summary>
+        internal void BookShow()
         {
             State.IsBig = State.IsBigWeek(State.Week);
             State.IsTitle = false;
@@ -186,15 +391,42 @@ namespace Game.Core.Ring.Career
             }
             else
             {
+                var pool = BookingPool();
                 opp = State.IsBig
-                    ? ShowBooker.ChooseBig(Content, State, Popularity, HammerAvailable, lv)
-                    : ShowBooker.ChooseWeekly(Content, State, Popularity, HammerAvailable, lv);
-                State.Position = State.IsBig ? CardPosition.Main : CareerRules.PositionFor(Popularity);
+                    ? ShowBooker.ChooseBig(pool, Federation, State, Popularity, HammerAvailable, lv)
+                    : ShowBooker.ChooseWeekly(pool, Federation, State, Popularity, HammerAvailable, lv);
+                State.Position = State.IsBig ? CardPosition.Main : CareerRules.PositionFor(Popularity, PopularityCeiling);
                 if (!State.IsBig) UpdateTier();
-                State.Plan = ShowBooker.PlanFor(opp, Popularity, Trust);
+                State.Plan = ShowBooker.PlanFor(opp, Popularity, Trust, PopularityFloor, PopularityCeiling);
                 State.Stip = ShowBooker.StipulationsFor(lv(opp.Id));
             }
             State.Opponent = opp.Id;
+            ApplyPendingOpponent();
+        }
+
+        /// <summary>
+        /// Суперник, якого пообіцяла сцена (ефект кар'єри «opponent»; зрада Сталевого — матч-розплата, рев'ю ПМ 927b86c), стає суперником
+        /// найближчого звичайного шоу: цього тижня, поки триває тиждень, інакше — на наступному звичайному. Охорона «лише на тижні» —
+        /// від шоу й кінця сезону; тому кожен початок тижня ставить Stage = Week ДО StartWeek (рев'ю ПМ 74a7d4b1: інакше обіцянку
+        /// пропускало кожне наступне шоу, і вона спрацьовувала пізніше — на BookShow посеред тижня). Велике шоу, титульний матч і
+        /// шоу ворожнечі з Молотом не чіпаються — обіцянка чекає. Такого NPC немає в пулі федерації (герой перейшов в іншу) — обіцянка
+        /// знімається. true — картку переписано (або суперник уже той самий).
+        /// </summary>
+        private bool ApplyPendingOpponent()
+        {
+            if (string.IsNullOrEmpty(State.PendingOpponent) || Stage != CareerStage.Week) return false;
+            if (State.IsBig || State.IsTitle || State.IsFeudShow) return false;
+            NpcDef npc = null;
+            foreach (var n in BookingPool()) if (n.Id == State.PendingOpponent) npc = n;
+            State.PendingOpponent = "";
+            if (npc == null) return false;
+            if (State.Opponent != npc.Id)
+            {
+                State.Opponent = npc.Id;
+                State.Plan = ShowBooker.PlanFor(npc, Popularity, Trust, PopularityFloor, PopularityCeiling);
+                State.Stip = ShowBooker.StipulationsFor(FeudLevel(npc.Id));
+            }
+            return true;
         }
 
         public WeekView GetWeekView()
@@ -205,7 +437,7 @@ namespace Game.Core.Ring.Career
                 ActionsLeft = State.ActionsLeft, ActionsTotal = State.Strained ? CareerRules.StrainedActions : CareerRules.ActionsPerWeek,
                 Strained = State.Strained, PromoChoicePending = State.PromoChoicePending, Money = State.Money, Popularity = Popularity,
                 Trust = Trust, DevPoints = DevPoints, IsBigShowWeek = State.IsBigWeek(State.Week), Card = GetShowCard(),
-                CanRecover = HasSomethingToRecover(), BackstageOpen = _bs != null
+                CanRecover = HasSomethingToRecover(), BackstageOpen = _bs != null, StarTrainingUsed = StarTrainingUsed
             };
             foreach (var k in State.ActionsDone) v.ActionsDone.Add((WeekActionKind)k);
             v.Injuries = InjuryViews();
@@ -219,9 +451,9 @@ namespace Game.Core.Ring.Career
             {
                 IsBig = State.IsBig, IsTitle = State.IsTitle, IsFeud = State.IsFeudShow, Opponent = opp,
                 OpponentFeudLevel = opp == null ? 0 : FeudLevel(opp.Id), Position = State.Position, Plan = State.Plan,
-                Stipulations = State.Stip, Fee = ShowBooker.Fee(State.Position, State.IsBig),
+                Stipulations = State.Stip, Fee = ContractFee(),
                 WinBonus = CareerRules.WinBonus, HypeBonus = CareerRules.HypeBonus, PromoHypeBonus = State.NextHypeBonus,
-                CanWithdraw = State.IsInjured && !State.IsBig, RivalSteps = RivalStepsNow(), IsRematch = IsRematch
+                CanWithdraw = State.IsInjured && !State.IsBig, RivalSteps = RivalStepsNow(), IsRematch = IsRematch, IsOutgrown = !IsRematch && IsOutgrown, IsFarewell = State.Farewell
             };
             c.Injuries = InjuryViews();
             return c;
@@ -240,8 +472,12 @@ namespace Game.Core.Ring.Career
             foreach (var id in State.Moves) { var m = Content.Moves.Find(id); if (m != null && m.Kind == MoveKind.Learn) learned++; }
             // Перки — за ціною (вінець за 3 очки сильніший за перк за 1): кожні RivalPerksPerStep очок ціни — одиниця.
             int perkCost = 0;
-            foreach (var id in Feud.State.Perks) { var pd = PerkCatalog.Find(id); perkCost += pd != null ? pd.Cost : 1; }
-            int units = Math.Max(0, bought - 1) + perkCost / CareerRules.RivalPerksPerStep + learned;
+            foreach (var id in Feud.State.Perks)
+            {
+                if (GimmickRules.IsBuiltInPerk(State.Gimmick, id)) continue;   // перк ґіміка — від старту, не ріст (суперники від нього не сильнішають)
+                var pd = PerkCatalog.Find(id); perkCost += pd != null ? pd.Cost : 1;
+            }
+            int units = Math.Max(0, bought - g.FreePoints) + perkCost / CareerRules.RivalPerksPerStep + learned;
             // Опукло: перші одиниці росту (вільний бал, перший перк) майже не роблять гравця сильнішим — суперник ще не росте;
             // далі — щабель на кожні ~1,6 одиниці (замір 06.11.2026: лінійно — другий сезон 40–45 %, третій 47–60 %).
             return Math.Max(0, (CareerRules.RivalGrowthNum * units - CareerRules.RivalGrowthOffset) / CareerRules.RivalGrowthDen);
@@ -259,34 +495,49 @@ namespace Game.Core.Ring.Career
         {
             int growth = PlayerGrowth();
             // Кульмінації — на поточному рості: ворожнеча й титул лишаються важкими.
-            if (State.IsFeudShow) return CareerRules.HammerBaseSteps + Feud.Records.Count * CareerRules.HammerStepsPerMatch + growth;
-            if (State.IsTitle) return CareerRules.TitleSteps + growth;
-            // Щотижневі — на знімку росту, знятому на вході в щабель картки: виріс між підвищеннями — виграєш частіше (пік);
-            // підвищили — суперники знову твого рівня. Реванш — суперник слабший.
-            int steps = CareerRules.RivalSteps(State.Position, State.TierPos < 0 ? growth : State.TierGrowth);
-            if (IsRematch) steps -= CareerRules.RematchSteps;
-            return Math.Max(0, steps);
+            if (State.IsFeudShow) return CareerRules.HammerSteps(Feud.Records.Count) + CareerRules.FeudTierSteps * (State.Federation - 1) + growth;
+            if (State.IsTitle) return CareerRules.TitleSteps(State.Federation) + growth;
+            // Щотижневі — на знімку росту, знятому на вході в щабель картки: виріс між підвищеннями — виграєш частіше; підвищили —
+            // суперники знову твого рівня. Піки (CareerRules, «Піки сили»): реванш, а без нього — «переріс щабель картки».
+            int steps = CareerRules.RivalSteps(State.Position, State.TierPos < 0 ? growth : State.TierGrowth, State.Federation);
+            if (IsRematch) steps -= CareerRules.RematchSteps(State.Federation);
+            else if (IsOutgrown) steps -= CareerRules.PeakSteps(State.Federation);
+            return Math.Max(CareerRules.RivalStepsFloor, steps);
         }
 
         /// <summary>Цього вечора — реванш із тим, хто переміг гравця останнього разу.</summary>
         public bool IsRematch { get { return !State.IsFeudShow && !State.IsTitle && State.Grudges.Contains(State.Opponent); } }
 
+        /// <summary>
+        /// Гравець переріс свій щабель картки: після знімка щабля виріс щонайменше на <see cref="CareerRules.PeakLag"/> щаблі, а
+        /// підвищення ще не було. Лише щотижневе шоу (велике, титул і ворожнеча — кульмінації, лишаються важкими).
+        /// </summary>
+        public bool IsOutgrown
+        {
+            get
+            {
+                return !State.IsFeudShow && !State.IsTitle && !State.IsBig && State.TierPos >= 0
+                       && PlayerGrowth() - State.TierGrowth >= CareerRules.PeakLag;
+            }
+        }
+
         /// <summary>Сходинка: на новому (вищому) щаблі картки — знімок поточного росту; на нижчому — щабель знижено, знімок той самий.</summary>
         private void UpdateTier()
         {
             int pos = (int)State.Position;
-            if (pos > State.TierPos) State.TierGrowth = PlayerGrowth();
+            if (pos > State.TierPos || pos == (int)CardPosition.Main) State.TierGrowth = PlayerGrowth();
             State.TierPos = pos;
         }
 
         // ---------- сітки витрат (не займають дій тижня) ----------
 
-        public bool CanBuyCostume { get { return Stage == CareerStage.Week && !State.CostumeBought && State.Money >= CareerRules.CostumeCost; } }
+        /// <summary>Костюм рівня федерації (П5): разово; старий костюм нижчого рівня ажіотажу виходу вже не дає.</summary>
+        public bool CanBuyCostume { get { return Stage == CareerStage.Week && !State.CostumeBought && State.Money >= CostumePrice; } }
 
         public bool BuyCostume()
         {
             if (!CanBuyCostume) return false;
-            State.Money -= CareerRules.CostumeCost; State.CostumeBought = true;
+            State.Money -= CostumePrice; State.CostumeTier = State.Federation;
             return true;
         }
 
@@ -322,7 +573,10 @@ namespace Game.Core.Ring.Career
         }
 
         /// <summary>Виїзне шоу цього тижня (не велике й не титульне): дорога зараз, гонорар ×2, наступного тижня на дію менше.</summary>
-        public bool CanGoAway { get { return Stage == CareerStage.Week && !State.AwayShow && !State.IsBig && State.Money >= CareerRules.AwayTravelCost; } }
+        public bool CanGoAway
+        {
+            get { return Stage == CareerStage.Week && !State.AwayShow && !State.IsBig && !ExclusiveActive && State.Money >= CareerRules.AwayTravelCost; }
+        }
 
         public bool GoAway()
         {
@@ -334,7 +588,12 @@ namespace Game.Core.Ring.Career
         private List<InjuryView> InjuryViews()
         {
             var l = new List<InjuryView>();
-            for (int z = 0; z < 3; z++) l.Add(new InjuryView { Zone = (BodyZone)z, ZoneDamage = State.ZoneDamage[z], WeeksLeft = State.Injury[z] });
+            for (int z = 0; z < 3; z++)
+                l.Add(new InjuryView
+                {
+                    Zone = (BodyZone)z, ZoneDamage = State.ZoneDamage[z], WeeksLeft = State.Injury[z], Threshold = InjuryAtZoneDamage,
+                    Scars = State.Scars[z], ScarWeeks = Ageing.ScarWeeks(State.Season, State.Injury[z] > 0 ? State.Scars[z] - 1 : State.Scars[z])
+                });
             return l;
         }
 
@@ -377,6 +636,7 @@ namespace Game.Core.Ring.Career
         public WeekActionResult Train(bool withTrainer)
         {
             var r = Begin(WeekActionKind.Training);
+            if (r.Ok && StarTrainingUsed) { r.Ok = false; r.Reason = "star_training"; }
             if (r.Ok && withTrainer && State.Money < CareerRules.TrainerCost) { r.Ok = false; r.Reason = "money"; }
             if (!r.Ok) return r;
             int pts = CareerRules.TrainingPoints;
@@ -389,7 +649,7 @@ namespace Game.Core.Ring.Career
             if (State.Coach >= 0)
             {
                 var a = CareerRules.Coaches[State.Coach];
-                if (++State.CoachProgress >= CareerRules.CoachProgressStep && Player.Get(a) < WrestlerStats.MaxAttr)
+                if (++State.CoachProgress >= CoachStepFor(State.Coach) && Player.Get(a) < WrestlerStats.MaxAttr)
                 {
                     State.CoachProgress = 0;
                     Player.Set(a, Player.Get(a) + 1);
@@ -422,6 +682,12 @@ namespace Game.Core.Ring.Career
             var r = Begin(WeekActionKind.Promo);
             if (!r.Ok) return r;
             Roll(r, RingAttr.Charisma, BodyZone.Head, "career:promo");
+            if (State.LateRole == LateRole.OffRingStar && r.Tier != RollTier.Miss)
+            {
+                // Зірка поза рингом: промо — ще й заробіток
+                int pay = r.Tier == RollTier.Strong ? LateRoles.StarPromoMoneyStrong : LateRoles.StarPromoMoneyPartial;
+                State.Money += pay; r.MoneyDelta += pay;
+            }
             switch (r.Tier)
             {
                 case RollTier.Strong:
@@ -504,6 +770,8 @@ namespace Game.Core.Ring.Career
             public readonly List<FeudEffect> Pending = new List<FeudEffect>();
             public int Money;
             public int Actions;
+            /// <summary>Подія відкрилась сама (<see cref="BackstageScene.Auto"/>): дії тижня не витрачає.</summary>
+            public bool Auto;
         }
 
         private BackstageRun _bs;
@@ -529,6 +797,28 @@ namespace Game.Core.Ring.Career
         /// <summary>Подія була цього сезону.</summary>
         public bool BackstageSeenThisSeason(string sceneId) { return State.BackstageSeen.Contains(SeenKey(State.Season, sceneId)); }
 
+        /// <summary>Подія була хоч раз за кар'єру (для сцен «раз на кар'єру», <see cref="BackstageScene.Once"/>).</summary>
+        public bool BackstageSeenEver(string sceneId)
+        {
+            string tail = ":" + sceneId;
+            foreach (var k in State.BackstageSeen) if (k.EndsWith(tail, StringComparison.Ordinal)) return true;
+            return false;
+        }
+
+        /// <summary>Подія була в одному з минулих сезонів (умова сцени seen_before, §7: «повернення ветерана» — через сезон після травми).</summary>
+        public bool BackstageSeenBefore(string sceneId)
+        {
+            string tail = ":" + sceneId;
+            foreach (var k in State.BackstageSeen)
+            {
+                if (!k.EndsWith(tail, StringComparison.Ordinal)) continue;
+                int season;
+                if (int.TryParse(k.Substring(0, k.Length - tail.Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out season) && season < State.Season)
+                    return true;
+            }
+            return false;
+        }
+
         /// <summary>Тиждень сезону, з якого подія доступна (детермінований розкид за зерном кар'єри; не пізніше останнього тижня).</summary>
         public int BackstageDueWeek(BackstageScene sc)
         {
@@ -547,17 +837,91 @@ namespace Game.Core.Ring.Career
             return true;
         }
 
+        /// <summary>
+        /// Сцена, яку відкриє наступне «Закулісся» замість звичайного вибору (огляд QA: <c>-ring-shot-event</c>,
+        /// <c>-ring-shot-backstage all</c>) — без умов, тижня й «раз за сезон». Одноразова: скидається, щойно сцену відкрито.
+        /// У сейв не входить.
+        /// </summary>
+        public string ForcedBackstageScene { get; private set; }
+
+        /// <summary>Примусити сцену наступного «Закулісся» (null — скасувати). Невідомий id — виняток.</summary>
+        public void ForceBackstage(string sceneId)
+        {
+            if (sceneId != null && (Content.Backstage == null || Content.Backstage.Find(sceneId) == null))
+                throw new ArgumentException("немає закулісної сцени '" + sceneId + "'");
+            ForcedBackstageScene = sceneId;
+        }
+
+        /// <summary>
+        /// Огляд QA (<c>-ring-shot-opponent</c>, рев'ю ПМ 12.11.2026 — найдовше ім'я на табло): суперник цього тижня замість обраного
+        /// букером. Лише на початку звичайного тижня (жодної дії, сцени, не велике шоу й не титул) і лише з пулу букера (дивізіон
+        /// героя; Молот — лише після розв'язки ворожнечі). План і умови — ті, що склав би букер для цього суперника. false — підмінити
+        /// не можна, картка не змінюється. Сама картка йде в сейв як звичайна.
+        /// </summary>
+        public bool ForceOpponent(string npcId)
+        {
+            if (Stage != CareerStage.Week || State.ActionsDone.Count > 0 || _bs != null || State.IsBig || State.IsTitle || State.IsFeudShow) return false;
+            NpcDef npc = null;
+            foreach (var n in BookingPool()) if (n.Id == npcId) npc = n;
+            if (npc == null || (npc.Id == CareerContent.HammerId && !HammerAvailable)) return false;
+            Func<string, int> lv = FeudLevel;
+            State.Opponent = npc.Id;
+            State.Plan = ShowBooker.PlanFor(npc, Popularity, Trust, PopularityFloor, PopularityCeiling);
+            State.Stip = ShowBooker.StipulationsFor(lv(npc.Id));
+            return true;
+        }
+
         private BackstageScene PickBackstageScene()
         {
             var all = Content.Backstage.Scenes;
+            if (ForcedBackstageScene != null)
+            {
+                var forced = Content.Backstage.Find(ForcedBackstageScene);
+                ForcedBackstageScene = null;
+                if (forced != null) return forced;
+            }
+            // сюжетні сцени дуги — першими (рев'ю ПМ 927b86c): щосезонні події, що стоять у файлі раніше, не перехоплюють дозрілу сцену
+            // дуги; між собою й серед решти — порядок файлу
+            foreach (bool arc in new[] { true, false })
+                foreach (var sc in all)
+                {
+                    if (sc.Kind != BackstageKind.Event || sc.Auto != BackstageAuto.None || sc.Arc != arc) continue;
+                    if (BackstageSeenThisSeason(sc.Id) || State.Season < sc.MinSeason || State.Week < BackstageDueWeek(sc)) continue;
+                    if (sc.Once && BackstageSeenEver(sc.Id)) continue;
+                    if (SceneHolds(sc)) return sc;
+                }
+            // розмова з букером: спершу та, чиї умови виконано (свій букер федерації); запасна без умов — коли жодна не підходить
+            BackstageScene fallback = null;
             foreach (var sc in all)
             {
-                if (sc.Kind != BackstageKind.Event) continue;
-                if (BackstageSeenThisSeason(sc.Id) || State.Season < sc.MinSeason || State.Week < BackstageDueWeek(sc)) continue;
-                if (SceneHolds(sc)) return sc;
+                if (sc.Kind != BackstageKind.Booker || !SceneHolds(sc)) continue;
+                if (sc.Requires.Count > 0) return sc;
+                if (fallback == null) fallback = sc;
             }
-            foreach (var sc in all) if (sc.Kind == BackstageKind.Booker && SceneHolds(sc)) return sc;
+            if (fallback != null) return fallback;
             throw new InvalidOperationException("Немає закулісної сцени для відкриття");
+        }
+
+        /// <summary>Іде подія, що відкрилась сама (подія мішаного матчу): після неї дій тижня стільки ж, скільки було.</summary>
+        public bool AutoSceneOpen { get { return _bs != null && _bs.Auto; } }
+
+        /// <summary>
+        /// Подія, що відкривається сама (<see cref="BackstageAuto.FeudFirst"/>, P2-6, ПМ 12.11.2026: «Молот — єдиний мішаний суперник
+        /// кар'єри, перший матч ворожнечі відкриває подія мішаного матчу»): на початку тижня першого шоу ворожнечі (жодної дії,
+        /// сцени, матчу ворожнечі ще не було), раз на кар'єру й лише за її умов (героїня — <c>{"career":"female"}</c>). Відкривається
+        /// на початку тижня, після відновлення з сейва — знову з початку.
+        /// </summary>
+        private void OpenAutoScene()
+        {
+            if (Content.Backstage == null || _bs != null || Stage != CareerStage.Week || State.ActionsDone.Count > 0) return;
+            if (!State.IsFeudShow || State.FeudResolved || Feud.Records.Count > 0) return;
+            foreach (var sc in Content.Backstage.Scenes)
+            {
+                if (sc.Auto != BackstageAuto.FeudFirst || BackstageSeenEver(sc.Id) || !SceneHolds(sc)) continue;
+                OpenBackstage(sc);
+                _bs.Auto = true;
+                return;
+            }
         }
 
         private void OpenBackstage(BackstageScene sc)
@@ -584,9 +948,18 @@ namespace Game.Core.Ring.Career
             {
                 case "money": return State.Money + pendingMoney >= c.Min;
                 case "season": return State.Season >= c.Min;
+                case "tier": return State.Federation >= c.Min;
                 case "week": return State.Week >= c.Min;
                 case "parity": return State.Week % 2 == c.Min;
                 case "injured": return State.IsInjured;
+                case "female": return State.Female;
+                case "manager": return State.Manager;
+                case "booker": return Federation.Booker == c.Target;
+                case "role":
+                    RingPath rp;
+                    return FeudVars.TryPath(c.Target, out rp) && CurrentRole == rp;
+                case "max_feud": return MaxFeudLevel >= c.Min;
+                case "seen_before": return BackstageSeenBefore(c.Target);
                 case "champion": return IsChampion;
                 case "last_won": return State.LastOutcome == 1;
                 case "last_lost": return State.LastOutcome == 2;
@@ -595,7 +968,7 @@ namespace Game.Core.Ring.Career
                 case "plan_set": return State.Plan != BookerPlan.None && !State.IsFeudShow && !State.IsTitle;
                 case "title_eligible":
                     Func<string, int> lv = FeudLevel;
-                    return ShowBooker.TitleEligible(Content, State, Trust, HammerAvailable, lv);
+                    return ShowBooker.TitleEligible(BookingPool(), State, Trust, HammerAvailable, lv);
                 case "actions": return State.ActionsLeft + pendingActions >= c.Min;
                 case "npc_feud": return FeudLevel(c.Target) >= c.Min;
                 default: return false;
@@ -623,7 +996,7 @@ namespace Game.Core.Ring.Career
             State.BackstageSeen.Add(SeenKey(State.Season, run.Scene.Id));
             _bs = null;
             if (run.Scene.Kind == BackstageKind.Booker) r.RumorKey = RumorKey();
-            Done(r);
+            if (!run.Auto) Done(r);
             if (extraActions < 0)
             {
                 int spend = Math.Min(State.ActionsLeft, -extraActions);
@@ -678,6 +1051,17 @@ namespace Game.Core.Ring.Career
                 case "dev":
                     Feud.State.DevPoints += e.Amount;
                     break;
+                case "manager":
+                    State.Manager = e.Amount > 0;
+                    break;
+                case "turn":
+                    RingPath to;
+                    if (FeudVars.TryPath(e.Target, out to) && Turn(to)) r.TurnedTo = to;
+                    break;
+                case "opponent":
+                    State.PendingOpponent = e.Target;
+                    if (ApplyPendingOpponent()) r.OpponentChanged = true;
+                    break;
             }
         }
 
@@ -685,7 +1069,7 @@ namespace Game.Core.Ring.Career
         {
             Func<string, int> lv = FeudLevel;
             if (State.IsFeudShow) return "rumor.hammer_big";
-            if (ShowBooker.TitleEligible(Content, State, Trust, HammerAvailable, lv)) return IsChampion ? "rumor.defense" : "rumor.title_shot";
+            if (ShowBooker.TitleEligible(BookingPool(), State, Trust, HammerAvailable, lv)) return IsChampion ? "rumor.defense" : "rumor.title_shot";
             if (Trust < 2) return "rumor.booker_cold";
             return State.IsBig ? "rumor.big_show" : "rumor.next_opponent";
         }
@@ -695,6 +1079,7 @@ namespace Game.Core.Ring.Career
         {
             var r = Begin(WeekActionKind.SideJob);
             if (!r.Ok) return r;
+            if (ExclusiveActive) { r.Ok = false; r.Reason = "exclusive"; return r; }
             int gain = CareerRules.SideJobBase + 5 * Math.Max(0, Player.Get(RingAttr.Stamina));
             State.Money += gain; r.MoneyDelta = gain;
             r.HasRoll = true;
@@ -709,15 +1094,22 @@ namespace Game.Core.Ring.Career
             return Done(r);
         }
 
-        /// <summary>Нарахувати ушкодження зони; на порозі — травма 1–4 тижні. true, якщо виникла нова травма.</summary>
-        private bool AddZoneDamage(int zone, int amount)
+        /// <summary>Поріг травми зони: накопичене ушкодження, з якого починається травма (у Хардкорника вищий, §5.2).</summary>
+        public int InjuryAtZoneDamage { get { return GimmickRules.InjuryAtZoneDamage(State.Gimmick); } }
+
+        /// <summary>Нарахувати ушкодження зони; на порозі — травма 1–4 тижні. true, якщо виникла нова травма. internal — для тестів порогу.</summary>
+        internal bool AddZoneDamage(int zone, int amount)
         {
             if (amount <= 0 || State.Injury[zone] > 0) return false;
             State.ZoneDamage[zone] += amount;
-            if (State.ZoneDamage[zone] < CareerRules.InjuryAtZoneDamage) return false;
+            if (State.ZoneDamage[zone] < InjuryAtZoneDamage) return false;
             State.ZoneDamage[zone] = 0;
             int span = CareerRules.MaxInjuryWeeks - CareerRules.MinInjuryWeeks + 1;
             State.Injury[zone] = CareerRules.MinInjuryWeeks + ShowBooker.Mix(State.Seed, State.Season * 100 + State.Week, 11 + zone) % span;
+            // слід (§5.5): зона травмувалась раніше — з сезону 4 нова травма довша; лічильник — до інкременту (умова ПМ), сліди — з сезону 1.
+            // Порядок: слід, потім страховка (−1, не менше тижня) — страховка діє на вже довшу травму.
+            State.Injury[zone] += Ageing.ScarWeeks(State.Season, State.Scars[zone]);
+            State.Scars[zone]++;
             if (State.InsuredSeason == State.Season) State.Injury[zone] = Math.Max(1, State.Injury[zone] - 1);
             return true;
         }
@@ -737,6 +1129,19 @@ namespace Game.Core.Ring.Career
 
         // Розвиток — на тижні, на підсумку шоу (одразу після матчу, 06.11.2026) і наприкінці сезону.
         private bool CanDevelop { get { return (Stage == CareerStage.Week && _bs == null) || Stage == CareerStage.SeasonEnd || (Stage == CareerStage.Show && State.Phase == ShowPhase.Result); } }
+
+        /// <summary>Ціна +1 до атрибута зараз (витривалість з сезону 4 дорожча, §5.5) — для порад і екранів.</summary>
+        public int AttrCost(RingAttr a) { return Development.AttrCostFor(Feud.State, a); }
+
+        /// <summary>
+        /// Тренувань із тренером <paramref name="coach"/> (індекс <see cref="CareerRules.Coaches"/>) на +1 до його атрибута: тренер
+        /// витривалості з сезону 4 — довше на надбавку старіння (§5.5). Для тренування й магазину тренерів.
+        /// </summary>
+        public int CoachStepFor(int coach)
+        {
+            bool stamina = coach >= 0 && coach < CareerRules.Coaches.Length && CareerRules.Coaches[coach] == RingAttr.Stamina;
+            return CareerRules.CoachProgressStep + (stamina ? Ageing.StaminaSurcharge(State.Season) : 0);
+        }
 
         public bool CanBuyAttr(RingAttr a, out string reason)
         {
@@ -792,7 +1197,8 @@ namespace Game.Core.Ring.Career
             {
                 RingName = State.RingName, Costume = State.Costume, Gimmick = State.Gimmick, Role = CurrentRole, Money = State.Money,
                 Popularity = Popularity, Trust = Trust, DevPoints = DevPoints, IsChampion = IsChampion, Season = State.Season,
-                Week = State.Week, TitlesWon = State.TitlesWon, FiredCount = State.FiredCount, FeudResolved = State.FeudResolved
+                Week = State.Week, TitlesWon = State.TitlesWon, FiredCount = State.FiredCount, FeudResolved = State.FeudResolved,
+                LateRole = State.LateRole, NextLateRole = State.NextLateRole, StaminaSurcharge = Feud.State.StaminaSurcharge
             };
             for (int i = 0; i < 5; i++) v.Attr[i] = Player.Get((RingAttr)i);
             foreach (var id in State.Moves) v.Moves.Add(Content.Moves.Get(id));
@@ -828,7 +1234,9 @@ namespace Game.Core.Ring.Career
             }
             var npc = Content.FindNpc(State.Opponent);
             var mods = Development.ToModifiers(Feud.State.Perks);
-            var rivalMods = new MatchModifiers();
+            LateRoles.ApplyTo(mods, State.LateRole);
+            GimmickRules.ApplyTo(mods, State.Gimmick);
+            var rivalMods = GimmickRules.ForRival(npc.Gimmick);   // ґімік NPC (§5.2): щаблі сили вечора додає Strengthened
             int hype = 1 + FeudLevel(npc.Id) + mods.StartHypeBonus + State.NextHypeBonus + (State.CostumeBought ? CareerRules.CostumeHype : 0)
                        + (State.IsInjured ? CareerRules.InjuredShowHype : 0);
             var setup = new MatchSetup
@@ -838,7 +1246,9 @@ namespace Game.Core.Ring.Career
                 RivalStartMomentum = Math.Max(0, Math.Min(10, npc.StartMomentum + State.RivalBoost + rivalMods.StartMomentumBonus)),
                 StartHype = Math.Max(0, Math.Min(10, hype)), PlayerHasAlly = false, Stipulations = State.Stip,
                 Plan = State.IsTitle ? BookerPlan.None : State.Plan, PlayerRole = Feud.State.DominantPath(), RivalRole = npc.Path,
-                HopeSpotEnabled = true
+                HopeSpotEnabled = true,
+                // фінішер для показу — прийом ґіміка (3-P1-3): ключ і постановка, без бонусів до кидка
+                PlayerFinisher = Content.FinisherShow(State.Gimmick), RivalFinisher = Content.FinisherShow(npc.Gimmick)
             };
             _engine = new MatchEngine(setup, Dice);
             State.Phase = ShowPhase.Match;
@@ -851,19 +1261,26 @@ namespace Game.Core.Ring.Career
             RequireShow(ShowPhase.Feud);
             int steps = RivalStepsNow();
             var e = Feud.StartMatch();
+            var hammerNpc = Content.FindNpc(CareerContent.HammerId);
             e.Setup.HopeSpotEnabled = true;
-            // Молот росте від матчу до матчу ворожнечі (сила за місцем у картці: велике шоу — мейн-івент).
+            e.Setup.PlayerFinisher = Content.FinisherShow(State.Gimmick);
+            e.Setup.RivalFinisher = Content.FinisherShow(hammerNpc.Gimmick);
+            // Молот росте від матчу до матчу ворожнечі (сила за місцем у картці: велике шоу — мейн-івент); його ґімік (§5.2) — як у
+            // будь-якого NPC-суперника.
             var hammer = e.State.Rival.Stats.Clone();
-            var over = new MatchModifiers();
+            var over = GimmickRules.ForRival(hammerNpc.Gimmick);
             ShowBooker.Strengthen(hammer, steps, over);
             e.State.Rival.Stats = hammer;
             // Понад межу атрибутів — витримка: рушій уже створено, тож жетони додаються одразу, решта — через модифікатори.
             var rm = e.Setup.RivalMods ?? (e.Setup.RivalMods = new MatchModifiers());
             rm.KickOutBonus += over.KickOutBonus;
             rm.DamageThresholdShift += over.DamageThresholdShift;
+            rm.ReadsRival |= over.ReadsRival;
             e.State.Rival.ReversalTokens += over.ExtraReversalTokens;
             e.State.Rival.Momentum = Math.Min(MatchRules.MaxMomentum, e.State.Rival.Momentum + over.StartMomentumBonus);
-            e.State.Hype = Math.Max(0, Math.Min(MatchRules.MaxHype, e.State.Hype + State.NextHypeBonus + (State.IsInjured ? CareerRules.InjuredShowHype : 0)));
+            // костюм рівня федерації — і на великому шоу ворожнечі (П5: раніше лише в StartShow)
+            e.State.Hype = Math.Max(0, Math.Min(MatchRules.MaxHype, e.State.Hype + State.NextHypeBonus + (State.IsInjured ? CareerRules.InjuredShowHype : 0)
+                + (State.CostumeBought ? CareerRules.CostumeHype : 0)));
             e.State.Rival.Momentum = Math.Max(0, Math.Min(MatchRules.MaxMomentum, e.State.Rival.Momentum + State.RivalBoost));
             State.DevPointsAtMatchStart = DevPoints;
             return e;
@@ -912,7 +1329,7 @@ namespace Game.Core.Ring.Career
             return l;
         }
 
-        /// <summary>Системні дії (утримання, встати, вийти з рингу, відчайдушний, напарник, промінь надії, перевести подих).</summary>
+        /// <summary>Системні дії (утримання, встати, відчайдушний, напарник, промінь надії, відновитися, перевести подих).</summary>
         public List<ActionOption> GetUniversalOptions()
         {
             var e = Engine;
@@ -976,10 +1393,26 @@ namespace Game.Core.Ring.Career
                 Position = State.Position, Winner = res.Winner, EndKind = res.Kind, Hype = res.FinalHype, Rounds = res.Rounds,
                 PlanOutcome = outcome, PopularityBefore = popBefore, TrustBefore = trustBefore
             };
-            r.Fee = ShowBooker.Fee(State.Position, State.IsBig) * (State.AwayShow ? CareerRules.AwayFeePercent : 100) / 100;
+            r.Fee = ContractFee() * (State.AwayShow ? CareerRules.AwayFeePercent : 100) / 100;
             if (res.Winner == MatchWinner.Player) r.FeeWinBonus = CareerRules.WinBonus;
             if (res.FinalHype >= CareerRules.HypeBonusAt) r.FeeHypeBonus = CareerRules.HypeBonus;
+            if (State.Manager)
+            {
+                // менеджер бере 15 % усього гонорару (база + бонуси; з бонусу 5 окремо вийшло б 0) — знято з бази, тож рядок
+                // «гонорар (база + бонуси)» сходиться. Приз за титул — не гонорар, його менеджер не ділить
+                r.ManagerCut = CareerRules.ManagerCut(r.TotalFee);
+                r.Fee -= r.ManagerCut;
+            }
             State.Money += r.TotalFee;
+
+            // P1-6: поразка чи нічия дає популярність лише з ажіотажем ≥ 9 і раз за сезон. Приріст від поразки в стані ворожнечі —
+            // лише правило ажіотажу (≥ 7) і «звернув і зал за тебе»: якщо їх не можна — популярність лишається, як до матчу.
+            if (res.Winner != MatchWinner.Player && Popularity > popBefore)
+            {
+                if (res.FinalHype < CareerRules.LossPopularityHype) { Feud.State.Audience = popBefore; r.LossPopularityBlocked = 1; }
+                else if (State.LossPopularitySeason == State.Season) { Feud.State.Audience = popBefore; r.LossPopularityBlocked = 2; }
+                else State.LossPopularitySeason = State.Season;
+            }
 
             // «Злам плану» (Бунтар): звернутий план букера — зал це любить і букер запам'ятовує.
             if (outcome == FeudPlanOutcome.Swerved && Feud.State.Perks.Contains(PerkCatalog.PlanBreaker))
@@ -987,9 +1420,12 @@ namespace Game.Core.Ring.Career
                 Feud.State.Audience = Math.Min(CareerRules.MaxPopularity, Feud.State.Audience + 1);
                 Feud.State.DevPoints += 1;
             }
+            // Новачок швидко росте (§5.2): очки розвитку за кожен зіграний матч
+            Feud.State.DevPoints += GimmickRules.DevPerMatch(State.Gimmick);
             ApplyBodyDamage(e, r, wasInjured, res);
             ApplyOpponentFeud(res, feudMatch);
             if (State.IsTitle) ApplyTitle(res, r);
+            if (State.Farewell) State.FarewellResult = outcome == FeudPlanOutcome.Fulfilled ? 1 : 2;
 
             r.PopularityAfter = Popularity; r.TrustAfter = Trust;
             r.DevPointsGained = DevPoints - State.DevPointsAtMatchStart;
@@ -1035,13 +1471,27 @@ namespace Game.Core.Ring.Career
                     if (fx.Kind == MatchEffectKind.Damage && fx.Who == MatchSide.Player && fx.Amount > 0)
                         pts[(int)ZoneOfRivalAction(ev.Action)] += fx.Amount;
             }
-            if (wasInjured && e.State.Player.Damage >= CareerRules.InjuryWorsenDamage)
-                for (int z = 0; z < 3; z++)
-                    if (State.Injury[z] > 0) State.Injury[z] = Math.Min(CareerRules.MaxInjuryWeeks, State.Injury[z] + 1);
+            if (wasInjured && e.State.Player.Damage >= CareerRules.InjuryWorsenDamage) WorsenInjuries();
             for (int z = 0; z < 3; z++)
             {
                 int d = pts[z] / CareerRules.ZonePointsDivisor;
                 if (d > 0 && AddZoneDamage(z, d) && r.InjuredZone < 0) { r.InjuredZone = z; r.InjuryWeeks = State.Injury[z]; }
+            }
+        }
+
+        /// <summary>
+        /// Виступ травмованим з важким ушкодженням (§6.3): наявні травми затягуються на тиждень до стелі зони —
+        /// <see cref="CareerRules.MaxInjuryWeeks"/>, а травма зі слідом (зона травмувалась і до неї; поточна вже в
+        /// <see cref="CareerState.Scars"/>) — на <see cref="Ageing.ScarExtraWeeks"/> довше. Погіршення травму не вкорочує ніколи.
+        /// internal — для тестів.
+        /// </summary>
+        internal void WorsenInjuries()
+        {
+            for (int z = 0; z < 3; z++)
+            {
+                if (State.Injury[z] <= 0) continue;
+                int cap = CareerRules.MaxInjuryWeeks + Ageing.ScarWeeks(State.Season, State.Scars[z] - 1);
+                State.Injury[z] = Math.Max(State.Injury[z], Math.Min(cap, State.Injury[z] + 1));
             }
         }
 
@@ -1095,11 +1545,24 @@ namespace Game.Core.Ring.Career
             RequireShow(ShowPhase.Result);
             bool wasTitle = State.IsTitle;
             State.Phase = ShowPhase.None;
+            if (State.Farewell)
+            {
+                // прощальний матч чемпіона: виконав «віддай пояс» — пояс у наступника, «пішов красиво»; ні — пояс вакантний, двері зачинено
+                State.Farewell = false;
+                State.IsBig = false;
+                bool ok = State.FarewellResult == 1;
+                State.BeltHolder = ok ? State.Opponent : "";
+                if (!ok) State.ClosedTiers.Add(State.Federation);
+                Transfer(ok ? CareerRules.FarewellTrust : CareerRules.TransferTrust);
+                Stage = CareerStage.SeasonEnd;
+                return;
+            }
             if (wasTitle)
             {
                 State.Report.TitleDone = true;
                 State.Report.TitleWon = State.Last != null && State.Last.TitleWon;
                 State.Report.BeltIsPlayers = IsChampion;
+                RefreshSeasonReport();
                 State.IsTitle = false;
                 State.IsBig = false;
                 Stage = CareerStage.SeasonEnd;
@@ -1110,14 +1573,15 @@ namespace Game.Core.Ring.Career
             else
             {
                 State.Week++;
+                Stage = CareerStage.Week;   // до StartWeek: відкладена розплата (PendingOpponent) стає на перше ж звичайне шоу
                 StartWeek();
-                Stage = CareerStage.Week;
+                OpenAutoScene();
             }
         }
 
         private void EndOfWeekBookkeeping()
         {
-            if (State.Money >= CareerRules.LivingCost) { State.Money -= CareerRules.LivingCost; State.Strained = false; }
+            if (State.Money >= WeeklyCost) { State.Money -= WeeklyCost; State.Strained = false; }
             else { State.Money = 0; State.Strained = true; }
             // Тренер ростера: плата щотижня; не вистачило — йде.
             if (State.Coach >= 0)
@@ -1138,15 +1602,35 @@ namespace Game.Core.Ring.Career
             Func<string, int> lv = FeudLevel;
             var rep = new SeasonReport
             {
-                Season = State.Season, Popularity = Popularity, Trust = Trust, Money = State.Money, Fired = Popularity <= 0,
+                Season = State.Season, Popularity = Popularity, Trust = Trust, Money = State.Money, Fired = CareerRules.IsFired(Popularity, Federation),
                 IsDefense = IsChampion, BeltIsPlayers = IsChampion
             };
-            rep.TitleEligible = !rep.Fired && ShowBooker.TitleEligible(Content, State, Trust, HammerAvailable, lv);
+            rep.TitleEligible = !rep.Fired && ShowBooker.TitleEligible(BookingPool(), State, Trust, HammerAvailable, lv);
             State.Report = rep;
             Stage = CareerStage.SeasonEnd;
         }
 
         public SeasonReport GetSeasonReport() { Require(CareerStage.SeasonEnd); return State.Report; }
+
+        /// <summary>
+        /// Підсумок сезону остаточний: титульний матч зіграно, від нього відмовились або його не було (3-P2-6, плейтест 08.11.2026:
+        /// титульний матч дописувався в уже показаний підсумок, і кінець сезону показувався двічі). Поки титульний шанс відкритий,
+        /// екран кінця сезону показує лише його, підсумок — після.
+        /// </summary>
+        public bool SeasonSummaryFinal { get { return Stage == CareerStage.SeasonEnd && !CanStartTitleMatch; } }
+
+        /// <summary>
+        /// Шкали підсумку — після титульного матчу чи відмови: популярність, довіра, гроші й звільнення такими, якими сезон
+        /// закрився (знімок кінця тижня 4 їх не знав: гонорар титулу, ажіотаж, довіра за відмову чемпіона).
+        /// </summary>
+        private void RefreshSeasonReport()
+        {
+            var rep = State.Report;
+            if (rep == null) return;
+            rep.Popularity = Popularity; rep.Trust = Trust; rep.Money = State.Money;
+            rep.Fired = CareerRules.IsFired(Popularity, Federation);
+            rep.BeltIsPlayers = IsChampion;
+        }
 
         public bool CanStartTitleMatch { get { return Stage == CareerStage.SeasonEnd && State.Report != null && State.Report.TitleEligible && !State.Report.TitleDone; } }
 
@@ -1155,7 +1639,7 @@ namespace Game.Core.Ring.Career
         {
             if (!CanStartTitleMatch) throw new InvalidOperationException("Титульного матчу зараз немає");
             Func<string, int> lv = FeudLevel;
-            var opp = ShowBooker.ChooseTitle(Content, State, HammerAvailable, lv);
+            var opp = ShowBooker.ChooseTitle(BookingPool(), State, HammerAvailable, lv);
             State.Opponent = opp.Id;
             State.IsBig = true; State.IsTitle = true; State.IsFeudShow = false;
             State.Position = CardPosition.Main;
@@ -1174,11 +1658,226 @@ namespace Game.Core.Ring.Career
             if (State.Report.TitleDone) return;
             if (State.Report.TitleEligible && IsChampion) Feud.State.Trust -= 1;
             State.Report.TitleDone = true;
+            RefreshSeasonReport();
         }
 
         public bool CanStartNextSeason
         {
-            get { return Stage == CareerStage.SeasonEnd && State.Report != null && (State.Report.Fired || !State.Report.TitleEligible || State.Report.TitleDone); }
+            get
+            {
+                return Stage == CareerStage.SeasonEnd && State.Report != null && !State.Farewell
+                    && (State.Report.Fired || !State.Report.TitleEligible || State.Report.TitleDone);
+            }
+        }
+
+        // ---------- перехід між федераціями: А2 «два ключі» (власник 11.11.2026) ----------
+
+        /// <summary>
+        /// Ключі пропозиції вищої федерації на кінці сезону (для екрана: «Глядачі N/потрібно», «Букер M/потрібно», «+ пояс»). null — не
+        /// кінець сезону. Перевіряються після титульного матчу чи відмови від нього (<see cref="SeasonSummaryFinal"/>).
+        /// </summary>
+        public OfferKeys GetOfferKeys()
+        {
+            if (Stage != CareerStage.SeasonEnd || State.Report == null) return null;
+            return CareerRules.OfferReady(Popularity, Trust, IsChampion, Federation, Content.Federations.Count);
+        }
+
+        /// <summary>Пропозицію можна прийняти чи відхилити зараз: підсумок остаточний, не звільнений, рішення ще немає, обидва ключі.</summary>
+        public bool OfferAvailable
+        {
+            get
+            {
+                if (!SeasonSummaryFinal || State.Report.Fired || State.OfferDecision != 0 || State.Farewell) return false;
+                var k = GetOfferKeys();
+                return k != null && k.Ready && !ExitLocked;
+            }
+        }
+
+        /// <summary>Федерація, куди кличуть (null — пропозиції немає).</summary>
+        public FederationDef OfferFederation { get { return OfferAvailable ? Content.Federation(State.Federation + 1) : null; } }
+
+        /// <summary>
+        /// Прийняти пропозицію. Не-чемпіон переходить одразу (довіра в новій 1). Чемпіон спершу грає прощальний матч у старій
+        /// федерації — план букера «віддай пояс» наступнику (<see cref="ContinueFromShow"/> завершує перехід). Пояс не переїжджає.
+        /// Умови підписано тут: аванс (з надбавкою менеджерки, якщо вона працює зараз) і пастка. Звільнити менеджерку до
+        /// прощального матчу можна, але підписаний аванс від цього не меншає — торгувалася вона до підпису.
+        /// </summary>
+        public void AcceptOffer()
+        {
+            if (!OfferAvailable) throw new InvalidOperationException("Пропозиції зараз немає");
+            var to = OfferFederation;
+            // вийти з чинної пастки раніше строку — штраф (§6.4); умови нового паперу фіксуються зараз, діють із переходом
+            int penalty = ExitPenaltyDue;
+            State.Money -= penalty;
+            State.PendingExclusive = OfferIsExclusive;
+            State.PendingAdvance = CareerRules.Advance(to, State.PendingExclusive, State.Manager);
+            State.OfferDecision = 1;
+            State.OfferDeclines = 0;
+            if (!IsChampion)
+            {
+                Transfer(CareerRules.TransferTrust);
+                return;
+            }
+            Func<string, int> lv = FeudLevel;
+            var heir = ShowBooker.ChooseTitle(BookingPool(), State, HammerAvailable, lv);
+            State.Farewell = true;
+            State.FarewellResult = 0;
+            State.Opponent = heir.Id;
+            State.IsBig = true; State.IsTitle = false; State.IsFeudShow = false;
+            State.Position = CardPosition.Main;
+            State.Plan = BookerPlan.LoseClean;
+            State.Stip = MatchStipulations.None;
+            State.ShowPromoDone = false; State.ShowPromoTier = -1;
+            Stage = CareerStage.Show;
+            State.Phase = ShowPhase.Card;
+            State.Last = null;
+        }
+
+        /// <summary>Відмовитися: лишаєшся; пропозиція повториться наступного сезону, поки ключі виконані. Друга відмова поспіль — довіра −1.</summary>
+        public void DeclineOffer()
+        {
+            if (!OfferAvailable) throw new InvalidOperationException("Пропозиції зараз немає");
+            State.OfferDecision = 2;
+            State.OfferDeclines++;
+            if (State.OfferDeclines >= CareerRules.DeclinesToOffend) Feud.State.Trust -= 1;
+            RefreshSeasonReport();
+        }
+
+        /// <summary>Перехід на рівень вище зі статусом входу (у М1 — один: стеля нової − 2) і довірою нового букера.</summary>
+        private void Transfer(int trust)
+        {
+            var to = Content.Federation(State.Federation + 1);
+            EnterFederation(to.Tier, CareerRules.EntryPopularity(to), trust);
+            State.Money += State.PendingAdvance;
+            if (State.PendingExclusive)
+            {
+                // строк — сезони нової федерації: наступний і ще один; вийти на кінці останнього — уже не рано
+                State.ContractExclusive = true;
+                State.ContractEndSeason = State.Season + CareerRules.ExclusiveSeasons;
+                State.ContractPenalty = CareerRules.ExitPenalty(to);
+            }
+            State.PendingExclusive = false;
+            State.PendingAdvance = 0;
+            RefreshSeasonReport();
+        }
+
+        // ---------- контракт (§6.4): аванс, пастка «виключне право», менеджер ----------
+
+        /// <summary>Чинна пастка «виключне право»: гонорар ×0,7, без виїзних шоу й підробітку — до кінця строку.</summary>
+        public bool ExclusiveActive { get { return State.ContractExclusive && State.Season <= State.ContractEndSeason; } }
+
+        /// <summary>Гонорар шоу за місцем у картці й рівнем федерації — і за контрактом (пастка ×0,7). Без виїзду й менеджера.</summary>
+        private int ContractFee()
+        {
+            return ShowBooker.Fee(State.Position, State.IsBig, Federation.FeePercent) * (ExclusiveActive ? CareerRules.ExclusiveFeePercent : 100) / 100;
+        }
+
+        /// <summary>Штраф, якщо піти з федерації зараз: чинна пастка й строк ще не скінчився (0 — вільний).</summary>
+        public int ExitPenaltyDue { get { return ExclusiveActive && State.Season < State.ContractEndSeason ? State.ContractPenalty : 0; } }
+
+        /// <summary>Пастка тримає: піти раніше строку можна, лише заплативши штраф, — а грошей не вистачає.</summary>
+        public bool ExitLocked { get { return ExitPenaltyDue > State.Money; } }
+
+        /// <summary>Огляд (QA, <c>-ring-shot-contract</c>): пропозиція — пастка (true) чи чесна (false); null — як вирішить зерно. Не в сейві.</summary>
+        public bool? ForcedOfferExclusive { get; set; }
+
+        /// <summary>
+        /// Пропозиція цього кінця сезону — пастка «виключне право»? Детерміновано від зерна, сезону й рівня (повторна пропозиція
+        /// наступного сезону — новий папір). Екран цього не бачить: лише <see cref="GetOfferContract"/>.
+        /// </summary>
+        internal bool OfferIsExclusive
+        {
+            get
+            {
+                if (ForcedOfferExclusive.HasValue) return ForcedOfferExclusive.Value;
+                var k = GetOfferKeys();
+                int tier = k == null ? State.Federation + 1 : k.ToTier;
+                return ShowBooker.Mix(State.Seed, State.Season * 10 + tier, 29) % 100 < CareerRules.ExclusiveOfferPercent;
+            }
+        }
+
+        /// <summary>Контракт пропозиції для екрана (null — ключів немає чи рішення вже ухвалено). Рахується й тоді, коли пастка тримає.</summary>
+        public ContractView GetOfferContract()
+        {
+            var k = GetOfferKeys();
+            if (k == null || !k.Ready || !SeasonSummaryFinal || State.Report.Fired || State.OfferDecision != 0 || State.Farewell) return null;
+            var to = Content.Federation(k.ToTier);
+            bool ex = OfferIsExclusive;
+            var sight = State.Manager ? ContractSight.Seen : (ContractSight)Math.Max(0, Math.Min(3, State.OfferRead));
+            var v = new ContractView
+            {
+                ToTier = to.Tier, Advance = CareerRules.Advance(to, ex, State.Manager), HasManager = State.Manager, Sight = sight,
+                ExclusiveSeen = sight == ContractSight.Seen && ex, HintSomething = sight == ContractSight.Hint && ex,
+                CanRead = !State.Manager && State.OfferRead == 0, ReadModifier = Player.Get(CareerRules.ContractReadAttr),
+                ExitPenalty = ExitPenaltyDue, ExitLocked = ExitLocked
+            };
+            if (v.ExclusiveSeen)
+            {
+                v.ExclusiveFeePercent = CareerRules.ExclusiveFeePercent;
+                v.ExclusiveSeasons = CareerRules.ExclusiveSeasons;
+                v.ExclusivePenalty = CareerRules.ExitPenalty(to);
+            }
+            return v;
+        }
+
+        /// <summary>
+        /// «Прочитати дрібний шрифт» (§6.4: «Пункт видно кидком Техніки або з менеджером»): 2d6 + Техніка, раз на пропозицію, дій
+        /// тижня не бере. 10+ — пункт видно; 7–9 — видно, чи щось є; 6− — нічого не знайдено. З менеджером читати не треба.
+        /// </summary>
+        public ContractReadResult ReadOfferContract()
+        {
+            var r = new ContractReadResult();
+            var c = GetOfferContract();
+            if (c == null) { r.Reason = "no_offer"; return r; }
+            if (State.Manager) { r.Reason = "manager"; return r; }
+            if (State.OfferRead != 0) { r.Reason = "already"; return r; }
+            r.Roll = TwoD6.Roll(Dice, "career:contract");
+            r.Modifier = Player.Get(CareerRules.ContractReadAttr);
+            r.Total = r.Roll + r.Modifier;
+            r.Tier = TwoD6.TierOf(r.Total);
+            r.Sight = r.Tier == RollTier.Strong ? ContractSight.Seen : r.Tier == RollTier.Partial ? ContractSight.Hint : ContractSight.Missed;
+            State.OfferRead = (int)r.Sight;
+            r.Ok = true;
+            return r;
+        }
+
+        /// <summary>Менеджер найнятий (§6.4): 15 % кожного гонорару; пастку бачить без кидка; аванс переходу +25 %.</summary>
+        public bool HasManager { get { return State.Manager; } }
+
+        /// <summary>Прапор кар'єри «менеджерку звільнено»: сцена ev_manager читає його й вітається інакше (знову найняти можна).</summary>
+        public const string ManagerFiredFlag = "manager_fired";
+        /// <summary>Подія менеджерки Марти Ріос.</summary>
+        public const string ManagerSceneId = "ev_manager";
+
+        /// <summary>
+        /// Звільнити менеджера — будь-коли, без штрафу (наймає сцена закулісся ev_manager). Наступного сезону Марта приходить знову
+        /// і пам'ятає звільнення (гілка сцени за прапором <see cref="ManagerFiredFlag"/>); відмова в сцені закриває її назавжди.
+        /// </summary>
+        public bool FireManager()
+        {
+            // посеред закулісної сцени — ні: сцена працює з копією стану ворожнечі, і прапор звільнення загубився б (рев'ю ПМ 12.11.2026)
+            if (!State.Manager || Stage == CareerStage.Title || Stage == CareerStage.Create || _bs != null) return false;
+            State.Manager = false;
+            Feud.State.Flags.Add(ManagerFiredFlag);
+            // повертається наступного сезону, а не за тиждень: подія менеджерки цього сезону вже «була»
+            State.BackstageSeen.Add(SeenKey(State.Season, ManagerSceneId));
+            return true;
+        }
+
+        /// <summary>
+        /// Куди підеш, якщо цього сезону контракт не продовжать (популярність нижче підлоги): найвища відкрита федерація нижче поточної.
+        /// На місцевій — вона сама (там звільнення — повернення на мінімум).
+        /// </summary>
+        public FederationDef DemotionFederation { get { return Content.Federation(State.Federation > 1 ? DemotionTier() : 1); } }
+
+        /// <summary>Федерація, з якої прийшов цього кінця сезону (після переходу; інакше null) — для рядка «пояс лишився в …».</summary>
+        public FederationDef MovedFrom { get { return State.OfferDecision == 1 && State.Federation > 1 ? Content.Federation(State.Federation - 1) : null; } }
+
+        /// <summary>Найвища відкрита федерація нижче поточної (куди не закрито повернення); місцева приймає завжди.</summary>
+        private int DemotionTier()
+        {
+            for (int t = State.Federation - 1; t > 1; t--) if (!State.ClosedTiers.Contains(t)) return t;
+            return 1;
         }
 
         /// <summary>
@@ -1192,14 +1891,27 @@ namespace Game.Core.Ring.Career
             // щабля немає, і без цього знімок застигав: третій сезон 81–87 %).
             if (State.TierPos >= 0)
                 State.TierGrowth += (PlayerGrowth() - State.TierGrowth) * CareerRules.SeasonCatchUpNum / CareerRules.SeasonCatchUpDen;
-            if (State.Report.Fired)
+            // відмови поспіль (рішення ПМ, 11.11.2026): серію обриває будь-який сезон без явної відмови — мовчазний пропуск, сезон без
+            // пропозиції, перехід; «відмова → пропуск → відмова» не штрафує
+            if (State.OfferDecision != 2) State.OfferDeclines = 0;
+            State.OfferDecision = 0;
+            State.FarewellResult = 0;
+            State.OfferRead = 0;
+            if (State.Report.Fired && State.Federation > 1)
+            {
+                // нижче підлоги — контракт не продовжують: рівень нижче (власник 11.11.2026), кар'єра триває
+                EnterFederation(DemotionTier(), Popularity, CareerRules.FiredTrust);
+                State.Money = Math.Max(State.Money, WeeklyCost * 2);
+                State.FiredCount++;
+            }
+            else if (State.Report.Fired)
             {
                 Feud.State.Audience = CareerRules.FiredPopularity;
                 Feud.State.Trust = CareerRules.FiredTrust;
-                State.BeltHolder = Content.BeltHolderId;
+                State.BeltHolder = Federation.BeltOf(State.Female) ?? "";
                 var keys = new List<string>(State.NpcFeud.Keys);
                 foreach (var k in keys) State.NpcFeud[k] = 0;
-                State.Money = Math.Max(State.Money, CareerRules.LivingCost * 2);
+                State.Money = Math.Max(State.Money, WeeklyCost * 2);
                 State.FiredCount++;
             }
             for (int z = 0; z < 3; z++)
@@ -1211,9 +1923,18 @@ namespace Game.Core.Ring.Career
             Array.Clear(State.SeasonRecord, 0, State.SeasonRecord.Length);
             State.SeasonPopStart = Popularity;
             State.Season++; State.Week = 1;
+            // пізня роль, обрана в кінці сезону, починає діяти тепер
+            State.LateRole = State.NextLateRole;
+            SyncFederationRules();
+            if (State.ContractExclusive && State.Season > State.ContractEndSeason)
+            {
+                // строк пастки скінчився — контракт продовжується як чесний
+                State.ContractExclusive = false; State.ContractEndSeason = 0; State.ContractPenalty = 0;
+            }
             State.Strained = false;
+            Stage = CareerStage.Week;   // до StartWeek — див. ApplyPendingOpponent
             StartWeek();
-            Stage = CareerStage.Week;
+            OpenAutoScene();
         }
 
         // ---------- сейв ----------
@@ -1257,9 +1978,22 @@ namespace Game.Core.Ring.Career
             Feud.RestoreState(Uri.UnescapeDataString(kv["feud"]));
             Dice.RestoreState(Uri.UnescapeDataString(kv["dice"]));
             State = st;
+            // пояс зі зліпка до 11.11.2026 — у дивізіон його власника; бракує поясів — стартові чемпіони
+            if (st.OldBelt != null)
+            {
+                var holder = Content.FindNpc(st.OldBelt);
+                if (holder != null) st.SetBelt(holder.Tier, holder.Female, holder.Id);
+                else if (st.OldBelt == CareerState.PlayerHolder) st.SetBelt(st.Federation, st.Female, CareerState.PlayerHolder);
+                st.OldBelt = null;
+            }
+            // герой уже є (не титул і не створення) — бракує поясів (старий сейв без «belts»; пояс порожній чи невідомий) — стартові
+            // чемпіони; до створення героя поясів ще немає
+            if (stage != CareerStage.Title && stage != CareerStage.Create) InitBelts();
+            SyncFederationRules();
             Stage = stage;
             _engine = null;
             _bs = null;   // незавершена сцена не зберігається: дія тижня не витрачена, сцена відкриється з початку
+            if (Stage == CareerStage.Week) OpenAutoScene();   // подія, що відкривається сама, — знову з початку
         }
     }
 }

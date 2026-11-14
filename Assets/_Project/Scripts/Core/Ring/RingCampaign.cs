@@ -37,6 +37,27 @@ namespace Game.Core.Ring
         /// <summary>Індекс кроку порядку (Script.Flow), який іде або піде наступним; у розвитку після матчу — крок цього матчу.</summary>
         public int StepIndex { get; private set; }
         public PromoRunner CurrentPromoRunner { get; private set; }
+
+        /// <summary>
+        /// Пізня роль борця (§5.3) — поправки матчу ворожнечі й реваншу. Не зберігається: ставить кар'єра зі свого стану (раніше лежала
+        /// у FeudState, і копія стану її губила — рев'ю ПМ 12.11.2026).
+        /// </summary>
+        public LateRole LateRole;
+
+        /// <summary>Ґімік борця (§5.2) — поправки матчу ворожнечі й реваншу. Як і пізню роль, ставить кар'єра; null — без ґіміка.</summary>
+        public Career.Gimmick? PlayerGimmick;
+
+        private string _bookerVoice;
+
+        /// <summary>
+        /// Голос «booker» у промо ворожнечі (<see cref="PromoRunner.BookerVoice"/>): ставить кар'єра за федерацією, не зберігається.
+        /// Діє й на промо, що вже йде (після відновлення сейва кар'єра ставить голос уже після кампанії).
+        /// </summary>
+        public string BookerVoice
+        {
+            get { return _bookerVoice; }
+            set { _bookerVoice = value; if (CurrentPromoRunner != null) CurrentPromoRunner.BookerVoice = value; }
+        }
         public MatchEngine CurrentMatch { get; private set; }
         /// <summary>Йде (або йшов останнім) реванш, а не матч ворожнечі.</summary>
         public bool IsRematch { get; private set; }
@@ -142,7 +163,7 @@ namespace Game.Core.Ring
             Require(RingStage.Overview);
             var st = CurrentStep;
             if (st == null || st.IsMatch) throw new InvalidOperationException("Наступний крок — не промо");
-            CurrentPromoRunner = new PromoRunner(Script, Script.Promos[st.Index], State);
+            CurrentPromoRunner = new PromoRunner(Script, Script.Promos[st.Index], State) { BookerVoice = _bookerVoice };
             Stage = RingStage.Promo;
             return CurrentPromoRunner;
         }
@@ -165,7 +186,7 @@ namespace Game.Core.Ring
             Require(RingStage.MatchPrep);
             State.PrepareMatch(CurrentMatchDef);
             _preMatchState = State.CaptureState();
-            CurrentMatch = new MatchEngine(State.BuildMatchSetup(Script), Dice);
+            CurrentMatch = new MatchEngine(State.BuildMatchSetup(Script, LateRole, PlayerGimmick), Dice);
             IsRematch = false;
             Stage = RingStage.Match;
             return CurrentMatch;
@@ -265,7 +286,7 @@ namespace Game.Core.Ring
             s.RestoreState(_preMatchState);
             foreach (var p in State.Perks) s.Perks.Add(p);
             s.Player = State.Player.Clone();
-            CurrentMatch = new MatchEngine(s.BuildMatchSetup(Script), Dice);
+            CurrentMatch = new MatchEngine(s.BuildMatchSetup(Script, LateRole, PlayerGimmick), Dice);
             IsRematch = true;
             RematchResult = null;
             Stage = RingStage.Match;
@@ -395,7 +416,7 @@ namespace Game.Core.Ring
             {
                 var st = Script.Flow[step];
                 if (st.IsMatch) throw new FormatException("етап промо на кроці матчу");
-                CurrentPromoRunner = new PromoRunner(Script, Script.Promos[st.Index], State, string.IsNullOrEmpty(node) ? null : node);
+                CurrentPromoRunner = new PromoRunner(Script, Script.Promos[st.Index], State, string.IsNullOrEmpty(node) ? null : node) { BookerVoice = _bookerVoice };
             }
             _preMatchState = kv["pre"].Length == 0 ? null : Unesc(kv["pre"]);
             _records.Clear();

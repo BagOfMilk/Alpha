@@ -1,59 +1,67 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using Game.Core.Ring;
 using Game.Core.Ring.Match;
+using Game.Gameplay.Combat;
 using NUnit.Framework;
 
 namespace Game.Tests.EditMode
 {
-    /// <summary>Таблиця дій (gdd §2.3), зони, реакції (§2.5), захисні кидки (§2.6), перки (§6).</summary>
+    /// <summary>
+    /// Таблиця дій (TRPG_DESIGN §4.6), ускладнення 7–9, реакції (§4.7), захисні кидки, перки, постановка (§4.4, §4.12) і QTE як видовище.
+    /// З 08.11.2026 зон рингу немає: усе в центрі, прийом із канатів чи кута — лише постановка для показу.
+    /// </summary>
     public class MatchActionsTests
     {
         private static UnavailableReason Why(MatchEngine e, MatchActionId id) { return e.Describe(id).Reason; }
 
+        /// <summary>Лежить, ушкоджений до порогу утримання, і вже не свіжий (його накривали й тримали в больовому).</summary>
+        private static void Lay(Fighter f)
+        {
+            f.Posture = Posture.Down; f.Damage = Math.Max(f.Damage, MatchRules.PinMinDamage);
+            MatchKit.NotFresh(f);
+        }
+
         // ---------- умови доступності ----------
 
         [Test]
-        public void Strike_NeedsBothStanding_SameSide()
+        public void Strike_NeedsUprightTarget()
         {
             var e = MatchKit.Engine(true);
             Assert.IsTrue(e.Describe(MatchActionId.Strike).Available);
-            e.State.Rival.Posture = Posture.Down; e.State.Rival.Damage = Math.Max(e.State.Rival.Damage, MatchRules.PinMinDamage);
+            Lay(e.State.Rival);
             Assert.AreEqual(UnavailableReason.TargetNotStanding, Why(e, MatchActionId.Strike));
-            e.State.Rival.Posture = Posture.Standing;
-            e.State.Rival.Zone = Zone.Outside;
-            Assert.AreEqual(UnavailableReason.NotSameZone, Why(e, MatchActionId.Strike));
-            e.State.Player.Zone = Zone.Outside;
-            Assert.IsTrue(e.Describe(MatchActionId.Strike).Available, "обидва поза рингом — удар можливий");
+            e.State.Rival.Posture = Posture.Stunned;
+            Assert.IsTrue(e.Describe(MatchActionId.Strike).Available, "приголомшеного бити можна");
         }
 
         [Test]
-        public void LyingActor_CanOnlyGetUpRecoverLeaveBreath()
+        public void LyingActor_CanOnlyGetUpRecoverBreath()
         {
             var e = MatchKit.Engine(true);
-            e.State.Player.Posture = Posture.Down; e.State.Player.Damage = Math.Max(e.State.Player.Damage, MatchRules.PinMinDamage);
+            Lay(e.State.Player);
             e.State.Player.Damage = 3;
             foreach (var o in e.GetAvailableActions())
             {
-                bool allowed = o.Id == MatchActionId.GetUp || o.Id == MatchActionId.Recover || o.Id == MatchActionId.LeaveRing
-                               || o.Id == MatchActionId.CatchBreath;
+                bool allowed = o.Id == MatchActionId.GetUp || o.Id == MatchActionId.Recover || o.Id == MatchActionId.CatchBreath;
                 Assert.AreEqual(allowed, o.Available, o.Id + " " + o.Reason);
             }
             Assert.AreEqual(UnavailableReason.ActorDown, Why(e, MatchActionId.Strike));
         }
 
         [Test]
-        public void Pin_NeedsLyingTarget_InRing_NotInRopes()
+        public void Pin_NeedsLyingTarget()
         {
             var e = MatchKit.Engine(true);
             Assert.AreEqual(UnavailableReason.TargetNotDown, Why(e, MatchActionId.Pin), "на стоячому недоступне");
-            e.State.Rival.Posture = Posture.Down; e.State.Rival.Damage = Math.Max(e.State.Rival.Damage, MatchRules.PinMinDamage);
+            Lay(e.State.Rival);
             Assert.IsTrue(e.Describe(MatchActionId.Pin).Available);
-            e.State.Rival.Zone = Zone.Ropes;
-            Assert.AreEqual(UnavailableReason.InRopes, Why(e, MatchActionId.Pin));
-            e.State.Rival.Zone = Zone.Outside;
-            Assert.AreEqual(UnavailableReason.NotInRing, Why(e, MatchActionId.Pin));
         }
+
+        // «Накрити знову — лише після іншого прийому» (JustPinned) з 08.11.2026 лишився для рятунку напарником:
+        // після «два» ініціатива переходить до того, хто вирвався (MatchEndTests.AllyRescue_BreaksTheThreeCount_OncePerMatch).
 
         [Test]
         public void PinAndSubmission_NeedAccumulatedDamage_TargetNotHurtBelowThreshold()
@@ -74,34 +82,31 @@ namespace Game.Tests.EditMode
         {
             var e = MatchKit.Engine(true);
             Assert.AreEqual(UnavailableReason.TargetNotDown, Why(e, MatchActionId.Submission));
-            e.State.Rival.Posture = Posture.Down; e.State.Rival.Damage = Math.Max(e.State.Rival.Damage, MatchRules.PinMinDamage);
+            Lay(e.State.Rival);
             Assert.IsTrue(e.Describe(MatchActionId.Submission).Available);
         }
 
         [Test]
-        public void ThrowRopesCorner_NeedStandingTargetInRing()
+        public void Throw_NeedsStandingTarget()
         {
             var e = MatchKit.Engine(true);
-            foreach (var id in new[] { MatchActionId.Throw, MatchActionId.IntoRopes, MatchActionId.IntoCorner })
-                Assert.IsTrue(e.Describe(id).Available, id.ToString());
-            e.State.Rival.Zone = Zone.Outside;
-            foreach (var id in new[] { MatchActionId.Throw, MatchActionId.IntoRopes, MatchActionId.IntoCorner })
-                Assert.AreEqual(UnavailableReason.NotInRing, Why(e, id));
-            e.State.Rival.Zone = Zone.Center; e.State.Rival.Posture = Posture.Down; e.State.Rival.Damage = Math.Max(e.State.Rival.Damage, MatchRules.PinMinDamage);
+            Assert.IsTrue(e.Describe(MatchActionId.Throw).Available);
+            Lay(e.State.Rival);
             Assert.AreEqual(UnavailableReason.TargetNotStanding, Why(e, MatchActionId.Throw));
         }
 
         [Test]
-        public void TopRope_OnlyFromCorner()
+        public void TopRope_NoCornerNeeded_ButFullStamina()
         {
             var e = MatchKit.Engine(true);
-            Assert.AreEqual(UnavailableReason.NotInCorner, Why(e, MatchActionId.TopRope));
-            e.State.Player.Zone = Zone.Corner;
-            Assert.IsTrue(e.Describe(MatchActionId.TopRope).Available);
+            Assert.IsTrue(e.Describe(MatchActionId.TopRope).Available, "кута для ризикованого трюку більше не треба");
+            Assert.AreEqual(RingAttr.Agility, e.Describe(MatchActionId.TopRope).Attr);
+            e.State.Player.Stamina = MatchRules.Cost(MatchActionId.TopRope) - 1;
+            Assert.AreEqual(UnavailableReason.NotEnoughStamina, Why(e, MatchActionId.TopRope));
         }
 
         [Test]
-        public void Finisher_NeedsMomentumHypeAndHurtTarget()
+        public void Finisher_NeedsMomentumHypeHurtTargetAndStamina()
         {
             var e = MatchKit.Engine(true);
             Assert.AreEqual(UnavailableReason.NeedImpulse, Why(e, MatchActionId.Finisher));
@@ -111,15 +116,21 @@ namespace Game.Tests.EditMode
             e.State.Hype = 4;
             Assert.AreEqual(UnavailableReason.TargetNotHurt, Why(e, MatchActionId.Finisher));
             e.State.Rival.Damage = 6;
+            Assert.AreEqual(UnavailableReason.TooEarly, Why(e, MatchActionId.Finisher), "P2-1: фінішер — не раніше FinisherMinRound-ї дії");
+            e.State.Round = MatchRules.FinisherMinRound;
             Assert.IsTrue(e.Describe(MatchActionId.Finisher).Available);
+            e.State.Player.Stamina = MatchRules.Cost(MatchActionId.Finisher) - 1;
+            Assert.AreEqual(UnavailableReason.NotEnoughStamina, Why(e, MatchActionId.Finisher));
         }
 
         [Test]
-        public void Taunt_NeedsLyingOrOutsideTarget()
+        public void Taunt_NeedsLyingOrStunnedTarget()
         {
             var e = MatchKit.Engine(true);
-            Assert.AreEqual(UnavailableReason.TargetNotDownOrOutside, Why(e, MatchActionId.Taunt));
-            e.State.Rival.Posture = Posture.Down; e.State.Rival.Damage = Math.Max(e.State.Rival.Damage, MatchRules.PinMinDamage);
+            Assert.AreEqual(UnavailableReason.TargetNotDownOrStunned, Why(e, MatchActionId.Taunt));
+            Lay(e.State.Rival);
+            Assert.IsTrue(e.Describe(MatchActionId.Taunt).Available);
+            e.State.Rival.Posture = Posture.Stunned;
             Assert.IsTrue(e.Describe(MatchActionId.Taunt).Available);
         }
 
@@ -142,30 +153,30 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void GetUp_OnlyWhenLying_PartialCostsAnotherAp()
+        public void GetUp_Strong_KeepsInitiative_Partial_StandsButPasses_Miss_StaysDown()
         {
-            var e = MatchKit.Engine(true, new[] { 8 });
+            var e = MatchKit.Engine(true, new[] { 11 });
             Assert.AreEqual(UnavailableReason.NotLying, Why(e, MatchActionId.GetUp));
-            e.State.Player.Posture = Posture.Down; e.State.Player.Damage = Math.Max(e.State.Player.Damage, MatchRules.PinMinDamage);
+            Lay(e.State.Player);
             MatchKit.Play(e, MatchActionId.GetUp);
             Assert.AreEqual(Posture.Standing, e.State.Player.Posture);
-            Assert.AreEqual(1, e.Ap, "ціна 1 + 7–9 забирає ще 1");
+            Assert.AreEqual(MatchSide.Player, e.CurrentActor, "10+: встав, ініціатива твоя");
+
+            var p = MatchKit.Engine(true, new[] { 8 });
+            Lay(p.State.Player);
+            MatchKit.Play(p, MatchActionId.GetUp);
+            Assert.AreEqual(Posture.Standing, p.State.Player.Posture);
+            Assert.AreEqual(MatchSide.Rival, p.CurrentActor, "7–9: встав, ініціатива в нього");
+
+            var m = MatchKit.Engine(true, new[] { 4 });
+            Lay(m.State.Player);
+            MatchKit.Play(m, MatchActionId.GetUp);
+            Assert.AreEqual(Posture.Down, m.State.Player.Posture);
+            Assert.AreEqual(MatchSide.Rival, m.CurrentActor);
         }
 
         [Test]
-        public void LeaveAndReturn_ToggleOutside()
-        {
-            var e = MatchKit.Engine(true);
-            Assert.AreEqual(UnavailableReason.NotOutside, Why(e, MatchActionId.ReturnToRing));
-            MatchKit.Play(e, MatchActionId.LeaveRing);
-            Assert.AreEqual(Zone.Outside, e.State.Player.Zone);
-            Assert.AreEqual(UnavailableReason.AlreadyOutside, Why(e, MatchActionId.LeaveRing));
-            MatchKit.Play(e, MatchActionId.ReturnToRing);
-            Assert.AreEqual(Zone.Center, e.State.Player.Zone);
-        }
-
-        [Test]
-        public void Recover_LowersDamageAndHype()
+        public void Recover_LowersDamageAndHype_PassesInitiative()
         {
             var e = MatchKit.Engine(true);
             Assert.AreEqual(UnavailableReason.NothingToRecover, Why(e, MatchActionId.Recover));
@@ -173,9 +184,10 @@ namespace Game.Tests.EditMode
             MatchKit.Play(e, MatchActionId.Recover);
             Assert.AreEqual(3, e.State.Player.Damage);
             Assert.AreEqual(2, e.State.Hype);
+            Assert.AreEqual(MatchSide.Rival, e.CurrentActor);
         }
 
-        // ---------- результати дій ----------
+        // ---------- результати дій і ускладнення 7–9 ----------
 
         [Test]
         public void Strike_Tiers()
@@ -187,6 +199,19 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(1, e.State.Player.Momentum, "чистий успіх: імпульс +1");
             MatchKit.Play(e, MatchActionId.Strike);
             Assert.AreEqual(3, e.State.Rival.Damage);
+            MatchKit.Play(e, MatchActionId.Strike);
+            Assert.AreEqual(1, e.State.Player.Damage, "провал: контрудар");
+            Assert.AreEqual(MatchSide.Rival, e.CurrentActor);
+        }
+
+        [Test]
+        public void Strike_Partial_OnEmptyStamina_DoesNotGoBelowZero()
+        {
+            var e = MatchKit.Engine(true, new[] { 9 });
+            e.State.Player.Stamina = 0;
+            MatchKit.Play(e, MatchActionId.Strike);
+            Assert.AreEqual(0, e.State.Player.Stamina);
+            Assert.AreEqual(MatchSide.Player, e.CurrentActor);
         }
 
         [Test]
@@ -208,6 +233,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(4, e.State.Hype);
             Assert.AreEqual(1, e.State.Rival.Momentum, "суперник продав прийом");
             Assert.AreEqual(1, e.State.Player.Momentum);
+            Assert.AreEqual(MatchSide.Player, e.CurrentActor);
         }
 
         [Test]
@@ -216,7 +242,8 @@ namespace Game.Tests.EditMode
             var e = MatchKit.Engine(true, new[] { 8 });
             MatchKit.Play(e, MatchActionId.Throw);
             Assert.AreEqual(2, e.State.Rival.Damage);
-            Assert.AreEqual(1, e.State.Player.Damage);
+            Assert.AreEqual(1, e.State.Player.Damage, "ускладнення: влучив, але ушкодив себе");
+            Assert.AreEqual(MatchSide.Player, e.CurrentActor);
             var m = MatchKit.Engine(true, new[] { 3 });
             MatchKit.Play(m, MatchActionId.Throw);
             Assert.AreEqual(Posture.Down, m.State.Player.Posture, "він вивернувся: ти лежиш");
@@ -227,81 +254,48 @@ namespace Game.Tests.EditMode
         public void TopRope_Tiers()
         {
             var e = MatchKit.Engine(true, new[] { 11 });
-            e.State.Player.Zone = Zone.Corner;
             MatchKit.Play(e, MatchActionId.TopRope);
             Assert.AreEqual(4, e.State.Rival.Damage);
             Assert.AreEqual(Posture.Down, e.State.Rival.Posture);
             Assert.AreEqual(5, e.State.Hype);
-            Assert.AreEqual(Zone.Center, e.State.Player.Zone);
+            var p = MatchKit.Engine(true, new[] { 8 });
+            MatchKit.Play(p, MatchActionId.TopRope);
+            Assert.AreEqual(2, p.State.Rival.Damage);
+            Assert.AreEqual(1, p.State.Player.Damage, "ускладнення: приземлився невдало");
             var m = MatchKit.Engine(true, new[] { 3 });
-            m.State.Player.Zone = Zone.Corner;
             MatchKit.Play(m, MatchActionId.TopRope);
             Assert.AreEqual(2, m.State.Player.Damage);
             Assert.AreEqual(Posture.Down, m.State.Player.Posture);
+            Assert.AreEqual(MatchSide.Rival, m.CurrentActor);
         }
 
         [Test]
-        public void IntoRopes_Strong_GivesNextHitBonus_ThatExpires()
-        {
-            var e = MatchKit.Engine(true, new[] { 11 });
-            MatchKit.Play(e, MatchActionId.IntoRopes);
-            Assert.AreEqual(Zone.Ropes, e.State.Rival.Zone);
-            Assert.AreEqual(1, e.Describe(MatchActionId.Strike).Modifier);
-            Assert.AreEqual(1, e.Describe(MatchActionId.Throw).Modifier);
-            MatchKit.Play(e, MatchActionId.Strike);
-            Assert.AreEqual(0, e.Describe(MatchActionId.Strike).Modifier, "бонус витрачено");
-        }
-
-        [Test]
-        public void IntoRopes_Partial_NoBonus()
+        public void Desperate_Partial_CostsSelfDamage()
         {
             var e = MatchKit.Engine(true, new[] { 8 });
-            MatchKit.Play(e, MatchActionId.IntoRopes);
-            Assert.AreEqual(Zone.Ropes, e.State.Rival.Zone);
-            Assert.AreEqual(0, e.Describe(MatchActionId.Strike).Modifier);
-        }
-
-        [Test]
-        public void IntoCorner_TargetTakesExtraStrikeDamage_MissPutsSelfInCorner()
-        {
-            var e = MatchKit.Engine(true, new[] { 8 });
-            MatchKit.Play(e, MatchActionId.IntoCorner);
-            Assert.AreEqual(Zone.Corner, e.State.Rival.Zone);
-            MatchKit.Play(e, MatchActionId.Strike);
-            Assert.AreEqual(2, e.State.Rival.Damage, "удар 7–9 = 1, у куті +1");
-            var m = MatchKit.Engine(true, new[] { 3 });
-            MatchKit.Play(m, MatchActionId.IntoCorner);
-            Assert.AreEqual(Zone.Corner, m.State.Player.Zone);
-        }
-
-        [Test]
-        public void CornerAndRopes_PersistThroughOwnersNextTurn_ThenReset()
-        {
-            var e = MatchKit.Engine(true, new[] { 8 });
-            MatchKit.Play(e, MatchActionId.IntoRopes);
-            e.EndTurn();                       // хід суперника: канати ще діють
-            Assert.AreEqual(Zone.Ropes, e.State.Rival.Zone);
-            e.EndTurn();
-            Assert.AreEqual(Zone.Center, e.State.Rival.Zone);
+            e.State.Player.Damage = 6;
+            MatchKit.Play(e, MatchActionId.Desperate);
+            Assert.AreEqual(2, e.State.Rival.Damage);
+            Assert.AreEqual(7, e.State.Player.Damage);
         }
 
         [Test]
         public void Taunt_Tiers()
         {
             var e = MatchKit.Engine(true, new[] { 11 });
-            e.State.Rival.Posture = Posture.Down; e.State.Rival.Damage = Math.Max(e.State.Rival.Damage, MatchRules.PinMinDamage);
+            Lay(e.State.Rival);
             MatchKit.Play(e, MatchActionId.Taunt);
             Assert.AreEqual(5, e.State.Hype);
             Assert.AreEqual(1, e.State.Player.Momentum);
             var m = MatchKit.Engine(true, new[] { 8 });
-            m.State.Rival.Posture = Posture.Down; m.State.Rival.Damage = Math.Max(m.State.Rival.Damage, MatchRules.PinMinDamage);
+            Lay(m.State.Rival);
             MatchKit.Play(m, MatchActionId.Taunt);
             Assert.AreEqual(4, m.State.Hype);
-            Assert.AreEqual(Posture.Standing, m.State.Rival.Posture, "він встає");
+            Assert.AreEqual(Posture.Standing, m.State.Rival.Posture, "ускладнення: він встає");
         }
 
         [Test]
-        public void RepeatingTheSameActionInATurn_CostsHype()
+        public void RepeatingTheSameMoveInAChain_CostsHype()
         {
             var e = MatchKit.Engine(true);
             MatchKit.Play(e, MatchActionId.Strike);
@@ -310,7 +304,38 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(2, e.State.Hype);
             e.EndTurn(); e.EndTurn();
             MatchKit.Play(e, MatchActionId.Strike);
-            Assert.AreEqual(2, e.State.Hype, "новий хід — повтору немає");
+            Assert.AreEqual(2, e.State.Hype, "новий ланцюг — повтору немає");
+        }
+
+        [Test]
+        public void SameAction_DifferentMoves_IsNotARepeat()
+        {
+            var e = MatchKit.Engine(true);
+            e.Perform(MatchActionId.Strike, new MoveHint { Key = "forearm" }); e.Commit(0);
+            e.Perform(MatchActionId.Strike, new MoveHint { Key = "low_kick" }); e.Commit(0);
+            Assert.AreEqual(3, e.State.Hype);
+        }
+
+        // ---------- постановка (усе в центрі) ----------
+
+        [Test]
+        public void Staging_TopRopeFromCorner_OthersCenter_HintOverrides()
+        {
+            var e = MatchKit.Engine(true, new[] { 11, 11, 11 });
+            MatchKit.Play(e, MatchActionId.Strike);
+            var a = e.State.Log.Last(x => x.Kind == MatchEventKind.Action);
+            Assert.AreEqual(MoveStaging.Center, a.Staging);
+            Assert.IsNull(a.MoveKey);
+            e.Perform(MatchActionId.Strike, new MoveHint { Key = "whip", Staging = MoveStaging.Ropes }); e.Commit(0);
+            a = e.State.Log.Last(x => x.Kind == MatchEventKind.Action);
+            Assert.AreEqual(MoveStaging.Ropes, a.Staging);
+            Assert.AreEqual("whip", a.MoveKey);
+            Assert.AreEqual(2, a.ChainIndex);
+            e.Perform(MatchActionId.TopRope); e.React(ReactionChoice.Sell); e.Commit(0);
+            var sell = e.State.Log.Last(x => x.Kind == MatchEventKind.Sell);
+            a = e.State.Log.Last(x => x.Kind == MatchEventKind.Action);
+            Assert.AreEqual(MoveStaging.Corner, a.Staging, "ризикований трюк без підказки — склейкою з кута");
+            Assert.AreEqual(MoveStaging.Corner, sell.Staging, "продаж — та сама постановка");
         }
 
         // ---------- брудний і ролі ----------
@@ -346,7 +371,7 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void Dirty_Miss_WarnsAndCostsHype_EndsTurn()
+        public void Dirty_Miss_WarnsAndCostsHype_PassesInitiative()
         {
             var e = MatchKit.Engine(true, new[] { 3 }, s => s.PlayerRole = RingPath.Rebel);
             MatchKit.Play(e, MatchActionId.Dirty);
@@ -364,14 +389,14 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void DistractedReferee_SeesNothing_UntilRoundEnds()
+        public void DistractedReferee_SeesNothing_UntilInitiativePasses()
         {
-            var e = MatchKit.Engine(true, new[] { 3 }, s => s.PlayerHasAlly = true);
+            var e = MatchKit.Engine(true, new[] { 8 }, s => s.PlayerHasAlly = true);
             MatchKit.Play(e, MatchActionId.Ally);
             Assert.IsTrue(e.State.RefereeDistracted);
             MatchKit.Play(e, MatchActionId.Dirty);
             Assert.AreEqual(0, e.State.Player.Warnings);
-            Assert.IsTrue(e.State.RefereeDistracted, "раунд ще не скінчився");
+            Assert.IsTrue(e.State.RefereeDistracted, "ініціатива ще в тебе");
             e.EndTurn();
             Assert.IsFalse(e.State.RefereeDistracted);
         }
@@ -381,23 +406,19 @@ namespace Game.Tests.EditMode
         [Test]
         public void BigMoves_AskForReaction_OthersDoNot()
         {
-            foreach (var id in new[] { MatchActionId.Throw })
-            {
-                var e = MatchKit.Engine(true);
-                e.Perform(id);
-                Assert.AreEqual(MatchPhase.AwaitReaction, e.Phase);
-                Assert.AreEqual(MatchSide.Rival, e.PendingReaction.Defender);
-                CollectionAssert.AreEqual(TwoD6.ChancesOf36(0), e.PendingReaction.ReverseChances);
-            }
+            var e = MatchKit.Engine(true);
+            e.Perform(MatchActionId.Throw);
+            Assert.AreEqual(MatchPhase.AwaitReaction, e.Phase);
+            Assert.AreEqual(MatchSide.Rival, e.PendingReaction.Defender);
+            CollectionAssert.AreEqual(TwoD6.ChancesOf36(0), e.PendingReaction.ReverseChances);
             var s = MatchKit.Engine(true);
             s.Perform(MatchActionId.Strike);
             Assert.AreEqual(MatchPhase.AwaitBoost, s.Phase);
             var t = MatchKit.Engine(true);
-            t.State.Player.Zone = Zone.Corner;
             t.Perform(MatchActionId.TopRope);
             Assert.AreEqual(MatchPhase.AwaitReaction, t.Phase);
             var f = MatchKit.Engine(true);
-            f.State.Player.Momentum = 5; f.State.Hype = 4; f.State.Rival.Damage = 6;
+            f.State.Player.Momentum = 5; f.State.Hype = 4; f.State.Rival.Damage = 6; f.State.Round = MatchRules.FinisherMinRound;
             f.Perform(MatchActionId.Finisher);
             Assert.AreEqual(MatchPhase.AwaitReaction, f.Phase);
             Assert.AreEqual(-3, f.PendingReaction.ReverseModifier, "проти фінішера -2 і -1 за ушкодження 6");
@@ -407,7 +428,7 @@ namespace Game.Tests.EditMode
         public void NoReversal_AgainstPin()
         {
             var e = MatchKit.Engine(true, new[] { 12 });
-            e.State.Rival.Posture = Posture.Down; e.State.Rival.Damage = Math.Max(e.State.Rival.Damage, MatchRules.PinMinDamage);
+            Lay(e.State.Rival);
             e.Perform(MatchActionId.Pin);
             Assert.IsNull(e.PendingReaction);
         }
@@ -425,7 +446,7 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void Reverse_Strong_AttackerFallsAndTurnEnds()
+        public void Reverse_Strong_AttackerFalls_InitiativeToDefender()
         {
             var e = MatchKit.Engine(true, new[] { 11 });
             e.Perform(MatchActionId.Throw);
@@ -437,14 +458,22 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void Reverse_Partial_MoveBrokenTurnEnds_AttackerStands()
+        public void Reverse_Partial_MoveBroken_NewExchange()
         {
-            var e = MatchKit.Engine(true, new[] { 8 });
+            // 7–9: прийом зірвано, ніхто не має переваги — знову Обмін (§4.7)
+            var e = MatchKit.Engine(true, new[] { 8, 2, 12 });
             e.Perform(MatchActionId.Throw);
-            e.React(ReactionChoice.Reverse);
+            var evs = e.React(ReactionChoice.Reverse);
+            Assert.IsTrue(evs.Any(x => x.Kind == MatchEventKind.Exchange));
             Assert.AreEqual(Posture.Standing, e.State.Player.Posture);
-            Assert.AreEqual(MatchSide.Rival, e.CurrentActor);
+            Assert.AreEqual(MatchSide.Rival, e.CurrentActor, "Обмін 2:12 — ініціатива суперника");
             Assert.AreEqual(0, e.State.Rival.Damage);
+
+            var k = MatchKit.Engine(true, new[] { 8, 12, 2 });
+            k.Perform(MatchActionId.Throw);
+            k.React(ReactionChoice.Reverse);
+            Assert.AreEqual(MatchSide.Player, k.CurrentActor, "Обмін 12:2 — ініціатива лишилась");
+            Assert.AreEqual(0, k.Chain, "ланцюг почався наново");
         }
 
         [Test]
@@ -483,10 +512,10 @@ namespace Game.Tests.EditMode
 
         // ---------- захисні кидки ----------
 
-        private static MatchEngine PinReady(System.Action<MatchSetup> tweak = null)
+        private static MatchEngine PinReady(System.Action<MatchSetup> tweak = null, int[] rolls = null)
         {
-            var e = MatchKit.Engine(true, null, tweak);
-            e.State.Rival.Posture = Posture.Down; e.State.Rival.Damage = Math.Max(e.State.Rival.Damage, MatchRules.PinMinDamage);
+            var e = MatchKit.Engine(true, rolls, tweak);
+            Lay(e.State.Rival);
             return e;
         }
 
@@ -496,9 +525,9 @@ namespace Game.Tests.EditMode
             var e = PinReady();
             Assert.AreEqual(MatchRules.DefenseBase, e.Describe(MatchActionId.Pin).Modifier);
             e.State.Rival.KickoutsDone = 1;
-            Assert.AreEqual(MatchRules.DefenseBase-1, e.Describe(MatchActionId.Pin).Modifier);
+            Assert.AreEqual(MatchRules.DefenseBase - 1, e.Describe(MatchActionId.Pin).Modifier);
             e.State.Rival.KickoutsDone = 3;
-            Assert.AreEqual(MatchRules.DefenseBase-3, e.Describe(MatchActionId.Pin).Modifier);
+            Assert.AreEqual(MatchRules.DefenseBase - 3, e.Describe(MatchActionId.Pin).Modifier);
         }
 
         [Test]
@@ -506,8 +535,8 @@ namespace Game.Tests.EditMode
         {
             var e = PinReady();
             e.State.Rival.Damage = 5; Assert.AreEqual(MatchRules.DefenseBase, e.Describe(MatchActionId.Pin).Modifier);
-            e.State.Rival.Damage = 6; Assert.AreEqual(MatchRules.DefenseBase-1, e.Describe(MatchActionId.Pin).Modifier);
-            e.State.Rival.Damage = 10; Assert.AreEqual(MatchRules.DefenseBase-2, e.Describe(MatchActionId.Pin).Modifier);
+            e.State.Rival.Damage = 6; Assert.AreEqual(MatchRules.DefenseBase - 1, e.Describe(MatchActionId.Pin).Modifier);
+            e.State.Rival.Damage = 10; Assert.AreEqual(MatchRules.DefenseBase - 2, e.Describe(MatchActionId.Pin).Modifier);
         }
 
         [Test]
@@ -515,83 +544,215 @@ namespace Game.Tests.EditMode
         {
             var e = PinReady(s => s.RivalMods.DamageThresholdShift = 2);
             e.State.Rival.Damage = 6; Assert.AreEqual(MatchRules.DefenseBase, e.Describe(MatchActionId.Pin).Modifier);
-            e.State.Rival.Damage = 8; Assert.AreEqual(MatchRules.DefenseBase-1, e.Describe(MatchActionId.Pin).Modifier);
-            e.State.Rival.Damage = 12; Assert.AreEqual(MatchRules.DefenseBase-2, e.Describe(MatchActionId.Pin).Modifier);
-            e.State.Rival.Damage = 10; Assert.AreEqual(MatchRules.DefenseBase-1, e.Describe(MatchActionId.Pin).Modifier);
+            e.State.Rival.Damage = 8; Assert.AreEqual(MatchRules.DefenseBase - 1, e.Describe(MatchActionId.Pin).Modifier);
+            e.State.Rival.Damage = 12; Assert.AreEqual(MatchRules.DefenseBase - 2, e.Describe(MatchActionId.Pin).Modifier);
+            e.State.Rival.Damage = 10; Assert.AreEqual(MatchRules.DefenseBase - 1, e.Describe(MatchActionId.Pin).Modifier);
         }
 
         [Test]
         public void Perk_KickOutBonus_AndStamina()
         {
             var e = PinReady(s => { s.RivalMods.KickOutBonus = 1; s.Rival.Set(RingAttr.Stamina, 2); });
-            Assert.AreEqual(MatchRules.DefenseBase+3, e.Describe(MatchActionId.Pin).Modifier);
+            Assert.AreEqual(MatchRules.DefenseBase + 3, e.Describe(MatchActionId.Pin).Modifier);
         }
 
         [Test]
-        public void LateStage_FromRound12_PenalisesDefence()
+        public void LateStage_PenalisesDefence()
         {
             var e = PinReady();
-            e.State.Round = 11; Assert.AreEqual(MatchRules.DefenseBase, e.Describe(MatchActionId.Pin).Modifier);
-            e.State.Round = 12; Assert.AreEqual(MatchRules.DefenseBase-1, e.Describe(MatchActionId.Pin).Modifier);
+            e.State.Round = MatchRules.LateStageRound - 1; Assert.AreEqual(MatchRules.DefenseBase, e.Describe(MatchActionId.Pin).Modifier);
+            e.State.Round = MatchRules.LateStageRound; Assert.AreEqual(MatchRules.DefenseBase - 1, e.Describe(MatchActionId.Pin).Modifier);
         }
 
         [Test]
         public void Perk_RiskyMoveBonus_TopRopeAndDesperate()
         {
             var e = MatchKit.Engine(true, null, s => { s.PlayerMods.RiskyMoveBonus = 1; s.Player.Set(RingAttr.Agility, 1); });
-            e.State.Player.Zone = Zone.Corner;
             Assert.AreEqual(2, e.Describe(MatchActionId.TopRope).Modifier);
             Assert.AreEqual(0, e.Describe(MatchActionId.Strike).Modifier);
             Assert.AreEqual(1, e.Describe(MatchActionId.Desperate).Modifier);
         }
 
         [Test]
-        public void Kickout_Tiers_AtOne_AtTwo()
+        public void Kickout_AtOneAndTwo_InitiativeToDefender()
         {
-            // «раз»: 10+, «два»: 7–9 (ажіотаж +2, імпульс +1 тому, хто вирвався)
-            var e = PinReady();
-            e.Perform(MatchActionId.Pin);
-            Assert.IsTrue(e.IsOver || e.Phase == MatchPhase.AwaitAction);
-            var one = MatchKit.Engine(true, new[] { 11 });
-            one.State.Rival.Posture = Posture.Down; one.State.Rival.Damage = Math.Max(one.State.Rival.Damage, MatchRules.PinMinDamage);
+            // «раз»: 10+ — ініціатива захиснику; «два»: 7–9 — ажіотаж +2, імпульс +1 тому, хто вирвався, і ініціатива теж його
+            // (баланс 08.11.2026: після майже-перемоги — камбек, а не нове накриття тим самим ланцюгом)
+            var one = PinReady(null, new[] { 11 });
             one.Perform(MatchActionId.Pin);
             Assert.AreEqual(1, one.State.Rival.KickoutsDone);
             Assert.AreEqual(3, one.State.Hype);
-            var two = MatchKit.Engine(true, new[] { 6 });
-            two.State.Rival.Posture = Posture.Down; two.State.Rival.Damage = Math.Max(two.State.Rival.Damage, MatchRules.PinMinDamage);
+            Assert.AreEqual(MatchSide.Rival, one.CurrentActor);
+            var two = PinReady(null, new[] { 6 });
             two.Perform(MatchActionId.Pin);
+            Assert.AreEqual(RollTier.Partial, two.State.Log.Last(x => x.Kind == MatchEventKind.Kickout).Tier);
             Assert.AreEqual(5, two.State.Hype);
             Assert.AreEqual(1, two.State.Rival.Momentum);
             Assert.IsFalse(two.IsOver);
+            Assert.AreEqual(MatchSide.Rival, two.CurrentActor);
         }
 
         [Test]
-        public void Finisher_SpendsMomentum_AutoPinsWithPenalty()
+        public void FreshWrestler_FirstCoverAndFirstHold_GetBonus_OnlyOnce()
+        {
+            // «Свіжий борець» (баланс 08.11.2026): перше накриття проти борця — +2 до «Вирватися», перший больовий — +3 до «Терпіти»
+            var e = MatchKit.Engine(true, new[] { 8, 4, 8, 4 });
+            e.State.Rival.Posture = Posture.Down; e.State.Rival.Damage = MatchRules.PinMinDamage;
+            Assert.AreEqual(MatchRules.DefenseBase + MatchRules.FirstPinBonus, e.Describe(MatchActionId.Pin).Modifier, "перше накриття");
+            e.State.Rival.PinsFaced = 1;
+            Assert.AreEqual(MatchRules.DefenseBase, e.Describe(MatchActionId.Pin).Modifier, "друге — без бонусу");
+
+            // больовий 7–9 (штраф −1): перший «Терпіти» 4 + 2 + 3 − 1 = 8 — тримається; другий 4 + 2 − 1 = 5 — здався
+            MatchKit.Play(e, MatchActionId.Submission);
+            var first = e.State.Log.Last(x => x.Kind == MatchEventKind.Endure);
+            Assert.AreEqual(MatchRules.DefenseBase + MatchRules.FirstHoldBonus - MatchRules.SubmissionPartialPenalty, first.Modifier);
+            Assert.AreEqual(RollTier.Partial, first.Tier);
+            Assert.AreEqual(1, e.State.Rival.HoldsFaced);
+            MatchKit.Play(e, MatchActionId.Submission);
+            var second = e.State.Log.Last(x => x.Kind == MatchEventKind.Endure);
+            Assert.AreEqual(MatchRules.DefenseBase - MatchRules.SubmissionPartialPenalty, second.Modifier, "другий больовий — без бонусу");
+            Assert.AreEqual(MatchEndKind.Submission, e.Result.Kind);
+        }
+
+        [Test]
+        public void Finisher_SpendsMomentumAndStamina_AutoPinsWithPenalty()
         {
             var e = MatchKit.Engine(true, new[] { 11, 12 });
-            e.State.Player.Momentum = MatchRules.FinisherMomentum; e.State.Hype = 4; e.State.Rival.Damage = 6;
+            e.State.Player.Momentum = MatchRules.FinisherMomentum; e.State.Hype = 4; e.State.Rival.Damage = 6; e.State.Round = MatchRules.FinisherMinRound;
             e.Perform(MatchActionId.Finisher);
             Assert.AreEqual(0, e.State.Player.Momentum);
+            Assert.AreEqual(MatchRules.StartStamina - MatchRules.Cost(MatchActionId.Finisher), e.State.Player.Stamina);
             e.React(ReactionChoice.Sell);
             e.Commit(0);
             var kick = e.State.Log.Last(x => x.Kind == MatchEventKind.Kickout);
             Assert.AreEqual(10, e.State.Rival.Damage);
-            Assert.AreEqual(MatchRules.DefenseBase - 5, kick.Modifier, "-2 поріг на межі, -3 фінішер");
+            Assert.AreEqual(MatchRules.DefenseBase + MatchRules.FirstPinBonus - 5, kick.Modifier, "+2 перше накриття, -2 поріг на межі, -3 фінішер");
             Assert.AreEqual(Posture.Down, e.State.Rival.Posture);
+            Assert.AreEqual(1, e.State.Rival.PinsFaced, "фінішер закінчується утриманням");
+            Assert.AreEqual(MatchSide.Rival, e.CurrentActor, "вирвався — ініціатива його");
         }
 
         [Test]
-        public void Endure_ModifiersAndRopes()
+        public void Endure_Partial_Holds()
         {
-            // больовий 7–9 (штраф -1), «Терпіти» 8-1 = 7 → тримається; у канатах — розірвано
+            // больовий 7–9 (штраф -1), «Терпіти» 8-1 = 7 → тримається, ініціатива в нападника
             var e = MatchKit.Engine(true, new[] { 8, 8 });
-            e.State.Rival.Posture = Posture.Down; e.State.Rival.Damage = Math.Max(e.State.Rival.Damage, MatchRules.PinMinDamage);
+            Lay(e.State.Rival);
             MatchKit.Play(e, MatchActionId.Submission);
             Assert.IsFalse(e.IsOver);
             var ev = e.State.Log.Last(x => x.Kind == MatchEventKind.Endure);
             Assert.AreEqual(MatchRules.DefenseBase - 1, ev.Modifier);
             Assert.AreEqual(RollTier.Partial, ev.Tier);
             Assert.AreEqual(Posture.Down, e.State.Rival.Posture);
+            Assert.AreEqual(MatchSide.Player, e.CurrentActor);
+        }
+
+        [Test]
+        public void Endure_Strong_BreaksFree_InitiativeToDefender()
+        {
+            // больовий 10+ (штраф -2), «Терпіти» 12-2 = 10 → вирвався
+            var e = MatchKit.Engine(true, new[] { 11, 12 });
+            Lay(e.State.Rival);
+            MatchKit.Play(e, MatchActionId.Submission);
+            Assert.IsFalse(e.IsOver);
+            Assert.AreEqual(RollTier.Strong, e.State.Log.Last(x => x.Kind == MatchEventKind.Endure).Tier);
+            Assert.AreEqual(MatchSide.Rival, e.CurrentActor);
+        }
+
+        // ---------- QTE — лише видовище ----------
+
+        [Test]
+        public void Flourish_PlusOneHype_OncePerEvent_OnlyPlayersLandedMoves()
+        {
+            var e = MatchKit.Engine(true, new[] { 8, 3 });
+            MatchKit.Play(e, MatchActionId.Strike);
+            var hit = e.State.Log.Last(x => x.Kind == MatchEventKind.Action);
+            int hype = e.State.Hype;
+            var fl = e.RegisterFlourish(hit.Seq);
+            Assert.AreEqual(1, fl.Count);
+            Assert.AreEqual(MatchEventKind.Flourish, fl[0].Kind);
+            Assert.AreEqual(hype + 1, e.State.Hype);
+            Assert.AreEqual(0, e.RegisterFlourish(hit.Seq).Count, "раз на подію");
+            Assert.AreEqual(hype + 1, e.State.Hype);
+            MatchKit.Play(e, MatchActionId.Strike);
+            var miss = e.State.Log.Last(x => x.Kind == MatchEventKind.Action);
+            Assert.AreEqual(RollTier.Miss, miss.Tier);
+            Assert.AreEqual(0, e.RegisterFlourish(miss.Seq).Count, "на провалі QTE немає");
+            Assert.AreEqual(0, e.RegisterFlourish(0).Count, "Обмін — не прийом");
+            Assert.AreEqual(0, e.RegisterFlourish(-1).Count);
+            Assert.AreEqual(0, e.RegisterFlourish(9999).Count);
+        }
+
+        [Test]
+        public void Flourish_IgnoresRivalMoves()
+        {
+            var e = MatchKit.Engine(false, new[] { 11 });
+            MatchKit.Play(e, MatchActionId.Strike);
+            var hit = e.State.Log.Last(x => x.Kind == MatchEventKind.Action);
+            Assert.AreEqual(MatchSide.Rival, hit.Actor);
+            Assert.AreEqual(0, e.RegisterFlourish(hit.Seq).Count);
+        }
+
+        /// <summary>
+        /// Інваріант QTE (рішення власника 08.11.2026: «Лише видовище»): той самий кубик з QTE і без нього дає ті самі кидки, ступені,
+        /// ушкодження й ініціативу; QTE змінює лише ажіотаж (+1 раз на подію). Політика дій не дивиться на ажіотаж — інакше розбіжність
+        /// була б від вибору, а не від QTE.
+        /// </summary>
+        [Test]
+        public void Flourish_NeverChangesDiceTiersDamageOrInitiative()
+        {
+            int flourishes = 0;
+            for (int seed = 1; seed <= 200; seed++)
+            {
+                var a = new MatchEngine(MatchKit.Setup(), new SeededDiceRoller((ulong)seed));
+                var b = new MatchEngine(MatchKit.Setup(), new SeededDiceRoller((ulong)seed));
+                for (int step = 0; step < 400 && !a.IsOver; step++)
+                {
+                    int before = b.State.Log.Count;
+                    Drive(a); Drive(b);
+                    for (int i = before; i < b.State.Log.Count; i++)
+                    {
+                        var ev = b.State.Log[i];
+                        if (ev.Kind == MatchEventKind.Action && ev.HasRoll && ev.Tier != RollTier.Miss && ev.Actor == MatchSide.Player)
+                        {
+                            if (b.RegisterFlourish(ev.Seq).Count > 0) flourishes++;
+                            break;
+                        }
+                    }
+                }
+                Assert.AreEqual(a.IsOver, b.IsOver, "seed " + seed);
+                Assert.AreEqual(Print(a), Print(b), "seed " + seed);
+                Assert.GreaterOrEqual(b.State.Hype, a.State.Hype, "seed " + seed);
+                if (a.IsOver) Assert.AreEqual(a.Result.Winner, b.Result.Winner, "seed " + seed);
+            }
+            Assert.Greater(flourishes, 100);
+        }
+
+        /// <summary>Одна дія за простою політикою (не дивиться на ажіотаж): встати, утримати, кинути, вдарити, перевести подих.</summary>
+        private static void Drive(MatchEngine e)
+        {
+            if (e.IsOver) return;
+            if (e.Phase == MatchPhase.AwaitReaction) { e.React(ReactionChoice.Sell); return; }
+            if (e.Phase == MatchPhase.AwaitBoost) { e.Commit(0); return; }
+            foreach (var id in new[] { MatchActionId.GetUp, MatchActionId.Pin, MatchActionId.Throw, MatchActionId.Strike })
+                if (e.Describe(id).Available) { e.Perform(id); return; }
+            e.EndTurn();
+        }
+
+        /// <summary>Журнал без QTE і без ажіотажу: що впало на кубиках і що сталося з тілами.</summary>
+        private static string Print(MatchEngine e)
+        {
+            var sb = new StringBuilder();
+            foreach (var ev in e.State.Log)
+            {
+                if (ev.Kind == MatchEventKind.Flourish) continue;
+                sb.Append(ev.Kind).Append(':').Append(ev.Actor).Append(':').Append(ev.Action).Append(':').Append(ev.Roll).Append(':')
+                  .Append(ev.Total).Append(':').Append(ev.Tier);
+                foreach (var f in ev.Effects) if (f.Kind != MatchEffectKind.Hype) sb.Append('[').Append(f.Kind).Append(f.Who).Append(f.Amount).Append(']');
+                sb.Append(';');
+            }
+            sb.Append(e.State.Player.Damage).Append('/').Append(e.State.Rival.Damage).Append('/').Append(e.CurrentActor);
+            return sb.ToString();
         }
     }
 }

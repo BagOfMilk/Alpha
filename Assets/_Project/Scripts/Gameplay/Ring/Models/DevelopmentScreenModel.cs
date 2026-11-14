@@ -142,7 +142,7 @@ namespace Game.Gameplay.Ring.Models
                 rows.Add(new DevPathRow
                 {
                     Path = p,
-                    Name = RingLabels.PathName(_t, p),
+                    Name = RingLabels.PathName(_t, p, HeroForms.ShowsHeroine(_t)),
                     Points = pts,
                     Rank = rank,
                     RankText = _t.Format("dev.rank", rank, Development.MaxRank)
@@ -174,7 +174,7 @@ namespace Game.Gameplay.Ring.Models
                     else
                     {
                         row.Path = def.Path.Value;
-                        row.PathText = _t.Format("dev.perk.path", RingLabels.PathName(_t, def.Path.Value), def.Rank);
+                        row.PathText = _t.Format("dev.perk.path", RingLabels.PathName(_t, def.Path.Value, HeroForms.ShowsHeroine(_t)), def.Rank);
                     }
                     string reason;
                     if (_c.State.Perks.Contains(def.Id)) row.State = PerkState.Owned;
@@ -208,7 +208,7 @@ namespace Game.Gameplay.Ring.Models
                     ValueText = RingChances.Signed(v),
                     CanBuy = can,
                     ReasonText = can ? "" : _t.Get("dev.reason." + reason),
-                    BuyText = _t.Format("dev.attr.buy", Development.AttrCost)
+                    BuyText = _t.Format("dev.attr.buy", Development.AttrCostFor(_c.State, a))   // витривалість з сезону 4 дорожча (§5.5)
                 });
             }
             return rows;

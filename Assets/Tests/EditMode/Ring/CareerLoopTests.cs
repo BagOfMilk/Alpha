@@ -162,6 +162,53 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(t.CanStartNextSeason);
         }
 
+        /// <summary>
+        /// 3-P2-6 (плейтест 08.11.2026): підсумок сезону остаточний лише після титульного матчу чи відмови — і тоді його шкали ті,
+        /// якими сезон закрився (гонорар, популярність, довіра титульного матчу; довіра чемпіона за відмову), а не знімок тижня 4.
+        /// </summary>
+        [Test]
+        public void SeasonSummary_IsFinalOnlyAfterTheTitleMatchOrSkip_AndShowsTheClosingScales()
+        {
+            for (ulong seed = 1; seed <= 6; seed++)
+            {
+                var s = ToLastShowResult(seed);
+                s.Feud.State.Trust = CareerRules.MaxTrust;
+                s.ContinueFromShow();
+                Assert.IsTrue(s.CanStartTitleMatch);
+                Assert.IsFalse(s.SeasonSummaryFinal, "титульний шанс відкритий — підсумку ще немає");
+                int moneyBefore = s.Money;
+                s.StartTitleMatch();
+                Assert.IsFalse(s.SeasonSummaryFinal);
+                s.StartShow();
+                CareerBot.PlayMatch(s, 1, new CareerRunReport());
+                var res = s.FinishMatch();
+                s.ContinueFromShow();
+                Assert.IsTrue(s.SeasonSummaryFinal);
+                var rep = s.GetSeasonReport();
+                Assert.AreEqual(s.Popularity, rep.Popularity, "популярність після титульного матчу");
+                Assert.AreEqual(s.Trust, rep.Trust, "довіра після титульного матчу");
+                Assert.AreEqual(s.Money, rep.Money, "гроші з гонораром титулу");
+                Assert.AreEqual(moneyBefore + res.TotalFee + (res.TitleWon ? CareerRules.TitleWinBonus : 0), rep.Money, "гонорар і премія за пояс");
+                Assert.AreEqual(s.IsChampion, rep.BeltIsPlayers);
+            }
+            // чемпіон відмовився від захисту: довіра −1 — і в підсумку
+            var c = ToLastShowResult(2);
+            c.Feud.State.Trust = CareerRules.MaxTrust;
+            c.State.BeltHolder = CareerState.PlayerHolder;
+            c.ContinueFromShow();
+            Assert.IsTrue(c.GetSeasonReport().IsDefense);
+            c.SkipTitle();
+            Assert.IsTrue(c.SeasonSummaryFinal);
+            Assert.AreEqual(CareerRules.MaxTrust - 1, c.GetSeasonReport().Trust);
+            // без титульного шансу підсумок остаточний одразу
+            var n = ToLastShowResult(9);
+            n.Feud.State.Trust = 1;
+            foreach (var npc in n.Content.Roster) n.State.SetNpcFeud(npc.Id, 0);
+            n.State.FeudResolved = true;
+            n.ContinueFromShow();
+            Assert.IsTrue(n.SeasonSummaryFinal);
+        }
+
         [Test]
         public void LowTrust_NoNpcFeud_NoTitleShot()
         {
@@ -192,10 +239,14 @@ namespace Game.Tests.EditMode
             Assert.Less(ShowBooker.Fee(CardPosition.SemiMain, false), ShowBooker.Fee(CardPosition.Main, false));
             Assert.AreEqual(ShowBooker.Fee(CardPosition.Midcard, false) * CareerRules.BigShowFeePercent / 100, ShowBooker.Fee(CardPosition.Midcard, true));
             Assert.Greater(ShowBooker.Fee(CardPosition.Midcard, true), ShowBooker.Fee(CardPosition.Midcard, false), "велике шоу платить більше");
-            Assert.AreEqual(CardPosition.Opener, CareerRules.PositionFor(0));
-            Assert.AreEqual(CardPosition.Midcard, CareerRules.PositionFor(3));
-            Assert.AreEqual(CardPosition.SemiMain, CareerRules.PositionFor(6));
-            Assert.AreEqual(CardPosition.Main, CareerRules.PositionFor(10));
+            // місце в картці — від відстані до стелі федерації (П5): стеля — головна, −1 — півголовна, −2 — середина
+            Assert.AreEqual(CardPosition.Opener, CareerRules.PositionFor(1, 4));
+            Assert.AreEqual(CardPosition.Midcard, CareerRules.PositionFor(2, 4));
+            Assert.AreEqual(CardPosition.SemiMain, CareerRules.PositionFor(3, 4));
+            Assert.AreEqual(CardPosition.Main, CareerRules.PositionFor(4, 4));
+            Assert.AreEqual(CardPosition.Opener, CareerRules.PositionFor(7, 10));
+            Assert.AreEqual(CardPosition.Main, CareerRules.PositionFor(10, 10));
+            Assert.AreEqual(ShowBooker.Fee(CardPosition.Main, false) * 6, ShowBooker.Fee(CardPosition.Main, false, 600), "гонорар світової ×6");
         }
 
         [Test]

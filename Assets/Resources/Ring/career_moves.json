@@ -33,22 +33,24 @@
   {
    "id": "whip",
    "name": "move.whip",
-   "action": "intoRopes",
+   "action": "strike",
    "category": "throw",
    "zone": "body",
    "heat": 0,
    "rollBonus": 0,
-   "kind": "basic"
+   "kind": "basic",
+   "staging": "ropes"
   },
   {
    "id": "corner_drag",
    "name": "move.corner_drag",
-   "action": "intoCorner",
+   "action": "strike",
    "category": "power",
    "zone": "body",
    "heat": 0,
    "rollBonus": 0,
-   "kind": "basic"
+   "kind": "basic",
+   "staging": "corner"
   },
   {
    "id": "armbar",
@@ -70,7 +72,8 @@
    "rollBonus": 0,
    "kind": "gimmick",
    "gimmick": "monster",
-   "cost": 2
+   "cost": 2,
+   "staging": "ropes"
   },
   {
    "id": "lift_slam",
@@ -106,7 +109,8 @@
    "rollBonus": 0,
    "kind": "gimmick",
    "gimmick": "flyer",
-   "cost": 2
+   "cost": 2,
+   "staging": "ropes"
   },
   {
    "id": "leg_lock",
@@ -176,7 +180,8 @@
    "heat": 2,
    "rollBonus": 0,
    "kind": "signature",
-   "gimmick": "flyer"
+   "gimmick": "flyer",
+   "staging": "corner"
   },
   {
    "id": "spider_lock",
@@ -220,7 +225,8 @@
    "heat": 0,
    "rollBonus": 0,
    "kind": "finisher",
-   "gimmick": "flyer"
+   "gimmick": "flyer",
+   "staging": "corner"
   },
   {
    "id": "iron_clamp",
@@ -265,6 +271,190 @@
    "rollBonus": 0,
    "kind": "learn",
    "cost": 2
+  },
+  {
+   "id": "arm_drag",
+   "name": "move.arm_drag",
+   "action": "throw",
+   "category": "throw",
+   "zone": "body",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "gimmick",
+   "gimmick": "veteran",
+   "cost": 2
+  },
+  {
+   "id": "crossface",
+   "name": "move.crossface",
+   "action": "submission",
+   "category": "submission",
+   "zone": "head",
+   "heat": 1,
+   "rollBonus": 0,
+   "kind": "gimmick",
+   "gimmick": "veteran",
+   "cost": 2
+  },
+  {
+   "id": "old_school",
+   "name": "move.old_school",
+   "action": "strike",
+   "category": "strike",
+   "zone": "head",
+   "heat": 2,
+   "rollBonus": 0,
+   "kind": "signature",
+   "gimmick": "veteran"
+  },
+  {
+   "id": "last_lesson",
+   "name": "move.last_lesson",
+   "action": "finisher",
+   "category": "strike",
+   "zone": "head",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "finisher",
+   "gimmick": "veteran"
+  },
+  {
+   "id": "headbutt",
+   "name": "move.headbutt",
+   "action": "strike",
+   "category": "hardcore",
+   "zone": "head",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "gimmick",
+   "gimmick": "hardcore",
+   "cost": 2
+  },
+  {
+   "id": "clubbing_blow",
+   "name": "move.clubbing_blow",
+   "action": "strike",
+   "category": "hardcore",
+   "zone": "head",
+   "heat": 1,
+   "rollBonus": 0,
+   "kind": "gimmick",
+   "gimmick": "hardcore",
+   "cost": 2
+  },
+  {
+   "id": "floor_slam",
+   "name": "move.floor_slam",
+   "action": "throw",
+   "category": "hardcore",
+   "zone": "body",
+   "heat": 2,
+   "rollBonus": 0,
+   "kind": "signature",
+   "gimmick": "hardcore"
+  },
+  {
+   "id": "scar_maker",
+   "name": "move.scar_maker",
+   "action": "finisher",
+   "category": "hardcore",
+   "zone": "head",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "finisher",
+   "gimmick": "hardcore"
+  },
+  {
+   "id": "chop",
+   "name": "move.chop",
+   "action": "strike",
+   "category": "strike",
+   "zone": "body",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "gimmick",
+   "gimmick": "rookie",
+   "cost": 2
+  },
+  {
+   "id": "body_drop",
+   "name": "move.body_drop",
+   "action": "throw",
+   "category": "throw",
+   "zone": "body",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "gimmick",
+   "gimmick": "rookie",
+   "cost": 2
+  },
+  {
+   "id": "upstart",
+   "name": "move.upstart",
+   "action": "strike",
+   "category": "showy",
+   "zone": "head",
+   "heat": 2,
+   "rollBonus": 0,
+   "kind": "signature",
+   "gimmick": "rookie"
+  },
+  {
+   "id": "first_break",
+   "name": "move.first_break",
+   "action": "finisher",
+   "category": "power",
+   "zone": "body",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "finisher",
+   "gimmick": "rookie"
+  },
+  {
+   "id": "military_press",
+   "name": "move.military_press",
+   "action": "throw",
+   "category": "power",
+   "zone": "body",
+   "heat": 1,
+   "rollBonus": 0,
+   "kind": "gimmick",
+   "gimmick": "strongman",
+   "cost": 2
+  },
+  {
+   "id": "bear_hug",
+   "name": "move.bear_hug",
+   "action": "submission",
+   "category": "power",
+   "zone": "body",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "gimmick",
+   "gimmick": "strongman",
+   "cost": 2
+  },
+  {
+   "id": "anvil",
+   "name": "move.anvil",
+   "action": "throw",
+   "category": "power",
+   "zone": "body",
+   "heat": 2,
+   "rollBonus": 0,
+   "kind": "signature",
+   "gimmick": "strongman"
+  },
+  {
+   "id": "titan_press",
+   "name": "move.titan_press",
+   "action": "finisher",
+   "category": "power",
+   "zone": "body",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "finisher",
+   "gimmick": "strongman"
   }
  ]
 }

@@ -56,8 +56,40 @@ namespace Game.Gameplay.Ring.UI
         /// <summary>Клавіша L — повний журнал (матч).</summary>
         public virtual void OnToggleLog() { }
 
+        /// <summary>
+        /// Esc / «Назад»: екран закриває верхнє своє (шухляду, розгорнуту картку) і повертає true; false — закривати нічого,
+        /// тоді хост відкриває паузу (ПМ 08.11.2026: «Esc спершу закриває верхнє … і лише тоді, коли закривати нічого, відкриває паузу»).
+        /// </summary>
+        public virtual bool OnBack() { return false; }
+
         /// <summary>Кожен кадр (для ходу суперника з паузою).</summary>
         public virtual void Tick(float unscaledDeltaTime) { }
+
+        /// <summary>
+        /// Екран приймає фокус без миші (хрестовина, стік, стрілки; A / Enter натискає ціль у фокусі; P3 геймпад, 11.11.2026):
+        /// лише коли шар увімкнений (<see cref="CareerPadFeature.Enabled"/>; у М1 — ні, ітерація 2) і всі дії екрана мають ціль
+        /// фокусу (<see cref="PadTargets"/>). Маршрут вводу, підписи й огляд читають саме це — прапорець не обійти.
+        /// </summary>
+        public bool PadEnabled { get { return CareerPadFeature.PadOn(PadTargets); } }
+
+        /// <summary>
+        /// Усі дії екрана мають ціль фокусу (кнопки <see cref="RingUi"/>, плитки, плити й <see cref="PadMark"/>). Вимкнено за
+        /// замовчуванням: екран вмикає сам.
+        /// </summary>
+        protected virtual bool PadTargets { get { return false; } }
+
+        private PadFocus _pad;
+        private VisualElement _padRoot;
+
+        /// <summary>Фокус без миші цього екрана (цілі збираються з <see cref="Root"/>).</summary>
+        public PadFocus Pad
+        {
+            get
+            {
+                if (_pad == null || _padRoot != Root) { _pad = new PadFocus(Root); _padRoot = Root; }
+                return _pad;
+            }
+        }
     }
 
     /// <summary>
@@ -128,13 +160,17 @@ namespace Game.Gameplay.Ring.UI
             e.style.color = Text;
         }
 
+        /// <summary>
+        /// Картка (мова «Арена», B08 §0.1 / B03): кутаста плита без заокруглень, тонка обводка, кармінна смужка ліворуч — як плити
+        /// меню й хабу тижня (власник 08.11.2026: «давай дизайн більш схожий на реслінг»).
+        /// </summary>
         public static VisualElement Card(float pad = 12f)
         {
             var e = Column();
             e.style.backgroundColor = Stage.RingStageHub.Has3D ? RingTheme.WithAlpha(Panel, BrandTokens.AlphaPanel) : Panel;
             HudToolkitTheme.Border(e, 1f, Border);
-            e.style.borderTopLeftRadius = 6f; e.style.borderTopRightRadius = 6f;
-            e.style.borderBottomLeftRadius = 6f; e.style.borderBottomRightRadius = 6f;
+            e.style.borderLeftWidth = 4f;
+            e.style.borderLeftColor = RingTheme.Crimson;
             HudToolkitTheme.Padding(e, pad, pad + 2f);
             return e;
         }
@@ -154,11 +190,35 @@ namespace Game.Gameplay.Ring.UI
         /// <summary>Поля екрана: відступ від краю.</summary>
         public static void HudPad(VisualElement e) { HudToolkitTheme.Padding(e, 22f, 34f); }
 
-        public static Label Title(string text) { return Lbl(text, 26f, Gold, true); }
+        /// <summary>
+        /// Статут TYPE-02: ВЕЛИКІ display — лише для ≤2 слів (мітки, імена). Довше — речення, sentence case у ролі text.
+        /// Словом рахується відрізок із літерою чи цифрою («—», «·» — ні). Рев'ю 08.11.2026: підказка реакції матчу
+        /// («Тайгер: «…». Як відповісти?») і підказка натиску стали довгими реченнями ВЕЛИКИМИ — важко читати.
+        /// </summary>
+        public static bool ShortCaption(string text) { return RingCaption.IsShort(text); }
+
+        /// <summary>Заголовок за TYPE-02: коротка мітка — display ВЕЛИКИМИ, речення — Fixel жирним того ж кольору.</summary>
+        private static Label CaptionOrSentence(string text, float displaySize, float textSize, RingFontRole role, float tracking)
+        {
+            Label l;
+            if (ShortCaption(text)) l = Menus.MenuKit.Display(text, displaySize, Gold, role, tracking);
+            else l = Menus.MenuKit.Body(text, textSize, Gold, true);
+            l.style.whiteSpace = WhiteSpace.Normal;
+            return l;
+        }
+
+        /// <summary>Заголовок екрана — display Black ВЕЛИКИМИ курсивом (як титр-плита меню); речення — Fixel жирним.</summary>
+        public static Label Title(string text)
+        {
+            bool caps = ShortCaption(text);
+            var l = CaptionOrSentence(text, 28f, 22f, RingFontRole.Display900, 0.02f);
+            if (caps) l.style.unityFontStyleAndWeight = FontStyle.Italic;
+            return l;
+        }
 
         public static Label Heading(string text)
         {
-            var l = Lbl(text, 18f, Gold, true);
+            var l = CaptionOrSentence(text, 21f, 18f, RingFontRole.Display800, 0.04f);
             l.style.marginBottom = 6f;
             return l;
         }
@@ -194,6 +254,12 @@ namespace Game.Gameplay.Ring.UI
         /// </summary>
         public static Button MakeButton(string text, Action onClick, bool enabled = true, Color? accent = null, float size = 17f)
         {
+            return Make(text, onClick, enabled, accent, size, enabled ? PanelRaised : Panel, PanelHover, enabled ? Text : Disabled);
+        }
+
+        /// <summary>Кнопка «Арени»: кутаста плита (без заокруглень), смужка-акцент ліворуч, наведення — світліша плита.</summary>
+        private static Button Make(string text, Action onClick, bool enabled, Color? accent, float size, Color back, Color hover, Color textColor)
+        {
             var b = new Button();
             b.text = text;
             b.style.fontSize = size;
@@ -202,30 +268,57 @@ namespace Game.Gameplay.Ring.UI
             RingFonts.Apply(b, RingFontRole.Text);
             HudToolkitTheme.Padding(b, 8f, 12f);
             b.style.marginLeft = 0f; b.style.marginRight = 0f; b.style.marginTop = 0f; b.style.marginBottom = 6f;
-            b.style.borderTopLeftRadius = 4f; b.style.borderTopRightRadius = 4f;
-            b.style.borderBottomLeftRadius = 4f; b.style.borderBottomRightRadius = 4f;
             HudToolkitTheme.Border(b, 1f, enabled ? Border : RingTheme.WithAlpha(Border, 0.4f));
             b.style.borderLeftWidth = 4f;
             b.style.borderLeftColor = accent ?? (enabled ? Gold : Disabled);
-            var back = enabled ? PanelRaised : Panel;
             b.style.backgroundColor = back;
-            b.style.color = enabled ? Text : Disabled;
-            if (enabled && onClick != null)
+            b.style.color = textColor;
+            bool live = enabled && onClick != null;
+            if (live)
             {
                 b.clicked += onClick;
-                b.RegisterCallback<PointerEnterEvent>(e => b.style.backgroundColor = PanelHover);
-                b.RegisterCallback<PointerLeaveEvent>(e => b.style.backgroundColor = back);
+                // поки фокус без миші (P3 геймпад), нерухомий курсор не перехоплює підсвіт
+                PadFocus.Hover(b, () => b.style.backgroundColor = hover, () => b.style.backgroundColor = back);
             }
+            // ціль фокусу без миші: доступна — підсвіт, як наведення; недоступна — рамка кольору тексту (видно, де фокус; У0 11.11.2026)
+            Color frame = enabled ? Border : RingTheme.WithAlpha(Border, 0.4f);
+            PadMark.Mark(b, live ? onClick : null, "btn:" + text, 3, on =>
+            {
+                if (live) { b.style.backgroundColor = on ? hover : back; return; }
+                Color c = on ? Text : frame;
+                b.style.borderTopColor = c; b.style.borderRightColor = c; b.style.borderBottomColor = c;
+            });
             return b;
         }
 
-        /// <summary>Велика кнопка головної дії («Далі», «Кинути»).</summary>
+        /// <summary>
+        /// Головна дія («Далі», «На ринг») — золота плита з написом display Black ВЕЛИКИМИ, як золота плита хабу (B03): золото —
+        /// головна дія гравця. Недоступна — темна плита й сірий текст.
+        /// </summary>
         public static Button PrimaryButton(string text, Action onClick, bool enabled = true)
         {
-            var b = MakeButton(text, onClick, enabled, Gold, 20f);
+            // TYPE-02: «Далі», «На ринг» — display ВЕЛИКИМИ; довший напис («Далі — до наступного промо») — Fixel жирним
+            bool caps = ShortCaption(text);
+            var b = Make(caps ? RingTheme.Caps(text) : text, onClick, enabled, enabled ? RingTheme.Crimson : Disabled, caps ? 24f : 19f,
+                enabled ? Gold : Panel, enabled ? RingTheme.Paper : Panel, enabled ? Bg : Disabled);
+            RingFonts.Apply(b, caps ? RingFontRole.Display900 : RingFontRole.TextBold);
             b.style.unityTextAlign = TextAnchor.MiddleCenter;
+            b.style.borderLeftWidth = 8f;
             b.style.marginTop = 8f;
+            var pad = PadMark.Of(b);
+            if (pad != null) pad.Rank = 2;      // головна дія — перша ціль фокусу
             return b;
+        }
+
+        /// <summary>
+        /// Сталий ключ цілі фокусу без миші замість «btn:» + напис: напис кнопки міняється після дії («Сила +2 → +3» стає
+        /// «+3 → +4»), а фокус має лишитись на ній (аудит P3, 11.11.2026).
+        /// </summary>
+        public static T PadKey<T>(T el, string key) where T : VisualElement
+        {
+            var m = PadMark.Of(el);
+            if (m != null) m.Key = key;
+            return el;
         }
 
         /// <summary>Скрол-обгортка для довгих списків.</summary>
@@ -263,7 +356,7 @@ namespace Game.Gameplay.Ring.UI
         /// <summary>Заголовок розділу компактного вигляду.</summary>
         public static Label Section(string text)
         {
-            var l = Lbl(text, 13f, Gold, true);
+            var l = CaptionOrSentence(text, BrandTokens.TypeLabel, BrandTokens.TypeLabel, RingFontRole.Display800, 0.1f);
             l.style.marginTop = 6f;
             l.style.marginBottom = 3f;
             return l;
@@ -289,8 +382,8 @@ namespace Game.Gameplay.Ring.UI
             b.style.borderLeftWidth = 3f;
             if (hint != null && !string.IsNullOrEmpty(hintText))
             {
-                b.RegisterCallback<PointerEnterEvent>(e => { hint.text = hintText; hint.style.color = Text; });
-                b.RegisterCallback<PointerLeaveEvent>(e => { hint.text = ""; });
+                PadFocus.Hover(b, () => { hint.text = TextBreak.GlueDashes(hintText); hint.style.color = Text; }, () => hint.text = "");
+                PadMark.AddHot(b, on => { hint.text = on ? TextBreak.GlueDashes(hintText) : ""; if (on) hint.style.color = Text; });
             }
             return b;
         }
@@ -325,6 +418,8 @@ namespace Game.Gameplay.Ring.UI
             panel.style.maxWidth = 760f;
             panel.style.backgroundColor = PanelRaised;
             HudToolkitTheme.Border(panel, 2f, Gold);
+            panel.style.borderLeftWidth = 8f;
+            panel.style.borderLeftColor = RingTheme.Crimson;
             shade.Add(panel);
             return shade;
         }

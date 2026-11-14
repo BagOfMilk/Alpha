@@ -21,19 +21,51 @@ namespace Game.Tests.EditMode
 
         private static void AssertHas(HashSet<string> keys, string key) { Assert.IsTrue(keys.Contains(key), "немає ключа тексту: " + key); }
 
+        /// <summary>
+        /// Чотири федерації (П5, власник 11.11.2026): у кожній 3 чоловіки + 3 жінки (на місцевій ще Молот), ранги 1–6, обидві ролі;
+        /// два пояси — у найсильнішого свого дивізіону; стеля, підлога й економіка ростуть з рівнем; 19 нових NPC.
+        /// </summary>
         [Test]
-        public void Roster_HasSixNpc_WithUniqueRanksOneToSix_BothRoles_AndAllGimmicks()
+        public void FourFederations_SixNpcEach_ThreePlusThree_TwoBelts_TablesGrow()
         {
             var c = CareerKit.Content();
-            Assert.AreEqual(6, c.Roster.Count);
-            CollectionAssert.AreEquivalent(new[] { 1, 2, 3, 4, 5, 6 }, c.Roster.Select(n => n.Rank).ToArray());
-            Assert.AreEqual(6, c.Roster.Select(n => n.Id).Distinct().Count());
-            Assert.IsTrue(c.Roster.Any(n => n.Role == CareerRole.Hero));
-            Assert.IsTrue(c.Roster.Any(n => n.Role == CareerRole.Villain));
+            Assert.AreEqual(CareerContent.MaxTier, c.Federations.Count);
+            Assert.AreEqual(25, c.Roster.Count, "6 місцевих + Молот + 18 вищих");
+            Assert.AreEqual(c.Roster.Count, c.Roster.Select(n => n.Id).Distinct().Count());
+            int[] ceil = { 4, 6, 8, 10 }, floor = { 0, 2, 4, 6 };
+            for (int t = 1; t <= CareerContent.MaxTier; t++)
+            {
+                var f = c.Federation(t);
+                Assert.AreEqual(t, f.Tier);
+                var npcs = f.Roster.Where(n => n.Id != CareerContent.HammerId).ToList();
+                Assert.AreEqual(6, npcs.Count, "федерація " + t);
+                Assert.AreEqual(3, npcs.Count(n => n.Female), "федерація " + t + ": три жінки");
+                CollectionAssert.AreEquivalent(new[] { 1, 2, 3, 4, 5, 6 }, npcs.Select(n => n.Rank).ToArray(), "федерація " + t);
+                Assert.IsTrue(npcs.Any(n => n.Role == CareerRole.Hero) && npcs.Any(n => n.Role == CareerRole.Villain));
+                Assert.IsTrue(f.Roster.All(n => n.Tier == t));
+                for (int d = 0; d < 2; d++)
+                {
+                    bool female = d == 1;
+                    var holder = c.FindNpc(f.BeltOf(female));
+                    Assert.AreEqual(female, holder.Female);
+                    Assert.AreEqual(npcs.Where(n => n.Female == female).Max(n => n.Rank), holder.Rank, "пояс — у найсильнішого дивізіону " + t);
+                }
+                Assert.AreEqual(ceil[t - 1], f.Ceiling); Assert.AreEqual(floor[t - 1], f.Floor);
+                if (t > 1)
+                {
+                    var prev = c.Federation(t - 1);
+                    Assert.Greater(f.FeePercent, prev.FeePercent); Assert.Greater(f.LivingCost, prev.LivingCost);
+                    Assert.Greater(f.CostumeCost, prev.CostumeCost); Assert.GreaterOrEqual(f.PopularityHype, prev.PopularityHype);
+                    Assert.Greater(npcs.Sum(n => Enumerable.Range(0, 5).Sum(i => n.Stats.Get((RingAttr)i))),
+                        prev.Roster.Where(n => n.Id != CareerContent.HammerId).Sum(n => Enumerable.Range(0, 5).Sum(i => n.Stats.Get((RingAttr)i))),
+                        "вища федерація — сильніший ростер");
+                }
+            }
             foreach (Gimmick g in Enum.GetValues(typeof(Gimmick))) Assert.IsTrue(c.Roster.Any(n => n.Gimmick == g), "у ростері немає ґіміка " + g);
             foreach (var n in c.Roster)
                 for (int i = 0; i < 5; i++) Assert.That(n.Stats.Get((RingAttr)i), Is.InRange(WrestlerStats.MinAttr, WrestlerStats.MaxAttr), n.Id);
-            Assert.AreEqual(6, c.FindNpc(c.BeltHolderId).Rank, "пояс на старті — у найсильнішого");
+            Assert.AreEqual("baron", c.BeltHolderId);
+            Assert.AreEqual("komet", c.Federation(1).BeltFemale);
         }
 
         [Test]
@@ -48,15 +80,16 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void Moves_AreTwentyFour_IdsUnique_WithTheRightKinds()
+        public void Moves_AreForty_IdsUnique_WithTheRightKinds()
         {
+            // 24 прийоми чотирьох перших ґіміків + 16 ґіміків 5–8 (П5, §5.2): по два ґімік-прийоми, коронний і фінішер на ґімік.
             var c = CareerKit.Content();
-            Assert.AreEqual(24, c.Moves.All.Count);
-            Assert.AreEqual(24, c.Moves.All.Select(m => m.Id).Distinct().Count());
+            Assert.AreEqual(40, c.Moves.All.Count);
+            Assert.AreEqual(40, c.Moves.All.Select(m => m.Id).Distinct().Count());
             Assert.AreEqual(6, c.Moves.All.Count(m => m.Kind == MoveKind.Basic));
-            Assert.AreEqual(8, c.Moves.All.Count(m => m.Kind == MoveKind.Gimmick));
-            Assert.AreEqual(4, c.Moves.All.Count(m => m.Kind == MoveKind.Signature));
-            Assert.AreEqual(4, c.Moves.All.Count(m => m.Kind == MoveKind.Finisher));
+            Assert.AreEqual(16, c.Moves.All.Count(m => m.Kind == MoveKind.Gimmick));
+            Assert.AreEqual(8, c.Moves.All.Count(m => m.Kind == MoveKind.Signature));
+            Assert.AreEqual(8, c.Moves.All.Count(m => m.Kind == MoveKind.Finisher));
             Assert.AreEqual(2, c.Moves.All.Count(m => m.Kind == MoveKind.Learn));
             foreach (var m in c.Moves.All)
             {
@@ -70,10 +103,13 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void Gimmicks_AreFour_EachWithTwoMovesSignatureAndFinisherOfItsOwn()
+        public void Gimmicks_AreEight_FourOnTheCreationScreen_EachWithTwoMovesSignatureAndFinisherOfItsOwn()
         {
             var c = CareerKit.Content();
-            Assert.AreEqual(4, c.Gimmicks.Count);
+            Assert.AreEqual(8, c.Gimmicks.Count);
+            CollectionAssert.AreEqual(new[] { Gimmick.Monster, Gimmick.Flyer, Gimmick.Technician, Gimmick.Showman },
+                c.Gimmicks.Where(g => g.OnCreationScreen).Select(g => g.Id).ToArray(), "ґіміки 5–8 — на екрані лише після У0 власника");
+            Assert.AreEqual(Enum.GetValues(typeof(Gimmick)).Length, c.Gimmicks.Select(g => g.Id).Distinct().Count(), "кожен ґімік enum — у даних");
             foreach (var g in c.Gimmicks)
             {
                 Assert.AreEqual(2, g.GimmickMoves.Length);
@@ -81,8 +117,10 @@ namespace Game.Tests.EditMode
                 Assert.AreEqual(MoveKind.Signature, c.Moves.Get(g.SignatureMove).Kind);
                 Assert.AreEqual(MoveKind.Finisher, c.Moves.Get(g.FinisherMove).Kind);
                 Assert.AreEqual(g.Key, c.Moves.Get(g.FinisherMove).GimmickId);
-                int sum = g.Attr.Sum();
-                Assert.That(sum, Is.InRange(2, 4), "основа ґіміка " + g.Key + " збалансована за сумою");
+                // Бюджет створення = основа + вільні бали: 3–4. Новачок — 2 (§5.2 «Рівно, +2 вільні»): слабший старт, зате росте швидше.
+                int budget = g.Attr.Sum() + g.FreePoints;
+                if (g.Id == Gimmick.Rookie) Assert.AreEqual(2, budget, "Новачок — рівно, +2 вільні");
+                else Assert.That(budget, Is.InRange(3, 4), "основа ґіміка " + g.Key + " збалансована за сумою");
             }
         }
 
@@ -141,7 +179,10 @@ namespace Game.Tests.EditMode
             var gim = CareerKit.Read("career_gimmicks.json"); var roster = CareerKit.Read("career_roster.json");
             Assert.Throws<FormatException>(() => CareerContent.Load(feud, moves.Replace("\"strike\"", "\"nonsense\""), gim, roster));
             Assert.Throws<FormatException>(() => CareerContent.Load(feud, moves, gim.Replace("bulldozer", "no_such_move"), roster));
-            Assert.Throws<FormatException>(() => CareerContent.Load(feud, moves, gim, roster.Replace("\"beltHolder\": \"komet\"", "\"beltHolder\": \"ghost\"")));
+            Assert.Throws<FormatException>(() => CareerContent.Load(feud, moves, gim, roster.Replace("\"beltHolder\": \"baron\"", "\"beltHolder\": \"ghost\"")));
+            Assert.Throws<FormatException>(() => CareerContent.Load(feud, moves, gim, roster.Replace("\"beltFemale\": \"komet\"", "\"beltFemale\": \"baron\"")), "пояс жінок — у чоловіка");
+            Assert.Throws<FormatException>(() => CareerContent.Load(feud, moves, gim, roster.Replace("\"ceiling\": 6", "\"ceiling\": 3")), "стеля нижча за попередню");
+            Assert.Throws<FormatException>(() => CareerContent.Load(feud, moves, gim, roster.Replace("\"booker\": \"booker3\"", "\"booker\": \"nobody\"")));
             Assert.Throws<FormatException>(() => CareerContent.Load(feud, moves, gim, roster.Replace("\"id\": \"hammer\"", "\"id\": \"hamster\"")));
         }
     }

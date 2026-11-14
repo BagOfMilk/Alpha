@@ -32,7 +32,13 @@ namespace Game.Gameplay.Ring
 
         // ---------------- ICareerHost ----------------
 
-        public int HeroBody { get; set; }
+        private int _heroBody;
+        /// <summary>Тіло героя. На створенні зміна тіла одразу міняє форми звертання (<see cref="HeroForms.IsHeroine"/>).</summary>
+        public int HeroBody
+        {
+            get { return _heroBody; }
+            set { _heroBody = value; if (_career != null && _career.Stage == CareerStage.Create) ApplyHeroForms(); }
+        }
         public int HeroHair { get; set; }
         public WeekActionResult LastWeekResult { get; set; }
 
@@ -48,6 +54,19 @@ namespace Game.Gameplay.Ring
 
         public bool HasSave { get { return _shotsDir == null && RingSaveFile.Exists(SavePath); } }
 
+        /// <summary>
+        /// Звідки «Продовжити» читає сейв: огляд із <c>-ring-shot-load &lt;сейв&gt;</c> — заданий файл (QA стартує з потрібного місця
+        /// кар'єри), інакше — <see cref="SavePath"/>. Пише огляд усе одно у свій ring_career_bot.txt: заданий сейв не переписується.
+        /// </summary>
+        private string LoadPath
+        {
+            get
+            {
+                ReadCareerShotArgs();
+                return _shotLoad ?? SavePath;
+            }
+        }
+
         public void NewGame()
         {
             _career = CareerSession.New(_content, new SeededDiceRoller(_seed), _seed);
@@ -55,6 +74,9 @@ namespace Game.Gameplay.Ring
             HeroBody = 0; HeroHair = 0;
             LastWeekResult = null;
             _career.StartNewGame();
+            // -ring-shot-heroine: тіло героїні — після скидання тіла (на завантаженні прапорці читаються ще на титулі)
+            ReadCareerShotArgs();
+            ApplyShotHeroine();
             _onTitle = false;
             Rebind();
         }
@@ -65,7 +87,7 @@ namespace Game.Gameplay.Ring
             {
                 CareerSession c = null;
                 bool fromBackup;
-                var lines = RingSaveFile.Read(SavePath, l =>
+                var lines = RingSaveFile.Read(LoadPath, l =>
                 {
                     var t = CareerSession.New(_content, new SeededDiceRoller(_seed), _seed);
                     t.RestoreState(l[0]);
@@ -79,6 +101,7 @@ namespace Game.Gameplay.Ring
                     if (p.Length > 1 && int.TryParse(p[0], out b) && int.TryParse(p[1], out h)) { HeroBody = Math.Max(0, Math.Min(b, CareerLooks.HeroBodies.Length - 1)); HeroHair = Math.Max(0, Math.Min(h, CareerLooks.HeroHair.Length - 1)); }
                 }
                 _career = c;
+                SyncHeroSex();
                 _onTitle = false;
                 LastWeekResult = null;
                 Rebind();
@@ -89,9 +112,22 @@ namespace Game.Gameplay.Ring
             }
         }
 
+        /// <summary>
+        /// Дивізіон героя (P2-6, П5): поки екран створення не передає стать у <see cref="CharacterDraft.Female"/>, вона береться з тіла
+        /// (body_f_* — жінки). Один раз: після CreateHero (екран одразу кличе Save) і для старих сейвів на «Продовжити». Тиждень 1 букер
+        /// перескладає з суперниками свого дивізіону.
+        /// </summary>
+        private void SyncHeroSex()
+        {
+            if (_career == null || _career.State.FemaleKnown || _career.Stage == CareerStage.Title || _career.Stage == CareerStage.Create) return;
+            int b = Math.Max(0, Math.Min(HeroBody, CareerLooks.HeroBodies.Length - 1));
+            _career.SetFemale(CareerLooks.IsFemaleBody(CareerLooks.HeroBodies[b]));
+        }
+
         public void Save()
         {
             if (_career == null || _career.Stage == CareerStage.Title || _career.Stage == CareerStage.Create) return;
+            SyncHeroSex();
             try
             {
                 RingSaveFile.Write(SavePath, new[] { _career.CaptureState(), HeroBody + "|" + HeroHair });
@@ -181,6 +217,9 @@ namespace Game.Gameplay.Ring
                 AfterDevelopment = () => { _career.FinishBigShow(); Save(); }
             };
             if (!string.IsNullOrEmpty(_career.State.RingName)) _text.Add("w.player.name", _career.State.RingName);
+            // -ring-hero-name: ім'я, яке екран створення підставляє в поле (той самий ключ, що й «Новачок» за замовчуванням)
+            ReadCareerShotArgs();
+            if (_shotHeroName != null) _text.Add("c.create.default_name", _shotHeroName);
             _view = null;
             _viewKey = null;
             _stageKey = null;
@@ -222,6 +261,8 @@ namespace Game.Gameplay.Ring
         private RingScreenView MakeView()
         {
             if (_onTitle) return new TitleMenuView(_ctx, this);
+            // Тут, а не в Rebind: стать стає відомою після створення героя (SyncHeroSex), а меню може перечитати тексти.
+            ApplyHeroForms();
             switch (_career.Stage)
             {
                 case CareerStage.Create: return new CreateScreenView(_ctx);
@@ -298,11 +339,354 @@ namespace Game.Gameplay.Ring
         private bool BotWeekStep(out bool grew)
         {
             grew = false;
+            ReadCareerShotArgs();
+            BotForceScenes();
+            BotContract();
+            if (BotLoadStep() || BotEndingStep() || BotDeclineTitleStep() || BotContractReadStep() || BotOfferStep()) { grew = true; return true; }
+            BotForceOpponent();
             bool week = !_onTitle && _career.Stage == CareerStage.Week && !_career.BackstageOpen;
             if (!week) return false;
             if (_shotGrow && BotGrow()) { _view.Refresh(); grew = true; return true; }
             if (_career.State.ActionsLeft > 0 || _career.State.PromoChoicePending) { _view.OnDigit(1 + _shotDigit++ % 6); return true; }
             return false;
+        }
+
+        // ---------------- огляд QA: старт із сейву й бот кінцівок (п. 8 П5, 11.11.2026) ----------------
+
+        private bool _shotArgsRead;
+        /// <summary><c>-ring-shot-load &lt;сейв&gt;</c>: повний шлях, шлях від теки запуску або ім'я файла в persistentDataPath.</summary>
+        private string _shotLoad;
+        /// <summary>0 — сейв ще не відкривали, 1 — «Продовжити» запущено, 2 — готово або не вдалося.</summary>
+        private int _shotLoadState;
+        private bool _shotHasEnding;
+        private FeudEnding _shotEnding;
+        private bool _shotEndingNoted;
+        private MatchEngine _shotGoalNoted;
+        private PromoRunner _botRewardsRunner;
+        private string _botRewardsNode;
+        private readonly HashSet<string> _botRewardsPressed = new HashSet<string>();
+        private bool _shotDeclineTitle;
+        /// <summary><c>-ring-shot-offer decline</c>: на кінці сезону з ключами — «Лишитися»; accept (за замовчуванням) — як каркас (Enter).</summary>
+        private bool _shotOfferDecline;
+        /// <summary><c>-ring-hero-name &lt;ім'я&gt;</c>: ім'я героя огляду (обрізане за MaxNameLength, як поле вводу); null — «Новачок».</summary>
+        private string _shotHeroName;
+        /// <summary><c>-ring-shot-opponent &lt;id&gt;</c>: суперник першого звичайного тижня огляду; null — уже підмінено або не задано.</summary>
+        private string _shotOpponent;
+        /// <summary><c>-ring-shot-event &lt;id&gt;</c>: сцена, яку відкриє перше «Закулісся» огляду (поки не примушено — не null).</summary>
+        private string _shotEvent;
+        private bool _shotBackstageAll;
+        private Queue<string> _shotBackstageQueue;
+        /// <summary><c>-ring-shot-heroine</c>: огляд героїні — перше жіноче тіло на екрані створення (<see cref="ApplyShotHeroine"/>).</summary>
+        private bool _shotHeroine;
+        /// <summary><c>-ring-shot-contract exclusive|honest</c>: папір пропозиції огляду (§6.4) — пастка чи чесний; null — як вирішить зерно.</summary>
+        private bool? _shotContract;
+        /// <summary><c>-ring-shot-contract-read</c>: на кінці сезону з пропозицією — «Прочитати дрібний шрифт» (кидок Техніки).</summary>
+        private bool _shotContractRead;
+        /// <summary><c>-ring-shot-manager</c>: менеджерка найнята з першого тижня огляду (рядки контракту й гонорару з її часткою).</summary>
+        private bool _shotManager;
+
+        /// <summary>Прапорці огляду кар'єри — лише разом з <c>-ring-shots</c> (сейв і гра гравця не чіпаються).</summary>
+        private void ReadCareerShotArgs()
+        {
+            if (_shotArgsRead) return;
+            _shotArgsRead = true;
+            if (_shotsDir == null) return;
+            string load = ReadArg("-ring-shot-load");
+            if (!string.IsNullOrEmpty(load))
+            {
+                if (System.IO.Path.IsPathRooted(load)) _shotLoad = load;
+                else if (System.IO.File.Exists(load)) _shotLoad = System.IO.Path.GetFullPath(load);
+                else _shotLoad = System.IO.Path.Combine(Application.persistentDataPath, load);
+            }
+            _shotDeclineTitle = RingLaunchArgs.Has("-ring-shot-decline-title");
+            string offer = ReadArg("-ring-shot-offer");
+            if (offer != null)
+            {
+                if (offer == "decline") _shotOfferDecline = true;
+                else if (offer != "accept") Debug.LogWarning("[Ринг] -ring-shot-offer: accept або decline, а не '" + offer + "' — як за замовчуванням (accept)");
+            }
+            string contract = ReadArg("-ring-shot-contract");
+            if (contract != null)
+            {
+                if (contract == "exclusive") _shotContract = true;
+                else if (contract == "honest") _shotContract = false;
+                else Debug.LogWarning("[Ринг] -ring-shot-contract: exclusive або honest, а не '" + contract + "' — як вирішить зерно");
+                if (_shotContract.HasValue) ShotNote("папір пропозиції: " + (_shotContract.Value ? "пастка «виключне право»" : "чесний") + " (-ring-shot-contract)");
+            }
+            _shotContractRead = RingLaunchArgs.Has("-ring-shot-contract-read");
+            _shotManager = RingLaunchArgs.Has("-ring-shot-manager");
+            string name = ReadArg("-ring-hero-name");
+            if (name != null)
+            {
+                if (name.Length > CareerSession.MaxNameLength) name = name.Substring(0, CareerSession.MaxNameLength);
+                if (name.Trim().Length == 0) Debug.LogWarning("[Ринг] -ring-hero-name: порожнє ім'я — лишається «Новачок»");
+                else
+                {
+                    _shotHeroName = name;
+                    ShotNote("ім'я героя: «" + name + "» (" + name.Length + " знаків, межа " + CareerSession.MaxNameLength + ")");
+                }
+            }
+            _shotHeroine = RingLaunchArgs.Has("-ring-shot-heroine");
+            ApplyShotHeroine();
+            _shotOpponent = ReadArg("-ring-shot-opponent");
+            _shotEvent = ReadArg("-ring-shot-event");
+            string bs = ReadArg("-ring-shot-backstage");
+            if (bs != null)
+            {
+                if (bs == "all") _shotBackstageAll = true;
+                else Debug.LogWarning("[Ринг] -ring-shot-backstage: відоме значення лише all, а не '" + bs + "'");
+            }
+            string end = ReadArg("-ring-shot-ending");
+            if (end != null)
+            {
+                if (FeudBot.TryParseEnding(end, out _shotEnding)) _shotHasEnding = true;
+                else Debug.LogWarning("[Ринг] -ring-shot-ending: невідома кінцівка '" + end + "' (own_script, outcast, crowd_favorite, hated_heel, honorable_loss, forgotten)");
+            }
+        }
+
+        /// <summary>
+        /// <c>-ring-shot-load</c>: на титулі — «Продовжити» з заданого сейву (тим самим входом, що й кнопка: розріз, завантаження,
+        /// екран за етапом). Не відкрився — лог і звичайний огляд з нової кар'єри.
+        /// </summary>
+        private bool BotLoadStep()
+        {
+            if (_shotLoad == null || !_onTitle || _shotLoadState == 2) return false;
+            if (_shotLoadState == 0)
+            {
+                if (!RingSaveFile.Exists(_shotLoad))
+                {
+                    Debug.LogError("[Ринг] -ring-shot-load: сейву немає — " + _shotLoad);
+                    ShotNote("сейв не знайдено: " + _shotLoad + " — нова кар'єра");
+                    _shotLoadState = 2;
+                    return false;
+                }
+                ShotNote("старт із сейву: " + _shotLoad);
+                _shotLoadState = 1;
+                StartGame(true);
+                return true;
+            }
+            // «Продовжити» запущено: чекаємо розрізу й завантаження; скінчилось, а ми ще на титулі — сейв не відкрився
+            if (_wipe.Busy || _loading != null) return true;
+            Debug.LogError("[Ринг] -ring-shot-load: сейв не відкрився — " + _shotLoad);
+            ShotNote("сейв не відкрився: " + _shotLoad + " — нова кар'єра");
+            _shotLoadState = 2;
+            return false;
+        }
+
+        /// <summary>
+        /// Ціль матчу бота кінцівок (<c>-ring-shot-ending</c>) для ходу за героя (RingGameBootstrap.Match.cs): розв'язка — сама
+        /// кінцівка з урахуванням плану, решта матчів — план букера і стиль потрібного шляху (<see cref="FeudBot.GoalFor"/>).
+        /// null — огляд без цілі (звичайний бот).
+        /// </summary>
+        public MatchGoal? ShotMatchGoal
+        {
+            get
+            {
+                if (!_shotHasEnding || _onTitle || _career == null || _career.Engine == null) return null;
+                var eng = _career.Engine;
+                bool decisive = _career.CurrentMatchDecisive;
+                var plan = _career.CurrentMatchPlan;
+                var g = FeudBot.GoalFor(_shotEnding, decisive, plan);
+                if (decisive && _shotGoalNoted != eng && _shotsDir != null)
+                {
+                    _shotGoalNoted = eng;
+                    ShotNote("розв'язка ворожнечі: план " + FeudVars.PlanNames[(int)plan] + ", ціль матчу " + g
+                             + (FeudBot.PlanAllows(_shotEnding, plan) ? "" : " — з цим планом кінцівка " + FeudBot.EndingName(_shotEnding) + " недосяжна"));
+                }
+                return g;
+            }
+        }
+
+        /// <summary>
+        /// Бот кінцівок у промо ворожнечі й сценах закулісся: вибір — цифрою варіанта, який обрав <see cref="FeudBot.ChooseOption"/>;
+        /// нагороди кидка — цифрами <see cref="FeudBot.ChooseRewards"/> по одній за крок, далі «Підтвердити». Репліки й сам кидок —
+        /// каркас («Далі»). Кінцівка ворожнечі — рядок у screens.txt і лог: ціль і що вийшло.
+        /// </summary>
+        private bool BotEndingStep()
+        {
+            if (!_shotHasEnding || _onTitle || _career == null) return false;
+            if (!_shotEndingNoted && _career.Feud.HasEnding)
+            {
+                _shotEndingNoted = true;
+                string line = "кінцівка ворожнечі: ціль " + FeudBot.EndingName(_shotEnding) + ", вийшло " + FeudBot.EndingName(_career.Feud.Ending)
+                              + (_career.Feud.Ending == _shotEnding ? " — так" : " — ні");
+                Debug.Log("[Ринг] Огляд: " + line);
+                if (_shotsDir != null) ShotNote(line);
+            }
+            PromoRunner r = null;
+            MatchDef next = null;
+            if (_career.Stage == CareerStage.Week && _career.BackstageOpen) r = _career.CurrentBackstage;
+            else if (_career.Stage == CareerStage.Show && _career.State.Phase == ShowPhase.Feud && _career.Feud.Stage == RingStage.Promo)
+            {
+                r = _career.Feud.CurrentPromoRunner;
+                next = FeudBot.NextMatch(_career.Feud);
+            }
+            if (r == null || r.IsFinished || !(_view is PromoScreenView) || !ReferenceEquals(_viewKey, r)) return false;
+            if (r.Current.Type == PromoNodeType.Choice)
+            {
+                string id = FeudBot.ChooseOption(r, _shotEnding, next);
+                int n = id == null ? 0 : FeudBot.OptionNumber(r, id);
+                if (n <= 0) return false;
+                ShotNote("кінцівка " + FeudBot.EndingName(_shotEnding) + ": " + r.Promo.Id + "/" + r.Current.Id + " → " + id);
+                _view.OnDigit(n);
+                return true;
+            }
+            if (r.Current.Type == PromoNodeType.Check && r.AwaitingRewards)
+            {
+                if (_botRewardsRunner != r || _botRewardsNode != r.Current.Id)
+                {
+                    _botRewardsRunner = r; _botRewardsNode = r.Current.Id; _botRewardsPressed.Clear();
+                }
+                foreach (var id in FeudBot.ChooseRewards(r, _shotEnding))
+                {
+                    if (_botRewardsPressed.Contains(id)) continue;
+                    _botRewardsPressed.Add(id);
+                    _view.OnDigit(FeudBot.RewardNumber(r, id));
+                    return true;
+                }
+                _view.OnConfirm();
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// <c>-ring-shot-event &lt;id&gt;</c> і <c>-ring-shot-backstage all</c>: перед «Закуліссям» тижня примусити сцену
+        /// (<see cref="CareerSession.ForceBackstage"/>) — спершу задану подію, далі всі сцени каталогу по черзі, по одній на кожне
+        /// «Закулісся». Кроку бота не займає: дію тижня тисне каркас.
+        /// </summary>
+        private void BotForceScenes()
+        {
+            if (_onTitle || _career == null || _career.Stage != CareerStage.Week || _career.BackstageOpen || _career.ForcedBackstageScene != null) return;
+            if (_shotEvent != null)
+            {
+                string id = _shotEvent;
+                _shotEvent = null;
+                ForceScene(id, "подія примусово");
+                return;
+            }
+            if (!_shotBackstageAll || _career.Content.Backstage == null) return;
+            if (_shotBackstageQueue == null)
+            {
+                _shotBackstageQueue = new Queue<string>();
+                foreach (var sc in _career.Content.Backstage.Scenes) _shotBackstageQueue.Enqueue(sc.Id);
+            }
+            if (_shotBackstageQueue.Count > 0) ForceScene(_shotBackstageQueue.Dequeue(), "закулісся по черзі (" + _shotBackstageQueue.Count + " ще)");
+        }
+
+        private void ForceScene(string id, string why)
+        {
+            try
+            {
+                _career.ForceBackstage(id);
+                ShotNote(why + ": наступне «Закулісся» — " + id);
+            }
+            catch (ArgumentException)
+            {
+                Debug.LogWarning("[Ринг] немає закулісної сцени '" + id + "'");
+                ShotNote("немає закулісної сцени " + id);
+            }
+        }
+
+        /// <summary>
+        /// <c>-ring-shot-offer decline</c>: на кінці сезону з ключами — «Лишитися» (той самий виклик, що й кнопка). Наступного сезону
+        /// пропозиція повториться — і друга відмова поспіль покаже «букер ображений». accept — нічого: «Перейти» тисне каркас.
+        /// </summary>
+        private bool BotOfferStep()
+        {
+            if (!_shotOfferDecline || _onTitle || _career == null || _career.Stage != CareerStage.SeasonEnd || !_career.OfferAvailable) return false;
+            ShotNote("пропозиція " + _career.OfferFederation.Tier + "-го рівня: «Лишитися» (-ring-shot-offer decline), відмова поспіль № " + (_career.State.OfferDeclines + 1));
+            _career.DeclineOffer();
+            Save();
+            _view.Refresh();
+            return true;
+        }
+
+        /// <summary>
+        /// <c>-ring-shot-opponent &lt;id&gt;</c>: на першому звичайному тижні огляду (до першої дії) — суперник за id
+        /// (<see cref="CareerSession.ForceOpponent"/>). Не вийшло (велике шоу, чужий дивізіон, немає такого) — пробує на наступному тижні.
+        /// Кроку бота не займає.
+        /// </summary>
+        private void BotForceOpponent()
+        {
+            if (_shotOpponent == null || _onTitle || _career == null || _career.Stage != CareerStage.Week || _career.State.ActionsDone.Count > 0) return;
+            if (_career.Content.FindNpc(_shotOpponent) == null)
+            {
+                Debug.LogWarning("[Ринг] -ring-shot-opponent: немає борця '" + _shotOpponent + "'");
+                ShotNote("немає борця " + _shotOpponent);
+                _shotOpponent = null;
+                return;
+            }
+            if (!_career.ForceOpponent(_shotOpponent)) return;
+            ShotNote("суперник тижня " + _career.State.Week + ": " + _shotOpponent + " (-ring-shot-opponent)");
+            _shotOpponent = null;
+            Save();
+            _view.Refresh();
+        }
+
+        /// <summary><c>-ring-shot-decline-title</c>: на кінці сезону з титульним шансом — «Відмовитись» (той самий виклик, що й кнопка).</summary>
+        private bool BotDeclineTitleStep()
+        {
+            if (!_shotDeclineTitle || _onTitle || _career == null || _career.Stage != CareerStage.SeasonEnd || !_career.CanStartTitleMatch) return false;
+            ShotNote("титульний шанс: відмова (-ring-shot-decline-title)");
+            _career.SkipTitle();
+            Save();
+            _view.Refresh();
+            return true;
+        }
+
+        /// <summary>
+        /// Жіночі форми звертання (П5): героїні — «ключ.f» замість чоловічого роду в промо, закулісся, кінцівках і кар'єрі; на створенні —
+        /// за вибраним тілом (<see cref="HeroForms.IsHeroine"/>). Суперниця тижня — «ключ.rf» (картка, чутки, розмова з букером);
+        /// кличеться з кожного MakeView, тож новий суперник нового тижня підхоплюється з першим же екраном.
+        /// </summary>
+        private void ApplyHeroForms()
+        {
+            if (_career == null || _text == null) return;
+            bool female = HeroForms.IsHeroine(_career, _heroBody);
+            bool rival = HeroForms.OpponentIsWoman(_career);
+            HeroForms.Apply(_text, female, rival);
+            if (_ctx != null && _ctx.Text != null && !ReferenceEquals(_ctx.Text, _text)) HeroForms.Apply(_ctx.Text, female, rival);
+        }
+
+        /// <summary>
+        /// <c>-ring-shot-heroine</c>: огляд героїні (жіночі форми тексту, подія мішаного матчу) — перше жіноче тіло на екрані створення.
+        /// Лише нова кар'єра (стадія створення): стать сейва не чіпає. Кличеться і з читання прапорців, і з NewGame після скидання тіла.
+        /// </summary>
+        private void ApplyShotHeroine()
+        {
+            if (!_shotHeroine || _career == null || _career.Stage != CareerStage.Create) return;
+            int fb = Array.FindIndex(CareerLooks.HeroBodies, CareerLooks.IsFemaleBody);
+            if (fb >= 0 && HeroBody != fb) { HeroBody = fb; ShotNote("героїня: тіло " + CareerLooks.HeroBodies[fb]); }
+        }
+
+        /// <summary>
+        /// <c>-ring-shot-contract</c> і <c>-ring-shot-manager</c> (огляд екрана контракту, §6.4): примус паперу пропозиції — щокроку, бо
+        /// його немає в сейві (переживає «Нова гра» й «Продовжити»); менеджерка — раз, на першому тижні. Кроку бота не займає.
+        /// </summary>
+        private void BotContract()
+        {
+            if (_onTitle || _career == null) return;
+            if (_shotContract.HasValue) _career.ForcedOfferExclusive = _shotContract;
+            if (_shotManager && !_career.HasManager && _career.Stage == CareerStage.Week)
+            {
+                _career.State.Manager = true;
+                _shotManager = false;
+                ShotNote("менеджерка найнята (-ring-shot-manager)");
+            }
+        }
+
+        /// <summary><c>-ring-shot-contract-read</c>: на кінці сезону з пропозицією — «Прочитати дрібний шрифт» (той самий виклик, що й кнопка).</summary>
+        private bool BotContractReadStep()
+        {
+            if (!_shotContractRead || _onTitle || _career == null || _career.Stage != CareerStage.SeasonEnd) return false;
+            var c = _career.GetOfferContract();
+            if (c == null || !c.CanRead) return false;
+            var r = _career.ReadOfferContract();
+            ShotNote("дрібний шрифт: 2d6 " + r.Roll + " + Техніка " + r.Modifier + " = " + r.Total + " — " + r.Sight + " (-ring-shot-contract-read)");
+            Save();
+            _view.Refresh();
+            return true;
         }
     }
 }

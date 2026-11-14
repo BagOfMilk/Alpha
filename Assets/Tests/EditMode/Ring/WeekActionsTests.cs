@@ -29,6 +29,39 @@ namespace Game.Tests.EditMode
             throw new InvalidOperationException("не знайшов зерно для " + tier);
         }
 
+        /// <summary>
+        /// Огляд QA (<c>-ring-shot-opponent</c>, рев'ю ПМ 12.11.2026): суперник тижня за id — лише на початку звичайного тижня і лише
+        /// з пулу букера; план і умови — як склав би букер; підміна живе в сейві. Барон — найдовше ім'я ростеру й чемпіон місцевої.
+        /// </summary>
+        [Test]
+        public void ForceOpponent_ForTheReview_OnlyAtWeekStart_OnlyFromTheBookersPool()
+        {
+            var s = CareerKit.NewHero(1);
+            Assert.AreEqual(1, s.State.Week);
+            Assert.IsFalse(s.State.IsBig);
+            Assert.IsTrue(s.ForceOpponent("baron"), "Барон — у пулі чоловічого дивізіону місцевої");
+            Assert.AreEqual("baron", s.State.Opponent);
+            var baron = s.Content.FindNpc("baron");
+            Assert.AreEqual(ShowBooker.PlanFor(baron, s.Popularity, s.Trust, s.PopularityFloor, s.PopularityCeiling), s.State.Plan, "план — як букерів");
+            Assert.AreEqual(ShowBooker.StipulationsFor(s.FeudLevel("baron")), s.State.Stip);
+
+            NpcDef female = null;
+            foreach (var n in s.Federation.Roster) if (n.Female) female = n;
+            Assert.IsNotNull(female);
+            Assert.IsFalse(s.ForceOpponent(female.Id), "чужий дивізіон — ні");
+            Assert.IsFalse(s.ForceOpponent(CareerContent.HammerId), "Молот — лише після розв'язки ворожнечі");
+            Assert.IsFalse(s.ForceOpponent("no_such_npc"));
+            Assert.AreEqual("baron", s.State.Opponent, "невдала підміна картку не змінює");
+
+            var blob = s.CaptureState();
+            var t = CareerKit.Fresh(1, s.Content);
+            t.RestoreState(blob);
+            Assert.AreEqual("baron", t.State.Opponent, "підміна — у сейві, як звичайна картка");
+
+            Assert.IsTrue(s.Train(false).Ok);
+            Assert.IsFalse(s.ForceOpponent("baron"), "після першої дії — ні");
+        }
+
         [Test]
         public void Week_HasThreeActions_FourthIsRefused_AndEndWeekGoesToShow()
         {

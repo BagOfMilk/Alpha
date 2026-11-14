@@ -72,17 +72,22 @@ namespace Game.Core.Ring
     public static class CareerFx
     {
         /// <summary>Умови: money(min), season(min), week(min), parity(min 0/1 — парність тижня), injured, champion, last_won,
-        /// last_lost, last_draw, last_swerved, plan_set, title_eligible, actions(min), npc_feud(target, min).</summary>
+        /// last_lost, last_draw, last_swerved, plan_set, title_eligible, actions(min), npc_feud(target, min), tier(min — рівень федерації),
+        /// female (героїня — жіночий дивізіон, P2-6), manager (менеджер найнятий, §6.4), booker(target — букер поточної федерації: розмова
+        /// свого букера, §6.4), role(target face/heel/rebel — роль зараз, домінантний шлях, §5.3), max_feud(min — найсильніша ворожнеча
+        /// з суперниками федерації, §5.3), seen_before(target — id сцени: була в одному з минулих сезонів, §7).</summary>
         public static readonly string[] Conditions =
         {
             "money", "season", "week", "parity", "injured", "champion", "last_won", "last_lost", "last_draw", "last_swerved",
-            "plan_set", "title_eligible", "actions", "npc_feud"
+            "plan_set", "title_eligible", "actions", "npc_feud", "tier", "female", "manager", "booker", "role", "max_feud", "seen_before"
         };
 
         /// <summary>Ефекти: money(add), injure(target зона head/body/legs/random, add — ушкодження), npc_feud(target NPC | opponent |
         /// last_opponent, add), hype(add — ажіотаж старту наступного матчу), boost(add — імпульс суперника), plan(target — план
-        /// наступного шоу), actions(add — дії тижня), dev(add — очки розвитку).</summary>
-        public static readonly string[] Effects = { "money", "injure", "npc_feud", "hype", "boost", "plan", "actions", "dev" };
+        /// наступного шоу), actions(add — дії тижня), dev(add — очки розвитку), manager(add 1 — найняти, −1 — звільнити, §6.4),
+        /// turn(target face/heel — поворот ролі, §5.3: очки героя й лиходія міняються місцями, без add), opponent(target NPC — суперник
+        /// найближчого звичайного шоу: цього тижня, якщо можна, інакше наступного; не велике, не титул, не Молот; без add).</summary>
+        public static readonly string[] Effects = { "money", "injure", "npc_feud", "hype", "boost", "plan", "actions", "dev", "manager", "turn", "opponent" };
 
         public static bool IsCondition(string n) { return Array.IndexOf(Conditions, n) >= 0; }
         public static bool IsEffect(string n) { return Array.IndexOf(Effects, n) >= 0; }
@@ -119,6 +124,10 @@ namespace Game.Core.Ring
                 c.Target = JsonRead.Str(o, "target", where, false);
                 if (!CareerFx.IsCondition(c.Key)) throw new FormatException(where + ": невідома умова кар'єри '" + c.Key + "'");
                 if (c.Key == "npc_feud" && c.Target == null) throw new FormatException(where + ": npc_feud потребує target");
+                if (c.Key == "booker" && c.Target == null) throw new FormatException(where + ": booker потребує target — id букера федерації");
+                if (c.Key == "seen_before" && c.Target == null) throw new FormatException(where + ": seen_before потребує target — id сцени");
+                RingPath rp;
+                if (c.Key == "role" && !FeudVars.TryPath(c.Target, out rp)) throw new FormatException(where + ": role потребує target face/heel/rebel");
             }
             else if (JsonRead.Has(o, "flag")) { c.Kind = ConditionKind.Flag; c.Key = JsonRead.Str(o, "flag", where); }
             else if (JsonRead.Has(o, "notFlag")) { c.Kind = ConditionKind.NotFlag; c.Key = JsonRead.Str(o, "notFlag", where); }
@@ -188,13 +197,19 @@ namespace Game.Core.Ring
                 e.Kind = EffectKind.Career; e.Key = JsonRead.Str(o, "career", where); e.Amount = JsonRead.Int(o, "add", where, 0);
                 e.Target = JsonRead.Str(o, "target", where, false);
                 if (!CareerFx.IsEffect(e.Key)) throw new FormatException(where + ": невідомий ефект кар'єри '" + e.Key + "'");
-                if ((e.Key == "injure" || e.Key == "npc_feud" || e.Key == "plan") && e.Target == null)
+                if ((e.Key == "injure" || e.Key == "npc_feud" || e.Key == "plan" || e.Key == "opponent") && e.Target == null)
                     throw new FormatException(where + ": ефект " + e.Key + " потребує target");
                 if (e.Key == "injure" && Array.IndexOf(new[] { "head", "body", "legs", "random" }, e.Target) < 0)
                     throw new FormatException(where + ": невідома зона '" + e.Target + "'");
                 BookerPlan cp;
                 if (e.Key == "plan" && !FeudVars.TryPlan(e.Target, out cp)) throw new FormatException(where + ": невідомий план '" + e.Target + "'");
-                if (e.Key != "plan" && e.Key != "npc_feud" && e.Amount == 0) throw new FormatException(where + ": ефект " + e.Key + " без add");
+                RingPath tp;
+                if (e.Key == "turn" && (!FeudVars.TryPath(e.Target, out tp) || tp == RingPath.Rebel))
+                    throw new FormatException(where + ": поворот потребує target face/heel");
+                if (e.Key == "turn" && e.Amount != 0) throw new FormatException(where + ": поворот без add");
+                if (e.Key == "opponent" && e.Amount != 0) throw new FormatException(where + ": суперник шоу — без add");
+                if (e.Key != "plan" && e.Key != "npc_feud" && e.Key != "turn" && e.Key != "opponent" && e.Amount == 0)
+                    throw new FormatException(where + ": ефект " + e.Key + " без add");
             }
             else if (JsonRead.Has(o, "var"))
             {

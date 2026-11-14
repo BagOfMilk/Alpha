@@ -47,6 +47,7 @@ namespace Game.Gameplay.EditorTools
             Directory.CreateDirectory(outDir);
             string oldName = PlayerSettings.productName;
             bool oldSplash = PlayerSettings.SplashScreen.show;
+            bool oldTiming = PlayerSettings.enableFrameTimingStats;
             var oldIcons = PlayerSettings.GetIcons(NamedBuildTarget.Unknown, IconKind.Any);
             bool ok = false;
             try
@@ -57,6 +58,8 @@ namespace Game.Gameplay.EditorTools
                 else Debug.LogWarning("[Ринг] значок застосунку не знайдено: Assets/Art/Ring/Brand/app_icon_1024.png");
                 // Заставку вимикаємо, лише якщо ліцензія дозволяє (Unity повертає show = true, якщо ні).
                 PlayerSettings.SplashScreen.show = false;
+                // Час кадру CPU/GPU для зонда FPS (-ring-fps, RingFpsProbe) — правдивий і з вікном за краєм екрана.
+                PlayerSettings.enableFrameTimingStats = true;
                 Debug.Log("[Ринг] заставка Unity: " + (PlayerSettings.SplashScreen.show ? "лишилась (ліцензія не дозволяє)" : "вимкнена"));
                 var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
                 {
@@ -73,6 +76,7 @@ namespace Game.Gameplay.EditorTools
             {
                 PlayerSettings.productName = oldName;
                 PlayerSettings.SplashScreen.show = oldSplash;
+                PlayerSettings.enableFrameTimingStats = oldTiming;
                 PlayerSettings.SetIcons(NamedBuildTarget.Unknown, oldIcons, IconKind.Any);
                 AssetDatabase.SaveAssets();
             }

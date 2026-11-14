@@ -133,6 +133,7 @@ namespace Game.Gameplay.Ring.UI.Menus
         private void SwitchTab(Tab t, bool sound)
         {
             if (_capturing != null) return;
+            ClearToast();   // статус «Дії помінялися клавішами» з «Керування» висів на «Мові» (огляд слоту 30, кадр m1080 021)
             _tab = t;
             for (int i = 0; i < _tabs.Count; i++) _tabs[i].State = i == (int)t ? PlateState.Focus : PlateState.Normal;
             if (sound) RingMenuServices.Play(MenuSfx.Tab);
@@ -347,6 +348,15 @@ namespace Game.Gameplay.Ring.UI.Menus
             RingMenuServices.Play(MenuSfx.Toggle);
             Toast(_t.Get("m.set.defaulted"));
             BuildRows(true);
+        }
+
+        /// <summary>Статус-рядок живе в межах вкладки: при зміні вкладки знімається одразу, разом із запланованим згасанням.</summary>
+        private void ClearToast()
+        {
+            _toastMs = -1f;
+            _anim.Set(_toast, MenuProp.Opacity, 0f);
+            _anim.Set(_toast, MenuProp.Scale, 1f);
+            _toast.text = "";
         }
 
         private void Toast(string s)

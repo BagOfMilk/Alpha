@@ -88,9 +88,11 @@ namespace Game.Gameplay.Ring.UI
             {
                 bool first = _beatSeen < 0;
                 _beatSeen = st.BeatSeq;
-                if (!first && st.BeatEvent != null) RingCallouts.Push(_call, st.BeatEvent, st.BeatPhase, Ctx.Text, _m.IsOver ? _m.Engine.Result.Winner : (MatchWinner?)null);
-                // Такт останньої події кроку — табло наздоганяє кадр саме на контакті (а не після всієї серії кліпів).
                 var log = _m.Engine.State.Log;
+                if (!first && st.BeatEvent != null)
+                    RingCallouts.Push(_call, st.BeatEvent, st.BeatPhase, Ctx.Text, _m.IsOver ? _m.Engine.Result.Winner : (MatchWinner?)null,
+                        MatchScreenModel.RescueFollows(log, st.BeatEvent));
+                // Такт останньої події кроку — табло наздоганяє кадр саме на контакті (а не після всієї серії кліпів).
                 if (!first && st.BeatEvent != null && log.Count > 0 && st.BeatEvent.Seq >= log[log.Count - 1].Seq && st.ShownSeq >= st.BeatEvent.Seq) { _snapP = null; Refresh(); }
             }
             // Журнал відкриває рядок на такті його події (не раніше).
@@ -181,24 +183,42 @@ namespace Game.Gameplay.Ring.UI
             var head = RingUi.Row();
             head.style.justifyContent = Justify.SpaceBetween;
             head.style.alignItems = Align.Center;
-            head.Add(RingUi.Lbl(c.Name, 17f, accent, true));
-            // Стан і зона — коротко: «Стоїть · Центр».
-            head.Add(RingUi.Lbl(c.PostureText + " · " + c.ZoneText, 13f, RingUi.Dim));
+            // Вузька плашка (4:3, довге ім'я — «Тарас «Молот» Гребінь»): стан переходить на другий рядок, а не за край плашки
+            // й екрана (слот 30, 12.11.2026: «Сили 10/10» обрізало на 4:3).
+            head.style.flexWrap = Wrap.Wrap;
+            var name = RingUi.Lbl(c.Name, 17f, accent, true);
+            name.style.flexShrink = 1f;
+            name.style.maxWidth = Length.Percent(100f);
+            name.style.marginRight = 8f;
+            head.Add(name);
+            // Стан і «Сили» — коротко: «Стоїть · Сили 7/10»; при переносі — притиснутий праворуч.
+            var state = RingUi.Lbl(c.PostureText + " · " + c.StaminaText, 13f, RingUi.Dim);
+            state.style.flexShrink = 0f;
+            state.style.flexGrow = 1f;
+            state.style.unityTextAlign = TextAnchor.MiddleRight;
+            head.Add(state);
             p.Add(head);
 
             p.Add(BarLine(c.Damage, c.DamageMax, c.Penalty > 0 ? RingUi.Bad : RingUi.Warn, 8f, Ctx.Text.Get("match.card.short.damage"), c.Damage + "/" + c.DamageMax));
             p.Add(BarLine(c.Momentum, c.MomentumMax, accent, 6f, Ctx.Text.Get("match.card.short.impulse"), c.Momentum + "/" + c.MomentumMax));
 
-            string extra = "";
-            if (c.PenaltyText.Length > 0) extra += c.PenaltyText;
-            if (c.WarningsText.Length > 0) extra += (extra.Length > 0 ? "  " : "") + c.WarningsText;
-            if (c.Tokens > 0) extra += (extra.Length > 0 ? "  " : "") + c.TokensText;
-            if (extra.Length > 0)
+            // Підвал плашки: штраф, попередження й жетони — окремими підписами у своєму кольорі, що переносяться цілими.
+            // Раніше — один рядок, увесь червоний при штрафі, і на 4:3 він рвався посередині: «Жетони / реверсу: 2» (слот 31, 12.11.2026).
+            var foot = RingUi.Row();
+            foot.style.flexWrap = Wrap.Wrap;
+            foot.style.marginTop = 3f;
+            System.Action<string, Color> addFoot = (text, col) =>
             {
-                var l = RingUi.Lbl(extra, 12f, c.PenaltyText.Length > 0 ? RingUi.Bad : RingUi.Warn);
-                l.style.marginTop = 3f;
-                p.Add(l);
-            }
+                if (text.Length == 0) return;
+                var l = RingUi.Lbl(text, 12f, col);
+                l.style.marginRight = 10f;
+                l.style.flexShrink = 1f;
+                foot.Add(l);
+            };
+            addFoot(c.PenaltyText, RingUi.Bad);
+            addFoot(c.WarningsText, RingUi.Warn);
+            if (c.Tokens > 0) addFoot(c.TokensText, RingUi.Warn);
+            if (foot.childCount > 0) p.Add(foot);
             return p;
         }
 
@@ -230,8 +250,8 @@ namespace Game.Gameplay.Ring.UI
             var top = RingUi.Row();
             top.style.justifyContent = Justify.Center;
             top.Add(RingUi.Lbl(_m.RoundText, 15f, RingUi.Gold, true));
-            string count = _m.CountText;
-            if (count.Length > 0) { var c = RingUi.Lbl("   " + count, 13f, RingUi.Bad); top.Add(c); }
+            string init = _m.InitiativeText;
+            if (init.Length > 0) { var c = RingUi.Lbl("   " + init, 13f, RingUi.Gold); top.Add(c); }
             p.Add(top);
             var hype = RingUi.Bar(_m.Hype / (float)_m.HypeMax, RingUi.Warn, 5f);
             hype.style.width = Length.Percent(100f);
@@ -401,7 +421,7 @@ namespace Game.Gameplay.Ring.UI
             string s = a.Name + "  ·  " + a.CostText;
             if (a.AttrText.Length > 0) s += "  ·  " + a.AttrText + " " + a.ModifierText;
             if (a.HasRoll && a.Percents.Length == 3)
-                s += "   |   " + t.Format(a.RollIsOpponents ? "match.action.chances.opp" : "match.chances.short", a.Percents[0], a.Percents[1], a.Percents[2]);
+                s += "   |   " + MatchScreenModel.ChancesShort(t, a);
             return s;
         }
 

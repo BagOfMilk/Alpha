@@ -245,7 +245,10 @@ namespace Game.Gameplay.Ring
             // Еталон 900 рядків (а не 720, як у зрізі): панелі менші, ринг видно (власник 04.11.2026: «зроби значно меньше»).
             // «Розмір інтерфейсу» діє на екрани гри (гнучка розкладка); меню й завантаження — завжди в еталоні 900 (розкладка за
             // безпечними зонами B01/B08: на 120 % кнопки й рядок стану пішли б за край).
-            bool menu = _view is IMenuNavigable || _loading != null || !_bootDone || _pause != null;
+            // Екрани кар'єри B03 v2 (створення, тиждень, картка шоу, підсумок, кінець сезону) — та сама абсолютна розкладка за
+            // безпечними зонами 900: на 120 % панель має ~750 одиниць заввишки, і афіша, шухляда, канати й ряди плиток налазять
+            // одне на одне (кадри 1080 і 4:3 на 120 %, 08.11.2026). «Розмір інтерфейсу» діє на гнучкі екрани — матч і розмови.
+            bool menu = _view is IMenuNavigable || _view is UI.CareerScreenView || _loading != null || !_bootDone || _pause != null;
             float s = Mathf.Clamp(Screen.height / 900f, 0.65f, 2.4f) * (_settings != null && !menu ? _settings.UiScale : 1f);
             if (Mathf.Abs(s - _appliedScale) >= 0.001f)
             {
@@ -494,6 +497,9 @@ namespace Game.Gameplay.Ring
                 OpenPause();
                 return;
             }
+            bool confirm = Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || Input.GetKeyDown(KeyCode.Space)
+                || BoundDown(RingAction.Confirm);
+            if (confirm && MatchQteInput.TryPress()) return;   // відкрите вікно QTE у матчі з'їдає «Підтвердити» (Ф3, зона бою)
             for (int i = 1; i <= 9; i++)
             {
                 if (!Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha1 + i - 1))) continue;
@@ -502,8 +508,7 @@ namespace Game.Gameplay.Ring
             }
             // перепризначені в налаштуваннях «Журнал», «Підтвердити», «Назад» діють і на екранах кар'єри; заводські — запасні
             if (Input.GetKeyDown(KeyCode.L) || BoundDown(RingAction.Log)) _view.OnToggleLog();
-            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || Input.GetKeyDown(KeyCode.Space) || BoundDown(RingAction.Confirm))
-                _view.OnConfirm();
+            if (confirm) _view.OnConfirm();
         }
 
         private int _fxSeen;

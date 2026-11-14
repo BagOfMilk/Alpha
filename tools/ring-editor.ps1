@@ -25,7 +25,10 @@
     powershell -ExecutionPolicy Bypass -File tools/ring-editor.ps1 -Action quit
 
   Коди виходу: 0 — готово; 5 — редактор не запустився чи закрився; 6 — помилки компіляції; 7 — огляд не стартував;
-  8 — огляд не дав кадрів; 9 — тайм-аут; 10 — проєкт зайнятий batchmode-процесом Unity (наприклад, збіркою).
+  8 — огляд не дав кадрів; 9 — тайм-аут; 10 — проєкт зайнятий batchmode-процесом Unity (наприклад, збіркою);
+  125 — звук редактора не вдалося заглушити (Play Mode зупинено).
+  Звук — завжди вимкнений: «Mute Audio» вкладки Game (RingInEditor) і, поки скрипт чекає гру чи огляд, Core Audio
+  для процесу редактора (tools/ring-audio-mute.ps1).
 #>
 param(
     [ValidateSet('start', 'shots', 'play', 'stop', 'status', 'show', 'hide', 'quit')]
@@ -121,6 +124,22 @@ function Get-EditorProcess {
 
 function Keep-Hidden($proc) {
     if (-not $Visible -and $proc) { [void][RingEditorWindows]::Park([int]$proc.ProcessId, $parkX, $parkY) }
+    Assert-Muted $proc
+}
+
+. (Join-Path $PSScriptRoot 'ring-audio-mute.ps1')   # [RingAudio.Muter]
+
+# Усі аудіосесії процесу редактора — гучність 0 і mute; не вдалося — зупинити Play Mode і вийти з кодом 125.
+function Assert-Muted($proc) {
+    if (-not $proc) { return }
+    $m = -2
+    $why = 'аудіосесія редактора не заглушилась (GetMute)'
+    try { $m = [RingAudio.Muter]::Mute([uint32]$proc.ProcessId) } catch { $why = $_.Exception.Message }
+    if ($m -lt 0) {
+        Send-Command @('stop')
+        Write-Host "Звук редактора не вдалося заглушити — Play Mode зупинено: $why"
+        exit 125
+    }
 }
 
 function Read-Status {

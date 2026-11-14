@@ -75,6 +75,10 @@ namespace Game.Gameplay.Ring.Models
         public string TitleText { get { return _t.Get(_runner.Promo.TitleKey); } }
         public string PlaceText { get { return _t.Get(_runner.Promo.PlaceKey); } }
         public int Act { get { return _runner.Promo.Act; } }
+        /// <summary>Сцени закулісся актів не мають (Act 0): «Акт 0» у шапці не показувати (плейтест P3, 08.11.2026).</summary>
+        public bool HasAct { get { return Act > 0; } }
+        /// <summary>«Акт N» для шапки; null — сцена без акту (закулісся).</summary>
+        public string ActText { get { return HasAct ? _t.Format("promo.act", Act) : null; } }
 
         public PromoViewKind Kind
         {
@@ -100,17 +104,17 @@ namespace Game.Gameplay.Ring.Models
             {
                 var n = _runner.Current;
                 if (n.Type != PromoNodeType.Line || string.IsNullOrEmpty(n.Speaker)) return "";
-                return _t.Get("speaker." + n.Speaker);
+                return _t.Get("speaker." + _runner.SpeakerOf(n));
             }
         }
 
-        /// <summary>Id мовця вузла-репліки (player, rival, booker...); порожньо, якщо вузол не репліка.</summary>
+        /// <summary>Id мовця вузла-репліки (player, rival, booker...; «booker» — голос букера федерації); порожньо, якщо вузол не репліка.</summary>
         public string SpeakerId
         {
             get
             {
                 var n = _runner.Current;
-                return n.Type == PromoNodeType.Line && !string.IsNullOrEmpty(n.Speaker) ? n.Speaker : "";
+                return n.Type == PromoNodeType.Line && !string.IsNullOrEmpty(n.Speaker) ? _runner.SpeakerOf(n) : "";
             }
         }
 
@@ -169,7 +173,7 @@ namespace Game.Gameplay.Ring.Models
                     return t.Format("reason.var", RingLabels.Var(t, c.Key), c.Min);
                 case ConditionKind.Path:
                     RingPath p;
-                    string pn = FeudVars.TryPath(c.Key, out p) ? RingLabels.PathName(t, p) : c.Key;
+                    string pn = FeudVars.TryPath(c.Key, out p) ? RingLabels.PathName(t, p, HeroForms.ShowsHeroine(t)) : c.Key;
                     return t.Format("reason.path", pn, c.Min);
                 case ConditionKind.Flag: return Specific(t, "reason.flag.", c.Key, "reason.flag");
                 case ConditionKind.NotFlag: return Specific(t, "reason.notflag.", c.Key, "reason.notflag");

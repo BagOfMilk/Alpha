@@ -12,6 +12,12 @@ namespace Game.Gameplay.Ring.UI.Menus
     /// </summary>
     public sealed class MenuDialog : IMenuNavigable
     {
+        /// <summary>
+        /// Відступи підкладки: праворуч більше — сходинка варіантів (14 на рядок), зсув фокуса (25) і ширша форма фокуса
+        /// (<see cref="SlantPlate.FocusGrow"/>) мають лишатися на підкладці.
+        /// </summary>
+        public const float DialogPadLeft = 40f, DialogPadRight = 72f, DialogPadTop = 30f, DialogPadBottom = 20f;
+
         public readonly VisualElement Root;
         private readonly List<MenuButton> _buttons = new List<MenuButton>();
         private readonly List<Action> _actions = new List<Action>();
@@ -30,6 +36,20 @@ namespace Game.Gameplay.Ring.UI.Menus
             Root.style.backgroundColor = RingTheme.WithAlpha(RingTheme.Scrim, BrandTokens.AlphaScrim);
             Root.style.justifyContent = Justify.Center;
             Root.style.alignItems = Align.Center;
+            // Підкладка діалогу — темна трапеція під заголовком, реченням і варіантами (огляд слоту 31, 12.11.2026): на одному
+            // затемненні речення лежало просто на сцені (канат крізь текст на «Вийти?» і «На титул?»), а на 4:3 заголовок
+            // «НЕ ЗБЕРЕЖЕНО» торкався підказки вкладки під затемненням.
+            var card = new VisualElement();
+            card.style.paddingLeft = DialogPadLeft; card.style.paddingRight = DialogPadRight;
+            card.style.paddingTop = DialogPadTop; card.style.paddingBottom = DialogPadBottom;
+            card.style.overflow = Overflow.Visible;
+            card.generateVisualContent = ctx =>
+            {
+                float w = card.layout.width, h = card.layout.height;
+                if (float.IsNaN(w) || w < 2f || h < 2f) return;
+                MenuShapes.Trapezoid(ctx.painter2D, 0f, 0f, w, h, MenuShapes.SlantK, RingTheme.WithAlpha(RingTheme.Bg, BrandTokens.AlphaPlate));
+            };
+            card.RegisterCallback<GeometryChangedEvent>(e => card.MarkDirtyRepaint());
             var col = new VisualElement();
             col.style.alignItems = Align.FlexStart;
             col.style.maxWidth = 760f;
@@ -56,7 +76,8 @@ namespace Game.Gameplay.Ring.UI.Menus
                 enabled.Add(true);
                 col.Add(btn);
             }
-            Root.Add(col);
+            card.Add(col);
+            Root.Add(card);
             _focus.Reset(enabled, focusIndex);
             Sync();
             _anim.FromTo(Root, MenuProp.Opacity, 0f, 1f, BrandTokens.MotionMenuPlateInMs, Ease.OutCubic);

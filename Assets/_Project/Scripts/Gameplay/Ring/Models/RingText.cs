@@ -55,6 +55,28 @@ namespace Game.Gameplay.Ring.Models
         }
     }
 
+    /// <summary>
+    /// Статут TYPE-02: ВЕЛИКІ display — лише для ≤2 слів (мітки, імена); довше — речення, sentence case у ролі text.
+    /// Словом рахується відрізок між пробілами з літерою чи цифрою («—», «·» — ні).
+    /// </summary>
+    public static class RingCaption
+    {
+        public static bool IsShort(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return true;
+            int words = 0;
+            bool inWord = false, hasAlnum = false;
+            for (int i = 0; i <= text.Length; i++)
+            {
+                bool sep = i == text.Length || char.IsWhiteSpace(text[i]);
+                if (!sep) { inWord = true; if (char.IsLetterOrDigit(text[i])) hasAlnum = true; continue; }
+                if (inWord && hasAlnum && ++words > 2) return false;
+                inWord = false; hasAlnum = false;
+            }
+            return true;
+        }
+    }
+
     /// <summary>Відсотки з тридцять шостих: цілі, сума рівно 100 (метод найбільших залишків).</summary>
     public static class RingChances
     {

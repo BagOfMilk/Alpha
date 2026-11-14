@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Game.Core.Randomness;
 using Game.Core.Ring;
 using Game.Core.Ring.Career;
 using Game.Core.Ring.Match;
 using Game.Gameplay.Combat;
+using Game.Gameplay.Ring.Models;
 using NUnit.Framework;
 
 namespace Game.Tests.EditMode
@@ -16,7 +18,8 @@ namespace Game.Tests.EditMode
     /// </summary>
     public class BackstageTests
     {
-        private static readonly string[] EventIds = { "ev_parking", "ev_interview", "ev_contract", "ev_friend" };
+        /// <summary>Події в порядку файлу (перша дозріла — перша): скаут (П5) — з сезону 2, решта — з першого.</summary>
+        private static readonly string[] EventIds = { "ev_scout", "ev_parking", "ev_interview", "ev_contract", "ev_friend" };
 
         private static CareerContent Shared() { return CareerKit.Content(); }
 
@@ -29,16 +32,48 @@ namespace Game.Tests.EditMode
             return s;
         }
 
-        /// <summary>Сесія, де першою відкриється подія id: попередні події цього сезону вже були, тиждень — останній (усе дозріло).</summary>
+        /// <summary>
+        /// Герой у федерації <paramref name="tier"/>: усі події цього сезону вже були, тож «Закулісся» відкриває розмову з букером
+        /// федерації. Популярність — підлога федерації (з неї менеджерка цікавиться, тому події позначені всі, а не лише EventIds).
+        /// </summary>
+        private static CareerSession HeroIn(CareerContent c, int tier, int week = 1, ulong seed = 1)
+        {
+            var s = Hero(c, seed, week, 1);
+            if (tier > 1) s.EnterFederation(tier, c.Federation(tier).Floor, 1);
+            foreach (var sc in c.Backstage.Scenes) if (sc.Kind == BackstageKind.Event) s.State.BackstageSeen.Add(s.State.Season + ":" + sc.Id);
+            return s;
+        }
+
+        /// <summary>Розмова з букером федерації <paramref name="tier"/>: та, що відкривається герою цієї федерації.</summary>
+        private static string TalkOf(CareerContent c, int tier)
+        {
+            var r = HeroIn(c, tier).Backstage();
+            Assert.AreEqual(BackstageKind.Booker, r.SceneKind, "федерація " + tier);
+            return r.SceneId;
+        }
+
+        /// <summary>
+        /// Сесія, де першою відкриється подія id: попередні події цього сезону вже були, тиждень — останній (усе дозріло). Сцени дуги
+        /// («arc») перевіряються раніше за решту (рев'ю ПМ 927b86c), тож і вони цього сезону вже були — крім самої id.
+        /// </summary>
         private static CareerSession HeroForEvent(CareerContent c, string id, ulong seed = 1)
         {
-            var s = Hero(c, seed, 4);
+            int season = Math.Max(1, c.Backstage.Find(id).MinSeason);
+            var s = Hero(c, seed, 4, season);
             foreach (var e in EventIds)
             {
                 if (e == id) break;
-                s.State.BackstageSeen.Add("1:" + e);
+                s.State.BackstageSeen.Add(season + ":" + e);
             }
+            ArcSeen(s, season, id);
             return s;
+        }
+
+        /// <summary>Сцени дуги цього сезону вже були (крім <paramref name="except"/>): вони йдуть першими й інакше перехопили б подію тесту.</summary>
+        private static void ArcSeen(CareerSession s, int season, string except = null)
+        {
+            foreach (var sc in s.Content.Backstage.Scenes)
+                if (sc.Arc && sc.Id != except) s.State.BackstageSeen.Add(season + ":" + sc.Id);
         }
 
         /// <summary>Пройти сцену за сценарієм виборів (id варіантів по черзі; далі — перший доступний); кидки — заданий ступінь.</summary>
@@ -108,7 +143,11 @@ namespace Game.Tests.EditMode
             foreach (var kv in own)
             {
                 bool service = kv.Key.StartsWith("speaker.") || kv.Key.StartsWith("week.reason.") || kv.Key.StartsWith("bs.kind.") || kv.Key.StartsWith("bs.ui.");
-                if (!service) StringAssert.Contains("\"" + kv.Key + "\"", scenes, "невикористаний ключ " + kv.Key);
+                // форми «ключ.f» і «ключ.rf» (HeroForms) у сценах не згадуються — досить, щоб був базовий ключ
+                string used = kv.Key;
+                foreach (var suf in new[] { HeroForms.RivalSuffix, HeroForms.FemaleSuffix })
+                    if (used.EndsWith(suf, StringComparison.Ordinal)) { used = used.Substring(0, used.Length - suf.Length); break; }
+                if (!service) StringAssert.Contains("\"" + used + "\"", scenes, "невикористаний ключ " + kv.Key);
                 string v = (string)kv.Value;
                 Assert.IsFalse(string.IsNullOrWhiteSpace(v), kv.Key);
                 foreach (var bad in new[] { "ы", "э", "ё", "ъ" }) StringAssert.DoesNotContain(bad, v.ToLowerInvariant(), kv.Key);
@@ -135,6 +174,85 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void Loader_BookerCondition_NeedsAFederationsBooker_AndTheirTalkIsSpokenByThemAlone()
+        {
+            Func<string, CareerContent> load = extra => CareerContent.Load(CareerKit.Read("feud_hammer.json"), CareerKit.Read("career_moves.json"),
+                CareerKit.Read("career_gimmicks.json"), CareerKit.Read("career_roster.json"),
+                "{\"scenes\":[{\"id\":\"booker_talk\",\"kind\":\"booker\",\"start\":\"n1\",\"nodes\":["
+                + "{\"id\":\"n1\",\"type\":\"line\",\"speaker\":\"booker\",\"text\":\"k\",\"next\":\"end\"},{\"id\":\"end\",\"type\":\"end\"}]}," + extra + "]}");
+            Func<string, string, string> talk = (cond, speaker) => "{\"id\":\"b2\",\"kind\":\"booker\",\"start\":\"n1\",\"requires\":[" + cond + "],\"nodes\":["
+                + "{\"id\":\"n1\",\"type\":\"line\",\"speaker\":\"" + speaker + "\",\"text\":\"k\",\"next\":\"end\"},{\"id\":\"end\",\"type\":\"end\"}]}";
+            Assert.IsNotNull(load(talk("{\"career\":\"booker\",\"target\":\"booker2\"}", "booker2")).Backstage);
+            Assert.IsNotNull(load(talk("{\"career\":\"booker\",\"target\":\"booker2\"}", "narrator")).Backstage, "оповідач у розмові букера — можна");
+            Assert.Throws<FormatException>(() => load(talk("{\"career\":\"booker\"}", "booker2")), "booker без target");
+            Assert.Throws<FormatException>(() => FeudCondition.FromJson(MiniJson.ParseObject("{\"career\":\"booker\"}"), "t"), "і поза закуліссям — умова без target");
+            Assert.Throws<FormatException>(() => load(talk("{\"career\":\"booker\",\"target\":\"scout\"}", "scout")), "агент — не букер федерації");
+            Assert.Throws<FormatException>(() => load(talk("{\"career\":\"booker\",\"target\":\"booker2\"}", "booker")), "у розмові Агати говорить Ліна");
+            Assert.Throws<FormatException>(() => load(talk("{\"career\":\"booker\",\"target\":\"booker2\"}", "booker3")), "у розмові Агати говорить Девід");
+        }
+
+        [Test]
+        public void TheOwnBookersTalk_WinsOverTheFallback_WhateverTheFileOrder()
+        {
+            // запасна розмова (без умов) у файлі стоїть першою — і все одно бере гору своя розмова букера федерації
+            var c = Shared();
+            Assert.AreEqual(0, c.Backstage.Scenes.FindIndex(x => x.Kind == BackstageKind.Booker), "у файлі першою стоїть запасна");
+            Assert.AreEqual("booker_talk", c.Backstage.Scenes.First(x => x.Kind == BackstageKind.Booker).Id);
+            for (int tier = 2; tier <= c.Federations.Count; tier++) Assert.AreNotEqual("booker_talk", TalkOf(c, tier));
+
+            // і навпаки: запасна — остання, розмови букерів 2–4 стоять перед нею, але в місцевій федерації їхні умови не виконано
+            var r = Shared();
+            r.Backstage.Scenes.Reverse();
+            Assert.AreEqual("booker_talk", r.Backstage.Scenes.Last(x => x.Kind == BackstageKind.Booker).Id, "у файлі запасна — остання");
+            Assert.AreEqual("booker_talk", TalkOf(r, 1), "місцева федерація — розмова Ліни");
+            for (int tier = 2; tier <= r.Federations.Count; tier++) Assert.AreEqual(c.Federation(tier).Booker + "_talk", TalkOf(r, tier));
+        }
+
+        [Test]
+        public void TheFeudPromos_SpeakWithTheVoiceOfTheCurrentFederationsBooker_AlsoAfterAFreshRestore()
+        {
+            // рев'ю ПМ 12.11.2026: ворожнеча з Молотом переходить у федерації 2–4, а її промо говорили голосом і ім'ям Ліни
+            var c = Shared();
+            var text = RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json"), CareerKit.Read("backstage_uk.json"));
+            var local = HeroIn(c, 1);
+            Assert.AreEqual("booker", local.Feud.BookerVoice, "місцева федерація — Ліна");
+            for (int tier = 2; tier <= c.Federations.Count; tier++)
+            {
+                var s = HeroIn(c, tier);
+                string voice = c.Federation(tier).Booker;
+                Assert.AreEqual(voice, s.Feud.BookerVoice, "федерація " + tier);
+                var t = CareerKit.Fresh(1, c);
+                t.RestoreState(s.CaptureState());
+                Assert.AreEqual(voice, t.Feud.BookerVoice, "після відновлення — той самий голос");
+
+                var promo = c.Feud.Promos.First(p => p.Nodes.Any(n => n.Speaker == PromoRunner.BookerSpeaker));
+                var run = new PromoRunner(c.Feud, promo, s.Feud.State.Clone()) { BookerVoice = s.Feud.BookerVoice };
+                var line = promo.Nodes.First(n => n.Speaker == PromoRunner.BookerSpeaker);
+                Assert.AreEqual(voice, run.SpeakerOf(line));
+                var m = new PromoScreenModel(new PromoRunner(c.Feud, promo, s.Feud.State.Clone(), line.Id) { BookerVoice = voice }, text);
+                Assert.AreEqual(text.Get("speaker." + voice), m.SpeakerText, "ім'я букера федерації " + tier);
+                Assert.AreEqual(voice, m.SpeakerId, "постать — теж за голосом");
+            }
+            var other = new PromoRunner(c.Feud, c.Feud.Promos[0], new FeudState()) { BookerVoice = "booker3" };
+            foreach (var n in c.Feud.Promos.SelectMany(p => p.Nodes).Where(n => n.Speaker != null && n.Speaker != PromoRunner.BookerSpeaker))
+                Assert.AreEqual(n.Speaker, other.SpeakerOf(n), "інших мовців голос букера не чіпає: " + n.Id);
+        }
+
+        [Test]
+        public void TheCampaign_PassesTheBookerVoice_ToTheRunningPromo_EvenWhenItIsSetLater()
+        {
+            var c = Shared();
+            var camp = RingCampaign.New(c.Feud, new SeededDiceRoller(3));
+            var run = camp.StartPromo();
+            Assert.IsNull(run.BookerVoice);
+            camp.BookerVoice = "booker2";
+            Assert.AreEqual("booker2", camp.CurrentPromoRunner.BookerVoice, "відновлення: голос ставлять після кампанії — і промо, що йде, його бере");
+            var early = RingCampaign.New(c.Feud, new SeededDiceRoller(3));
+            early.BookerVoice = "booker4";
+            Assert.AreEqual("booker4", early.StartPromo().BookerVoice, "голос, поставлений до промо, — у новому промо");
+        }
+
+        [Test]
         public void Loader_RejectsUnknownSpeakers_UnknownNpcTargets_AndFeudOnlyEffects()
         {
             string template = "{\"scenes\":[{\"id\":\"booker_talk\",\"kind\":\"booker\",\"start\":\"n1\",\"nodes\":["
@@ -150,6 +268,29 @@ namespace Game.Tests.EditMode
             Assert.Throws<FormatException>(() => load("booker", "{\"career\":\"teleport\",\"add\":1}"));
             Assert.Throws<FormatException>(() => load("booker", "{\"career\":\"injure\",\"target\":\"elbow\",\"add\":1}"));
             Assert.IsNotNull(load("baron", "{\"career\":\"money\",\"add\":5}"));
+        }
+
+        [Test]
+        public void Loader_AnEventsFederationBooker_SpeaksOnlyWhereTheConditionIsHisFederation()
+        {
+            // рев'ю ПМ 12.11.2026: припущення «подія лише у федерації X» — умовою в даних (booker, tier чи гілка за букером), а не коментарем
+            string template = "{\"scenes\":[{\"id\":\"booker_talk\",\"kind\":\"booker\",\"start\":\"n1\",\"nodes\":["
+                + "{\"id\":\"n1\",\"type\":\"line\",\"speaker\":\"booker\",\"text\":\"k\",\"next\":\"end\"},{\"id\":\"end\",\"type\":\"end\"}]},"
+                + "{\"id\":\"ev_x\",\"kind\":\"event\",\"start\":\"START\",REQ\"nodes\":["
+                + "{\"id\":\"nb\",\"type\":\"branch\",\"cases\":[{\"requires\":[{\"career\":\"booker\",\"target\":\"booker2\"}],\"next\":\"n1\"}],\"next\":\"end\"},"
+                + "{\"id\":\"n1\",\"type\":\"line\",\"speaker\":\"SPEAKER\",\"text\":\"k\",\"next\":\"end\"},{\"id\":\"end\",\"type\":\"end\"}]}]}";
+            Func<string, string, string, CareerContent> load = (start, req, sp) => CareerContent.Load(CareerKit.Read("feud_hammer.json"),
+                CareerKit.Read("career_moves.json"), CareerKit.Read("career_gimmicks.json"), CareerKit.Read("career_roster.json"),
+                template.Replace("START", start).Replace("REQ", req).Replace("SPEAKER", sp));
+            Assert.IsNotNull(load("n1", "", "narrator"), "оповідач — будь-де");
+            Assert.Throws<FormatException>(() => load("n1", "", "booker"), "Ліна в події без умови — ні");
+            Assert.Throws<FormatException>(() => load("n1", "", "booker2"));
+            Assert.IsNotNull(load("n1", "\"requires\":[{\"career\":\"booker\",\"target\":\"booker2\"}],", "booker2"), "умова booker");
+            Assert.Throws<FormatException>(() => load("n1", "\"requires\":[{\"career\":\"booker\",\"target\":\"booker2\"}],", "booker3"));
+            Assert.IsNotNull(load("n1", "\"requires\":[{\"career\":\"tier\",\"min\":2,\"not\":true}],", "booker"), "tier < 2 — федерація Ліни");
+            Assert.Throws<FormatException>(() => load("n1", "\"requires\":[{\"career\":\"tier\",\"min\":3,\"not\":true}],", "booker"), "федерації 1–2 — ні");
+            Assert.IsNotNull(load("nb", "", "booker2"), "гілка за букером");
+            Assert.Throws<FormatException>(() => load("nb", "", "booker3"));
         }
 
         [Test]
@@ -270,30 +411,207 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void BookerTalk_EveryPath_ReachesTheEnd_AcrossAllFiveSubTalks()
+        public void BookerTalk_EveryPath_ReachesTheEnd_AcrossAllFiveSubTalks_InEveryFederation()
         {
             var c = Shared();
-            var visited = new HashSet<string>();
-            var variants = new List<Func<CareerSession>>
+            for (int tier = 1; tier <= c.Federations.Count; tier++)
             {
-                () => { var s = Hero(c, 1, 1, 1, true); s.Feud.State.Trust = 1; return s; },                                         // холодна
-                () => { var s = Hero(c, 1, 1, 1, true); s.Feud.State.Trust = 3; s.State.LastOutcome = 2; s.State.LastOpponent = "dzhura"; return s; },   // поразка
-                () => { var s = Hero(c, 1, 1, 1, true); s.Feud.State.Trust = 4; return s; },                                         // титульний натяк
-                () => { var s = Hero(c, 1, 2, 1, true); s.Feud.State.Trust = 3; s.State.Plan = BookerPlan.WinClean; return s; },      // план
-                () => { var s = Hero(c, 1, 1, 1, true); s.Feud.State.Trust = 2; s.State.LastOutcome = 1; return s; },                 // після перемоги
-                () => { var s = Hero(c, 1, 1, 1, true); s.Feud.State.Trust = 2; return s; }                                          // звичайна
-            };
-            foreach (var v in variants) Explore(v, "booker_talk", visited);
-            AssertAllNodesVisited(c, "booker_talk", visited);
+                int f = tier;
+                string talk = TalkOf(c, f);
+                string rival = c.Federation(f).Roster.First(n => !n.Female && n.Id != CareerContent.HammerId).Id;
+                var visited = new HashSet<string>();
+                var variants = new List<Func<CareerSession>>
+                {
+                    () => { var s = HeroIn(c, f); s.Feud.State.Trust = 1; return s; },                                              // холодна
+                    () => { var s = HeroIn(c, f); s.Feud.State.Trust = 3; s.State.LastOutcome = 2; s.State.LastOpponent = rival; return s; },   // поразка
+                    () => { var s = HeroIn(c, f); s.Feud.State.Trust = 4; return s; },                                              // титульний натяк
+                    () => { var s = HeroIn(c, f, 2); s.Feud.State.Trust = 3; s.State.Plan = BookerPlan.WinClean; return s; },       // план
+                    () => { var s = HeroIn(c, f); s.Feud.State.Trust = 2; s.State.LastOutcome = 1; return s; },                    // після перемоги
+                    () => { var s = HeroIn(c, f); s.Feud.State.Trust = 2; return s; }                                              // звичайна
+                };
+                foreach (var v in variants) Explore(v, talk, visited);
+                AssertAllNodesVisited(c, talk, visited);
+            }
         }
 
         [Test]
-        public void BookerTalk_PicksTheSubTalkByState()
+        public void EveryFederation_TalksWithItsOwnBooker_InTheirOwnVoice_LinasTalkStaysHome()
         {
             var c = Shared();
+            var talks = new HashSet<string>();
+            for (int tier = 1; tier <= c.Federations.Count; tier++)
+            {
+                var f = c.Federation(tier);
+                string talk = TalkOf(c, tier);
+                Assert.IsTrue(talks.Add(talk), "у кожної федерації своя розмова: " + talk);
+                var speakers = c.Backstage.Find(talk).Promo.Nodes.Where(n => n.Type == PromoNodeType.Line).Select(n => n.Speaker).Distinct().ToList();
+                CollectionAssert.AreEqual(new[] { f.Booker }, speakers, "федерація " + tier + ": говорить лише її букер");
+                if (tier > 1) Assert.AreNotEqual("booker_talk", talk, "федерація " + tier + " не говорить голосом Ліни");
+            }
+            Assert.AreEqual("booker_talk", TalkOf(c, 1), "запасна розмова без умов — Ліна, місцева федерація");
+            // перехід посеред кар'єри: розмова змінюється разом із федерацією, і після сейву теж
+            var s = HeroIn(c, 1);
+            s.EnterFederation(3, c.Federation(3).Floor, 2);
+            var t = CareerKit.Fresh(1, c);
+            t.RestoreState(s.CaptureState());
+            Assert.AreEqual(TalkOf(c, 3), t.Backstage().SceneId);
+        }
+
+        [Test]
+        public void BookerTalks_OfOtherFederations_KeepTheSameSubTalks_AndTheSameStakes()
+        {
+            var c = Shared();
+            var lina = c.Backstage.Find("booker_talk").Promo;
+            for (int tier = 2; tier <= c.Federations.Count; tier++)
+            {
+                var p = c.Backstage.Find(TalkOf(c, tier)).Promo;
+                Assert.AreEqual(lina.Start, p.Start);
+                Assert.AreEqual(lina.TitleKey, p.TitleKey, "заголовок той самий — «Розмова з букером»");
+                Assert.AreNotEqual(lina.PlaceKey, p.PlaceKey, "кабінет — свій");
+                CollectionAssert.AreEqual(lina.Nodes.Select(n => n.Id + ":" + n.Type), p.Nodes.Select(n => n.Id + ":" + n.Type), p.Id + ": ті самі вузли");
+                foreach (var n in lina.Nodes)
+                {
+                    var m = p.Find(n.Id);
+                    Assert.AreEqual(string.Join(";", n.Cases.Select(x => string.Join(",", x.Requires) + ">" + x.Next)), string.Join(";", m.Cases.Select(x => string.Join(",", x.Requires) + ">" + x.Next)), p.Id + "/" + n.Id + ": гілки");
+                    Assert.AreEqual(Stakes(n), Stakes(m), p.Id + "/" + n.Id + ": ставки ті самі — темп кар'єри не змінюється (вікна заміряно на розмові Ліни)");
+                }
+            }
+        }
+
+        private static string Fx(FeudEffect e) { return e.Kind + ":" + e.Key + ":" + e.Amount + ":" + e.Target + ":" + e.Value; }
+
+        private static string Stakes(PromoNode n)
+        {
+            var parts = new List<string> { n.Next ?? "", n.Attr + "/" + n.Mod + "/" + n.Pick10 + "/" + n.Pick7 };
+            foreach (var o in n.Options) parts.Add(o.Id + ">" + o.Next + "[" + string.Join(",", o.Requires) + "]{" + string.Join(",", o.Effects.Select(e => Fx(e))) + "}" + o.Path);
+            foreach (var r in n.Rewards) parts.Add(r.Id + "{" + string.Join(",", r.Effects.Select(e => Fx(e))) + "}");
+            parts.Add("fail{" + string.Join(",", n.Fail.Select(e => Fx(e))) + "}");
+            return string.Join(" | ", parts);
+        }
+
+        /// <summary>Як у текстах звуть букерів (відмінки) — щоб знайти чуже ім'я в сцені.</summary>
+        private static readonly Dictionary<string, Regex> BookerNames = new Dictionary<string, Regex>
+        {
+            { "booker", new Regex("\\b(?:Ліна|Ліни|Ліні|Ліну|Ліною)\\b|\\bВорон\\b") },
+            { "booker2", new Regex("\\bАгат|\\bНовак\\b") },
+            { "booker3", new Regex("\\bДевід|\\bОкоро\\b") },
+            { "booker4", new Regex("\\bХіроко\\b|\\bТанак") },
+        };
+
+        /// <summary>
+        /// Вузли, до яких ведуть лише випадки гілок з умовою «букер федерації = X» (і всі — з тим самим X): вузол → X. Старт, перехід
+        /// рядка, варіант вибору, кидок і запасна гілка (next) — перехід без букера.
+        /// </summary>
+        private static Dictionary<string, string> BookerGuards(PromoDef p)
+        {
+            var into = new Dictionary<string, List<string>>();
+            Action<string, string> edge = (to, guard) =>
+            {
+                if (to == null) return;
+                List<string> l;
+                if (!into.TryGetValue(to, out l)) into[to] = l = new List<string>();
+                l.Add(guard);
+            };
+            edge(p.Start, null);
+            foreach (var n in p.Nodes)
+            {
+                if (n.Type != PromoNodeType.Branch) { foreach (var t in n.Targets()) edge(t, null); continue; }
+                foreach (var cs in n.Cases)
+                    edge(cs.Next, cs.Requires.Where(cd => cd.Kind == ConditionKind.Career && cd.Key == "booker" && !cd.Negate)
+                        .Select(cd => cd.Target).FirstOrDefault());
+                edge(n.Next, null);
+            }
+            var guards = new Dictionary<string, string>();
+            foreach (var kv in into)
+                if (kv.Value[0] != null && kv.Value.All(x => x == kv.Value[0])) guards[kv.Key] = kv.Value[0];
+            return guards;
+        }
+
+        [Test]
+        public void BookerNames_OnlyInTheirOwnFederationsScenes_AndTrustRewardsOfTheFeudNameNoBooker()
+        {
+            // перевірка самого охоронця: гілка за букером федерації пускає до репліки лише свого букера
+            var turn = BookerGuards(Shared().Backstage.Find("ev_turn").Promo);
+            Assert.AreEqual("booker", turn["b1"]);
+            Assert.AreEqual("booker2", turn["b2"]);
+            Assert.IsFalse(turn.ContainsKey("b0"), "запасна гілка — без букера");
+            Assert.IsFalse(turn.ContainsKey("rb"), "спільний вузол після реплік — без букера");
+
+            var c = Shared();
+            var text = new Dictionary<string, string>();
+            foreach (var f in new[] { "strings_uk.json", "backstage_uk.json" })
+                foreach (var kv in MiniJson.ParseObject(CareerKit.Read(f))) text[kv.Key] = (string)kv.Value;
+            foreach (var b in BookerNames) Assert.IsTrue(b.Value.IsMatch(text["speaker." + b.Key]), "ім'я " + b.Key + " розпізнається: " + text["speaker." + b.Key]);
+            Assert.IsTrue(c.Federations.All(f => BookerNames.ContainsKey(f.Booker)), "кожен букер федерації — у переліку імен");
+
+            var bad = new List<string>();
+            Action<string, string, string> check = (where, key, allowed) =>
+            {
+                foreach (var k in new[] { key, key + HeroForms.FemaleSuffix, key + HeroForms.RivalSuffix })
+                {
+                    string v;
+                    if (k == null || !text.TryGetValue(k, out v)) continue;
+                    foreach (var b in BookerNames)
+                        if (b.Key != allowed && b.Value.IsMatch(v)) bad.Add(where + " " + k + ": " + b.Key + " — «" + v + "»");
+                }
+            };
+            foreach (var sc in c.Backstage.Scenes)
+            {
+                string allowed = null;
+                foreach (var cd in sc.Requires) if (cd.Kind == ConditionKind.Career && cd.Key == "booker" && !cd.Negate) allowed = cd.Target;
+                // умови «tier» звужують федерації сцени; одна федерація — лише її букер (ev_betrayal: tier min 2 not → федерація 1)
+                int lo = 1, hi = c.Federations.Count;
+                foreach (var cd in sc.Requires)
+                    if (cd.Kind == ConditionKind.Career && cd.Key == "tier") { if (cd.Negate) hi = Math.Min(hi, cd.Min - 1); else lo = Math.Max(lo, cd.Min); }
+                if (allowed == null && lo == hi) allowed = c.Federation(lo).Booker;
+                if (sc.Kind == BackstageKind.Booker && sc.Requires.Count == 0) allowed = "booker";   // запасна — розмова Ліни, лише місцева федерація
+                var p = sc.Promo;
+                check(sc.Id, p.TitleKey, allowed);
+                check(sc.Id, p.PlaceKey, allowed);
+                var guards = BookerGuards(p);
+                foreach (var n in p.Nodes)
+                {
+                    // вузол, до якого ведуть лише випадки гілки «букер федерації = X», буває тільки у федерації X
+                    string g, here = guards.TryGetValue(n.Id, out g) ? g : allowed;
+                    check(sc.Id + "/" + n.Id, n.TextKey, here);
+                    foreach (var o in n.Options) check(sc.Id + "/" + n.Id, o.TextKey, here);
+                    foreach (var r in n.Rewards) check(sc.Id + "/" + n.Id, r.TextKey, here);
+                    if (n.Type == PromoNodeType.Line && c.IsFederationBooker(n.Speaker) && n.Speaker != here)
+                        bad.Add(sc.Id + "/" + n.Id + ": говорить " + n.Speaker + ", а вузол буває не лише в федерації цього букера");
+                }
+            }
+            // промо ворожнечі з Молотом іде в будь-якій федерації кар'єри (рев'ю ПМ 12.11.2026): жодного імені букера в жодному тексті,
+            // а говорить букер лише як «booker» — голос букера поточної федерації (PromoRunner.BookerVoice)
+            foreach (var p in c.Feud.Promos)
+            {
+                string w = "ворожнеча " + p.Id;
+                check(w, p.TitleKey, null);
+                check(w, p.PlaceKey, null);
+                foreach (var n in p.Nodes)
+                {
+                    check(w + "/" + n.Id, n.TextKey, null);
+                    foreach (var o in n.Options) check(w + "/" + n.Id, o.TextKey, null);
+                    foreach (var r in n.Rewards) check(w + "/" + n.Id, r.TextKey, null);
+                    if (n.Type == PromoNodeType.Line && c.IsFederationBooker(n.Speaker) && n.Speaker != PromoRunner.BookerSpeaker)
+                        bad.Add(w + "/" + n.Id + ": говорить " + n.Speaker + " — у ворожнечі букер лише «booker» (голос федерації)");
+                }
+            }
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        [Test]
+        public void BookerTalk_PicksTheSubTalkByState_InEveryFederation()
+        {
+            var c = Shared();
+            for (int tier = 1; tier <= c.Federations.Count; tier++) PicksTheSubTalkByState(c, tier);
+        }
+
+        private static void PicksTheSubTalkByState(CareerContent c, int tier)
+        {
+            string talk = TalkOf(c, tier);
             Func<CareerSession, string> second = s =>
             {
-                s.Backstage();
+                Assert.AreEqual(talk, s.Backstage().SceneId);
                 var r = s.CurrentBackstage;
                 Assert.AreEqual("n1", r.Current.Id);
                 r.Advance();
@@ -301,7 +619,7 @@ namespace Game.Tests.EditMode
             };
             Func<int, int, Action<CareerSession>, string> at = (trust, week, setup) =>
             {
-                var s = Hero(c, 1, week, 1, true);
+                var s = HeroIn(c, tier, week);
                 s.Feud.State.Trust = trust;
                 if (setup != null) setup(s);
                 return second(s);
@@ -391,7 +709,7 @@ namespace Game.Tests.EditMode
         {
             var c = Shared();
             var s = HeroForEvent(c, "ev_interview");
-            s.Feud.State.Audience = 1;   // інтерв'ю потребує популярності ≥ 2
+            s.Feud.State.Audience = 0;   // інтерв'ю потребує популярності ≥ 1 (П5: місцева шкала 0–4, старт 1)
             Assert.AreNotEqual("ev_interview", s.Backstage().SceneId);
         }
 
@@ -518,6 +836,25 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(1, r.HypeBonusDelta);
             Assert.AreEqual(heel + 1, s.Feud.State.GetPath(RingPath.Heel));
             Assert.IsTrue(s.State.BackstageSeen.Contains("1:ev_parking"));
+        }
+
+        [Test]
+        public void Parking_NotForTheHeroine_TheFightWithTheBaronIsTheHerosScene()
+        {
+            // рішення ПМ 12.11.2026 (P2-6: суперник своєї статі): героїні не показувати; варіант із чемпіонкою — вміст на пізніше
+            var c = Shared();
+            var h = Heroine(71);
+            h.State.Week = 4;
+            foreach (var e in EventIds)
+            {
+                if (e == "ev_parking") break;
+                h.State.BackstageSeen.Add("1:" + e);
+            }
+            Assert.AreNotEqual("ev_parking", h.Backstage().SceneId, "героїні — наступна подія сезону, не парковка");
+            var s = HeroForEvent(c, "ev_parking", 71);
+            Assert.AreEqual("ev_parking", s.Backstage().SceneId, "герою — як і була");
+            var cond = c.Backstage.Find("ev_parking").Requires;
+            Assert.IsTrue(cond.Exists(x => x.Kind == ConditionKind.Career && x.Key == "female" && x.Negate));
         }
 
         [Test]
@@ -789,6 +1126,180 @@ namespace Game.Tests.EditMode
                 CareerBot.Step(s, 3, rep);
             }
             Assert.Greater(rep.Scenes.Count, 0, "бот-варіант 3 заходить у закулісся");
+        }
+
+        /// <summary>
+        /// Огляд QA (-ring-shot-event, -ring-shot-backstage all): примусова сцена відкривається наступним «Закуліссям» навіть
+        /// без своїх умов і до свого тижня, рівно один раз; далі вибір звичайний. У сейв не входить; невідомий id — виняток.
+        /// </summary>
+        [Test]
+        public void ForcedScene_OpensOnceIgnoringConditions_NotSaved()
+        {
+            var c = Shared();
+            var s = Hero(c, 3, 1);
+            s.Feud.State.Audience = 0;   // ev_contract вимагає популярності ≥ 1 і доступний з тижня 2
+            s.ForceBackstage("ev_contract");
+            Assert.AreEqual("ev_contract", s.ForcedBackstageScene);
+            var fresh = CareerKit.Fresh(3, c);
+            fresh.RestoreState(s.CaptureState());
+            Assert.IsNull(fresh.ForcedBackstageScene, "примусова сцена — лише огляд, у сейв не йде");
+
+            var r = s.Backstage();
+            Assert.IsTrue(r.NeedsScene);
+            Assert.AreEqual("ev_contract", r.SceneId);
+            Assert.IsNull(s.ForcedBackstageScene, "одноразова");
+            var pm = new PromoScreenModel(s.CurrentBackstage, RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json"), CareerKit.Read("backstage_uk.json")));
+            Assert.IsFalse(pm.HasAct, "у закулісся немає актів — без «Акт 0»");
+            Assert.IsNull(pm.ActText);
+            var fm = new PromoScreenModel(RingCampaignDriver.NewCampaign(1).StartPromo(), RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json")));
+            Assert.IsTrue(fm.HasAct, "промо ворожнечі — з актом");
+            StringAssert.Contains(fm.Act.ToString(), fm.ActText);
+            CareerKit.PlayScene(s);
+
+            var r2 = s.Backstage();
+            Assert.IsTrue(r2.NeedsScene);
+            Assert.AreNotEqual("ev_contract", r2.SceneId, "друга — звичайним вибором (умови ev_contract не виконані)");
+
+            Assert.Throws<ArgumentException>(() => s.ForceBackstage("no_such_scene"));
+            s.ForceBackstage(null);
+            Assert.IsNull(s.ForcedBackstageScene);
+        }
+
+        // ---------- подія мішаного матчу (P2-6) ----------
+
+        private const string Mixed = "ev_mixed";
+
+        private static CareerSession Heroine(ulong seed)
+        {
+            var s = CareerKit.NewAtCreate(seed);
+            var d = CareerKit.Draft();
+            d.Female = true;
+            s.CreateHero(d);
+            return s;
+        }
+
+        /// <summary>Ботом кар'єри — до початку тижня першого шоу ворожнечі (подію, що відкрилась сама, бот не грає: цикл стає раніше).</summary>
+        private static void ToFirstFeudWeek(CareerSession s)
+        {
+            var rep = new CareerRunReport();
+            for (int guard = 0; !(s.Stage == CareerStage.Week && s.State.IsFeudShow); guard++)
+            {
+                Assert.Less(guard, 3000);
+                if (s.Stage == CareerStage.Week && s.State.ActionsDone.Count == 0)
+                    Assert.IsFalse(s.BackstageOpen, "до тижня шоу ворожнечі подія сама не відкривається (тиждень " + s.State.Week + ")");
+                CareerBot.Step(s, 0, rep);
+            }
+        }
+
+        private static int SeenTimes(CareerSession s, string id)
+        {
+            int n = 0;
+            foreach (var k in s.State.BackstageSeen) if (k.EndsWith(":" + id, StringComparison.Ordinal)) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// P2-6 (ПМ 12.11.2026: «Молот — єдиний мішаний суперник кар'єри, перший матч ворожнечі відкриває подія мішаного матчу»):
+        /// героїні на початку тижня першого шоу ворожнечі подія відкривається сама — без «Закулісся» і без дії тижня; після сейва —
+        /// знову з початку; за кар'єру — рівно раз.
+        /// </summary>
+        [Test]
+        public void MixedMatchEvent_OpensItself_ForTheHeroine_OnTheFirstFeudWeek_OnceAndWithoutAnAction()
+        {
+            var s = Heroine(61);
+            Assert.IsTrue(s.State.Female);
+            ToFirstFeudWeek(s);
+            Assert.AreEqual(0, s.Feud.Records.Count, "перший матч ворожнечі ще попереду");
+            Assert.AreEqual(CareerContent.HammerId, s.State.Opponent);
+            Assert.IsTrue(s.BackstageOpen && s.AutoSceneOpen, "подія відкрилась сама");
+            Assert.AreEqual(Mixed, s.CurrentBackstageScene.Id);
+            Assert.AreEqual(BackstageKind.Event, s.CurrentBackstageScene.Kind);
+            int actions = s.State.ActionsLeft;
+            Assert.AreEqual("scene_open", s.Train(false).Reason, "до кінця події інших дій немає");
+
+            // сейв посеред події: сцена не зберігається — відкривається знову з початку, дії ті самі
+            var t = CareerKit.Fresh(61, s.Content);
+            t.RestoreState(s.CaptureState());
+            Assert.IsTrue(t.AutoSceneOpen);
+            Assert.AreEqual(Mixed, t.CurrentBackstageScene.Id);
+            Assert.AreEqual(t.CurrentBackstageScene.Promo.Start, t.CurrentBackstage.Current.Id, "з початку");
+            Assert.AreEqual(actions, t.State.ActionsLeft);
+
+            var r = CareerKit.PlayScene(s);
+            Assert.IsTrue(r.Ok);
+            Assert.AreEqual(Mixed, r.SceneId);
+            Assert.AreEqual(actions, s.State.ActionsLeft, "дій тижня не забирає");
+            Assert.AreEqual(0, s.State.ActionsDone.Count);
+            Assert.IsFalse(s.BackstageOpen);
+            var u = CareerKit.Fresh(61, s.Content);
+            u.RestoreState(s.CaptureState());
+            Assert.IsFalse(u.BackstageOpen, "побачена подія після сейва не повертається");
+
+            // далі — уся ворожнеча (три сезони): подія більше не відкривається, ні сама, ні через «Закулісся»
+            var rep = CareerBot.Play(s, 3, 1);
+            Assert.IsTrue(s.State.FeudResolved, "ворожнеча розв'язалась");
+            Assert.AreEqual(1, SeenTimes(s, Mixed), "рівно раз за кар'єру");
+            Assert.IsFalse(rep.Scenes.Contains(Mixed), "«Закулісся» її не вибирає");
+        }
+
+        /// <summary>
+        /// Старий сейв (до події) посеред ворожнечі: перший матч з Молотом уже зіграно, а події героїня не бачила. Подія відкриває
+        /// саме перший матч — на другому шоу ворожнечі вона вже не з'являється.
+        /// </summary>
+        [Test]
+        public void MixedMatchEvent_OldSaveMidFeud_DoesNotOpenLate()
+        {
+            var s = Heroine(63);
+            ToFirstFeudWeek(s);
+            CareerKit.PlayScene(s);
+            var rep = new CareerRunReport();
+            for (int guard = 0; !(s.Stage == CareerStage.Week && s.State.IsFeudShow && s.Feud.Records.Count == 1 && s.State.ActionsDone.Count == 0); guard++)
+            {
+                Assert.Less(guard, 3000);
+                CareerBot.Step(s, 0, rep);
+            }
+            Assert.IsFalse(s.BackstageOpen, "друге шоу ворожнечі — події немає");
+            s.State.BackstageSeen.RemoveWhere(k => k.EndsWith(":" + Mixed, StringComparison.Ordinal));   // сейв до події
+            var t = CareerKit.Fresh(63, s.Content);
+            t.RestoreState(s.CaptureState());
+            Assert.AreEqual(CareerStage.Week, t.Stage);
+            Assert.IsTrue(t.State.IsFeudShow);
+            Assert.IsFalse(t.BackstageOpen, "перший матч ворожнечі вже позаду — подія не відкривається запізно");
+        }
+
+        [Test]
+        public void MixedMatchEvent_NotForTheHero_ForcedOnlyThroughTheBackstageAction()
+        {
+            var s = CareerKit.NewHero(61);
+            Assert.IsFalse(s.State.Female);
+            ToFirstFeudWeek(s);
+            Assert.IsFalse(s.BackstageOpen, "герою події немає");
+            CareerBot.Play(s, 3, 1);
+            Assert.AreEqual(0, SeenTimes(s, Mixed));
+
+            // примусово (огляд QA, -ring-shot-event ev_mixed) — через «Закулісся», і тоді коштує дію, як будь-яка сцена
+            var h = Heroine(62);
+            h.ForceBackstage(Mixed);
+            int before = h.State.ActionsLeft;
+            Assert.IsTrue(h.Backstage().NeedsScene);
+            Assert.IsFalse(h.AutoSceneOpen);
+            CareerKit.PlayScene(h);
+            Assert.AreEqual(before - 1, h.State.ActionsLeft);
+        }
+
+        [Test]
+        public void AutoScene_IsAnEventOncePerCareer_OtherwiseTheContentIsRejected()
+        {
+            const string booker = "{\"id\":\"b\",\"kind\":\"booker\",\"title\":\"t\",\"place\":\"p\",\"start\":\"n1\",\"nodes\":[{\"id\":\"n1\",\"type\":\"end\"}]}";
+            Func<string, string> scene = extra =>
+                "{\"scenes\":[" + booker + ",{\"id\":\"a\",\"title\":\"t\",\"place\":\"p\",\"start\":\"n1\",\"nodes\":[{\"id\":\"n1\",\"type\":\"end\"}]," + extra + "}]}";
+            var ok = BackstageContent.Load(scene("\"kind\":\"event\",\"once\":true,\"auto\":\"feud_first\""));
+            Assert.AreEqual(BackstageAuto.FeudFirst, ok.Find("a").Auto);
+            Assert.AreEqual(BackstageAuto.None, ok.Find("b").Auto);
+            Assert.Throws<FormatException>(() => BackstageContent.Load(scene("\"kind\":\"event\",\"auto\":\"feud_first\"")), "без once");
+            Assert.Throws<FormatException>(() => BackstageContent.Load(scene("\"kind\":\"booker\",\"once\":true,\"auto\":\"feud_first\"")), "розмова з букером");
+            Assert.Throws<FormatException>(() => BackstageContent.Load(scene("\"kind\":\"event\",\"once\":true,\"auto\":\"later\"")), "невідоме значення");
+            Assert.AreEqual(BackstageAuto.FeudFirst, CareerKit.Content().Backstage.Find(Mixed).Auto, "подія мішаного матчу — сама");
         }
     }
 }

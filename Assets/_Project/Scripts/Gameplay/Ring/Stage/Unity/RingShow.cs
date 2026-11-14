@@ -92,9 +92,9 @@ namespace Game.Gameplay.Ring.Stage
 
         /// <summary>
         /// Закочування під нижнім канатом (Entrance_Roll_In): таз на старті — за 0,36 м від краю помосту (половина помосту
-        /// 2,438 м, venue_gym_info.txt), на підлозі, обличчям до рингу (+X); кліп сам піднімає таз на мат.
+        /// з якорів залу, у спортзалі 2,438 м), на підлозі, обличчям до рингу (+X); кліп сам піднімає таз на мат.
         /// </summary>
-        private static readonly Vector3 RollStart = new Vector3(-(2.438f + 0.357f), 0f, 0f);
+        private static Vector3 RollStart { get { return new Vector3(-(RingStage3D.Venue.Plat + 0.357f), 0f, 0f); } }
 
         /// <summary>
         /// За шторою виходу (дверні панелі арки — x ≈ −14,9; кадри огляду 08.11.2026: тут борець стояв і раніше, лише його не
@@ -126,7 +126,7 @@ namespace Game.Gameplay.Ring.Stage
         private const int BarrierVertex = 2;
 
         /// <summary>Перетин канатів північно-західного кута (anchor_rope_NW, Unity) на висоті мату — поза на другому канаті.</summary>
-        private static readonly Vector3 CornerNW = new Vector3(-2.138f, RingStage3D.MatY, 2.138f);
+        private static Vector3 CornerNW { get { float c = RingStage3D.Venue.RopeLine; return new Vector3(-c, RingStage3D.MatY, c); } }
 
         // Над завісою, вище банера зали (на 3,4 м екран закривав банер — огляд 04.11.2026).
         private static readonly Vector3 CurtainTop = new Vector3(-15.9f, 5.3f, 0f);
@@ -659,7 +659,8 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Чи кутова стійка рингу (верх — 1,5 м над матом) стоїть між камерою й точкою.</summary>
         private static bool PostBlocks(Vector3 cam, Vector3 target)
         {
-            const float post = 2.138f, top = RingStage3D.MatY + 1.5f, r = 0.32f;
+            const float r = 0.32f;
+            float post = RingStage3D.Venue.RopeLine, top = RingStage3D.MatY + 1.5f;
             Vector2 a = new Vector2(cam.x, cam.z), b = new Vector2(target.x, target.z), ab = b - a;
             for (int sx = -1; sx <= 1; sx += 2)
                 for (int sz = -1; sz <= 1; sz += 2)
@@ -1006,20 +1007,53 @@ namespace Game.Gameplay.Ring.Stage
         // ============================ закулісся ============================
 
         /// <summary>
-        /// Закулісся (тиждень): роздягальня окремою кімнатою поза залою — шафки, лавка, лампа, двері; герой і букер.
-        /// Камера — фіксований ракурс з кута кімнати. Знову на ринг — <see cref="LeaveBackstage"/>.
+        /// Закулісся (тиждень): роздягальня окремою кімнатою поза залою — шафки, лавка, лампа, двері; герой і букер (постать
+        /// букера дає сцена — <see cref="SetBooker"/>). Камера — фіксований ракурс з кута кімнати. Знову на ринг —
+        /// <see cref="LeaveBackstage"/>.
         /// </summary>
-        public void ShowBackstage(GameObject bookerPrefab, GameObject kit)
+        public void ShowBackstage()
         {
             StopAllCoroutines();
             Busy = false;
-            if (_backstage == null) BuildBackstage(bookerPrefab, kit);
+            if (_backstage == null) BuildBackstage();
             _backstage.SetActive(true);
             var hero = _s.Actor(Core.Ring.Match.MatchSide.Player);
             Vector3 o = BackstageOrigin;
-            _s.Place(hero, o + new Vector3(-0.7f, 0f, 0.2f), 70f, "Ring_Stance_Loop");
-            if (_booker != null) _s.Place(_booker, o + new Vector3(0.8f, 0f, 0.5f), -110f, "Ref_Idle_Loop");
+            _s.Place(hero, o + HeroSpot, 70f, "Ring_Stance_Loop");
+            if (_booker != null) _s.Place(_booker, o + BookerSpot, -110f, "Ref_Idle_Loop");
             Look(o + new Vector3(0.6f, 1.75f, -3.6f), o + new Vector3(0f, 1.2f, 0.4f), 46f, true);
+        }
+
+        // Місця в роздягальні від BackstageOrigin: герой біля лавки, букер біля свого столу; гість, що стоїть поруч із букером
+        // (подія з обома), — ближче до дверей, обличчям до героя.
+        private static readonly Vector3 HeroSpot = new Vector3(-0.7f, 0f, 0.2f);
+        private static readonly Vector3 BookerSpot = new Vector3(0.8f, 0f, 0.5f);
+        private static readonly Vector3 GuestBesideSpot = new Vector3(1.4f, 0f, -0.5f);
+
+        /// <summary>Мовець букера, чия постать стоїть у роздягальні (null — ще нікого).</summary>
+        public string BookerId { get; private set; }
+
+        /// <summary>Постаті роздягальні — букер і гість події (огляд облич; null — немає).</summary>
+        public RingActor Booker { get { return _booker; } }
+        public RingActor Guest { get { return _guest; } }
+
+        /// <summary>Огляд (RingStageDemo): камера показу склейкою на точку — крупні плани людей у роздягальні.</summary>
+        public void ReviewLook(Vector3 pos, Vector3 look, float fov) { Look(pos, look, fov, true); }
+
+        /// <summary>
+        /// Постать букера федерації (№ 10 рішень 12.11.2026): попередня зникає, нова — біля столу; поки в сцені гість на місці
+        /// букера, вона схована.
+        /// </summary>
+        public void SetBooker(RingActor booker, string speaker)
+        {
+            if (_booker != null) { _booker.Destroy(); Destroy(_booker.Slot.gameObject); }
+            _booker = booker;
+            BookerId = speaker;
+            _lastTalker = null;
+            if (booker == null) return;
+            if (_backstage != null) booker.Slot.SetParent(_backstage.transform, true);
+            _s.Place(booker, BackstageOrigin + BookerSpot, -110f, "Ref_Idle_Loop");
+            booker.Model.SetActive(_guest == null || _guestBeside);
         }
 
         public bool InBackstage { get { return _backstage != null && _backstage.activeSelf; } }
@@ -1027,40 +1061,59 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Щойно вийшли з закулісся — камера рингу має стати на місце різко (RingStage3D читає й скидає).</summary>
         public bool LeftBackstage { get; set; }
 
-        /// <summary>Камера розмови в роздягальні: букер через плече героя, герой через плече букера, інші — загальний план.</summary>
+        /// <summary>
+        /// Камера розмови в роздягальні: той, хто говорить, — через плече героя; герой — через плече останнього, хто до нього
+        /// говорив; оповідач — загальний план. Хто говорить: гість події (його мовець) або букер; у сцені з гостем на місці
+        /// букера — гість за будь-кого, крім героя й оповідача.
+        /// </summary>
         public void BackstageSpeaker(string speaker)
         {
-            if (!InBackstage || _booker == null) return;
+            if (!InBackstage || (_booker == null && _guest == null)) return;
             var hero = _s.Actor(Core.Ring.Match.MatchSide.Player);
-            var other = _guest ?? _booker;
+            RingActor talker = null;
+            if (speaker != "player" && speaker != "narrator" && speaker != null)
+                talker = _guest != null && (!_guestBeside || speaker == _guestSpeaker || _booker == null) ? _guest : _booker;
+            if (talker != null) _lastTalker = talker;
+            var other = _lastTalker ?? _guest ?? _booker;
             Vector3 b = other.HeadPos, h = hero.HeadPos;
-            if (speaker != "player" && speaker != "narrator" && speaker != null) speaker = "booker";
             Vector3 across = Vector3.Cross(Vector3.up, (b - h).normalized);
-            if (speaker == "booker") Look(h + (h - b).normalized * 0.9f + across * 0.45f + Vector3.up * 0.1f, b, 34f, true);
+            if (talker != null) Look(h + (h - b).normalized * 0.9f + across * 0.45f + Vector3.up * 0.1f, b, 34f, true);
             else if (speaker == "player") Look(b + (b - h).normalized * 0.9f - across * 0.45f + Vector3.up * 0.1f, h, 34f, true);
             else { var o = BackstageOrigin; Look(o + new Vector3(0.6f, 1.75f, -3.6f), o + new Vector3(0f, 1.2f, 0.4f), 46f, false); }
         }
 
         private RingActor _guest;
-        private string _guestKey;
+        private string _guestKey, _guestSpeaker;
+        private bool _guestBeside;
+        private RingActor _lastTalker;
         private Light _lamp;
 
         /// <summary>
-        /// Хто в кадрі сцени закулісся: розмова — Ліна Ворон; подія — гість на її місці (Барон на парковці, Сталевий у лазареті,
-        /// ведучий інтерв'ю, агент із контрактом), Ліни немає. Парковка — холодна лампа, що мерехтить.
+        /// Хто в кадрі сцени закулісся: розмова — букер федерації; подія — гість на його місці (Барон на парковці, Сталевий у
+        /// лазареті, ведуча інтерв'ю, скаут із контрактом, менеджерка), букера немає; <paramref name="beside"/> — подія, де
+        /// говорять обидва (зрада напарника): гість стоїть поруч, букер лишається. <paramref name="speaker"/> — мовець гостя
+        /// (камера на того, хто говорить). Парковка — холодна лампа, що мерехтить.
         /// </summary>
-        public void SetGuest(RingActor guest, string key, bool parking)
+        public void SetGuest(RingActor guest, string key, bool parking, string speaker = null, bool beside = false)
         {
             if (_guestKey == key) return;
             if (_guest != null) { _guest.Destroy(); Destroy(_guest.Slot.gameObject); _guest = null; }
             _guestKey = key;
             _guest = guest;
+            _guestSpeaker = speaker;
+            _guestBeside = guest != null && beside;
+            _lastTalker = null;
             Vector3 o = BackstageOrigin;
-            if (_booker != null) _booker.Model.SetActive(guest == null);
+            if (_booker != null) _booker.Model.SetActive(guest == null || _guestBeside);
             if (guest != null)
             {
                 guest.Slot.SetParent(_backstage.transform, true);
-                _s.Place(guest, o + new Vector3(0.8f, 0f, 0.5f), -110f, "Ref_Idle_Loop");
+                if (_guestBeside)
+                {
+                    Vector3 at = o + GuestBesideSpot;
+                    _s.Place(guest, at, RingStage3D.YawTo(at, o + HeroSpot), "Ref_Idle_Loop");
+                }
+                else _s.Place(guest, o + BookerSpot, -110f, "Ref_Idle_Loop");
             }
             if (_lamp != null)
             {
@@ -1080,7 +1133,7 @@ namespace Game.Gameplay.Ring.Stage
 
         public void TickBooker(float dt) { if (_booker != null) _booker.Tick(dt); }
 
-        private void BuildBackstage(GameObject bookerPrefab, GameObject kit)
+        private void BuildBackstage()
         {
             _backstage = new GameObject("Backstage");
             _backstage.transform.SetParent(transform, false);
@@ -1117,11 +1170,7 @@ namespace Game.Gameplay.Ring.Stage
             lamp.color = new Color(1f, 0.86f, 0.62f);
             lamp.shadows = LightShadows.Soft;
             Box("Плафон", o + new Vector3(0f, 2.92f, 0.6f), new Vector3(0.5f, 0.06f, 0.5f), Lit(new Color(1f, 0.95f, 0.8f)));
-
-            // Ліна Ворон: тіло з текстурою шкіри борців (як гості) — з голого FBX обличчя було сірою маскою (лукбук 04.11.2026);
-            // хвіст замість каре, що закривало обличчя; сорочка, штани, взуття.
-            _booker = _s.MakeDressed("Букер", "body_f_mediterranean", 0x8C9EB3, "hair_ponytail01", new Color(0.55f, 0.62f, 0.7f));
-            if (_booker != null) _booker.Slot.SetParent(_backstage.transform, true);
+            // Букер — постать федерації кар'єри, її ставить сцена (RingStage3D.ShowBackstage → SetBooker; BackstageCast).
         }
 
         private void Box(string name, Vector3 pos, Vector3 size, Material m)

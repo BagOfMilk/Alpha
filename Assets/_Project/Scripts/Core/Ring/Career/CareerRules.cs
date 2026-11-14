@@ -69,11 +69,99 @@ namespace Game.Core.Ring.Career
 
         // ---------- довгі шкали ----------
         public const int MaxPopularity = 10;
+        /// <summary>
+        /// Популярність новачка на старті кар'єри (П5): місцева федерація має шкалу 0–4, і стартові 3 зі сценарію ворожнечі (шкала
+        /// 0–10) — це вже півголовна подія (перший суперник — Барон, 18 дій). 1 — відкривання, але ще не звільнення (0 на кінці сезону).
+        /// </summary>
+        public const int StartPopularity = 1;
+        /// <summary>
+        /// P1-6 (рішення власника за планом П5): поразка чи нічия дає популярність лише з ажіотажем фіналу ≥ 9 і щонайбільше раз
+        /// за сезон (раніше — будь-який матч з ажіотажем ≥ 7). Перемога — як і була.
+        /// </summary>
+        public const int LossPopularityHype = 9;
         public const int MaxTrust = 5;
         public const int MaxFeud = 4;
         public const int TitleShotTrust = 4;
         public const int FiredPopularity = 1;
         public const int FiredTrust = 1;
+
+        // ---------- перехід між федераціями: правило А2 «два ключі» (власник 11.11.2026: «А2, як радиш»). ПЛЕЙСХОЛДЕР ----------
+        /// <summary>Ключ глядачів: популярність ≥ стеля поточної федерації − це число (місцева 3, регіональна 5, національна 7).</summary>
+        public const int OfferPopularityGap = 1;
+        /// <summary>Ключ букера: довіра ≥ цього числа.</summary>
+        public const int OfferTrust = 4;
+        /// <summary>Чинний чемпіон своєї федерації на кінець сезону: довіра в перевірці рахується на стільки більше. Популярність пояс не замінює.</summary>
+        public const int OfferChampionTrustBonus = 1;
+        /// <summary>Статус входу в М1 — один: попередня стеля (= нова − 2), середина картки. Статуси входу — ідея ітерації 2.</summary>
+        public const int EntryCeilingGap = 2;
+        /// <summary>Довіра в новій федерації: чемпіон віддав пояс за планом («пішов красиво») — 2; інакше — 1.</summary>
+        public const int FarewellTrust = 2;
+        public const int TransferTrust = 1;
+        /// <summary>Відмова від пропозиції стільки разів поспіль — букер ображений: довіра −1.</summary>
+        public const int DeclinesToOffend = 2;
+
+        /// <summary>
+        /// Обидва ключі пропозиції вищої федерації (А2): глядачі (популярність) і букер (довіра, пояс додає +1). Одна функція — одна
+        /// правка умови. <paramref name="maxTier"/> — скільки федерацій є; з найвищої пропозиції немає.
+        /// </summary>
+        public static OfferKeys OfferReady(int popularity, int trust, bool champion, FederationDef fed, int maxTier)
+        {
+            var k = new OfferKeys
+            {
+                FromTier = fed.Tier, ToTier = fed.Tier + 1, HasHigher = fed.Tier < maxTier,
+                Popularity = popularity, PopularityNeed = fed.Ceiling - OfferPopularityGap,
+                Trust = trust, BeltCounted = champion, TrustNeed = OfferTrust
+            };
+            k.TrustCounted = trust + (champion ? OfferChampionTrustBonus : 0);
+            k.AudienceOk = popularity >= k.PopularityNeed;
+            k.BookerOk = k.TrustCounted >= k.TrustNeed;
+            k.Ready = k.HasHigher && k.AudienceOk && k.BookerOk;
+            return k;
+        }
+
+        /// <summary>Популярність, з якою гравець входить у федерацію (статус входу; у М1 — стеля нової − 2).</summary>
+        public static int EntryPopularity(FederationDef to) { return Math.Max(to.Floor, to.Ceiling - EntryCeilingGap); }
+
+        // ---------- контракт переходу (§6.4; власник 11.11.2026: «Пастка «виключне право» — так»). ПЛЕЙСХОЛДЕР ----------
+        // Аванс — FederationDef.Advance (40 / 80 / 150 на рівнях 2 / 3 / 4). Пропозиція — один папір: чесний або пастка.
+
+        /// <summary>Яка частка пропозицій — пастка «виключне право» (детерміновано від зерна, сезону й рівня).</summary>
+        public const int ExclusiveOfferPercent = 34;
+        /// <summary>Пастка: аванс у відсотках від чесного (×2) — приманка.</summary>
+        public const int ExclusiveAdvancePercent = 200;
+        /// <summary>Пастка: гонорар за кожне шоу федерації (×0,7), поки строк.</summary>
+        public const int ExclusiveFeePercent = 70;
+        /// <summary>Пастка: строк у сезонах федерації; без виїзних шоу й підробітку.</summary>
+        public const int ExclusiveSeasons = 2;
+        /// <summary>Пастка: вийти раніше строку — штраф у відсотках від чесного авансу (= аванс пастки, ×2).</summary>
+        public const int ExclusivePenaltyPercent = 200;
+        /// <summary>«Прочитати дрібний шрифт»: 2d6 + Техніка, раз на пропозицію. 10+ — пункт видно; 7–9 — видно, що щось є; 6− — нічого.</summary>
+        public const RingAttr ContractReadAttr = RingAttr.Technique;
+        /// <summary>Менеджер: частка кожного гонорару (§6.4 «Менеджер бере 15 %»).</summary>
+        public const int ManagerFeePercent = 15;
+        /// <summary>Менеджер торгується: аванс переходу у відсотках (+25 %). Пастку бачить без кидка.</summary>
+        public const int ManagerAdvancePercent = 125;
+        /// <summary>З якої популярності менеджер приходить познайомитися (сцена закулісся ev_manager) — дані сцени; тут для тестів.</summary>
+        public const int ManagerPopularity = 3;
+
+        /// <summary>Аванс переходу: чесний — аванс федерації; пастка — ×2; з менеджером — ще +25 %.</summary>
+        public static int Advance(FederationDef to, bool exclusive, bool manager)
+        {
+            int a = to.Advance * (exclusive ? ExclusiveAdvancePercent : 100) / 100;
+            return manager ? a * ManagerAdvancePercent / 100 : a;
+        }
+
+        /// <summary>Штраф за вихід із пастки раніше строку (від чесного авансу федерації, без надбавки менеджера).</summary>
+        public static int ExitPenalty(FederationDef of) { return of.Advance * ExclusivePenaltyPercent / 100; }
+
+        /// <summary>Частка менеджера з суми гонорару (ціле, вниз).</summary>
+        public static int ManagerCut(int amount) { return amount > 0 ? amount * ManagerFeePercent / 100 : 0; }
+
+        /// <summary>
+        /// Контракт не продовжують: популярність нижче підлоги федерації на кінці сезону (власник 11.11.2026 — рівень нижче); на
+        /// місцевій (підлога 0) — популярність 0, як і було (§6.2: повернення на мінімум, не кінець гри).
+        /// </summary>
+        public static bool IsFired(int popularity, FederationDef fed) { return fed.Floor <= 0 ? popularity <= 0 : popularity < fed.Floor; }
 
         // ---------- травми (§6.3) ----------
         public const int InjuryAtZoneDamage = 3;
@@ -106,8 +194,10 @@ namespace Game.Core.Ring.Career
         /// <summary>
         /// Щаблів сили на щотижневому шоу за місцем у картці: відкривання → мейн-івент. Мейн-івент +1 — рішення власника 06.11.2026
         /// («Повернути»); провал другого сезону від цієї надбавки знято порогом росту (<see cref="RivalGrowthOffset"/> 16 → 21).
+        /// Відкривання 1 → 0 (П5, 11.11.2026, рушій P2-1 — матч 8–15 дій): перший тиждень став 51 %, місцева загалом 52 % проти
+        /// вікна 55–65 %; з 0 — перший тиждень 61 %, місцева 56 %.
         /// </summary>
-        public static readonly int[] RivalStepsByPosition = { 1, 1, 1, 2 };
+        public static readonly int[] RivalStepsByPosition = { 0, 1, 1, 2 };
         /// <summary>
         /// Букер ставить суперників рівня гравця: + щабель за кожен куплений атрибут понад базу ґіміка і за кожні
         /// <see cref="RivalPerksPerStep"/> перки. Без цього місце в картці насичується на мейн-івенті, а гравець росте далі
@@ -121,30 +211,148 @@ namespace Game.Core.Ring.Career
         public const int RivalGrowthNum = 5, RivalGrowthOffset = 21, RivalGrowthDen = 8;
         /// <summary>На початку сезону знімок росту щабля наздоганяє поточний ріст на Num/Den.</summary>
         public const int SeasonCatchUpNum = 1, SeasonCatchUpDen = 1;
-        /// <summary>Реванш із тим, хто тебе переміг: суперник слабший на стільки щаблів (ти знаєш його слабкість).</summary>
-        public const int RematchSteps = 2;
+        // Піки сили (власник 06.11.2026: «Піки 70–80%»; рев'ю ПМ 12.11.2026: «пік 2+ і реванш 70–80 % на кожному рівні, середні
+        // 50–65 % не зрушуються»). Пік — реванш або «переріс щабель картки»: суперник слабший за знімок на кілька щаблів, а щаблі можуть
+        // бути від'ємними (тоді він слабший за базу ростеру, ShowBooker.Weaken). Чому за рівнями: щабель важить по-різному. На
+        // місцевій суперник майже без щаблів (0,8 у середньому), і реванш обрізало до нуля; з регіональної атрибути суперника в межі 3,
+        // і щаблі понад неї (витримка) — по 1,5–3,5 п.п. проти ~5 за атрибут; до того ж у реванші суперник сильніший за середнього
+        // (той, хто тебе переміг, — вище в картці). Парний замір 200 кар'єр (той самий зліпок, той самий матч, лише щаблі): реванш з −2
+        // давав 67 / 61 / 65 / 69 % за рівнями, «переріс на 2» — 85 (13 матчів) / 56 / 63 % (на світовій — 3 матчі); забрати ще 2 щаблі —
+        // +7…+11 п.п., додати 2 до «справедливого» — лише −2…−5 (щаблі понад межу). Черга витримки K, J, K, J з одним жетоном (варіант ПМ
+        // «б») суперника не посилила: на світовій тижневі 65 → 69 %, без жетонів — 72 % (у «Вирватися» і «залізної щелепи» спадна віддача).
+        // Замір 12.11.2026, три набори сідів (200 кар'єр): реванш 70–76 / 73–78 / 72–78 / 76–78 %, «переріс» на регіональній і
+        // національній 74–75 / 76–81 % (на місцевій і світовій — 5–17 матчів, на місцевій пік тримає MatchFeelTests: 73–78 %).
+        // Від'ємні щаблі — лише на місцевій (вище щаблів досить): без них реванш там 67 % (обрізало до нуля).
+
+        /// <summary>Нижня межа щаблів суперника: нижче нуля — слабший за базу ростеру (ShowBooker.Weaken опускає атрибути).</summary>
+        public const int RivalStepsFloor = -3;
+        /// <summary>Реванш із тим, хто тебе переміг: суперник слабший на стільки щаблів (ти знаєш його слабкість), за рівнем федерації.</summary>
+        public static readonly int[] RematchStepsByTier = { 3, 6, 6, 6 };
+        /// <summary>«Переріс щабель картки»: ріст гравця після знімка щабля — щонайменше стільки щаблів.</summary>
+        public const int PeakLag = 2;
+        /// <summary>Переріс щабель картки — букер ставить тих, кого ти вже переріс: суперник слабший за знімок ще на стільки щаблів.</summary>
+        public static readonly int[] PeakStepsByTier = { 1, 5, 5, 5 };
+
+        /// <summary>
+        /// Щотижневі на рівні федерації — понад місце в картці й ріст: піки підняли середні тижневі на регіональній і вище (там їх
+        /// більше — реванш і «переріс» разом ~35–40 % тижневих матчів; 57 / 65 / 65 → 63 / 66 / 66 %), і ці щаблі повертають їх у вікно:
+        /// замір 12.11.2026 — 59–60 / 60–62 / 61–64 / 62–65 %.
+        /// </summary>
+        public static readonly int[] RivalStepsByTier = { 0, 1, 2, 2 };
+
+        /// <summary>Щаблі щотижневого шоу за місцем у картці, ростом (знімком) і рівнем федерації — до піків.</summary>
+        public static int RivalSteps(CardPosition p, int growth, int tier) { return RivalSteps(p, growth) + ByTier(RivalStepsByTier, tier); }
+
+        public static int RematchSteps(int tier) { return ByTier(RematchStepsByTier, tier); }
+        public static int PeakSteps(int tier) { return ByTier(PeakStepsByTier, tier); }
+        private static int ByTier(int[] a, int tier) { return a[Math.Max(0, Math.Min(a.Length - 1, tier - 1))]; }
         /// <summary>Букер охоче ставить реванш: стільки балів до вибору суперника, який тебе переміг.</summary>
         public const int RematchBookingScore = 3;
 
-        /// <summary>Молот: щаблів у першому матчі ворожнечі й за кожен наступний (матчі — у різних сезонах).</summary>
-        public const int HammerBaseSteps = 1;
-        public const int HammerStepsPerMatch = 2;
-        /// <summary>Титульний матч (і захист пояса): чемпіон — найсильніший у федерації.</summary>
-        public const int TitleSteps = 5;
+        /// <summary>
+        /// Молот: щаблів понад ріст гравця в 1-му, 2-му і 3-му матчі ворожнечі (матчі — у різних сезонах), як і до федерацій:
+        /// база 1 + 2 за матч.
+        /// </summary>
+        public static readonly int[] HammerStepsByMatch = { 1, 3, 5 };
+        /// <summary>
+        /// Молот іде слідом (варіант А, П5): на кожному рівні федерації вище місцевої — + стільки щаблів. Без цього ворожнеча на
+        /// регіональній — 61–63 % (замір 200 кар'єр на рушії P2-1; Молот упирається в межу атрибутів, а гравець, якого підвищили,
+        /// сильніший); з 3 — 54 %.
+        /// </summary>
+        public const int FeudTierSteps = 3;
+        public static int HammerSteps(int matchesPlayed)
+        {
+            return HammerStepsByMatch[Math.Max(0, Math.Min(HammerStepsByMatch.Length - 1, matchesPlayed))];
+        }
+        /// <summary>
+        /// Титульний матч (і захист пояса): чемпіон — найсильніший у федерації; щаблів понад ріст — за рівнем федерації (1…4).
+        /// П5 (11.11.2026, вікно «титул 35–45 %» — рекомендація ПМ, рушій P2-1): однакові 3 щаблі давали 49 / 53 / 71 / 75 % — на вищих рівнях
+        /// атрибути чемпіона впираються в межу, і кожен щабель понад неї (витримка) важить менше; з {4, 6, 7, 9} — 35 / 43 / 43 / 45 %.
+        /// </summary>
+        public static readonly int[] TitleStepsByTier = { 4, 6, 7, 9 };
+        public static int TitleSteps(int tier) { return TitleStepsByTier[Math.Max(0, Math.Min(TitleStepsByTier.Length - 1, tier - 1))]; }
 
         public static int RivalSteps(CardPosition p, int growth) { return RivalStepsByPosition[(int)p] + Math.Max(0, growth); }
 
-        /// <summary>Місце в картці за популярністю 0–10.</summary>
-        public static CardPosition PositionFor(int popularity)
+        /// <summary>
+        /// Місце в картці від відстані до стелі федерації (П5): на стелі — головна подія, −1 — півголовна, −2 — середина, нижче —
+        /// відкривання. Новачок вищої федерації приходить із попередньою стелею (= нова − 2) — у середину картки.
+        /// </summary>
+        public static CardPosition PositionFor(int popularity, int ceiling)
         {
-            if (popularity >= 9) return CardPosition.Main;
-            if (popularity >= 6) return CardPosition.SemiMain;
-            if (popularity >= 3) return CardPosition.Midcard;
+            if (popularity >= ceiling) return CardPosition.Main;
+            if (popularity >= ceiling - 1) return CardPosition.SemiMain;
+            if (popularity >= ceiling - 2) return CardPosition.Midcard;
             return CardPosition.Opener;
         }
     }
 
     public enum CardPosition { Opener = 0, Midcard = 1, SemiMain = 2, Main = 3 }
+
+    /// <summary>
+    /// Два ключі пропозиції (А2) для екрана кінця сезону: «Глядачі N/потрібно», «Букер M/потрібно» (+ пояс, якщо зарахований) —
+    /// рядок одразу показує, чого бракує.
+    /// </summary>
+    public sealed class OfferKeys
+    {
+        public int FromTier;
+        public int ToTier;
+        /// <summary>Є куди рости (з найвищої федерації пропозиції немає).</summary>
+        public bool HasHigher;
+        public int Popularity;
+        public int PopularityNeed;
+        public bool AudienceOk;
+        /// <summary>Довіра без пояса й з поясом (у перевірці).</summary>
+        public int Trust;
+        public int TrustCounted;
+        public int TrustNeed;
+        public bool BookerOk;
+        public bool BeltCounted;
+        public bool Ready;
+    }
+
+    /// <summary>Що видно про дрібний шрифт пропозиції: не читано; прочитано, але нічого не знайдено (6−); «щось є» чи «чисто» (7–9); усе (10+ чи менеджер).</summary>
+    public enum ContractSight { Unread = 0, Missed = 1, Hint = 2, Seen = 3 }
+
+    /// <summary>
+    /// Контракт пропозиції вищої федерації (§6.4) для екрана кінця сезону. Ядро знає, чи це пастка, завжди; вид каже лише те, що
+    /// гравець бачить: аванс (у пастки він подвійний — приманка) і стільки дрібного шрифту, скільки прочитано.
+    /// </summary>
+    public sealed class ContractView
+    {
+        public int ToTier;
+        /// <summary>Аванс, який заплатять при переході (з надбавкою менеджера).</summary>
+        public int Advance;
+        public bool HasManager;
+        public ContractSight Sight;
+        /// <summary>Пункт «виключне право» видно (Sight == Seen і він є). Тоді видно й умови нижче.</summary>
+        public bool ExclusiveSeen;
+        /// <summary>7–9: у папері щось дрібним шрифтом є (true) чи на око чисто (false). Лише Sight == Hint.</summary>
+        public bool HintSomething;
+        /// <summary>Умови пастки — для рядка, коли пункт видно: гонорар у відсотках, строк у сезонах, штраф за ранній вихід.</summary>
+        public int ExclusiveFeePercent;
+        public int ExclusiveSeasons;
+        public int ExclusivePenalty;
+        /// <summary>Можна прочитати дрібний шрифт (раз на пропозицію, без менеджера) і модифікатор кидка (Техніка) — для шансів до кидка.</summary>
+        public bool CanRead;
+        public int ReadModifier;
+        /// <summary>Чинна пастка тримає: вийти зараз — штраф (0 — вільний); грошей не вистачає — пропозицію не прийняти.</summary>
+        public int ExitPenalty;
+        public bool ExitLocked;
+    }
+
+    /// <summary>Підсумок кидка «прочитати дрібний шрифт».</summary>
+    public sealed class ContractReadResult
+    {
+        public bool Ok;
+        /// <summary>Чому ні: no_offer, already, manager.</summary>
+        public string Reason;
+        public int Roll;
+        public int Modifier;
+        public int Total;
+        public RollTier Tier;
+        public ContractSight Sight;
+    }
 
     public enum CareerStage { Title = 0, Create = 1, Week = 2, Show = 3, SeasonEnd = 4 }
 

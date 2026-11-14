@@ -103,11 +103,14 @@ namespace Game.Tests.EditMode
         {
             foreach (Gimmick g in Enum.GetValues(typeof(Gimmick)))
             {
-                var s = CareerKit.NewHero(1, g, CareerRole.Hero, g == Gimmick.Monster ? RingAttr.Technique : RingAttr.Strength);
+                // Вільний бал — у атрибут, де основа ґіміка не на стелі (Силач: сила вже 3+1; Монстр — без техніки за основою).
+                var free = g == Gimmick.Monster ? RingAttr.Technique : g == Gimmick.Strongman ? RingAttr.Charisma : RingAttr.Strength;
+                var s = CareerKit.NewHero(1, g, CareerRole.Hero, free);
                 var v = s.GetCareerView();
-                Assert.AreEqual(10, v.Moves.Count, g.ToString());
+                int gm = g == Gimmick.Rookie ? 0 : 2; // Новачок — «мало прийомів»: ґімік-прийоми вчить з нуля
+                Assert.AreEqual(8 + gm, v.Moves.Count, g.ToString());
                 Assert.AreEqual(6, v.Moves.Count(m => m.Kind == MoveKind.Basic));
-                Assert.AreEqual(2, v.Moves.Count(m => m.Kind == MoveKind.Gimmick));
+                Assert.AreEqual(gm, v.Moves.Count(m => m.Kind == MoveKind.Gimmick), g.ToString());
                 Assert.AreEqual(1, v.Moves.Count(m => m.Kind == MoveKind.Signature));
                 Assert.AreEqual(1, v.Moves.Count(m => m.Kind == MoveKind.Finisher));
                 foreach (var m in v.Moves.Where(m => m.Kind != MoveKind.Basic)) Assert.AreEqual(g.ToString().ToLowerInvariant(), m.GimmickId);
@@ -205,7 +208,7 @@ namespace Game.Tests.EditMode
             ok = false;
             if (e.CurrentActor != MatchSide.Player) return 0;
             e.Perform(MatchActionId.Strike, first); e.Commit(0);
-            if (e.IsOver || e.CurrentActor != MatchSide.Player || e.Phase != MatchPhase.AwaitAction || e.Ap < 1) return 0;
+            if (e.IsOver || e.CurrentActor != MatchSide.Player || e.Phase != MatchPhase.AwaitAction) return 0;
             int before = e.State.Hype;
             e.Perform(MatchActionId.Strike, second);
             if (e.Phase != MatchPhase.AwaitBoost) return 0;

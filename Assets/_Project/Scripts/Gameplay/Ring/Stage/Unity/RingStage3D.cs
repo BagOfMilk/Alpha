@@ -20,6 +20,11 @@ namespace Game.Gameplay.Ring.Stage
         public Vector3 Offset;
         /// <summary>Поворот B відносно A, градуси (Blender, проти годинникової зверху; в Unity курс B = курс A мінус це).</summary>
         public float Rotation;
+        /// <summary>
+        /// Вузол пози на початку кліпа (стовпець «з вузла» маніфесту; «-» — невідомо; null — рядок старого формату з одним
+        /// вузлом). Режисер ловить ним стик ланцюга: кінець попереднього кліпа має збігтися з початком наступного.
+        /// </summary>
+        public string StartNode;
         /// <summary>Вузол пози в кінці кліпа (stance, lying_back, …; «-» — невідомо).</summary>
         public string EndNode;
         public bool EndsLying { get { return EndNode != null && EndNode.StartsWith("lying"); } }
@@ -36,8 +41,15 @@ namespace Game.Gameplay.Ring.Stage
     public sealed class RingStage3D : MonoBehaviour, IRingStage
     {
         // ---------- геометрія рингу (м, Unity: Y угору, центр рингу — початок) ----------
-        public const float MatY = 1.0f;
-        public const float RingHalf = 2.038f;
+        /// <summary>Зал матчу: розміри рингу з якорів арени (<see cref="RingVenue"/>), карта підлоги, місце пари за рингом.
+        /// До побудови сцени — спортзал (ті самі 1,0 / 2,038, що були константами).</summary>
+        public static RingVenue Venue { get; private set; } = RingVenue.Parse(null);
+        /// <summary>Висота полотна над підлогою залу.</summary>
+        public static float MatY { get { return Venue.MatY; } }
+        /// <summary>Край бійцівського квадрата від центру (лінія каната − 0,10).</summary>
+        public static float RingHalf { get { return Venue.RingHalf; } }
+        /// <summary>Місце пари за рингом у цьому залі (<see cref="RingVenue.PlanOutside"/>).</summary>
+        public static RingVenue.OutsideSpot Outside { get; private set; }
 
         public const float PlaySpeed = 1.2f;
 
@@ -79,7 +91,10 @@ namespace Game.Gameplay.Ring.Stage
             return _motion.TryGetValue(clip, out v) ? v : 0f;
         }
 
-        public string PlayedReport()
+        public string PlayedReport() { return PlayedReport(true); }
+
+        /// <summary>Те саме; <paramref name="director"/> = false — без лічильників режисера за останній матч (демо пише їх сумою).</summary>
+        public string PlayedReport(bool director)
         {
             Func<string, string> logical = n => n.EndsWith("_A") || n.EndsWith("_B") ? n.Substring(0, n.Length - 2) : n;
             var played = new HashSet<string>();
@@ -94,7 +109,19 @@ namespace Game.Gameplay.Ring.Stage
             }
             runRope.Sort(StringComparer.Ordinal);
             return string.Format(CultureInfo.InvariantCulture, "[Ринг] кліпи: зіграно {0} логічних з {1} у маніфесті рингу (усього різних {2}); біг, канати, кидки: {3}",
-                inMatch, _matchClips.Count, played.Count, runRope.Count > 0 ? string.Join(", ", runRope) : "—") + "\n" + Watch.Report();
+                inMatch, _matchClips.Count, played.Count, runRope.Count > 0 ? string.Join(", ", runRope) : "—")
+                + (director ? "\n" + DirectorReport() : "") + "\n" + Watch.Report();
+        }
+
+        /// <summary>
+        /// Лічильники режисера за останній матч (скидаються на його початку): кроки, зіграні підстановкою кліпа (критерій М1 «0»),
+        /// старти пари посеред розбігу, кадри з тазом далі <see cref="RingMatchDirector.CenterLimit"/> від центру.
+        /// </summary>
+        public string DirectorReport()
+        {
+            if (_director == null) return "[Ринг] режисер за матч: —";
+            return string.Format(CultureInfo.InvariantCulture, "[Ринг] режисер за матч: підстановок кліпів {0}, стартів із розбігу {1}, таз поза центром {2}",
+                _director.StandIns, _director.RunInStarts, _director.OffCenter);
         }
 
         private float _shakeAmp, _shakeT, _shakeDur;
@@ -156,6 +183,8 @@ namespace Game.Gameplay.Ring.Stage
         private GameObject _mic;
         private RingActor _micHolder;
         private readonly Dictionary<string, RingClipInfo> _info = new Dictionary<string, RingClipInfo>();
+        /// <summary>Рядки жіночого маніфесту (ring_anims_f_manifest.txt): ті самі імена, зсуви пар подекуди інші.</summary>
+        private readonly Dictionary<string, RingClipInfo> _infoF = new Dictionary<string, RingClipInfo>();
         private readonly Dictionary<string, AnimationClip> _clips = new Dictionary<string, AnimationClip>();
         /// <summary>Жіночий набір виходу (RING_Entrance_F.fbx): ті самі імена — окремий словник, щоб не затерти чоловічі.</summary>
         private readonly Dictionary<string, AnimationClip> _clipsF = new Dictionary<string, AnimationClip>();
@@ -247,6 +276,7 @@ namespace Game.Gameplay.Ring.Stage
             foreach (var k in _info.Keys) _matchClips.Add(k.EndsWith("_A") || k.EndsWith("_B") ? k.Substring(0, k.Length - 2) : k);
             ParseManifest(assets.promoManifest);
             ParseManifest(assets.entranceManifest);
+            ParseManifest(assets.manifestF, _infoF);
             Events = RingClipEvents.Parse(assets.events != null ? assets.events.text : null);
             Events.Add(assets.eventsF != null ? assets.eventsF.text : null);
             if (assets.motion != null)
@@ -258,12 +288,14 @@ namespace Game.Gameplay.Ring.Stage
                         || !float.TryParse(p[2], NumberStyles.Float, CultureInfo.InvariantCulture, out dy)) continue;
                     _motion[p[0]] = Mathf.Sqrt(dx * dx + dy * dy);
                 }
-            Debug.Log("[Ринг] 3D: кліпів " + _clips.Count + ", у маніфесті " + _info.Count + ", міток подій " + Events.Count);
+            Debug.Log("[Ринг] 3D: кліпів " + _clips.Count + " (жіночих " + _clipsF.Count + "), у маніфесті " + _info.Count
+                + " (жіночому " + _infoF.Count + "), міток подій " + Events.Count);
         }
 
-        private void ParseManifest(TextAsset t)
+        private void ParseManifest(TextAsset t, Dictionary<string, RingClipInfo> into = null)
         {
             if (t == null) return;
+            if (into == null) into = _info;
             foreach (var raw in t.text.Split('\n'))
             {
                 string line = raw.Trim();
@@ -281,9 +313,10 @@ namespace Game.Gameplay.Ring.Stage
                     Rotation = F(p[7]),
                     // Колонки 9–10 — вузол пози на початку і в кінці (ring_anims.py). Раніше бралась 9-та (початок), і
                     // «лежить після кліпа» не спрацьовувало: кинутий після Bodyslam ще й продавав падіння.
+                    StartNode = p.Length > 9 ? p[8] : null,
                     EndNode = p.Length > 9 ? p[9] : p[8]
                 };
-                _info[ci.Name] = ci;
+                into[ci.Name] = ci;
             }
         }
 
@@ -296,6 +329,18 @@ namespace Game.Gameplay.Ring.Stage
         {
             RingClipInfo ci;
             return _info.TryGetValue(clip, out ci) ? ci : null;
+        }
+
+        /// <summary>
+        /// Рядок маніфесту для постаті певної статі: жінці — з жіночого (ring_anims_f_manifest.txt), якщо кліп там є; інакше —
+        /// чоловічий. Станом на 36178fd жіночий відрізняється в чотирьох рядках: Cover_A/B (зсув уперед 0,672 проти 0,600 м) і
+        /// Ref_Raise_Hand_A/B (убік 0,640 проти 0,750 м).
+        /// </summary>
+        public RingClipInfo Info(string clip, bool female)
+        {
+            RingClipInfo ci;
+            if (female && clip != null && _infoF.TryGetValue(clip, out ci)) return ci;
+            return clip != null ? Info(clip) : null;
         }
 
         public AnimationClip Clip(string name)
@@ -326,9 +371,28 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Скасувати відкладений звук удару виходу (тема, гонг, оплески) — вихід закінчився чи пропущений.</summary>
         internal void CancelEntranceSound() { if (_sound != null) _sound.CancelEntranceHit(); }
 
+        // Тексти обраного залу (якорі канатів, стільці, натовп) — для канатів і вбрання зали.
+        private TextAsset _venueAnchors, _venueProps, _venueCrowd;
+
         private void BuildArena()
         {
-            var v = Instantiate(assets.venue, transform);
+            // Зал: у грі — спортзал; огляд «за рингом» у трьох залах — -ring-venue hall|arena (ассети — venueSets).
+            GameObject fbx = assets.venue;
+            _venueAnchors = assets.venueAnchors; _venueProps = assets.venueProps; _venueCrowd = assets.venueCrowd;
+            string id = "gym", want = ReadArg("-ring-venue");
+            if (!string.IsNullOrEmpty(want) && want != id && assets.venueSets != null)
+            {
+                bool found = false;
+                foreach (var vs in assets.venueSets)
+                    if (vs != null && vs.id == want && vs.venue != null)
+                    {
+                        fbx = vs.venue; _venueAnchors = vs.anchors; _venueProps = vs.props; _venueCrowd = vs.crowd; id = vs.id;
+                        found = true;
+                    }
+                if (!found) Debug.LogWarning("[Ринг] 3D: залу «" + want + "» немає серед ассетів — спортзал");
+            }
+            Venue = RingVenue.Parse(_venueAnchors != null ? _venueAnchors.text : null, id);
+            var v = Instantiate(fbx, transform);
             v.name = "Venue";
             // Kit_* — колір вершин × сіра карта набору (у Unity були світло-сірими без текстури: плейтест 08.11.2026, P3).
             RingVenueKit.Apply(v, null, assets.kitSets, assets.kitAlbedo, assets.kitNormal, assets.kitTile);
@@ -338,6 +402,7 @@ namespace Game.Gameplay.Ring.Stage
             // (x, z_blender, y_blender) — рівно як у Blender, лицьовий бік (hardcam, −Y) дивиться на −Z.
             v.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
             v.transform.localScale = Vector3.one;
+            PlanFloor(v);
             var b = new Bounds(Vector3.zero, Vector3.zero);
             bool first = true;
             foreach (var r in v.GetComponentsInChildren<Renderer>())
@@ -351,6 +416,52 @@ namespace Game.Gameplay.Ring.Stage
                 if (Mathf.Abs(rb.center.x) < 2.5f && Mathf.Abs(rb.center.z) < 2.5f && rb.min.y > -0.5f && rb.min.y < 3f && rb.size.x > 1.5f)
                     Debug.Log("[Ринг] 3D: арена біля центру " + r.name + " min=" + rb.min + " max=" + rb.max);
             }
+        }
+
+        /// <summary>
+        /// Карта підлоги залу й місце пари за рингом (<see cref="RingVenue.PlanOutside"/>): сходи, столи й зброя з якорів,
+        /// стільці й глядачі з текстів, а огорожа, столи й штативи світла — з трикутників самої сітки залу (у текстах їх
+        /// немає; генератор і тексти можуть розходитись — сітка й є те, що на екрані).
+        /// </summary>
+        private void PlanFloor(GameObject v)
+        {
+            var venue = Venue;
+            venue.MarkAnchors();
+            venue.MarkProps(_venueProps != null ? _venueProps.text : null);
+            venue.MarkCrowd(_venueCrowd != null ? _venueCrowd.text : null);
+            int tris = 0, skipped = 0;
+            foreach (var mf in v.GetComponentsInChildren<MeshFilter>())
+            {
+                var m = mf.sharedMesh;
+                if (m == null) continue;
+                if (!m.isReadable) { skipped++; continue; }
+                var w = mf.transform.localToWorldMatrix;
+                var vs = m.vertices;
+                var t = m.triangles;
+                for (int i = 0; i + 2 < t.Length; i += 3)
+                {
+                    Vector3 a = w.MultiplyPoint3x4(vs[t[i]]), b = w.MultiplyPoint3x4(vs[t[i + 1]]), c = w.MultiplyPoint3x4(vs[t[i + 2]]);
+                    venue.MarkTriangle(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+                }
+                tris += t.Length / 3;
+            }
+            Outside = venue.PlanOutside();
+            var o = Outside;
+            float x0, z0, x1, z1;
+            o.Rect(venue.Plat, 0f, out x0, out z0, out x1, out z1);
+            string msg = string.Format(CultureInfo.InvariantCulture,
+                "[Ринг] 3D: зал {0}; підлога з {1} трикутників (нечитаних сіток {2}); за рингом — бік {3}, зсув {4:0.00}, центр ({5:0.00}; {6:0.00}), смуга ±{7:0.0} м, назовні до {10:0.00} м від платформи, підлога {8:0.00} м, операторів у смузі {9}",
+                venue, tris, skipped, o.Side, o.Shift, o.X, o.Z, o.HalfLength, o.Ground, venue.SoftIn(x0, z0, x1, z1), o.OuterEdge);
+            if (o.Ok) Debug.Log(msg);
+            else Debug.LogWarning(msg + string.Format(CultureInfo.InvariantCulture, " — ВІЛЬНОЇ СМУГИ НЕМАЄ (найвища перешкода {0:0.00} м у ({1:0.00}; {2:0.00}))",
+                o.Blocked, o.BlockedX, o.BlockedZ));
+            // Кут героя — північно-західний (свій кут у кліпах Move_Corner_*): там на великих шоу стоїть менеджерка.
+            float mx, mz;
+            _cornerOk = venue.CornerSpot(o, -1f, 1f, out mx, out mz);
+            _corner = new Vector3(mx, venue.GroundAt(mx, mz), mz);
+            _cornerYaw = YawTo(_corner, new Vector3(-venue.PostLine, 0f, venue.PostLine) * 0.5f);
+            if (_cornerOk) Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] 3D: менеджер у кутку героя — ({0:0.00}; {1:0.00}), курс {2:0}°", mx, mz, _cornerYaw));
+            else Debug.LogWarning("[Ринг] 3D: біля кута героя вільного місця немає — менеджерки в кутку не буде");
         }
 
         private void BuildCamera()
@@ -432,15 +543,15 @@ namespace Game.Gameplay.Ring.Stage
             var ropeGo = new GameObject("Ropes");
             ropeGo.transform.SetParent(transform, false);
             _ropes = ropeGo.AddComponent<RingRopes>();
-            _ropes.Build(assets.venueAnchors, assets.wrestlerTemplate, actors);
+            _ropes.Build(_venueAnchors, assets.wrestlerTemplate, actors);
 
             var dressGo = new GameObject("VenueDress");
             dressGo.transform.SetParent(transform, false);
             _dress = dressGo.AddComponent<RingVenueDress>();
             string n = ReadArg("-ring-crowd");
             if (n != null) { int v; if (int.TryParse(n, out v)) _dress.attendance = Mathf.Clamp(v, 0, 200); }
-            _dress.BuildChairs(assets.props, assets.venueProps, assets.wrestlerTemplate);
-            if (_dress.attendance > 0) _dress.BuildCrowd(assets.crowd, assets.venueCrowd, assets.crowdClips, assets.crowdAvatar);
+            _dress.BuildChairs(assets.props, _venueProps, assets.wrestlerTemplate);
+            if (_dress.attendance > 0) _dress.BuildCrowd(assets.crowd, _venueCrowd, assets.crowdClips, assets.crowdAvatar);
         }
 
         private void BuildActors()
@@ -459,11 +570,12 @@ namespace Game.Gameplay.Ring.Stage
                 new RingDress.Piece("hair_short02", new Color(0.16f, 0.11f, 0.08f)),
             });
             RingDress.Apply(_player.Model, assets.kitMale, new[] { new RingDress.Piece("hair_short01", new Color(0.12f, 0.08f, 0.05f)) });
-            RingDress.Apply(_rival.Model, assets.kitMale, new[]
-            {
-                new RingDress.Piece("hair_short04", new Color(0.55f, 0.42f, 0.26f)),
-                new RingDress.Piece("beard_short", new Color(0.5f, 0.38f, 0.24f)),
-            });
+            // Борода набору Alpha скроєна під іншу голову: на голові cast вона висить пластиною під підборіддям і при закинутій
+            // голові читається «щелепою як у скелета» (власник, 09.11.2026; кадр hall p8ed 018). Рішення власника 12.11.2026 (№ 2,
+            // «Так, усі 11»): у Молота за замовчуванням бороди немає; -ring-diag-beard повертає її лише в оглядах — кадр «до».
+            var rivalDress = new List<RingDress.Piece> { new RingDress.Piece("hair_short04", new Color(0.55f, 0.42f, 0.26f)) };
+            if (RingLaunchArgs.Has("-ring-diag-beard")) rivalDress.Add(new RingDress.Piece("beard_short", new Color(0.5f, 0.38f, 0.24f)));
+            RingDress.Apply(_rival.Model, assets.kitMale, rivalDress);
             if (assets.mic != null)
             {
                 _mic = Instantiate(assets.mic, transform);
@@ -507,7 +619,9 @@ namespace Game.Gameplay.Ring.Stage
                 for (int i = 0; i < mats.Length; i++) mats[i] = mat;
                 r.sharedMaterials = mats;
                 r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
-                r.receiveShadows = true;
+                // Діагностика огляду облич (-ring-diag-nohead-shadow, лише кадри): голова не приймає тіней — чи сіра пляма на
+                // підборідді (огляд «щелепи», hall 018) — тінь. У грі прапорця немає.
+                r.receiveShadows = !(Characters.CharacterAssembler.PartOf(r.name) == "body_head" && RingLaunchArgs.Has("-ring-diag-nohead-shadow"));
                 // Межі скін-меша стоять у бінд-позі набору (авторовані осторонь), а кліпи рингу запечені з абсолютним
                 // зсувом: без цього постать відсікається камерою, щойно її таз відходить від старих меж.
                 var smr = r as SkinnedMeshRenderer;
@@ -579,6 +693,7 @@ namespace Game.Gameplay.Ring.Stage
 
         private void Kill(RingActor a)
         {
+            _bodyScale.Remove(a);
             a.Destroy();
             if (a.Slot != null) Destroy(a.Slot.gameObject);
         }
@@ -617,17 +732,141 @@ namespace Game.Gameplay.Ring.Stage
         public RingActor Actor(MatchSide s) { return s == MatchSide.Player ? _player : _rival; }
         public RingActor Referee { get { return _ref; } }
 
-        /// <summary>Канонічне місце борця в зоні (світ). Центр — навпроти суперника, канати й кут — біля дальнього боку, поза рингом — на підлозі.</summary>
-        public static Vector3 ZonePos(MatchSide s, Zone z)
+        /// <summary>
+        /// Місце борця пари (світ, слот на підлозі під ним). На рингу — центр, навпроти суперника: (±0,85; мат; 0), гравець —
+        /// на заході. За рингом — пара РАЗОМ на підлозі з одного боку, між фартухом і першим рядом (огорожею): точка
+        /// <see cref="OutsideAnchor"/>, розлука ±0,85 уздовж боку (<see cref="OutsideAlong"/>: гравець — у мінус); висота —
+        /// підлога там (мати довкола рингу).
+        /// </summary>
+        public static Vector3 PairPos(MatchSide s, bool outside)
         {
+            bool player = s == MatchSide.Player;
+            if (!outside) return new Vector3(player ? -0.85f : 0.85f, MatY, 0f);
+            float x, z;
+            RingVenue.PairPoint(Outside, player, out x, out z);
+            return new Vector3(x, Venue.GroundAt(x, z), z);
+        }
+
+        /// <summary>Курс борця пари: обличчям до суперника (на рингу — гравець 90°, суперник −90°).</summary>
+        public static float PairYaw(MatchSide s, bool outside)
+        {
+            var other = s == MatchSide.Player ? MatchSide.Rival : MatchSide.Player;
+            return YawTo(PairPos(s, outside), PairPos(other, outside));
+        }
+
+        /// <summary>Центр пари за рингом (на підлозі).</summary>
+        public static Vector3 OutsideAnchor
+        {
+            get { var o = Outside; return new Vector3(o.X, Venue.GroundAt(o.X, o.Z), o.Z); }
+        }
+
+        /// <summary>
+        /// Місце рефері, поки пара за рингом (<see cref="RingVenue.RefPoint"/>): на фартуху навпроти центру пари, за канатами,
+        /// на висоті мату — звідти рахує відлік; тіла пари не дістають, кадр «за рингом» його крізь ринг не бачить.
+        /// </summary>
+        public static Vector3 OutsideRefPos
+        {
+            get { float x, z; RingVenue.RefPoint(Outside, out x, out z); return new Vector3(x, MatY, z); }
+        }
+
+        /// <summary>Уздовж боку за рингом (одиничний; гравець — у мінус, суперник — у плюс).</summary>
+        public static Vector3 OutsideAlong { get { return new Vector3(Outside.AlongX, 0f, Outside.AlongZ); } }
+
+        /// <summary>Назовні від рингу на боці пари (одиничний): від фартуха до огорожі.</summary>
+        public static Vector3 OutsideOut { get { return new Vector3(Outside.OutX, 0f, Outside.OutZ); } }
+
+        /// <summary>
+        /// Вільна смуга за рингом: від центру пари ±<see cref="OutsideHalfLength"/> уздовж боку і ±<see cref="OutsideHalfWidth"/>
+        /// назовні (смуга — від краю платформи + 0,15 до її зовнішньої межі: + 1,85 м, у вузькому спортзалі ближче;
+        /// <see cref="RingVenue.OutsideSpot.HalfWidth"/>). Кліп пари з бічним зсувом ставити так, щоб обидва борці лягли в
+        /// смугу: зсув ділиться навпіл довкола центру.
+        /// </summary>
+        public static float OutsideHalfLength { get { return Outside.HalfLength; } }
+        public static float OutsideHalfWidth { get { return Outside.HalfWidth; } }
+
+        // Лінія каната кліпів відскоку від тазу першого кадру, у зростах ригу (CAST_ANIM.md: ROPE_D + 0,12; режисер — так само).
+        private const float RopeLineRig = 1.83f;
+
+        /// <summary>
+        /// Точка першого кадру кліпа «на канаті / на куті» (план 1 склейки, <see cref="StageStepKind.Cut"/>): таз кліпа в мить 0
+        /// (x, z) і висота слота (y) для <see cref="Place"/> / <see cref="RingActor.PlayAt"/>; <paramref name="yaw"/> — курс
+        /// тазу для них. Кліп — <see cref="RingClipTable.DefaultPerch"/>.
+        /// </summary>
+        public Vector3 PerchPos(MatchSide s, MoveStaging perch, out float yaw)
+        {
+            return PerchPos(s, perch, RingClipTable.DefaultPerch(perch), out yaw);
+        }
+
+        /// <summary>
+        /// Те саме для заданого кліпа склейки (CAST_ANIM.md, «Ринг і місця кліпів»; hs — <see cref="BodyScale"/>):
+        /// <c>Rope_*</c> — свій задній канат (гравець — західний, суперник — східний): лінія каната кліпу (1,83 hs від тазу
+        /// першого кадру) — на лінії каната рингу, слот обличчям до каната; якщо до суперника в центрі ближче 0,8 м —
+        /// північний канат. <c>Move_Corner_*</c> — свій дальній кут (гравець — північно-західний, суперник —
+        /// північно-східний; з боку жорсткої камери видно цілком): таз за 0,42 hs від стійки по діагоналі, обличчям до
+        /// центру. <c>Top_*</c>, <c>Corner_Climb_Top</c> — той самий кут, таз за 0,76 hs, слот піднято на 1,31 − 1,145 hs
+        /// (жіночі кліпи — 1,034 hs).
+        /// </summary>
+        public Vector3 PerchPos(MatchSide s, MoveStaging perch, string clip, out float yaw)
+        {
+            var a = Actor(s);
+            float hs = BodyScale(a);
+            bool female = a != null && IsFemale(a);
             float sx = s == MatchSide.Player ? -1f : 1f;
-            switch (z)
+            var v = Venue;
+            if (string.IsNullOrEmpty(clip)) clip = RingClipTable.DefaultPerch(perch);
+            bool top = clip.StartsWith("Top_", StringComparison.Ordinal) || clip == "Corner_Climb_Top";
+            bool rope = clip.StartsWith("Rope_", StringComparison.Ordinal);
+            bool corner = top || clip.StartsWith("Move_Corner_", StringComparison.Ordinal) || (perch == MoveStaging.Corner && !rope);
+            if (corner)
             {
-                case Zone.Ropes: return new Vector3(sx * 0.9f, MatY, 1.5f);
-                case Zone.Corner: return new Vector3(sx * 1.5f, MatY, 1.5f);
-                case Zone.Outside: return new Vector3(sx * 3.55f, 0f, -0.2f);
-                default: return new Vector3(sx * 0.85f, MatY, 0f);
+                var post = new Vector3(sx * v.PostLine, 0f, v.PostLine);
+                var diag = new Vector3(sx, 0f, 1f).normalized;
+                Vector3 p = post - diag * ((top ? 0.76f : 0.42f) * hs);
+                yaw = YawTo(Vector3.zero, -diag);
+                float lift = top ? 1.31f - (female ? 1.034f : 1.145f) * hs : 0f;
+                return new Vector3(p.x, v.MatY + lift, p.z);
             }
+            // Курс тазу на першому кадрі в системі слота: слот має дивитися рівно на канат (кліп іде по осі слота).
+            float hy0 = 0f;
+            var c = Clip(clip, female);
+            if (c != null && a != null) { Vector3 h0; a.SampleLocal(c, 0f, out h0, out hy0); }
+            float line = RopeLineRig * hs;
+            // Свій задній канат: старт тазу між центром і своїм місцем, після відскоку — обличчям до суперника.
+            var back = new Vector3(sx * (v.RopeLine - line), v.MatY, 0f);
+            var victim = PairPos(s == MatchSide.Player ? MatchSide.Rival : MatchSide.Player, false);
+            if (Mathf.Abs(back.x - victim.x) >= 0.8f)
+            {
+                yaw = sx * 90f + hy0;
+                return back;
+            }
+            yaw = hy0;
+            return new Vector3(sx * 0.85f, v.MatY, v.RopeLine - line);
+        }
+
+        private readonly Dictionary<RingActor, float> _bodyScale = new Dictionary<RingActor, float>();
+
+        /// <summary>
+        /// Масштаб тіла hs: метри зсуву тазу на цьому тілі на одиницю ригу кліпа (Humanoid масштабує зсув під пропорції), з
+        /// кривої циклу бігу на тілі проти його зсуву в ring_anims_motion.txt (як у режисера), 0,6–1,6.
+        /// </summary>
+        public float BodyScale(RingActor a)
+        {
+            float k;
+            if (a == null) return 1f;
+            if (_bodyScale.TryGetValue(a, out k)) return k;
+            k = 1f;
+            var run = Clip("Run_Loop");
+            float rig = MotionNet("Run_Loop");
+            if (run != null && rig > 0.3f)
+            {
+                var pos = new Vector3[2];
+                var yw = new float[2];
+                a.SamplePath(run, new[] { 0f, run.length - 1f / 60f }, pos, yw);
+                float d = new Vector2(pos[1].x, pos[1].z).magnitude * run.length / (run.length - 1f / 60f);
+                if (d > 0.1f) k = Mathf.Clamp(d / rig, 0.6f, 1.6f);
+            }
+            _bodyScale[a] = k;
+            return k;
         }
 
         public static Vector3 RefPos { get { return new Vector3(0f, MatY, 1.5f); } }
@@ -660,8 +899,8 @@ namespace Game.Gameplay.Ring.Stage
             // Світло зали — робоче: холодне світло поразки лишалося на картці й промо наступного тижня (плейтест 08.11.2026, P3:
             // «картка шоу тижня 2 і далі має холодне синє світло»).
             if (_fx != null) _fx.Match();
-            Place(_player, ZonePos(MatchSide.Player, Zone.Center), 90f, "Ring_Stance_Loop");
-            Place(_rival, ZonePos(MatchSide.Rival, Zone.Center), -90f, "Ring_Stance_Loop");
+            Place(_player, PairPos(MatchSide.Player, false), 90f, "Ring_Stance_Loop");
+            Place(_rival, PairPos(MatchSide.Rival, false), -90f, "Ring_Stance_Loop");
             Place(_ref, RefPos, 180f, "Ref_Idle_Loop");
             SetShot(StageCam.Overview);
             var rr = _player.Model.GetComponentsInChildren<Renderer>();
@@ -718,22 +957,32 @@ namespace Game.Gameplay.Ring.Stage
             ForgetWatch();
             HideMic();
             ShowAll();
+            // Загальний план — ДО режисера: відновлений матч зі стану «за рингом» ставить у Begin свій кадр (план «за рингом»),
+            // і загальний план після нього той кадр перебивав.
+            SetShot(StageCam.Overview);
             _director.Begin(engine);
             if (_fx != null) _fx.Match();
             CrowdMood(engine != null ? engine.State.Hype : 0);
             if (_sound != null) { _sound.MusicOff(); if (engine != null && engine.State.Log.Count <= 1) _sound.BellStart(); }
-            SetShot(StageCam.Overview);
         }
 
         /// <summary>Демо-режим (-ring-demo): матч без рушія, події подає RingStageDemo.</summary>
         public RingMatchDirector BeginDemoMatch()
         {
+            // Показ готується, як у BeginMatch (запит ПМ №5, 09.11.2026): з шоу — геть, троє на рингу, музика стихає, натовп
+            // спокійний (рушія немає — як матч з нуля); дзвона немає — демо не матч.
+            LeaveShow();
             _mode = RingStageMode.Match;
             ForgetWatch();
             HideMic();
-            _ref.Model.SetActive(true);
-            _director.BeginDemo();
+            ShowAll();
+            // Загальний план — до режисера, як у BeginMatch.
             SetShot(StageCam.Overview);
+            _director.BeginDemo();
+            // Світло матчу: кінець попереднього сценарію демо (RingDemoScript) лишав світло перемоги чи поразки.
+            if (_fx != null) _fx.Match();
+            CrowdMood(0);
+            if (_sound != null) _sound.MusicOff();
             return _director;
         }
 
@@ -1077,34 +1326,24 @@ namespace Game.Gameplay.Ring.Stage
             return a;
         }
 
-        /// <summary>Сцена закулісся: хто на місці Ліни (подія — гість), парковка — холодна лампа.</summary>
+        /// <summary>Постать із таблиці людей кар'єри (<see cref="BackstageCast"/>): у сорочці, штанях і взутті або в борцівському.</summary>
+        private RingActor MakePerson(string name, BackstageCast.Person p)
+        {
+            if (p == null) return null;
+            return p.Dressed ? MakeDressed(name, p.Body, p.Rgb, p.Hair, RingTheme.Rgb((uint)p.Rgb)) : Rebuild(name, p.Body, p.Rgb, p.Hair, 1f);
+        }
+
+        /// <summary>
+        /// Сцена закулісся: хто на місці букера (подія — гість, <see cref="BackstageCast.GuestSpeaker"/>; зрада напарника — гість
+        /// поруч із букером), парковка — холодна лампа. Подія без гостя (мішаний матч, поворот) — говорить букер федерації.
+        /// </summary>
         public void SetBackstageScene(string sceneId)
         {
             if (_show == null || !_show.InBackstage) return;
-            string body = null, hair = ""; int rgb = 0x5A6A78; bool dress = true;
-            switch (sceneId)
-            {
-                case "ev_parking": { var l = CareerLooks.ForNpc("baron"); body = l.Body; rgb = l.Rgb; hair = l.Hair; break; }
-                case "ev_friend": { var l = CareerLooks.ForNpc("stalevyi"); body = l.Body; rgb = l.Rgb; hair = l.Hair; dress = false; break; }
-                case "ev_interview": body = "body_f_south_asian"; hair = "hair_bob02"; rgb = 0x3B5BA0; break;
-                case "ev_contract": body = "body_m_east_asian"; hair = "hair_short02"; rgb = 0x202024; break;
-            }
-            RingActor guest = null;
-            if (body != null)
-            {
-                guest = Rebuild("Гість", body, rgb, hair, 1f);
-                if (guest != null && dress)
-                {
-                    bool f = body.StartsWith("body_f_");
-                    var c = new Color(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f);
-                    RingDress.Apply(guest.Model, f ? assets.kitFemale : assets.kitMale, new[]
-                    {
-                        new RingDress.Piece("shirt", c), new RingDress.Piece("trousers", new Color(0.12f, 0.12f, 0.13f)),
-                        new RingDress.Piece("shoes", new Color(0.08f, 0.06f, 0.05f)),
-                    });
-                }
-            }
-            _show.SetGuest(guest, sceneId ?? "", sceneId == "ev_parking");
+            string speaker = BackstageCast.GuestSpeaker(sceneId);
+            var guest = MakePerson("Гість", BackstageCast.Guest(speaker));
+            if (speaker != null && guest == null) Debug.LogWarning("[Ринг] закулісся: немає постаті гостя «" + speaker + "» сцени " + sceneId);
+            _show.SetGuest(guest, sceneId ?? "", BackstageCast.Parking(sceneId), speaker, BackstageCast.GuestWithBooker(sceneId));
         }
 
         public void ShowBackstage()
@@ -1113,22 +1352,93 @@ namespace Game.Gameplay.Ring.Stage
             _mode = RingStageMode.Idle;
             if (_director != null) _director.EndMatch();
             HideMic();
-            // Букер — Ліна Ворон (сцени закулісся): жіноче тіло набору у власних матеріалах FBX.
-            int bi = Array.FindIndex(assets.bodies, b => b != null && b.name == "body_f_mediterranean");
-            _show.ShowBackstage(bi >= 0 ? assets.bodies[bi] : assets.bodyRef, bi >= 0 ? assets.kitFemale : assets.kitMale);
+            // Букер — той, кого назвала кар'єра (SetCareerCast; за замовчуванням Ліна Ворон).
+            _show.ShowBackstage();
+            EnsureBooker();
             if (_sound != null) { _sound.MusicOff(); _sound.Crowd(-1); }
         }
+
+        // ============================ люди кар'єри поза рингом ============================
+
+        private string _castBooker = BackstageCast.DefaultBooker;
+        private bool _castManager;
+        private RingActor _manager;
+        private bool _managerShown, _cornerOk;
+        private Vector3 _corner;
+        private float _cornerYaw;
+
+        public void SetCareerCast(string bookerId, bool manager)
+        {
+            _castBooker = string.IsNullOrEmpty(bookerId) ? BackstageCast.DefaultBooker : bookerId;
+            _castManager = manager;
+            if (_show != null && _show.InBackstage) EnsureBooker();
+        }
+
+        /// <summary>У роздягальні — постать букера федерації кар'єри (№ 10 рішень 12.11.2026); та сама — без перебудови.</summary>
+        private void EnsureBooker()
+        {
+            if (_show == null || _show.BookerId == _castBooker) return;
+            var p = BackstageCast.Booker(_castBooker);
+            var a = MakePerson("Букер", p);
+            if (a == null) return;
+            _show.SetBooker(a, _castBooker);
+            Debug.Log("[Ринг] закулісся: букер — " + _castBooker + " (" + p.Body + ")");
+        }
+
+        /// <summary>
+        /// Менеджерка Марта Ріос у кутку героя (№ 8 рішень 12.11.2026): найнята (<see cref="SetCareerCast"/>), велике шоу,
+        /// на рингу (не закулісся і не «герой сам»), біля кута є вільне місце (<see cref="RingVenue.CornerSpot"/>). Стоїть на
+        /// підлозі обличчям до рингу.
+        /// </summary>
+        private void SyncManager(float dt)
+        {
+            bool want = _castManager && _cornerOk && _fx != null && _fx.Big && !_heroOnly && (_show == null || !_show.InBackstage);
+            if (want && _manager == null)
+            {
+                _manager = MakePerson("Менеджерка", BackstageCast.Manager);
+                if (_manager == null) { _cornerOk = false; return; }
+                _managerShown = false;
+            }
+            if (_manager == null) return;
+            if (want != _managerShown)
+            {
+                _managerShown = want;
+                _manager.Model.SetActive(want);
+                if (want) Place(_manager, _corner, _cornerYaw, "Ref_Idle_Loop");
+            }
+            if (want) _manager.Tick(dt);
+        }
+
+        /// <summary>Менеджерка в кутку зараз видна (огляд).</summary>
+        public bool ManagerShown { get { return _managerShown; } }
+
+        /// <summary>Місце менеджерки в кутку героя (огляд); false — вільного місця немає.</summary>
+        public bool ManagerSpot(out Vector3 at) { at = _corner; return _cornerOk; }
+
+        /// <summary>Постать менеджерки (огляд облич і кадри); null — ще не з'являлась.</summary>
+        public RingActor Manager { get { return _manager; } }
 
         // ============================ камера ============================
 
         public void SetShot(StageCam cam)
         {
             // Низький план утримання — склейкою: камера, що пливе з загального плану всередину рингу, пролітала крізь канат.
-            if (cam == StageCam.Low && _shot != StageCam.Low) _camInit = false;
+            if (cam == StageCam.Low && _shot != StageCam.Low) { _camInit = false; _holdOk = false; _holdAge = 99f; }
             // Вихід із кіноплану — теж склейкою: наїзд із кіноплану на загальний перелітав ринг (кадр «між планами»).
             if (_shot == StageCam.Cine && cam != StageCam.Cine) _camInit = false;
             if (_shot != cam) _shotAge = 0f;
             _shot = cam;
+        }
+
+        /// <summary>
+        /// Склейка на план <paramref name="cam"/> — камера стає на місце плану в тому самому кадрі, без наїзду (<see cref="SetShot"/>
+        /// сам склеює лише вхід у низький план і вихід із кіноплану). Для склейок режисера (Cut / Place, кінець «за рингом») —
+        /// замість його власного HardCut (запит ПМ п. 4б; режисер — зона ПМ).
+        /// </summary>
+        public void CutTo(StageCam cam)
+        {
+            SetShot(cam);
+            _camInit = false;
         }
 
         private Vector3 _cinePos, _cineLook;
@@ -1183,12 +1493,14 @@ namespace Game.Gameplay.Ring.Stage
                 Watch.Tick(_watchShow, Time.deltaTime, !_camInit || _show.CamCut);
             }
             if (_show != null) _show.TickBooker(Time.deltaTime);
+            SyncManager(Time.deltaTime);
             if (_cam == null) return;
             _shotAge += dt;
             if (_mode == RingStageMode.Match && _director != null && _director.IsBusy) _camTime[(int)_shot] += dt;
 
             Vector3 pos, look;
             float fov;
+            bool held = false;
             if (_show != null && _show.LeftBackstage) { _show.LeftBackstage = false; _camInit = false; }
             bool show = _show != null && _show.CamActive;
             if (_feetCam && _player != null && _rival != null)
@@ -1236,7 +1548,9 @@ namespace Game.Gameplay.Ring.Stage
                         fov = 33f;
                         break;
                     case StageCam.Low:
-                        // Утримання: камера низько біля мату, збоку — накриття, плече на маті й рука рефері, що б'є «раз — два».
+                        // Утримання (П2): згори під 35–45°, обидва борці й рефері в кадрі — HoldShot; нижче — запасний низький план.
+                        if (HoldShot(dt, out pos, out look, out fov)) { held = true; break; }
+                        // Запасний: камера низько біля мату, збоку — накриття, плече на маті й рука рефері, що б'є «раз — два».
                         look = mid + new Vector3(0f, 0.3f, 0f);
                         // Камера з боку, протилежного рефері (він за парою, z+), вздовж тіл; ринг тісний — ширший кут замість відстані.
                         pos = look + new Vector3(1.7f, 0.95f, -1.5f);
@@ -1262,13 +1576,15 @@ namespace Game.Gameplay.Ring.Stage
                         fov = 33f;
                         break;
                 }
+                if (_shot != StageCam.Low && _shot != StageCam.Cine) pos = OverRopes(pos);
             }
 
             // Ринг підняти над центром кадру: знизу панель дій (UI).
             Vector3 fwd = (look - pos).normalized;
             Vector3 up = Vector3.Cross(Vector3.Cross(fwd, Vector3.up), fwd).normalized;
             float halfH = (look - pos).magnitude * Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad);
-            bool cine = !show && _mode != RingStageMode.Promo && _shot == StageCam.Cine;
+            // Кіноплан і план утримання вже розкладені з полями під виноски й панель — без зсуву рингу вгору.
+            bool cine = !show && _mode != RingStageMode.Promo && (_shot == StageCam.Cine || held);
             Vector3 aim = look - up * (halfH * (show || cine ? 0f : _frameShift));
             Quaternion rot = Quaternion.LookRotation(aim - pos, Vector3.up);
 
@@ -1296,9 +1612,137 @@ namespace Game.Gameplay.Ring.Stage
                 }
             }
             _cam.transform.SetPositionAndRotation(_camPos + _camRot * shake, _camRot);
-            if (_dress != null) _dress.Occlude(_camPos, look);
+            if (_dress != null)
+            {
+                KeepOutsideClear();
+                _dress.Occlude(_camPos, look);
+            }
             _cam.fieldOfView = _camFov;
             LogBudget(dt);
+        }
+
+        private Vector3 _holdPos, _holdLook;
+        private float _holdFov, _holdYaw, _holdAge = 99f;
+        private bool _holdOk;
+        private static readonly float[] HoldYaws = { 0f, 25f, -25f, 50f, -50f, 75f, -75f, 180f };
+        private static readonly float[] HoldPitch = { 40f, 35f, 45f };
+        private static readonly float[] HoldFovs = { 40f, 46f, 52f, 58f };
+
+        /// <summary>
+        /// План утримання (П2; ПМ 11.11.2026: «утримання 35–45°, обидва в кадрі»): камера згори під 35–45°, у кадрі обидва
+        /// борці (голова, таз, стопи) і рефері поруч (до 2,5 м — голова й таз), поля під виноски (верх 24 %) і панель (низ 80 %).
+        /// Курс — з боку, протилежного рефері (він за парою), далі ±25/50/75°; камера в канатах або над ними (лінія до кожної стопи
+        /// над верхнім канатом, <see cref="RingVenue.CamYOverRopes"/>). Перераховується щочверть секунди, спершу з попереднім
+        /// курсом — план не стрибає між курсами; камера доганяє плавно, вхід у план — склейкою (<see cref="SetShot"/>).
+        /// Огляд 8f: старий низький план (22°, з-за плеча) обрізав верхнім краєм того, хто накриває, і рефері (033–043).
+        /// </summary>
+        private bool HoldShot(float dt, out Vector3 pos, out Vector3 look, out float fov)
+        {
+            _holdAge += dt;
+            if (_holdAge >= 0.25f && _player != null && _rival != null)
+            {
+                _holdAge = 0f;
+                var pts = new List<Vector3>();
+                var feet = new List<Vector3>();
+                HoldBody(pts, feet, _player);
+                HoldBody(pts, feet, _rival);
+                Vector3 mid = (_player.PosePos + _rival.PosePos) * 0.5f;
+                Vector3 toRef = Vector3.forward;
+                if (_ref != null)
+                {
+                    Vector3 r = _ref.PosePos - mid;
+                    r.y = 0f;
+                    if (r.magnitude < 2.5f)
+                    {
+                        pts.Add(_ref.HeadPos);
+                        if (_ref.Hips != null) pts.Add(_ref.Hips.position);
+                    }
+                    if (r.sqrMagnitude > 0.04f) toRef = r.normalized;
+                }
+                float yaw0 = Mathf.Atan2(toRef.x, toRef.z) * Mathf.Rad2Deg;
+                var venue = Venue;
+                Func<Vector3, bool> ok = p =>
+                {
+                    if (p.y > MatY + 4.5f) return false;
+                    float rr = Mathf.Max(Mathf.Abs(p.x), Mathf.Abs(p.z));
+                    if (rr <= venue.RopeLine - 0.15f) return true;
+                    if (rr > venue.Plat + 2.0f) return false;
+                    for (int i = 0; i < feet.Count; i++)
+                        if (venue.CamYOverRopes(p.x, p.y, p.z, feet[i].x, feet[i].z) > p.y + 1e-3f) return false;
+                    return true;
+                };
+                var yaws = new List<float>(HoldYaws.Length + 1);
+                if (_holdOk) yaws.Add(_holdYaw);
+                foreach (float dy in HoldYaws) yaws.Add(yaw0 + dy);
+                bool found = false;
+                foreach (float yaw in yaws)
+                {
+                    foreach (float pitch in HoldPitch)
+                    {
+                        var s = RingCine.FrameAny(pts, yaw, pitch, HoldFovs, CamAspect, 0.24f, 0.80f, 0.06f, ok, 1.2f, 8f);
+                        if (!s.Ok) continue;
+                        _holdPos = s.Pos; _holdLook = s.Look; _holdFov = s.Fov; _holdYaw = yaw;
+                        found = true;
+                        break;
+                    }
+                    if (found) break;
+                }
+                _holdOk = found;
+            }
+            pos = _holdPos; look = _holdLook; fov = _holdFov;
+            return _holdOk;
+        }
+
+        /// <summary>Точки тіла для плану утримання: голова, таз, обидві стопи (стопи — ще й для лінії над канатом).</summary>
+        private static void HoldBody(List<Vector3> pts, List<Vector3> feet, RingActor a)
+        {
+            pts.Add(a.HeadPos);
+            if (a.Hips != null) pts.Add(a.Hips.position);
+            int n = feet.Count;
+            if (a.Anim != null)
+                foreach (var b in new[] { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot })
+                {
+                    var t = a.Anim.GetBoneTransform(b);
+                    if (t != null) { pts.Add(t.position); feet.Add(t.position); }
+                }
+            if (feet.Count == n) feet.Add(a.PosePos);
+        }
+
+        /// <summary>
+        /// Плани з-за канатів (загальний, середній, великий): камера піднімається, доки лінія до стоп кожного борця в рингу не
+        /// пройде над верхнім канатом (<see cref="RingVenue.CamYOverRopes"/>), — канат не перетинає постать (огляд 8e: arena demo
+        /// 005–027, канат на рівні колін). Ціль кадру та сама — нахил стає крутішим; стеля підйому — 2,5 м.
+        /// </summary>
+        private Vector3 OverRopes(Vector3 pos)
+        {
+            if (_player == null || _rival == null) return pos;
+            float y = pos.y;
+            foreach (var a in new[] { _player, _rival })
+            {
+                Vector3 f = a.PosePos;
+                y = Venue.CamYOverRopes(pos.x, y, pos.z, f.x, f.z);
+            }
+            pos.y = Mathf.Min(y, pos.y + 2.5f);
+            return pos;
+        }
+
+        /// <summary>
+        /// Поки хтось із пари за рингом (таз у смузі <see cref="Outside"/>), оператори й глядачі в смузі (+0,35 м) сховані:
+        /// оператори камер стоять саме там, де б'ються за рингом (<see cref="RingVenue.MarkCrowd"/> — «м'які»).
+        /// </summary>
+        private void KeepOutsideClear()
+        {
+            bool on = false;
+            float x0, z0, x1, z1;
+            Outside.Rect(Venue.Plat, 0.6f, out x0, out z0, out x1, out z1);
+            foreach (var a in new[] { _player, _rival })
+            {
+                if (a == null || a.Hips == null) continue;
+                Vector3 p = a.PosePos;
+                if (p.y < MatY - 0.3f && p.x >= x0 && p.x <= x1 && p.z >= z0 && p.z <= z1) on = true;
+            }
+            if (on) Outside.Rect(Venue.Plat, 0.35f, out x0, out z0, out x1, out z1);
+            _dress.KeepClear(on, x0, z0, x1, z1);
         }
 
         /// <summary>

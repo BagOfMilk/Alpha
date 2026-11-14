@@ -80,6 +80,11 @@ namespace Game.Core.Ring
         public bool DirtyGame;
         /// <summary>«Імпровізація»: раз за матч провал (не фінішер, не промінь надії) стає «частково».</summary>
         public bool Improvise;
+        /// <summary>
+        /// «Читає суперника» (ґімік «Ветеран», Кар'єра п. 4 М1, 12.11.2026): гравець бачить намір суперника перед його ходом
+        /// (<c>MatchScreenModel.RivalIntent</c>). На кидки не впливає — лише показ; показ на екрані — після У0.
+        /// </summary>
+        public bool ReadsRival;
     }
 
     /// <summary>Усе, що матч отримує від ворожнечі (gdd §1, §3).</summary>
@@ -102,9 +107,25 @@ namespace Game.Core.Ring
         public RingPath PlayerRole;
         /// <summary>Суперник зрізу — лиходій.</summary>
         public RingPath RivalRole = RingPath.Heel;
-        public int RoundLimit = 20;
+        /// <summary>Ліміт дій матчу (ланцюг ініціативи, TRPG_DESIGN §4.11): далі нічия. ПЛЕЙСХОЛДЕР.</summary>
+        public int RoundLimit = Match.MatchRules.ActionLimit;
+        /// <summary>
+        /// Показ/демо (сценарії <c>RingDemoScript</c>): фінішер доступний з першої дії, без мінімуму
+        /// <see cref="Match.MatchRules.FinisherMinRound"/> (P2-1). У матчі гри й кар'єри — false.
+        /// </summary>
+        public bool NoFinisherMinimum;
         /// <summary>Кар'єра: слабший бік, що сильно відстає, раз за матч отримує «промінь надії» (ПЛЕЙСХОЛДЕР, TRPG_DESIGN §4). Зріз ворожнечі лишає вимкненим.</summary>
         public bool HopeSpotEnabled;
+        /// <summary>
+        /// Фінішер борця для показу, коли дію «Фінішер» обрано без прийому — ШІ суперника чи загальна кнопка (прохід 3 «Скилів»,
+        /// 3-P1-3: 35 із 35 фінішерів грались одним кліпом, бо в події не було ключа). Ключ прийому каталогу й постановка — лише
+        /// для показу: <see cref="Match.MoveHint.RollMod"/> і <see cref="Match.MoveHint.HypeOnStrong"/> тут нульові, тож кидки й
+        /// ажіотаж ті самі, що без підказки. null — без ключа (запасний кліп таблиці).
+        /// </summary>
+        public Match.MoveHint PlayerFinisher;
+        public Match.MoveHint RivalFinisher;
+
+        public Match.MoveHint FinisherOf(Match.MatchSide s) { return s == Match.MatchSide.Player ? PlayerFinisher : RivalFinisher; }
     }
 
     /// <summary>Підсумок матчу — усе, що ворожнеча читає назад (gdd §3 «Матч → ворожнеча»).</summary>

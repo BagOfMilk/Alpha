@@ -33,6 +33,13 @@ namespace UnityEngine.UIElements
         public static Length Percent(float value) { return new Length(value, LengthUnit.Percent); }
     }
 
+    public static class UQueryExtensions
+    {
+        public static VisualElement Q(this VisualElement e, string name = null, string className = null) { return null; }
+    }
+
+    public enum StyleKeyword { Undefined = 0, Null, Auto, None, Initial }
+
     public struct StyleLength
     {
         public Length value;
@@ -42,6 +49,7 @@ namespace UnityEngine.UIElements
 
         public static implicit operator StyleLength(float v) { return new StyleLength(v); }
         public static implicit operator StyleLength(Length v) { return new StyleLength(v); }
+        public static implicit operator StyleLength(StyleKeyword k) { return new StyleLength(0f); }
     }
 
     public struct StyleFloat
@@ -343,12 +351,28 @@ namespace UnityEngine.UIElements
     {
         public void RegisterCallback<TEventType>(EventCallback<TEventType> callback, TrickleDown useTrickleDown = TrickleDown.NoTrickleDown)
             where TEventType : EventBase<TEventType>, new() { }
+        // плита розвитку «Рингу»: одноразовий обробник розкладки (прокрутка до щойно розгорнутого списку)
+        public void UnregisterCallback<TEventType>(EventCallback<TEventType> callback, TrickleDown useTrickleDown = TrickleDown.NoTrickleDown)
+            where TEventType : EventBase<TEventType>, new() { }
+    }
+
+    public interface IVisualElementScheduledItem { }
+
+    public interface IVisualElementScheduler
+    {
+        IVisualElementScheduledItem Execute(Action timerUpdateEvent);
+    }
+
+    public static class VisualElementExtensions
+    {
+        public static UnityEngine.Vector2 ChangeCoordinatesTo(this VisualElement src, VisualElement dest, UnityEngine.Vector2 point) { return point; }
     }
 
     public abstract class Focusable : CallbackEventHandler
     {
         public bool focusable { get; set; }
         public FocusController focusController { get { return null; } }
+        public void Focus() { }
         public void Blur() { }
     }
 
@@ -359,8 +383,11 @@ namespace UnityEngine.UIElements
 
     // ---------------- елементи ----------------
 
+    public interface IPanel { }
+
     public class VisualElement : Focusable
     {
+        public enum MeasureMode { Undefined = 0, Exactly = 1, AtMost = 2 }
         private readonly IStyle _style = new InlineStyleStub();
 
         public string name { get; set; }
@@ -379,16 +406,33 @@ namespace UnityEngine.UIElements
         public UnityEngine.Rect contentRect { get { return default(UnityEngine.Rect); } }
         public UnityEngine.Rect layout { get { return default(UnityEngine.Rect); } }
         public VisualElement parent { get { return null; } }
+        public IPanel panel { get { return null; } }
         public int childCount { get { return 0; } }
         public VisualElement this[int index] { get { return null; } }
         public void Remove(VisualElement element) { }
         public void RemoveFromHierarchy() { }
         public void BringToFront() { }
+        // плита розвитку «Рингу»: прокрутка до щойно розгорнутого списку після розкладки
+        public IVisualElementScheduler schedule { get { return null; } }
+        public virtual VisualElement contentContainer { get { return this; } }
+        // прокрутка «Рингу» на межу рядка (п. 2 і 5 слоту 32): розраховані стилі й класи-позначки рядків
+        public IResolvedStyle resolvedStyle { get { return null; } }
+        public void AddToClassList(string className) { }
+        public bool ClassListContains(string cls) { return false; }
+    }
+
+    /// <summary>Розраховані значення стилю після розкладки (лише те, що читає код «Рингу»).</summary>
+    public interface IResolvedStyle
+    {
+        float paddingBottom { get; }
+        DisplayStyle display { get; }
+        Position position { get; }
     }
 
     public class TextElement : VisualElement
     {
         public virtual string text { get; set; }
+        public Vector2 MeasureTextSize(string textToMeasure, float width, MeasureMode widthMode, float height, MeasureMode heightMode) { return default(Vector2); }
     }
 
     public class Label : TextElement
@@ -424,6 +468,7 @@ namespace UnityEngine.UIElements
         public ScrollView(ScrollViewMode scrollViewMode) { }
 
         public Vector2 scrollOffset { get; set; }
+        public VisualElement contentViewport { get { return null; } }
         public ScrollerVisibility verticalScrollerVisibility { get; set; }
         public ScrollerVisibility horizontalScrollerVisibility { get; set; }
     }

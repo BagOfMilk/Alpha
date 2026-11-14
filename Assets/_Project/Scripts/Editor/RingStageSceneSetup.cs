@@ -39,6 +39,26 @@ namespace Game.Gameplay.EditorTools
             assets.venueAnchors = Load<TextAsset>(Art + "venue_gym_anchors.txt");
             assets.venueProps = Load<TextAsset>(Art + "venue_gym_props.txt");
             assets.venueCrowd = Load<TextAsset>(Art + "venue_gym_crowd.txt");
+            // Клубна зала й палац спорту — лише для збірки огляду «за рингом» у трьох залах (-ring-venue hall|arena): Unity
+            // запускають зі змінною середовища RING_REVIEW_VENUES=1. Без неї (гра, збірки інших сесій) у сцені лише спортзал —
+            // посилання на сцену тягнуть FBX у білд і в пам'ять при завантаженні, а з читанням сіток (карта підлоги) — ще й копію
+            // в пам'яті процесора (Статут PERF-01). Текстури їхніх наборів і так у білді (KitSets бере весь маніфест).
+            var venueSets = new List<RingStageAssets.VenueSet>();
+            bool reviewVenues = System.Environment.GetEnvironmentVariable("RING_REVIEW_VENUES") == "1";
+            foreach (string id in reviewVenues ? new[] { "hall", "arena" } : new string[0])
+            {
+                Readable(Art + "venue_" + id + ".fbx");
+                venueSets.Add(new RingStageAssets.VenueSet
+                {
+                    id = id,
+                    venue = Load<GameObject>(Art + "venue_" + id + ".fbx"),
+                    anchors = Load<TextAsset>(Art + "venue_" + id + "_anchors.txt"),
+                    props = Load<TextAsset>(Art + "venue_" + id + "_props.txt"),
+                    crowd = Load<TextAsset>(Art + "venue_" + id + "_crowd.txt"),
+                });
+            }
+            assets.venueSets = venueSets.ToArray();
+            if (reviewVenues) Debug.Log("[Ринг] 3D: RING_REVIEW_VENUES=1 — у сцені ще й зали " + venueSets.Count + " (огляд, не для гри).");
             var crowdClips = new List<AnimationClip>();
             foreach (var o in AssetDatabase.LoadAllAssetsAtPath("Assets/Art/Animations/CROWD_Anims.fbx"))
             {
@@ -91,24 +111,21 @@ namespace Game.Gameplay.EditorTools
             assets.screenTemplate = EnsureScreenMaterial();
             assets.particleAdd = EnsureParticleMaterial("ring_particle_add", true);
             assets.particleAlpha = EnsureParticleMaterial("ring_particle_alpha", false);
-            var clips = new List<AnimationClip>();
-            foreach (string fbx in new[] { "Assets/Art/Animations/RING_Moves.fbx", "Assets/Art/Animations/RING_Promo.fbx", "Assets/Art/Animations/RING_Entrance.fbx" })
-            {
-                foreach (var o in AssetDatabase.LoadAllAssetsAtPath(fbx))
-                {
-                    var c = o as AnimationClip;
-                    if (c != null && !c.name.StartsWith("__preview__")) clips.Add(c);
-                }
-            }
+            // Кліпи рингу — усі RING_*.fbx теки анімацій: чоловічі (без «_F») і жіночі («_F») окремими масивами з тими самими
+            // іменами (ENTRANCE_PROFILE.md). Спершу відомі набори в сталому порядку, далі решта за абеткою: новий файл набору —
+            // скажімо, Top_Rope_Perch_Loop не в RING_Moves*.fbx (CLIP_NEEDS.md) — вантажиться без правки збирача (запити ПМ
+            // №7 і №8, 09.11.2026). Стійка на куті з набору постатей RING_Cast_*.fbx сюди не годиться: той імпортовано без анімації.
+            var animSets = AnimSets();
+            var clips = LoadClipSets(animSets.Where(n => !n.EndsWith("_F", System.StringComparison.Ordinal)));
+            var clipsF = LoadClipSets(animSets.Where(n => n.EndsWith("_F", System.StringComparison.Ordinal)));
             assets.clips = clips.ToArray();
-            // Жіночий набір виходу — окремим масивом: ті самі імена, що в RING_Entrance.fbx (ENTRANCE_PROFILE.md).
-            var clipsF = new List<AnimationClip>();
-            foreach (var o in AssetDatabase.LoadAllAssetsAtPath("Assets/Art/Animations/RING_Entrance_F.fbx"))
-            {
-                var c = o as AnimationClip;
-                if (c != null && !c.name.StartsWith("__preview__")) clipsF.Add(c);
-            }
             assets.clipsFemale = clipsF.ToArray();
+            Debug.Log("[Ринг] 3D: набори кліпів — " + string.Join(", ", animSets) + "; чоловічих " + clips.Count + ", жіночих " + clipsF.Count);
+            foreach (var need in new[] { "Top_Rope_Perch_Loop" })
+            {
+                if (!clips.Any(c => c.name == need)) Debug.LogWarning("[Ринг] 3D: немає кліпа " + need + " у чоловічому наборі рингу (" + AnimDir + "RING_*.fbx)");
+                if (!clipsF.Any(c => c.name == need)) Debug.LogWarning("[Ринг] 3D: немає кліпа " + need + " у жіночому наборі рингу (" + AnimDir + "RING_*_F.fbx)");
+            }
             // Екран виходу (ТЗ B07): пули й маски мотивів лишаються в теці директора (генератор пише туди) — у білд їх
             // тягнуть ці посилання; печатка — з бренду.
             const string Tron = Art + "Titantron/";
@@ -124,6 +141,7 @@ namespace Game.Gameplay.EditorTools
             assets.beltNormal = Load<Texture2D>(Art + "Cast/Props/Textures/belt_normal.png");
             Debug.Log("[Ринг] 3D: виходи — жіночих кліпів " + clipsF.Count + ", пулів екрана " + assets.tronPools.Length + ", мотивів " + assets.tronSprites.Length);
             assets.manifest =Load<TextAsset>("Assets/Art/Animations/ring_anims_manifest.txt");
+            assets.manifestF = Load<TextAsset>("Assets/Art/Animations/ring_anims_f_manifest.txt");
             assets.promoManifest = Load<TextAsset>("Assets/Art/Animations/ring_promo_manifest.txt");
             assets.entranceManifest = Load<TextAsset>("Assets/Art/Animations/ring_entrance_manifest.txt");
             assets.events = Load<TextAsset>("Assets/Art/Animations/ring_anims_events.txt");
@@ -177,6 +195,42 @@ namespace Game.Gameplay.EditorTools
             mi.isReadable = true;
             mi.SaveAndReimport();
             Debug.Log("[Ринг] 3D: " + path + " — увімкнено читання сіток (isReadable).");
+        }
+
+        private const string AnimDir = "Assets/Art/Animations/";
+        private static readonly string[] AnimSetOrder = { "RING_Moves", "RING_Promo", "RING_Entrance" };
+
+        /// <summary>Імена файлів RING_*.fbx теки анімацій (без розширення): відомі набори — у сталому порядку, решта — за абеткою.</summary>
+        private static List<string> AnimSets()
+        {
+            var names = System.IO.Directory.GetFiles(AnimDir, "RING_*.fbx")
+                .Where(p => p.EndsWith(".fbx", System.StringComparison.OrdinalIgnoreCase))
+                .Select(p => System.IO.Path.GetFileNameWithoutExtension(p))
+                .ToList();
+            System.Func<string, int> rank = n =>
+            {
+                string b = n.EndsWith("_F", System.StringComparison.Ordinal) ? n.Substring(0, n.Length - 2) : n;
+                int i = System.Array.IndexOf(AnimSetOrder, b);
+                return i < 0 ? AnimSetOrder.Length : i;
+            };
+            return names.OrderBy(rank).ThenBy(n => n, System.StringComparer.Ordinal).ToList();
+        }
+
+        /// <summary>Кліпи кількох FBX поспіль (без службових __preview__); пізніший набір з тим самим іменем перекриває ранній (RingStage3D.LoadClips).</summary>
+        private static List<AnimationClip> LoadClipSets(IEnumerable<string> sets)
+        {
+            var list = new List<AnimationClip>();
+            foreach (string set in sets)
+            {
+                int before = list.Count;
+                foreach (var o in AssetDatabase.LoadAllAssetsAtPath(AnimDir + set + ".fbx"))
+                {
+                    var c = o as AnimationClip;
+                    if (c != null && !c.name.StartsWith("__preview__")) list.Add(c);
+                }
+                if (list.Count == before) Debug.LogWarning("[Ринг] 3D: у " + AnimDir + set + ".fbx немає кліпів (імпорт без анімації?)");
+            }
+            return list;
         }
 
         private static T Load<T>(string path) where T : Object

@@ -34,6 +34,13 @@ namespace Game.Core.Ring.Career
         public bool TitleWon;
         /// <summary>Очки розвитку, нараховані за матч (різниця DevPoints).</summary>
         public int DevPointsGained;
+        /// <summary>P1-6: чому поразка не дала популярності — 0 (не застосовно), 1 — ажіотаж нижче 9, 2 — уже було цього сезону.</summary>
+        public int LossPopularityBlocked;
+        /// <summary>
+        /// Частка менеджера (§6.4, 15 % усього гонорару), уже знята з бази Fee — суми рядка «гонорар» сходяться без нового рядка; окремий рядок
+        /// «менеджер −N» — за бажанням екрана.
+        /// </summary>
+        public int ManagerCut;
 
         public int TotalFee { get { return Fee + FeeWinBonus + FeeHypeBonus; } }
 
@@ -44,7 +51,7 @@ namespace Game.Core.Ring.Career
                 B(Played), B(Withdrew), B(IsBig), B(IsTitle), B(IsFeud), Uri.EscapeDataString(OpponentId ?? ""), I((int)Position),
                 I((int)Winner), I((int)EndKind), I(Hype), I(Rounds), I((int)PlanOutcome), I(Fee), I(FeeWinBonus), I(FeeHypeBonus),
                 I(PopularityBefore), I(PopularityAfter), I(TrustBefore), I(TrustAfter), I(InjuredZone), I(InjuryWeeks), B(TitleWon),
-                I(DevPointsGained)
+                I(DevPointsGained), I(LossPopularityBlocked), I(ManagerCut)
             });
         }
 
@@ -52,7 +59,8 @@ namespace Game.Core.Ring.Career
         {
             if (string.IsNullOrEmpty(s)) return null;
             var p = s.Split(',');
-            if (p.Length != 23) throw new FormatException("пошкоджений підсумок шоу у зліпку кар'єри");
+            // 24-те поле (LossPopularityBlocked) додано 11.11.2026, 25-те (ManagerCut) — 12.11.2026: старі зліпки мають 23 чи 24
+            if (p.Length < 23 || p.Length > 25) throw new FormatException("пошкоджений підсумок шоу у зліпку кар'єри");
             int i = 0;
             var r = new ShowResult();
             r.Played = Bo(p[i++]); r.Withdrew = Bo(p[i++]); r.IsBig = Bo(p[i++]); r.IsTitle = Bo(p[i++]); r.IsFeud = Bo(p[i++]);
@@ -61,6 +69,8 @@ namespace Game.Core.Ring.Career
             r.PlanOutcome = (FeudPlanOutcome)In(p[i++]); r.Fee = In(p[i++]); r.FeeWinBonus = In(p[i++]); r.FeeHypeBonus = In(p[i++]);
             r.PopularityBefore = In(p[i++]); r.PopularityAfter = In(p[i++]); r.TrustBefore = In(p[i++]); r.TrustAfter = In(p[i++]);
             r.InjuredZone = In(p[i++]); r.InjuryWeeks = In(p[i++]); r.TitleWon = Bo(p[i++]); r.DevPointsGained = In(p[i++]);
+            if (p.Length > 23) r.LossPopularityBlocked = In(p[i++]);
+            if (p.Length > 24) r.ManagerCut = In(p[i++]);
             return r;
         }
 
@@ -148,6 +158,11 @@ namespace Game.Core.Ring.Career
 
         public readonly int[] Injury = new int[3];
         public readonly int[] ZoneDamage = new int[3];
+        /// <summary>
+        /// Сліди травм (§5.5): скільки разів зона травмувалась за кар'єру, разом із поточною травмою. Записуються з сезону 1, діють
+        /// з сезону 4 (<see cref="Ageing"/>). У зліпку — «scars», необов'язково (старі зліпки — нулі).
+        /// </summary>
+        public readonly int[] Scars = new int[3];
 
         public int ActionsLeft;
         public bool Strained;
@@ -163,12 +178,38 @@ namespace Game.Core.Ring.Career
         /// <summary>Ворожнеча з NPC (крім Молота, поки ворожнеча триває — його рівень у FeudState.Heat).</summary>
         public readonly SortedDictionary<string, int> NpcFeud = new SortedDictionary<string, int>(StringComparer.Ordinal);
         public const string PlayerHolder = "player";
-        public string BeltHolder = "";
+
+        /// <summary>Федерація, де виступає гравець: 1 — місцева … 4 — світова (П5).</summary>
+        public int Federation = 1;
+        /// <summary>Дивізіон героя (P2-6): жіночий чи чоловічий. Ставить екран створення (CharacterDraft.Female); до того — хост із тіла.</summary>
+        public bool Female;
+        /// <summary>Дивізіон уже відомий: проставив екран створення або хост (старі зліпки без ключа «fem» — ні).</summary>
+        public bool FemaleKnown;
+        /// <summary>
+        /// Пояси всіх федерацій і дивізіонів (P2-6, два пояси на федерацію): ключ «рівень + m|f» → хто тримає (<see cref="PlayerHolder"/>,
+        /// id NPC; "" — вакантний). Пояс ніколи не переїжджає з гравцем у іншу федерацію.
+        /// </summary>
+        public readonly SortedDictionary<string, string> Belts = new SortedDictionary<string, string>(StringComparer.Ordinal);
+
+        public static string BeltKey(int tier, bool female) { return tier.ToString(CultureInfo.InvariantCulture) + (female ? "f" : "m"); }
+
+        public string Belt(int tier, bool female)
+        {
+            string h;
+            return Belts.TryGetValue(BeltKey(tier, female), out h) ? h : "";
+        }
+
+        public void SetBelt(int tier, bool female, string holder) { Belts[BeltKey(tier, female)] = holder ?? ""; }
+
+        /// <summary>Пояс дивізіону героя в його федерації.</summary>
+        public string BeltHolder { get { return Belt(Federation, Female); } set { SetBelt(Federation, Female, value); } }
 
         // шоу
         public ShowPhase Phase;
         public string Opponent = "";
         public string LastOpponent = "";
+        /// <summary>Суперник, обіцяний сценою на найближче звичайне шоу (ефект «opponent»); "" — обіцянки немає. У сейві — «popp».</summary>
+        public string PendingOpponent = "";
         public BookerPlan Plan;
         public MatchStipulations Stip;
         public CardPosition Position;
@@ -195,7 +236,10 @@ namespace Game.Core.Ring.Career
         public int TierPos = -1;
         /// <summary>Сітки витрат (06.11.2026): костюм куплено; тренер ростера (−1 — немає) і прогрес його атрибута; страховка на
         /// сезон (номер сезону, 0 — ні); виїзне шоу цього тижня й штраф часу наступного.</summary>
-        public bool CostumeBought;
+        /// <summary>Рівень купленого костюма (0 — немає). Ажіотаж виходу дає лише костюм не нижчий за рівень федерації (П5).</summary>
+        public int CostumeTier;
+        /// <summary>Костюм пасує цій федерації (старий у палаці не вражає).</summary>
+        public bool CostumeBought { get { return CostumeTier >= Federation; } }
         public int Coach = -1;
         public int CoachProgress;
         public int InsuredSeason;
@@ -206,6 +250,32 @@ namespace Game.Core.Ring.Career
         public readonly SortedSet<string> Grudges = new SortedSet<string>(StringComparer.Ordinal);
 
         public int FiredCount;
+        /// <summary>
+        /// Перехід (А2): рішення щодо пропозиції цього кінця сезону (0 — ще ні, 1 — прийняв, 2 — відмовився); відмов поспіль;
+        /// прощальний матч чемпіона йде («віддай пояс»); його підсумок (0 — не було, 1 — пішов красиво, 2 — пояс зняли); рівні,
+        /// куди повернення закрите.
+        /// </summary>
+        public int OfferDecision;
+        public int OfferDeclines;
+        public bool Farewell;
+        public int FarewellResult;
+        public readonly SortedSet<int> ClosedTiers = new SortedSet<int>();
+        /// <summary>
+        /// Контракт (§6.4): чинна пастка «виключне право» — до якого сезону включно і штраф за вихід раніше; прочитаний дрібний шрифт
+        /// пропозиції цього кінця сезону (0 — ні, 1 — провал, 2 — «щось є», 3 — видно); підписаний, але ще не почався (прощальний
+        /// матч чемпіона): пастка й аванс; менеджер найнятий.
+        /// </summary>
+        public bool ContractExclusive;
+        public int ContractEndSeason;
+        public int ContractPenalty;
+        public int OfferRead;
+        public bool PendingExclusive;
+        public int PendingAdvance;
+        public bool Manager;
+        /// <summary>Пізня роль (§5.3): з кінця першого сезону, одна на раз.</summary>
+        public LateRole LateRole;
+        /// <summary>Пізня роль, обрана в кінці сезону на наступний (рев'ю ПМ 12.11.2026): стає <see cref="LateRole"/> на старті сезону.</summary>
+        public LateRole NextLateRole;
         public int TitlesWon;
         public bool FeudResolved;
         /// <summary>Очки розвитку на початок поточного матчу (для підсумку).</summary>
@@ -216,6 +286,8 @@ namespace Game.Core.Ring.Career
         /// </summary>
         public readonly int[] SeasonRecord = new int[3];
         public int SeasonPopStart;
+        /// <summary>P1-6: сезон, у якому поразка вже дала популярність (0 — ще ні). Раз за сезон.</summary>
+        public int LossPopularitySeason;
 
         public int GetNpcFeud(string id)
         {
@@ -234,6 +306,14 @@ namespace Game.Core.Ring.Career
         // ---------- зліпок ----------
 
         private static string Esc(string s) { return Uri.EscapeDataString(s ?? ""); }
+        /// <summary>Пізня роль зі зліпка: не число чи невідоме значення — <paramref name="fallback"/> (рев'ю ПМ 12.11.2026).</summary>
+        private static LateRole ParseLateRole(string v, LateRole fallback)
+        {
+            int n;
+            if (!int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out n) || !Enum.IsDefined(typeof(LateRole), n)) return fallback;
+            return (LateRole)n;
+        }
+
         private static string Ints(int[] a) { return string.Join(",", Array.ConvertAll(a, x => x.ToString(CultureInfo.InvariantCulture))); }
         private static string Ints(List<int> a) { return Ints(a.ToArray()); }
 
@@ -247,15 +327,18 @@ namespace Game.Core.Ring.Career
             var mv = new List<string>();
             foreach (var m in Moves) mv.Add(Esc(m));
             sb.Append("|moves=").Append(string.Join(",", mv));
-            sb.Append("|inj=").Append(Ints(Injury)).Append("|zd=").Append(Ints(ZoneDamage));
+            sb.Append("|inj=").Append(Ints(Injury)).Append("|zd=").Append(Ints(ZoneDamage)).Append("|scars=").Append(Ints(Scars));
             sb.Append("|actions=").Append(ActionsLeft).Append("|strained=").Append(b(Strained)).Append("|promochoice=").Append(b(PromoChoicePending));
             sb.Append("|hypebonus=").Append(NextHypeBonus).Append("|rivalboost=").Append(RivalBoost);
             sb.Append("|done=").Append(Ints(ActionsDone)).Append("|tally=").Append(Ints(ActionTally));
             var nf = new List<string>();
             foreach (var kv in NpcFeud) nf.Add(Esc(kv.Key) + ":" + kv.Value);
             sb.Append("|npcfeud=").Append(string.Join(",", nf));
-            sb.Append("|belt=").Append(Esc(BeltHolder));
-            sb.Append("|phase=").Append((int)Phase).Append("|opp=").Append(Esc(Opponent)).Append("|lastopp=").Append(Esc(LastOpponent));
+            var belts = new List<string>();
+            foreach (var kv in Belts) belts.Add(kv.Key + ":" + Esc(kv.Value));
+            sb.Append("|belts=").Append(string.Join(",", belts));
+            sb.Append("|fed=").Append(Federation).Append("|fem=").Append(FemaleKnown ? b(Female) : "");
+            sb.Append("|phase=").Append((int)Phase).Append("|opp=").Append(Esc(Opponent)).Append("|lastopp=").Append(Esc(LastOpponent)).Append("|popp=").Append(Esc(PendingOpponent));
             sb.Append("|plan=").Append((int)Plan).Append("|stip=").Append((int)Stip).Append("|pos=").Append((int)Position);
             sb.Append("|big=").Append(b(IsBig)).Append("|title=").Append(b(IsTitle)).Append("|feudshow=").Append(b(IsFeudShow));
             sb.Append("|showpromo=").Append(b(ShowPromoDone)).Append("|showpromotier=").Append(ShowPromoTier);
@@ -268,12 +351,19 @@ namespace Game.Core.Ring.Career
             sb.Append("|bs=").Append(string.Join(",", bs));
             sb.Append("|lastout=").Append(LastOutcome).Append("|lastplan=").Append((int)LastPlanOutcome);
             sb.Append("|tierpos=").Append(TierPos).Append("|tiergrowth=").Append(TierGrowth);
-            sb.Append("|costume2=").Append(b(CostumeBought)).Append("|coach=").Append(Coach).Append("|coachp=").Append(CoachProgress);
+            sb.Append("|costumetier=").Append(CostumeTier).Append("|coach=").Append(Coach).Append("|coachp=").Append(CoachProgress);
             sb.Append("|insured=").Append(InsuredSeason).Append("|away=").Append(b(AwayShow)).Append("|awaytired=").Append(b(AwayTired));
             var gr = new List<string>();
             foreach (var g in Grudges) gr.Add(Esc(g));
             sb.Append("|grudges=").Append(string.Join(",", gr));
             sb.Append("|srec=").Append(Ints(SeasonRecord)).Append("|spop=").Append(SeasonPopStart);
+            sb.Append("|losspop=").Append(LossPopularitySeason);
+            var ct = new List<int>(ClosedTiers);
+            sb.Append("|offer=").Append(OfferDecision).Append("|offerdecl=").Append(OfferDeclines).Append("|farewell=").Append(b(Farewell))
+              .Append("|fwres=").Append(FarewellResult).Append("|closed=").Append(Ints(ct));
+            sb.Append("|excl=").Append(b(ContractExclusive)).Append("|exend=").Append(ContractEndSeason).Append("|expen=").Append(ContractPenalty)
+              .Append("|offread=").Append(OfferRead).Append("|pendex=").Append(b(PendingExclusive)).Append("|pendadv=").Append(PendingAdvance)
+              .Append("|manager=").Append(b(Manager)).Append("|late=").Append((int)LateRole).Append("|latenext=").Append((int)NextLateRole);
         }
 
         internal void Restore(Dictionary<string, string> kv)
@@ -283,7 +373,10 @@ namespace Game.Core.Ring.Career
             Func<string, string> S = k => Uri.UnescapeDataString(Need(kv, k));
             Seed = ulong.Parse(Need(kv, "seed"), CultureInfo.InvariantCulture);
             Season = I("season"); Week = I("week"); Money = I("money");
-            RingName = S("name"); Costume = I("costume"); Gimmick = (Gimmick)I("gimmick"); Role = (CareerRole)I("role");
+            RingName = S("name"); Costume = I("costume"); Role = (CareerRole)I("role");
+            int gimmick = I("gimmick");   // номери ґіміків 0–7 сталі (сейви); невідомий — зліпок новішої гри чи пошкоджений
+            if (!Enum.IsDefined(typeof(Gimmick), gimmick)) throw new FormatException("невідомий ґімік у зліпку кар'єри: " + gimmick);
+            Gimmick = (Gimmick)gimmick;
             Moves.Clear();
             foreach (var m in Need(kv, "moves").Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)) Moves.Add(Uri.UnescapeDataString(m));
             Fill(Injury, Need(kv, "inj")); Fill(ZoneDamage, Need(kv, "zd"));
@@ -299,8 +392,27 @@ namespace Game.Core.Ring.Career
                 if (c < 0) throw new FormatException("пошкоджена ворожнеча з NPC у зліпку кар'єри");
                 NpcFeud[Uri.UnescapeDataString(p.Substring(0, c))] = int.Parse(p.Substring(c + 1), CultureInfo.InvariantCulture);
             }
-            BeltHolder = S("belt");
+            // федерації й два дивізіони додано 11.11.2026 (П5): старі зліпки — місцева федерація, дивізіон невідомий (хост
+            // проставить із тіла), один пояс «belt» — у дивізіоні його власника (гравця — чоловічий); решту поясів добудує сесія
+            string v;
+            Federation = kv.TryGetValue("fed", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 1;
+            FemaleKnown = kv.TryGetValue("fem", out v) && v.Length > 0;
+            Female = FemaleKnown && v == "1";
+            Belts.Clear();
+            OldBelt = null;
+            if (kv.TryGetValue("belts", out v))
+            {
+                foreach (var p in v.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    int c = p.IndexOf(':');
+                    if (c < 0) throw new FormatException("пошкоджені пояси у зліпку кар'єри");
+                    Belts[p.Substring(0, c)] = Uri.UnescapeDataString(p.Substring(c + 1));
+                }
+            }
+            else if (kv.TryGetValue("belt", out v)) OldBelt = Uri.UnescapeDataString(v);
             Phase = (ShowPhase)I("phase"); Opponent = S("opp"); LastOpponent = S("lastopp");
+            // обіцяний суперник (рев'ю ПМ 927b86c) з'явився пізніше за перші зліпки: без ключа обіцянки немає
+            PendingOpponent = kv.TryGetValue("popp", out v) ? Uri.UnescapeDataString(v) : "";
             Plan = (BookerPlan)I("plan"); Stip = (MatchStipulations)I("stip"); Position = (CardPosition)I("pos");
             IsBig = B("big"); IsTitle = B("title"); IsFeudShow = B("feudshow");
             ShowPromoDone = B("showpromo"); ShowPromoTier = I("showpromotier");
@@ -312,14 +424,15 @@ namespace Game.Core.Ring.Career
             string bs;
             if (kv.TryGetValue("bs", out bs))
                 foreach (var k in bs.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)) BackstageSeen.Add(Uri.UnescapeDataString(k));
-            string v;
             LastOutcome = kv.TryGetValue("lastout", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
             LastPlanOutcome = kv.TryGetValue("lastplan", out v) ? (FeudPlanOutcome)int.Parse(v, CultureInfo.InvariantCulture) : FeudPlanOutcome.Neither;
             // сходинки сили додано 06.11.2026: старі зліпки — «знімка ще не було», образ немає
             TierPos = kv.TryGetValue("tierpos", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : -1;
             TierGrowth = kv.TryGetValue("tiergrowth", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
             // сітки витрат додано 06.11.2026: старі зліпки — нічого не куплено
-            CostumeBought = kv.TryGetValue("costume2", out v) && v == "1";
+            // рівень костюма додано 11.11.2026: старий «costume2=1» — костюм місцевого рівня
+            CostumeTier = kv.TryGetValue("costumetier", out v) ? int.Parse(v, CultureInfo.InvariantCulture)
+                : kv.TryGetValue("costume2", out v) && v == "1" ? 1 : 0;
             Coach = kv.TryGetValue("coach", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : -1;
             CoachProgress = kv.TryGetValue("coachp", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
             InsuredSeason = kv.TryGetValue("insured", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
@@ -332,7 +445,34 @@ namespace Game.Core.Ring.Career
             Array.Clear(SeasonRecord, 0, SeasonRecord.Length);
             if (kv.TryGetValue("srec", out v)) Fill(SeasonRecord, v);
             SeasonPopStart = kv.TryGetValue("spop", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : -1;
+            // P1-6 додано 11.11.2026: старі зліпки — поразка цього сезону популярності ще не давала
+            LossPopularitySeason = kv.TryGetValue("losspop", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
+            // перехід між федераціями додано 11.11.2026: старі зліпки — пропозицій і закритих федерацій ще не було
+            OfferDecision = kv.TryGetValue("offer", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
+            OfferDeclines = kv.TryGetValue("offerdecl", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
+            Farewell = kv.TryGetValue("farewell", out v) && v == "1";
+            FarewellResult = kv.TryGetValue("fwres", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
+            ClosedTiers.Clear();
+            if (kv.TryGetValue("closed", out v))
+                foreach (var t in v.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)) ClosedTiers.Add(int.Parse(t, CultureInfo.InvariantCulture));
+            // контракт і менеджер додано 12.11.2026: старі зліпки — чесний контракт, менеджера немає, дрібний шрифт не читано
+            ContractExclusive = kv.TryGetValue("excl", out v) && v == "1";
+            ContractEndSeason = kv.TryGetValue("exend", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
+            ContractPenalty = kv.TryGetValue("expen", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
+            OfferRead = kv.TryGetValue("offread", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
+            PendingExclusive = kv.TryGetValue("pendex", out v) && v == "1";
+            PendingAdvance = kv.TryGetValue("pendadv", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
+            Manager = kv.TryGetValue("manager", out v) && v == "1";
+            // пізні ролі додано 12.11.2026: старі зліпки — ролі немає
+            LateRole = kv.TryGetValue("late", out v) ? ParseLateRole(v, LateRole.None) : LateRole.None;
+            // роль на наступний сезон — з 12.11.2026 (рев'ю ПМ): у старих зліпках її немає — та сама, що діє
+            NextLateRole = kv.TryGetValue("latenext", out v) ? ParseLateRole(v, LateRole) : LateRole;
+            // сліди травм (§5.5) — з 13.11.2026: у старих зліпках їх немає — зони чисті
+            if (kv.TryGetValue("scars", out v)) Fill(Scars, v);
         }
+
+        /// <summary>Пояс зі зліпка до 11.11.2026 (один на федерацію): сесія розкладе його по дивізіонах. Не зберігається.</summary>
+        internal string OldBelt;
 
         private static string Need(Dictionary<string, string> kv, string key)
         {

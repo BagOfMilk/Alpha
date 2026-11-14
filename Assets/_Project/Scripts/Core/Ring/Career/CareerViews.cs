@@ -10,9 +10,18 @@ namespace Game.Core.Ring.Career
         public CareerRole Role;
         /// <summary>Атрибут, у який іде +1 вільний бал (межі −1…+3).</summary>
         public RingAttr FreePoint;
+        /// <summary>
+        /// Другий вільний бал — лише в ґіміка з двома (<see cref="GimmickDef.FreePoints"/>, Новачок). null — туди ж, що й перший.
+        /// </summary>
+        public RingAttr? FreePoint2;
         public string RingName = "";
         /// <summary>Індекс кольору костюма (0…<see cref="CareerSession.CostumeCount"/>−1) — лише вигляд.</summary>
         public int CostumeColor;
+        /// <summary>
+        /// Дивізіон (P2-6): жіночий чи чоловічий — суперник за замовчуванням своєї статі. Ставить екран створення з тіла героя;
+        /// null — не поставив (хост проставить сам через <see cref="CareerSession.SetFemale"/>), до того — чоловічий.
+        /// </summary>
+        public bool? Female;
     }
 
     public sealed class GimmickView
@@ -21,6 +30,8 @@ namespace Game.Core.Ring.Career
         /// <summary>Атрибути ґіміка до вільного балу (RingAttr за індексом).</summary>
         public int[] BaseAttr;
         public List<MoveDef> StartMoves = new List<MoveDef>();
+        /// <summary>Вільних балів у цього ґіміка (Новачок — 2).</summary>
+        public int FreePoints = 1;
     }
 
     public sealed class CreationView
@@ -36,10 +47,16 @@ namespace Game.Core.Ring.Career
     public sealed class InjuryView
     {
         public BodyZone Zone;
-        /// <summary>Накопичене ушкодження зони 0–3 (3 = травма).</summary>
+        /// <summary>Накопичене ушкодження зони від 0 до <see cref="Threshold"/> (поріг = травма).</summary>
         public int ZoneDamage;
+        /// <summary>Поріг травми зони (3; у Хардкорника — 4, §5.2 «терпіти біль»).</summary>
+        public int Threshold = CareerRules.InjuryAtZoneDamage;
         /// <summary>Тижнів до загоєння травми (0 — здорова).</summary>
         public int WeeksLeft;
+        /// <summary>Сліди (§5.5): скільки разів зона травмувалась, разом із поточною травмою.</summary>
+        public int Scars;
+        /// <summary>На скільки тижнів довша травма цієї зони через слід — нова (здорова зона) чи поточна (0 — сліду немає чи до сезону 4).</summary>
+        public int ScarWeeks;
     }
 
     /// <summary>Картка вечора (TRPG_DESIGN §3, §8): суперник, місце в картці, план букера, умови, гонорар.</summary>
@@ -49,6 +66,8 @@ namespace Game.Core.Ring.Career
         public bool IsTitle;
         /// <summary>Велике шоу з етапами ворожнечі з Молотом (проходить екранами RingCampaign).</summary>
         public bool IsFeud;
+        /// <summary>Прощальний матч чемпіона перед переходом: план букера «віддай пояс» наступнику (А2).</summary>
+        public bool IsFarewell;
         public NpcDef Opponent;
         public int OpponentFeudLevel;
         public CardPosition Position;
@@ -61,10 +80,15 @@ namespace Game.Core.Ring.Career
         /// <summary>Ажіотаж-бонус промо, що чекає на матч.</summary>
         public int PromoHypeBonus;
         public bool CanWithdraw;
-        /// <summary>Щаблів сили суперника цього вечора (за місцем у картці, ворожнечею, титулом).</summary>
+        /// <summary>
+        /// Щаблів сили суперника цього вечора (за місцем у картці, ворожнечею, титулом). Від'ємні (до
+        /// <see cref="CareerRules.RivalStepsFloor"/>) — суперник слабший за базу ростеру (реванш, «переріс щабель»).
+        /// </summary>
         public int RivalSteps;
         /// <summary>Реванш із тим, хто переміг гравця: суперник слабший (ти знаєш його слабкість).</summary>
         public bool IsRematch;
+        /// <summary>Гравець переріс свій щабель картки (CareerSession.IsOutgrown): суперник слабший — пік сили.</summary>
+        public bool IsOutgrown;
         public List<InjuryView> Injuries = new List<InjuryView>();
     }
 
@@ -89,6 +113,8 @@ namespace Game.Core.Ring.Career
         public bool CanRecover;
         /// <summary>Іде закулісна сцена: інші дії тижня й кінець тижня недоступні, доки її не закінчено (<see cref="CareerSession.FinishBackstage"/>).</summary>
         public bool BackstageOpen;
+        /// <summary>Зірка поза рингом уже тренувалась цього тижня (§5.3): «Тренування» недоступне, причина — week.reason.star_training.</summary>
+        public bool StarTrainingUsed;
     }
 
     /// <summary>Результат дії тижня: кидок (якщо був), ступінь, зміни шкал, ключ чутки.</summary>
@@ -127,6 +153,10 @@ namespace Game.Core.Ring.Career
         public int ActionsDelta;
         /// <summary>Сцена змінила план найближчого шоу.</summary>
         public bool PlanChanged;
+        /// <summary>Сцена переписала картку: суперник найближчого шоу — обіцяний нею (ефект «opponent», матч-розплата).</summary>
+        public bool OpponentChanged;
+        /// <summary>Сцена повернула роль (§5.3): нова роль; null — повороту не було.</summary>
+        public RingPath? TurnedTo;
     }
 
     /// <summary>Рядок списку прийомів матчу: прийом + доступність дії з урахуванням травми зони і бонусу прийому.</summary>
@@ -146,6 +176,12 @@ namespace Game.Core.Ring.Career
         public int Costume;
         public Gimmick Gimmick;
         public RingPath Role;
+        /// <summary>Пізня роль (§5.3).</summary>
+        public LateRole LateRole;
+        /// <summary>Пізня роль, обрана на наступний сезон (у кінці сезону — може відрізнятися від нинішньої).</summary>
+        public LateRole NextLateRole;
+        /// <summary>Тіло старіє (§5.5): на скільки очок дорожча витривалість цього сезону (0 — до сезону 4). Для «Меню».</summary>
+        public int StaminaSurcharge;
         public int[] Attr = new int[5];
         public int Money;
         public int Popularity;
