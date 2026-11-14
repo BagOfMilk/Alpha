@@ -61,7 +61,7 @@
 фінішерів усіх 8 ґіміків (власник 14.11.2026: «А фінішери це шось кінематографічне») — `Stage/Unity/RingFinisherCine.cs` і
 чиста модель розкадровки `Stage/RingFinisherCinePlan.cs` з тестами; точка виклику в `RingMatchDirector` — ПМ; аудит
 плавності всіх кліпів (власник: «Взагалі виправ усі проблеми та не плавність і нереалістичність анімацій…») — список вад ПМ,
-фікси в зонах власників | `docs/ring/DESIGN_SYSTEM.md`, `docs/ring/design/**`, `tools/ring_design/**`, `Models/BrandTokens.cs`, `UI/RingTheme.cs`, `UI/RingFonts.cs`, `RingFontSet.cs`, `RingFontSpike.cs`, Editor `RingFontAssets`, шрифти, тести `RingDesignGuard*`, `TitantronAssetsGuard*` |
+фікси в зонах власників | `docs/ring/DESIGN_SYSTEM.md`, `docs/ring/design/**`, `tools/ring_design/**`, `Models/BrandTokens.cs`, `UI/RingTheme.cs`, `UI/RingFonts.cs`, `RingFontSet.cs`, `RingFontSpike.cs`, Editor `RingFontAssets`, шрифти, тести `RingDesignGuard*`, `TitantronAssetsGuard*`; живе очікування `Stage/RingIdleLife*.cs` (ПМ 14.11.2026: виклик із `RingStage3D` — «Изучение», вікно/дозвіл/темп у `RingMatchDirector` — ПМ; фаза петель `Stage/RingIdlePhase.cs` — ПМ) |
 
 **Разовий розподіл на Етапі 0** (робить «Изучение» як власник файлів) — **зроблено 08.11.2026, 7f19686**:
 - `RingGameBootstrap.cs` («Изучение», каркас): запуск, UI, кадр, шоу 3D, виходи, `SyncStage`, клавіші, огляд, лукбук;
