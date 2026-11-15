@@ -1261,17 +1261,26 @@ namespace Game.Tests.EditMode
 
             /// <summary>
             /// Голови букерок набору (Assets/Art/Characters/Kit/body_*.fbx, вершини сітки, 15.11.2026), метри: маківка голови без зачіски,
-            /// підборіддя (де профіль обличчя відступає до шиї), півширина голови, зачіска над маківкою. Звірено з кадром s34b_m4x3/048
-            /// (Ліна, 4:3): маківка 333 на кадрі — 337 у проєкції; підборіддя ≈ 387 на кадрі — 400 у проєкції (із запасом униз).
-            /// Пояс (лінія ременя) — 0,57 маківки: Ліна ≈ 530 на тому ж кадрі.
+            /// підборіддя (де профіль обличчя відступає до шиї), півширина голови, зачіска над маківкою, верх брів (сітка eyebrow001 і очей
+            /// набору). Звірено з кадром s34b_m4x3/048 (Ліна, 4:3): маківка 333 на кадрі — 337 у проєкції; підборіддя ≈ 387 на кадрі — 400
+            /// у проєкції (із запасом униз). Пояс (лінія ременя) — 0,57 маківки: Ліна ≈ 530 на тому ж кадрі. Обличчя для АД — брови →
+            /// підборіддя (АД 15.11.2026: «маківку й лоб у кадрі можна зрізати…, очі й рот — ні»).
             /// </summary>
             public static readonly Dictionary<string, double[]> Faces = new Dictionary<string, double[]>
             {
-                { "body_f_mediterranean", new[] { 1.602, 1.395, 0.081, 0.03 } },
-                { "body_f_nordic", new[] { 1.605, 1.397, 0.081, 0.02 } },
-                { "body_m_west_african", new[] { 1.813, 1.575, 0.098, 0.015 } },
-                { "body_f_east_asian", new[] { 1.497, 1.305, 0.078, 0.02 } },
+                { "body_f_mediterranean", new[] { 1.602, 1.395, 0.081, 0.03, 1.512 } },
+                { "body_f_nordic", new[] { 1.605, 1.397, 0.081, 0.02, 1.514 } },
+                { "body_m_west_african", new[] { 1.813, 1.575, 0.098, 0.015, 1.716 } },
+                { "body_f_east_asian", new[] { 1.497, 1.305, 0.078, 0.02, 1.411 } },
             };
+
+            /// <summary>
+            /// Низ афіші тижня (одиниці панелі, відлік згори) — з кадрів слоту 34 (s34b_m4x3/048, s34b_m1610/048): лише план — ≈ 307, кожен
+            /// рядок умов матчу — ще ≈ 24, наліпка форми суперника — <see cref="CareerTileLayout.PosterStickerHang"/>. Висоту афіші рахує
+            /// розкладка UI Toolkit, тож тут — лише для логу на вузьких екранах; наживо — кадри У2.
+            /// </summary>
+            public const double PosterPlanBottom = 307.0, PosterConditionLine = 24.0;
+            public const int PosterMaxConditionLines = 3;
 
             /// <summary>Пояс — частка маківки (кадр s34b_m4x3/048).</summary>
             public const double WaistOfCrown = 0.57;
@@ -1475,8 +1484,11 @@ namespace Game.Tests.EditMode
         /// від голови до пояса — та сама умова, що я ставив для 4:3»). Знизу: пояс кожної букерки над шапкою ряду дій («ДІЇ ТИЖНЯ»,
         /// вкладки) — і над одним, і над двома рядами, з ростом плиток, як у WeekScreenView.Fit: висота плитки — найвища потрібна
         /// найдовшим текстам плиток тижня на цій ширині (не більше межі росту), над двома рядами ріст піднімає шапку двічі; канати —
-        /// лінія на рівні пояса (так на прийнятому кадрі 4:3, s34b_m4x3/048). Згори: афіша праворуч, її висота — від умов матчу; де голова під афішею по горизонталі, охоронець пише в лог,
-        /// не нижче якого краю афіша лишає маківку вільною (на рішення АД: найкоротша афіша на кадрах — низ ≈ 307).
+        /// лінія на рівні пояса (так на прийнятому кадрі 4:3, s34b_m4x3/048). Згори (АД 15.11.2026, уточнено: «охороняється обличчя (брови →
+        /// підборіддя), а не маківка»): на 16:10 і ширше обличчя кожної букерки лівіше за афішу — вільне за будь-якої її висоти (умова); на
+        /// 5:4–3:2 голова під афішею по горизонталі — лог: до якого низу афіші брови вільні, скільки рядків умов це дає, і найгірший
+        /// випадок — Девід із трьома рядками умов (М1 — варіант (3): дивитись на кадрах У2; ціль камери для «Изучение» — обличчя лівіше за
+        /// x 870).
         /// </summary>
         [Test]
         public void WeekScene_ClosedDrawer_ShowsTheBookerDownToTheWaist()
@@ -1501,7 +1513,13 @@ namespace Game.Tests.EditMode
             {
                 double[] f;
                 if (!BackstageView.Faces.TryGetValue(p.Body, out f)) { bad.Add(p.Speaker + ": голови «" + p.Body + "» немає в BackstageView.Faces"); continue; }
-                double crown = view.ScreenY(view.BookerHead(f[0] + f[3])), waist = view.ScreenY(view.BookerHead(BackstageView.WaistOfCrown * f[0]));
+                if (f.Length < 5) { bad.Add(p.Speaker + ": у мірці голови «" + p.Body + "» немає брів — виміряй верх eyebrow001 з FBX набору"); continue; }
+                double crown = view.ScreenY(view.BookerHead(f[0] + f[3])), brow = view.ScreenY(view.BookerHead(f[4])), chin = view.ScreenY(view.BookerHead(f[1]));
+                double waist = view.ScreenY(view.BookerHead(BackstageView.WaistOfCrown * f[0]));
+                if (!(crown < brow && brow < chin)) bad.Add(string.Format(CultureInfo.InvariantCulture, "{0}: мірка голови не по порядку (маківка {1:0}, брови {2:0}, підборіддя {3:0})", p.Speaker, crown, brow, chin));
+                // скільки рядків умов афіші лишають брови вільними (план без умов — 0); −1 — навіть план закриває брови
+                int lines = -1;
+                while (lines < BackstageView.PosterMaxConditionLines && BackstageView.PosterPlanBottom + (lines + 1) * BackstageView.PosterConditionLine <= brow) lines++;
                 var row = new List<string>();
                 for (int i = 0; i < WeekAspects.Length; i++)
                 {
@@ -1509,14 +1527,28 @@ namespace Game.Tests.EditMode
                     if (waist > header[i])
                         bad.Add(string.Format(CultureInfo.InvariantCulture, "{0}, {1}: пояс {2:0} нижче за верх шапки ряду дій {3:0}", p.Speaker, WeekAspectNames[i], waist, header[i]));
                     double posterLeft = w - CareerTileLayout.Edge - CareerTileLayout.StripW, hl, hr;
-                    view.HeadX(f[2] + f[3], w, out hl, out hr);
-                    row.Add(hr > posterLeft
-                        ? string.Format(CultureInfo.InvariantCulture, "{0}: голова {1:0}–{2:0} під афішею (від {3:0}) — маківка вільна, якщо низ афіші ≤ {4:0}", WeekAspectNames[i], hl, hr, posterLeft, crown)
-                        : string.Format(CultureInfo.InvariantCulture, "{0}: голова лівіше за афішу", WeekAspectNames[i]));
+                    view.HeadX(f[2], w, out hl, out hr);   // обличчя — у межах голови без зачіски
+                    bool under = hr > posterLeft;
+                    if (under && WeekAspects[i] >= 1.6)
+                        bad.Add(string.Format(CultureInfo.InvariantCulture, "{0}, {1}: обличчя {2:0}–{3:0} заходить під афішу (від {4:0}) — на 16:10 і ширше воно вільне за будь-якої афіші (АД 15.11.2026)",
+                            p.Speaker, WeekAspectNames[i], hl, hr, posterLeft));
+                    row.Add(under
+                        ? string.Format(CultureInfo.InvariantCulture, "{0}: обличчя {1:0}–{2:0} під афішею (від {3:0}) — брови вільні, якщо низ афіші ≤ {4:0} ({5})",
+                            WeekAspectNames[i], hl, hr, posterLeft, brow, lines < 0 ? "закриває навіть план" : lines + " рядк. умов")
+                        : string.Format(CultureInfo.InvariantCulture, "{0}: обличчя лівіше за афішу", WeekAspectNames[i]));
                 }
-                TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "{0}: маківка {1:0}, пояс {2:0}; {3}", p.Speaker, crown, waist, string.Join("; ", row)));
+                TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "{0} ({1}): маківка {2:0}, брови {3:0}, підборіддя {4:0}, пояс {5:0}; {6}",
+                    p.Speaker, p.Body, crown, brow, chin, waist, string.Join("; ", row)));
+                if (p.Body == "body_m_west_african")
+                {
+                    double worst = BackstageView.PosterPlanBottom + BackstageView.PosterMaxConditionLines * BackstageView.PosterConditionLine;
+                    TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                        "найгірший випадок (АД): Девід ({0}), {1} рядки умов — низ афіші ≈ {2:0}: на 5:4–3:2 закрито {3:0} з {4:0} обличчя (брови {5:0} → підборіддя {6:0}), з наліпкою — до {7:0}",
+                        p.Body, BackstageView.PosterMaxConditionLines, worst, Math.Max(0.0, Math.Min(worst, chin) - brow), chin - brow, brow, chin,
+                        worst + CareerTileLayout.PosterStickerHang));
+                }
             }
-            Assert.IsEmpty(bad, "букерку при закритій шухляді не видно до пояса:\n" + string.Join("\n", bad));
+            Assert.IsEmpty(bad, "букерку при закритій шухляді не видно від обличчя до пояса:\n" + string.Join("\n", bad));
         }
 
         /// <summary>
