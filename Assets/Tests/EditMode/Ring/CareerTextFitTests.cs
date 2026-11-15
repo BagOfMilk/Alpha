@@ -606,12 +606,53 @@ namespace Game.Tests.EditMode
         private const float CheckClear = 4f;
 
         /// <summary>
+        /// Два рядки імені на стрічці — чорнилом, а не рамкою кегля (АД 14.11.2026: «у Д, Ц, Щ хвости нижче лінії, у Й, Ї знаки над
+        /// великими»): на кожному кеглі двох рядків (15…<see cref="CareerTileLayout.StripNameTwoLineMax"/>) найвищий знак першого рядка
+        /// не виходить за верх плити, між найглибшим хвостом першого і найвищим знаком другого — щонайменше 2 px (менше — злипнеться
+        /// згладжуванням; АД 14.11.2026 — тому крок 1,25), хвіст другого — щонайменше на 2 над рядками зон. Перебрано найгірше з усієї
+        /// великої абетки (і апостроф); базова лінія першого рядка — висхідна від верху імені, другого — на крок
+        /// <see cref="CareerTileLayout.StripNameLine2Offset"/> нижче. Числа моделі (висхідна, хвіст) — з TTF. Окремо — «ЦЕЗАР ЇЖАКЕВИЧ» на
+        /// 15 і найбільшому кеглі двох рядків (кадри У2).
+        /// </summary>
+        [Test]
+        public void StripName_TwoLines_InkClearsThePlateAndTheZones()
+        {
+            const string caps = "АБВГҐДЕЄЖЗИІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯ'’";
+            float top, bottom;
+            Assert.IsTrue(WordFont.Ink(caps, out top, out bottom), "у display є glyf");
+            Assert.Greater(top, WordFont.AscentEm - 0.05f, "передумова: знаки над великими сягають висхідної");
+            Assert.Less(bottom, -0.1f, "передумова: хвости нижче базової лінії");
+            Assert.AreEqual(WordFont.AscentEm, CareerTileLayout.DisplayAscentEm, 0.0005f, "висхідна моделі — з TTF");
+            Assert.AreEqual(-bottom, CareerTileLayout.DisplayCapsTailEm, 0.0005f, "хвіст великих моделі — з TTF");
+            var bad = new List<string>();
+            var log = new List<string>();
+            for (float s = CareerTileLayout.StripNameMinSize; s <= CareerTileLayout.StripNameTwoLineMax; s++)
+                foreach (var pair in new[] { new[] { caps, caps }, new[] { "ЦЕЗАР", "ЇЖАКЕВИЧ" } })
+                {
+                    float t1, b1, t2, b2;
+                    WordFont.Ink(pair[0], out t1, out b1);
+                    WordFont.Ink(pair[1], out t2, out b2);
+                    float base1 = CareerTileLayout.StripNameTop + WordFont.AscentEm * s, base2 = base1 + CareerTileLayout.StripNameLine2Offset(s);
+                    float inkTop1 = base1 - t1 * s, inkBottom1 = base1 - b1 * s, inkTop2 = base2 - t2 * s, inkBottom2 = base2 - b2 * s;
+                    string what = pair[0] == caps ? "уся абетка" : pair[0] + " / " + pair[1];
+                    if (inkTop1 < 0f) bad.Add(string.Format("{0} на {1}: знак першого рядка на {2:0.0} — вище плити", what, s, inkTop1));
+                    if (inkTop2 - inkBottom1 < 2f) bad.Add(string.Format("{0} на {1}: хвіст першого ({2:0.0}) і знак другого ({3:0.0}) — ближче 2", what, s, inkBottom1, inkTop2));
+                    if (inkBottom2 > CareerTileLayout.StripZonesTop - CareerTileLayout.StripNameInkClear)
+                        bad.Add(string.Format("{0} на {1}: хвіст другого до {2:0.0}, зони з {3} — ближче {4}", what, s, inkBottom2, CareerTileLayout.StripZonesTop, CareerTileLayout.StripNameInkClear));
+                    if (pair[0] != caps && (s == CareerTileLayout.StripNameMinSize || s == CareerTileLayout.StripNameTwoLineMax))
+                        log.Add(string.Format("{0} на {1}: знак першого {2:0.0}, проміжок хвіст→знак {3:0.00}, хвіст другого {4:0.0}", what, s, inkTop1, inkTop2 - inkBottom1, inkBottom2));
+                }
+            TestContext.WriteLine(string.Join("\n", log));
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
         /// Найдовше допустиме ім'я героя (ПМ 14.11.2026: «Максиміліан Шершеньковий» — рівно межа <c>CareerSession.MaxNameLength</c>)
         /// на стрічці героя: кожен ґімік обох родів, кожен шлях, із поясом і без. Правило <see cref="CareerTileLayout.FitStripName"/>
-        /// з шириною TTF (display Black 40, розрядка 0,01, запас рендера): кегль ≥ 15, кожен рядок — до мітки ролі й до ляльки, два
-        /// рядки — над рядками зон, «…» (урізає модель) — лише героїні з поясом: мітка «РОЛЬ · ЧЕМПІОНКА ФЕДЕРАЦІЇ» лишає імені 69–92
-        /// (відкрите питання директору — коротший напис пояса на стрічці). Найширші 24 літери (Ю) двома словами — без «…», крім поясу.
-        /// Висота рядка display — як у моделі (<see cref="CareerTileLayout.DisplayLineEm"/>).
+        /// з шириною TTF (display Black 40, розрядка 0,01, запас рендера) і кроками мітки, як на стрічці (АД 14.11.2026): ґімік, далі
+        /// пояс «· ЧЕМПІОН(КА) ФЕДЕРАЦІЇ» коротшає до «· ЧЕМПІОН(КА)», тоді ховається, і лише тоді «…». Кегль ≥ 15, кожен рядок — у місці
+        /// свого кроку (до мітки ролі й до ляльки), два рядки — над рядками зон; «Максиміліан Шершеньковий» — завжди цілим, у героїні-
+        /// чемпіонки — двома рядками на 19 з коротким поясом (кадр У2 директора). Висота рядка display — як у моделі.
         /// </summary>
         [Test]
         public void LongestHeroName_FitsTheHeroStrip()
@@ -626,41 +667,51 @@ namespace Game.Tests.EditMode
             Func<string, float> w40 = s => WordFont.Width(s, CareerTileLayout.StripNameSize, CareerTileLayout.StripNameTrack) + RenderSlack;
             float nameX = CareerTileLayout.StripNameLeft, tagRight = CareerTileLayout.StripW - CareerTileLayout.StripTagRight;
             float dollX = CareerTileLayout.StripW - CareerTileLayout.StripDollRight - CareerTileLayout.StripDollW;
-            int whole = 0, twoLines = 0, clipped = 0;
+            int whole = 0, twoLines = 0, shortBelt = 0;
             foreach (var g in CareerKit.Content().Gimmicks)
                 foreach (bool female in new[] { false, true })
                     foreach (var path in new[] { RingPath.Face, RingPath.Heel, RingPath.Rebel })
                         foreach (bool champ in new[] { false, true })
                         {
                             string gn = Caps(RingLabels.GimmickName(T, g.Key, female)), pn = Caps(RingLabels.PathName(T, path, female));
-                            // пояс — тим самим ключем, що й стрічка (HeroForms підставляє героїні «c.champion.f»)
+                            // пояс — тими самими ключами, що й стрічка (HeroForms підставляє героїні «….f»)
                             string belt = champ ? " · " + Caps(Ui(female ? HeroForms.FemaleKey("c.champion") : "c.champion")) : "";
+                            string beltCut = champ ? " · " + Caps(Ui(female ? HeroForms.FemaleKey("c.champion.short") : "c.champion.short")) : "";
                             float gw = LegendFont.Width(gn + " ·", tagSize, track);
-                            float rest = LegendFont.Width(" " + pn, tagSize, track) + (champ ? LegendFont.Width(belt, tagSize, track) : 0f) + RenderSlack;
-                            float availWith = Math.Min(tagRight - gw - rest, dollX) - CareerTileLayout.StripNameGap - nameX;
-                            float availWithout = Math.Min(tagRight - rest, dollX) - CareerTileLayout.StripNameGap - nameX;
+                            float role = LegendFont.Width(" " + pn, tagSize, track) + RenderSlack;
+                            Func<float, float> at = tagW => Math.Min(tagRight - tagW, dollX) - CareerTileLayout.StripNameGap - nameX;
+                            float full = champ ? LegendFont.Width(belt, tagSize, track) : 0f, cut = champ ? LegendFont.Width(beltCut, tagSize, track) : 0f;
+                            var avail = new List<float> { at(gw + role + full), at(role + full) };
+                            if (champ) { avail.Add(at(role + cut)); avail.Add(at(role)); }
                             foreach (var who in new[] { Caps(longest), widest })
                             {
-                                var f = CareerTileLayout.FitStripName(who, w40, availWith, availWithout);
+                                var f = CareerTileLayout.FitStripName(who, w40, avail);
                                 string where = string.Format("«{0}» + «{1} · {2}{3}»", who, gn, pn, belt);
-                                bool mayClip = champ && (female || who == widest);
-                                if (f.Ellipsis && !mayClip) bad.Add(where + ": «…» — ім'я не вмістилось цілим (" + availWithout.ToString("0") + ")");
-                                if (f.Ellipsis) clipped++; else { whole++; if (f.TwoLines && who != widest) twoLines++; }
+                                if (f.Ellipsis && who != widest) bad.Add(where + ": «…» — ім'я не вмістилось цілим і без поясу (" + avail[avail.Count - 1].ToString("0") + ")");
+                                if (f.Ellipsis && f.Drop != avail.Count - 1) bad.Add(where + ": «…» раніше, ніж віддано все");
+                                if (!f.Ellipsis) { whole++; if (f.TwoLines && who != widest) twoLines++; }
+                                if (champ && female && who != widest)
+                                {
+                                    if (f.Drop == 2) shortBelt++;
+                                    if (f.Drop != 2 || !f.TwoLines || f.Size != CareerTileLayout.StripNameTwoLineMax)
+                                        bad.Add(string.Format("{0}: героїня-чемпіонка — крок {1}, {2} рядки, кегль {3}; чекали короткий пояс, 2 рядки на {4} (кадр АД)",
+                                            where, f.Drop, f.TwoLines ? 2 : 1, f.Size, CareerTileLayout.StripNameTwoLineMax));
+                                }
                                 if (f.Size < CareerTileLayout.StripNameMinSize) bad.Add(where + ": кегль " + f.Size);
-                                float room = f.HideOptional ? availWithout : availWith;
+                                float room = avail[f.Drop];
                                 foreach (var line in f.Text.Split('\n'))
                                 {
                                     float lw = WordFont.Width(line, f.Size, CareerTileLayout.StripNameTrack);
                                     if (lw > room + 0.01f) bad.Add(string.Format("{0}: рядок «{1}» на {2:0} — {3:0.0} у {4:0.0}", where, line, f.Size, lw, room));
                                 }
-                                float bottom = CareerTileLayout.StripNameTop + (f.TwoLines ? 2 : 1) * WordFont.LineHeight(f.Size);
+                                float bottom = CareerTileLayout.StripNameTop + (f.TwoLines ? CareerTileLayout.StripNameLine2Offset(f.Size) : 0f) + WordFont.LineHeight(f.Size);
                                 if (f.TwoLines && bottom > CareerTileLayout.StripZonesTop + 0.01f) bad.Add(string.Format("{0}: два рядки на {1:0} — до {2:0.0}, зони з {3}", where, f.Size, bottom, CareerTileLayout.StripZonesTop));
                                 if (WordFont.Missing(f.Text.Replace("\n", "")).Count > 0) bad.Add(where + ": у шрифті немає гліфів «" + f.Text + "»");
                             }
                         }
             Assert.Greater(whole, 0);
             Assert.Greater(twoLines, 0, "з поясом героя ім'я стає у два рядки — гілка справді міряється");
-            Assert.Greater(clipped, 0, "і «…» з поясом героїні справді трапляється — гілка міряється");
+            Assert.Greater(shortBelt, 0, "і короткий пояс героїні справді трапляється — гілка міряється");
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
 

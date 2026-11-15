@@ -32,11 +32,13 @@ namespace Game.Gameplay.Ring.UI
             var gimmick = ArenaKit.Tag(RingLabels.GimmickName(t, c.Content.GimmickOf(v.Gimmick).Key, HeroForms.ShowsHeroine(t)) + " ·", RingTheme.TextDim);
             tag.Add(gimmick);
             tag.Add(ArenaKit.Tag(" " + RingLabels.PathName(t, v.Role, HeroForms.ShowsHeroine(t)), ArenaKit.RoleText(v.Role)));
-            if (v.IsChampion) tag.Add(ArenaKit.Tag(" · " + t.Get("c.champion"), RingTheme.Gold));
+            Label belt = null;
+            if (v.IsChampion) { belt = ArenaKit.Tag(" · " + t.Get("c.champion"), RingTheme.Gold); tag.Add(belt); }
             box.Add(tag);
             var doll = new InjuryDoll();
-            // довге ім'я не лягає ні на мітку ролі, ні на ляльку (ПМ 14.11.2026)
-            ArenaKit.FitNameAndTag(box, name, tag, gimmick, true, doll);
+            // довге ім'я не лягає ні на мітку ролі, ні на ляльку (ПМ 14.11.2026); повний пояс «федерації» на стрічці не обов'язковий —
+            // коротшає до «· чемпіон / чемпіонка», тоді ховається, і лише тоді «…» (АД 14.11.2026, (в) → (б))
+            ArenaKit.FitNameAndTag(box, name, tag, gimmick, true, doll, belt, belt != null ? " · " + t.Get("c.champion.short") : null);
             var zones = new VisualElement();
             ArenaKit.Place(zones, CareerTileLayout.StripNameLeft, CareerTileLayout.StripZonesTop, null, null);
             zones.pickingMode = PickingMode.Ignore;

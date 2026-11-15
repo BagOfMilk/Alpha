@@ -16,6 +16,8 @@ namespace Game.Tests.EditMode
         private readonly Dictionary<int, int> _glyph = new Dictionary<int, int>();
         private readonly ushort[] _advance;
         private readonly int _unitsPerEm, _ascender, _descender, _lineGap;
+        // чорнило гліфа по вертикалі (glyf: yMin, yMax від базової лінії); null — шрифт без glyf
+        private readonly short[] _inkMin, _inkMax;
 
         public string Name { get; private set; }
 
@@ -39,6 +41,39 @@ namespace Game.Tests.EditMode
             for (int i = 0; i < metrics; i++) _advance[i] = (ushort)U16(d, at["hmtx"] + 4 * i);
             ReadCmap(d, at["cmap"]);
             if (_glyph.Count == 0) throw new InvalidDataException(path + ": немає cmap формату 4 (Windows Unicode BMP)");
+            if (at.ContainsKey("glyf") && at.ContainsKey("loca") && at.ContainsKey("maxp"))
+            {
+                int glyphs = U16(d, at["maxp"] + 4), longLoca = S16(d, at["head"] + 50), loca = at["loca"], glyf = at["glyf"];
+                _inkMin = new short[glyphs]; _inkMax = new short[glyphs];
+                for (int g = 0; g < glyphs; g++)
+                {
+                    long off = longLoca != 0 ? U32(d, loca + 4 * g) : 2L * U16(d, loca + 2 * g);
+                    long next = longLoca != 0 ? U32(d, loca + 4 * g + 4) : 2L * U16(d, loca + 2 * g + 2);
+                    if (next <= off) continue;   // порожній гліф (пробіл)
+                    _inkMin[g] = (short)S16(d, glyf + (int)off + 4);
+                    _inkMax[g] = (short)S16(d, glyf + (int)off + 8);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Чорнило рядка по вертикалі в частках кегля від базової лінії (glyf): <paramref name="top"/> — найвища точка (знаки над
+        /// великими — Й, Ї), <paramref name="bottom"/> — найнижча (хвости Д, Ц, Щ — від'ємна). false — у шрифті немає glyf.
+        /// </summary>
+        public bool Ink(string s, out float top, out float bottom)
+        {
+            top = 0f; bottom = 0f;
+            if (_inkMin == null) return false;
+            int hi = 0, lo = 0;
+            foreach (char c in s ?? "")
+            {
+                int g;
+                if (!_glyph.TryGetValue(c, out g) || g >= _inkMax.Length) continue;
+                if (_inkMax[g] > hi) hi = _inkMax[g];
+                if (_inkMin[g] < lo) lo = _inkMin[g];
+            }
+            top = hi / (float)_unitsPerEm; bottom = lo / (float)_unitsPerEm;
+            return true;
         }
 
         public static TtfMetrics Load(params string[] relative)

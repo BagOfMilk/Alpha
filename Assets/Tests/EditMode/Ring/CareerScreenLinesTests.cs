@@ -442,6 +442,11 @@ namespace Game.Tests.EditMode
             // без ґіміка місця вдосталь — кегль не більший за 40
             f = CareerTileLayout.FitStripName(n15, Px20, 180f, 1000f);
             Assert.AreEqual(40f, f.Size); Assert.IsTrue(f.HideOptional);
+            // ім'я з пробілом, що без ґіміка влазить одним рядком (180 → 20 ≥ 18 на кроці 1) — один рядок, а не два
+            f = CareerTileLayout.FitStripName("АААА ББББ", Px20, 50f, 90f);
+            Assert.AreEqual(20f, f.Size); Assert.IsFalse(f.TwoLines, "один рядок на 20 — раніше за два"); Assert.AreEqual(1, f.Drop);
+            f = CareerTileLayout.FitStripName("АААА ББББ", Px20, new[] { 50f, 90f, 200f, 300f });
+            Assert.AreEqual(1, f.Drop, "поясу не чіпаємо, коли один рядок ≥ 18 є вже без ґіміка"); Assert.IsFalse(f.TwoLines);
             // 10 + пробіл + 11 = 440; без ґіміка 150 → 13 < 18: два рядки, довший 220 → 27, але не більше StripNameTwoLineMax
             string two = new string('А', 10) + " " + new string('Б', 11);
             f = CareerTileLayout.FitStripName(two, Px20, 100f, 150f);
@@ -478,6 +483,63 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(40f, f.Size); Assert.IsFalse(f.HideOptional || f.Ellipsis);
             f = CareerTileLayout.FitStripName(null, Px20, 10f, 10f);
             Assert.AreEqual("", f.Text); Assert.AreEqual(40f, f.Size);
+
+            // кроки мітки (АД 14.11.2026): ґімік → кегль до 18 → два рядки 15–19 → короткий пояс → пояс → лише тоді «…».
+            // 10 + пробіл + 12 = 460, довший рядок 240. Повний пояс 80: два рядки на 13 < 15 — короткий пояс 120: два рядки на 19
+            string belt = new string('А', 10) + " " + new string('Б', 12);
+            f = CareerTileLayout.FitStripName(belt, Px20, new[] { 50f, 80f, 120f, 200f });
+            Assert.AreEqual(2, f.Drop, "короткий пояс"); Assert.IsTrue(f.TwoLines); Assert.IsFalse(f.Ellipsis);
+            Assert.AreEqual(CareerTileLayout.StripNameTwoLineMax, f.Size);
+            // повний пояс лишає два рядки на 15 — поясу не чіпаємо, хоч з коротким було б 19
+            f = CareerTileLayout.FitStripName(belt, Px20, new[] { 50f, 90f, 120f, 200f });
+            Assert.AreEqual(1, f.Drop); Assert.AreEqual(15f, f.Size); Assert.IsTrue(f.TwoLines);
+            // і короткий не рятує — пояс ховається: без нього 200 → 17 одним рядком < 18, два рядки на 19
+            f = CareerTileLayout.FitStripName(belt, Px20, new[] { 50f, 60f, 80f, 200f });
+            Assert.AreEqual(3, f.Drop, "пояс сховано"); Assert.AreEqual(CareerTileLayout.StripNameTwoLineMax, f.Size); Assert.IsFalse(f.Ellipsis);
+            // «…» — лише коли віддано все: на останньому кроці 40 (106,7 на 40) — перше слово 200 не влазить, «АААА…»
+            f = CareerTileLayout.FitStripName(belt, Px20, new[] { 10f, 20f, 30f, 40f });
+            Assert.IsTrue(f.Ellipsis); Assert.AreEqual(3, f.Drop); Assert.AreEqual("АААА…", f.Text);
+            // два кроки — те саме, що стара пара «з ґіміком / без»
+            var p2 = CareerTileLayout.FitStripName(belt, Px20, 50f, 88f);
+            var l2 = CareerTileLayout.FitStripName(belt, Px20, new[] { 50f, 88f });
+            Assert.AreEqual(p2.Size, l2.Size); Assert.AreEqual(p2.Text, l2.Text); Assert.AreEqual(p2.Drop, l2.Drop);
+            Assert.AreEqual(40f, CareerTileLayout.FitStripName(belt, Px20, new[] { 50f }).Size, "один крок — ім'я як є");
+            Assert.AreEqual(40f, CareerTileLayout.FitStripName(belt, Px20, new[] { 50f, 80f, float.NaN }).Size, "NaN — ім'я як є");
+        }
+
+        /// <summary>
+        /// Порядок кроків мітки (АД 14.11.2026: «обрізаємо його останнім, після всіх приміток»): хоч яким буде місце на чотирьох
+        /// кроках, крок k віддано лише тоді, коли на кроці k − 1 ім'я цілим не вміщалось; «…» — лише на останньому кроці; кожен рядок —
+        /// у місці свого кроку.
+        /// </summary>
+        [Test]
+        public void StripName_Steps_GiveTheNotesBeforeTheName()
+        {
+            string[] names = { "МАКСИМІЛІАН ШЕРШЕНЬКОВИЙ", new string('Ю', 24), new string('А', 10) + " " + new string('Б', 12), "ЛЕВ" };
+            int dropped2 = 0, dropped3 = 0, ell = 0;
+            foreach (var n in names)
+                for (float a0 = 0f; a0 <= 300f; a0 += 37f)
+                    for (float d1 = 0f; d1 <= 120f; d1 += 23f)
+                        for (float d2 = 0f; d2 <= 80f; d2 += 19f)
+                            for (float d3 = 0f; d3 <= 60f; d3 += 29f)
+                            {
+                                var av = new[] { a0, a0 + d1, a0 + d1 + d2, a0 + d1 + d2 + d3 };
+                                var f = CareerTileLayout.FitStripName(n, Px20, av);
+                                string where = string.Format("«{0}», місце {1}/{2}/{3}/{4}", n, av[0], av[1], av[2], av[3]);
+                                for (int k = 1; k < f.Drop; k++)
+                                {
+                                    var g = CareerTileLayout.FitStripName(n, Px20, new[] { av[0], av[k] });
+                                    if (!g.Ellipsis) Assert.Fail(where + ": віддано крок " + f.Drop + ", а на кроці " + k + " ім'я вміщалось цілим");
+                                }
+                                if (f.Ellipsis) { Assert.AreEqual(3, f.Drop, where + ": «…» до останнього кроку"); ell++; }
+                                foreach (var line in f.Text.Split('\n'))
+                                    if (line != "…") Assert.LessOrEqual(Px20(line) * f.Size / CareerTileLayout.StripNameSize, av[f.Drop] + 0.01f, where + ": рядок «" + line + "»");
+                                if (f.Drop == 2) dropped2++;
+                                if (f.Drop == 3) dropped3++;
+                            }
+            Assert.Greater(dropped2, 0, "короткий пояс справді трапляється");
+            Assert.Greater(dropped3, 0, "і пояс ховається");
+            Assert.Greater(ell, 0, "і «…» на останньому кроці");
         }
 
         /// <summary>
@@ -544,8 +606,15 @@ namespace Game.Tests.EditMode
         public void StripName_AndNameField_Numbers()
         {
             float max = CareerTileLayout.StripNameTwoLineMax;
-            Assert.LessOrEqual(CareerTileLayout.StripNameTop + 2f * CareerTileLayout.DisplayLineEm * max, CareerTileLayout.StripZonesTop, "два рядки — над зонами");
-            Assert.Greater(CareerTileLayout.StripNameTop + 2f * CareerTileLayout.DisplayLineEm * (max + 1f), CareerTileLayout.StripZonesTop, "найбільший можливий");
+            // чорнило двох рядків (АД 14.11.2026): висхідна + крок 1,25 + хвіст великих — щонайменше за 2 до зон
+            float ink = CareerTileLayout.DisplayAscentEm + CareerTileLayout.StripNameLinePitchEm + CareerTileLayout.DisplayCapsTailEm;
+            float floorY = CareerTileLayout.StripZonesTop - CareerTileLayout.StripNameInkClear;
+            Assert.LessOrEqual(CareerTileLayout.StripNameTop + ink * max, floorY, "хвіст другого рядка — за 2 до зон");
+            Assert.Greater(CareerTileLayout.StripNameTop + ink * (max + 1f), floorY, "найбільший можливий");
+            Assert.AreEqual(1.25f, CareerTileLayout.StripNameLinePitchEm, "крок двох рядків — 1,25 (АД)");
+            Assert.AreEqual(2f, CareerTileLayout.StripNameInkClear);
+            Assert.AreEqual(18f, max, "на кроці 1,25 — 18: на 19 хвіст абетки ліг би на 52,8");
+            Assert.AreEqual(22.5f, CareerTileLayout.StripNameLine2Offset(18f), 0.001f);
             Assert.GreaterOrEqual(max, CareerTileLayout.StripNameMinSize);
             Assert.GreaterOrEqual(CareerTileLayout.StripNameMinSize, 15f, "мінімум токенів, не нижче 15");
             Assert.Less(CareerTileLayout.StripNameOneLineMin, CareerTileLayout.StripNameKeepTagMin);
@@ -575,7 +644,8 @@ namespace Game.Tests.EditMode
                 "var name = ArenaKit.Big(v.RingName, CareerTileLayout.StripNameSize, RingTheme.Text);",
                 "ArenaKit.Place(name, CareerTileLayout.StripNameLeft, CareerTileLayout.StripNameTop, null, null);",
                 "ArenaKit.Place(tag, null, CareerTileLayout.StripTagTop, CareerTileLayout.StripTagRight, null);",
-                "ArenaKit.FitNameAndTag(box, name, tag, gimmick, true, doll);",
+                "ArenaKit.FitNameAndTag(box, name, tag, gimmick, true, doll, belt, belt != null ? \" · \" + t.Get(\"c.champion.short\") : null);",
+                "if (v.IsChampion) { belt = ArenaKit.Tag(\" · \" + t.Get(\"c.champion\"), RingTheme.Gold); tag.Add(belt); }",
                 "ArenaKit.Place(zones, CareerTileLayout.StripNameLeft, CareerTileLayout.StripZonesTop, null, null);",
                 "ArenaKit.Place(doll, null, CareerTileLayout.StripDollTop, CareerTileLayout.StripDollRight, null);",
                 "var nl = ArenaKit.Big(nick, CareerTileLayout.StripNameSize, RingTheme.Text);",
@@ -583,25 +653,42 @@ namespace Game.Tests.EditMode
                 "ArenaKit.FitNameAndTag(box, nl, tag, rg, false);",
                 "ArenaKit.Place(real, null, CareerTileLayout.StripZonesTop, CareerTileLayout.StripNameLeft, null);" })
                 if (!CodeLine(show, l)) bad.Add("ShowScreens: немає «" + l + "»");
-            int dollAt = show.IndexOf("var doll = new InjuryDoll();"), fitAt = show.IndexOf("ArenaKit.FitNameAndTag(box, name, tag, gimmick, true, doll);");
+            int dollAt = show.IndexOf("var doll = new InjuryDoll();"), fitAt = show.IndexOf("ArenaKit.FitNameAndTag(box, name, tag, gimmick, true, doll, belt,");
             if (dollAt < 0 || fitAt < 0 || dollAt > fitAt) bad.Add("ShowScreens: лялька має бути створена до FitNameAndTag (перешкода імені)");
             foreach (var l in new[] {
-                "public static void FitNameAndTag(VisualElement box, Label name, VisualElement tag, VisualElement optional, bool nameLeft, VisualElement obstacle = null)",
+                "public static void FitNameAndTag(VisualElement box, Label name, VisualElement tag, VisualElement optional, bool nameLeft, VisualElement obstacle = null,",
+                "Label belt = null, string beltShort = null)",
                 "var probe = Big(text, CareerTileLayout.StripNameSize, RingTheme.Text);",
                 "probe.style.visibility = Visibility.Hidden;",
-                "var f = CareerTileLayout.FitStripName(text, measure, availWith, availWithout);",
+                "var f = CareerTileLayout.FitStripName(text, measure, avail);",
+                "if (beltCut != null && beltCut != beltFull) steps.Add(2);",
+                "if (belt != null) steps.Add(3);",
+                "string beltCut = belt != null && !string.IsNullOrEmpty(beltShort) ? RingTheme.Caps(beltShort) : null;",
+                "if (belt != null && state < 3 && !float.IsNaN(belt.layout.width)) beltW = belt.layout.width + (state == 2 ? cut : 0f);",
+                "float tagAll = t.width + Given(state, opt, cut, bw);",
+                "float tagK = tagAll - Given(steps[k], opt, cut, bw);",
+                "avail[k] = nameLeft ? Math.Min(t.xMax - tagK, ob) - CareerTileLayout.StripNameGap - n.x",
+                ": n.xMax - (t.x + tagK) - CareerTileLayout.StripNameGap;",
+                "int next = steps[f.Drop];",
+                "belt.style.display = state >= 3 ? DisplayStyle.None : DisplayStyle.Flex;",
+                "belt.text = state == 2 ? beltCut : beltFull;",
+                "return (step >= 1 ? gimmick : 0f) + (step == 2 ? beltCut : step >= 3 ? belt : 0f);",
                 "name.style.fontSize = f.Size;",
                 "name.style.letterSpacing = new Length(f.Size * CareerTileLayout.StripNameTrack);",
                 "name.style.whiteSpace = WhiteSpace.NoWrap;",
                 "name.style.width = StyleKeyword.Auto;",
-                "string key = f.Size + \"|\" + f.HideOptional + \"|\" + f.Text;",
+                "string key = f.Size + \"|\" + next + \"|\" + f.Text;",
                 "float ob = obstacle != null && !float.IsNaN(obstacle.layout.x) ? obstacle.layout.x : float.MaxValue;",
-                "availWith = Math.Min(t.xMax - tagWith, ob) - CareerTileLayout.StripNameGap - n.x;",
-                "availWithout = Math.Min(t.xMax - tagWithout, ob) - CareerTileLayout.StripNameGap - n.x;",
-                "availWith = n.xMax - (t.x + tagWith) - CareerTileLayout.StripNameGap;",
-                "availWithout = n.xMax - (t.x + tagWithout) - CareerTileLayout.StripNameGap;",
-                "optional.style.display = hidden ? DisplayStyle.None : DisplayStyle.Flex;",
-                "name.text = f.Text;",
+                "if (optional != null) optional.style.display = state >= 1 ? DisplayStyle.None : DisplayStyle.Flex;",
+                "string[] lines = f.Text.Split('\\n');",
+                "name.text = lines[0];",
+                "var line2 = Big(\"\", CareerTileLayout.StripNameSize, RingTheme.Text);",
+                "line2.style.display = lines.Length > 1 ? DisplayStyle.Flex : DisplayStyle.None;",
+                "line2.text = lines[1];",
+                "line2.style.fontSize = f.Size;",
+                "line2.style.top = n.y + CareerTileLayout.StripNameLine2Offset(f.Size);",
+                "if (nameLeft) { line2.style.left = n.x; line2.style.right = StyleKeyword.Auto; }",
+                "else { line2.style.right = box.layout.width - n.xMax; line2.style.left = StyleKeyword.Auto; }",
                 "box.RegisterCallback(fit);", "tag.RegisterCallback(fit);", "probe.RegisterCallback(fit);",
                 "style.width = CareerTileLayout.StripDollW; style.height = CareerTileLayout.StripDollH;" })
                 if (!CodeLine(kit, l)) bad.Add("ArenaKit: немає «" + l + "»");

@@ -151,10 +151,12 @@ namespace Game.Gameplay.Ring.UI
         /// Тепер одне рішення <see cref="CareerTileLayout.FitStripName"/> з мір кожної розкладки: ширина імені на 40 — невидимою
         /// пробою (тим самим шрифтом і розрядкою), мітка з ґіміком (<paramref name="optional"/>) і без нього, перешкода
         /// <paramref name="obstacle"/> (лялька травм) праворуч від імені. Мітка ролі й лялька лишаються вільними: ім'я меншає, ховає
-        /// ґімік, стає у два рядки, а в крайньому разі — «…» (урізає модель). <paramref name="nameLeft"/> — ім'я ліворуч, мітка праворуч (стрічка
-        /// гравця), інакше дзеркально (суперник).
+        /// ґімік, стає у два рядки; далі пояс <paramref name="belt"/> коротшає до <paramref name="beltShort"/>, тоді ховається, і лише
+        /// тоді — «…» (урізає модель; АД 14.11.2026: «обрізаємо його останнім, після всіх приміток»). <paramref name="nameLeft"/> — ім'я
+        /// ліворуч, мітка праворуч (стрічка гравця), інакше дзеркально (суперник).
         /// </summary>
-        public static void FitNameAndTag(VisualElement box, Label name, VisualElement tag, VisualElement optional, bool nameLeft, VisualElement obstacle = null)
+        public static void FitNameAndTag(VisualElement box, Label name, VisualElement tag, VisualElement optional, bool nameLeft, VisualElement obstacle = null,
+            Label belt = null, string beltShort = null)
         {
             string text = name.text ?? "";
             var probe = Big(text, CareerTileLayout.StripNameSize, RingTheme.Text);
@@ -164,45 +166,76 @@ namespace Game.Gameplay.Ring.UI
             probe.pickingMode = PickingMode.Ignore;
             box.Add(probe);
             Func<string, float> measure = s => probe.MeasureTextSize(s, 0f, VisualElement.MeasureMode.Undefined, 0f, VisualElement.MeasureMode.Undefined).x;
-            float optW = -1f;
-            bool hidden = false;
+            // другий рядок — окремою міткою на крок 1,25 кегля нижче (АД 14.11.2026: на 1,2 хвіст Д/Ц/Щ і крапки Ї злипались би); висоти
+            // рядка в UI Toolkit немає
+            var line2 = Big("", CareerTileLayout.StripNameSize, RingTheme.Text);
+            line2.style.position = Position.Absolute;
+            line2.style.display = DisplayStyle.None;
+            box.Add(line2);
+            // що мітка віддає імені, за порядком (АД 14.11.2026): 0 — усе на місці; 1 — ґімік; 2 — короткий напис поясу; 3 — пояс
+            string beltFull = belt != null ? belt.text : null;
+            string beltCut = belt != null && !string.IsNullOrEmpty(beltShort) ? RingTheme.Caps(beltShort) : null;
+            var steps = new List<int> { 0, 1 };
+            if (beltCut != null && beltCut != beltFull) steps.Add(2);
+            if (belt != null) steps.Add(3);
+            Func<string, float> beltText = s => belt.MeasureTextSize(s, 0f, VisualElement.MeasureMode.Undefined, 0f, VisualElement.MeasureMode.Undefined).x;
+            var avail = new float[steps.Count];
+            float optW = -1f, beltW = -1f;
+            int state = 0;
             string applied = null;
             EventCallback<GeometryChangedEvent> fit = e =>
             {
                 Rect t = tag.layout, n = name.layout;
                 if (float.IsNaN(t.width) || float.IsNaN(n.x) || float.IsNaN(n.width) || t.width <= 0f) return;
-                if (optional != null && !hidden && !float.IsNaN(optional.layout.width)) optW = optional.layout.width;
-                float opt = Math.Max(0f, optW);
-                float tagWith = t.width + (hidden ? opt : 0f), tagWithout = tagWith - opt;
-                float availWith, availWithout;
-                if (nameLeft)
+                if (optional != null && state < 1 && !float.IsNaN(optional.layout.width)) optW = optional.layout.width;
+                float cut = 0f;   // на скільки короткий напис поясу вужчий за повний
+                if (beltCut != null)
                 {
-                    float ob = obstacle != null && !float.IsNaN(obstacle.layout.x) ? obstacle.layout.x : float.MaxValue;
-                    availWith = Math.Min(t.xMax - tagWith, ob) - CareerTileLayout.StripNameGap - n.x;
-                    availWithout = Math.Min(t.xMax - tagWithout, ob) - CareerTileLayout.StripNameGap - n.x;
+                    float full = beltText(beltFull), shorter = beltText(beltCut);
+                    if (!float.IsNaN(full) && !float.IsNaN(shorter)) cut = Math.Max(0f, full - shorter);
                 }
-                else
+                if (belt != null && state < 3 && !float.IsNaN(belt.layout.width)) beltW = belt.layout.width + (state == 2 ? cut : 0f);
+                float opt = Math.Max(0f, optW), bw = Math.Max(0f, beltW);
+                // мітка з усім на місці — з поточної ширини, хоч би що зараз сховано чи вкорочено
+                float tagAll = t.width + Given(state, opt, cut, bw);
+                float ob = obstacle != null && !float.IsNaN(obstacle.layout.x) ? obstacle.layout.x : float.MaxValue;
+                for (int k = 0; k < steps.Count; k++)
                 {
-                    availWith = n.xMax - (t.x + tagWith) - CareerTileLayout.StripNameGap;
-                    availWithout = n.xMax - (t.x + tagWithout) - CareerTileLayout.StripNameGap;
+                    float tagK = tagAll - Given(steps[k], opt, cut, bw);
+                    avail[k] = nameLeft ? Math.Min(t.xMax - tagK, ob) - CareerTileLayout.StripNameGap - n.x
+                        : n.xMax - (t.x + tagK) - CareerTileLayout.StripNameGap;
                 }
-                var f = CareerTileLayout.FitStripName(text, measure, availWith, availWithout);
-                // вигляд імені — лише з рішення (кегль, ґімік, текст): ширина рамки не задається, тож застарілою не стане (рев'ю 14.11.2026)
-                string key = f.Size + "|" + f.HideOptional + "|" + f.Text;
-                if (key == applied) return;   // мітка змінюється від схованого ґіміка — рішення те саме, без циклу
+                var f = CareerTileLayout.FitStripName(text, measure, avail);
+                int next = steps[f.Drop];
+                // вигляд імені — лише з рішення (кегль, крок мітки, текст): ширина рамки не задається, тож застарілою не стане (рев'ю 14.11.2026)
+                string key = f.Size + "|" + next + "|" + f.Text;
+                if (key == applied) return;   // мітка змінюється від схованого — рішення те саме, без циклу
                 applied = key;
-                if (optional != null)
+                state = next;
+                if (optional != null) optional.style.display = state >= 1 ? DisplayStyle.None : DisplayStyle.Flex;
+                if (belt != null)
                 {
-                    hidden = f.HideOptional;
-                    optional.style.display = hidden ? DisplayStyle.None : DisplayStyle.Flex;
+                    belt.style.display = state >= 3 ? DisplayStyle.None : DisplayStyle.Flex;
+                    belt.text = state == 2 ? beltCut : beltFull;
                 }
-                name.text = f.Text;
+                string[] lines = f.Text.Split('\n');
+                name.text = lines[0];
                 name.style.fontSize = f.Size;
                 name.style.letterSpacing = new Length(f.Size * CareerTileLayout.StripNameTrack);
                 name.style.unityTextAlign = nameLeft ? TextAnchor.UpperLeft : TextAnchor.UpperRight;
-                // без переносу за шириною: два рядки — лише явним «\n» моделі (NoWrap його тримає — підпис титулу 4:3 двома рядками,
-                // кадр слоту 34), «…» модель уже поставила; рамка — за текстом. Перенос у рамці впритул міг дати третій рядок на зонах
-                // (рев'ю 14.11.2026)
+                line2.style.display = lines.Length > 1 ? DisplayStyle.Flex : DisplayStyle.None;
+                if (lines.Length > 1)
+                {
+                    line2.text = lines[1];
+                    line2.style.fontSize = f.Size;
+                    line2.style.letterSpacing = new Length(f.Size * CareerTileLayout.StripNameTrack);
+                    line2.style.unityTextAlign = nameLeft ? TextAnchor.UpperLeft : TextAnchor.UpperRight;
+                    line2.style.top = n.y + CareerTileLayout.StripNameLine2Offset(f.Size);
+                    if (nameLeft) { line2.style.left = n.x; line2.style.right = StyleKeyword.Auto; }
+                    else { line2.style.right = box.layout.width - n.xMax; line2.style.left = StyleKeyword.Auto; }
+                }
+                // без переносу за шириною: другий рядок — лише за «\n» моделі, окремою міткою; «…» модель уже поставила; рамка — за
+                // текстом. Перенос у рамці впритул міг дати третій рядок на зонах (рев'ю 14.11.2026)
                 name.style.whiteSpace = WhiteSpace.NoWrap;
                 name.style.width = StyleKeyword.Auto;
                 name.style.overflow = Overflow.Visible;
@@ -210,6 +243,12 @@ namespace Game.Gameplay.Ring.UI
             box.RegisterCallback(fit);
             tag.RegisterCallback(fit);
             probe.RegisterCallback(fit);
+        }
+
+        /// <summary>Скільки ширини мітка вже віддала на кроці <paramref name="step"/>: ґімік, далі різниця короткого поясу, далі весь пояс.</summary>
+        private static float Given(int step, float gimmick, float beltCut, float belt)
+        {
+            return (step >= 1 ? gimmick : 0f) + (step == 2 ? beltCut : step >= 3 ? belt : 0f);
         }
 
         /// <summary>Число / коротке слово display Black.</summary>

@@ -707,20 +707,46 @@ namespace Game.Gameplay.Ring.Models
         /// <summary>Висота рядка display (Fira Sans Extra Condensed: висхідна 935 + низхідна 265 з 1000) у частках кегля.</summary>
         public const float DisplayLineEm = 1.2f;
 
-        /// <summary>Кегль двох рядків: обидва вміщаються між верхом імені й рядками зон (<see cref="StripZonesTop"/>).</summary>
+        /// <summary>
+        /// Чорнило display (Fira Sans Extra Condensed Black, з 1000): висхідна 935 — від верху рядка до базової лінії; найглибший хвіст
+        /// великих (Д, Ц, Щ) — 173 нижче базової. Міра двох рядків — чорнило, а не рамка кегля (АД 14.11.2026); охоронець звіряє з TTF.
+        /// </summary>
+        public const float DisplayAscentEm = 0.935f, DisplayCapsTailEm = 0.173f;
+        /// <summary>
+        /// Крок двох рядків імені — 1,25 кегля (АД 14.11.2026: на 1,2 між хвостом Д/Ц/Щ першого рядка і крапками Ї другого лишалось
+        /// 1,3 px — менше за піксель згладжування з кожного боку, на кадрі злиплось би). Другий рядок — окремою міткою на цей крок нижче:
+        /// висоти рядка в UI Toolkit немає.
+        /// </summary>
+        public const float StripNameLinePitchEm = 1.25f;
+        /// <summary>Від хвоста другого рядка до рядків зон — не менше 2.</summary>
+        public const float StripNameInkClear = 2f;
+
+        /// <summary>Зсув верху другого рядка імені від верху першого.</summary>
+        public static float StripNameLine2Offset(float size) { return StripNameLinePitchEm * size; }
+
+        /// <summary>
+        /// Кегль двох рядків: хвіст другого — щонайменше на <see cref="StripNameInkClear"/> над рядками зон (<see cref="StripZonesTop"/>);
+        /// з кроком 1,25 це 18 (на 19 хвіст ліг би на 52,8).
+        /// </summary>
         public static float StripNameTwoLineMax
         {
-            get { return (float)Math.Floor((StripZonesTop - StripNameTop) / (2f * DisplayLineEm)); }
+            get { return (float)Math.Floor((StripZonesTop - StripNameInkClear - StripNameTop) / (DisplayAscentEm + StripNameLinePitchEm + DisplayCapsTailEm)); }
         }
 
         /// <summary>
-        /// Рішення для імені на стрічці: кегль, чи ховати ґімік у мітці, текст до показу (з «\n» між двома рядками; урізаний — уже з «…»
-        /// в кінці), чи два рядки, чи урізано.
+        /// Рішення для імені на стрічці: кегль, скільки необов'язкових частин мітки віддано імені, текст до показу (з «\n» між двома
+        /// рядками; урізаний — уже з «…» в кінці), чи два рядки, чи урізано.
         /// </summary>
         public struct StripNameFit
         {
             public float Size;
-            public bool HideOptional;
+            /// <summary>
+            /// Скільки кроків місця віддано (індекс у списку місць <see cref="FitStripName(string, Func{string, float}, IList{float})"/>):
+            /// 0 — мітка вся; 1 — ґімік сховано; далі — що мітка віддає ще (на стрічці героя: короткий напис поясу, тоді пояс сховано).
+            /// </summary>
+            public int Drop;
+            /// <summary>Ґімік у мітці сховано (віддано хоч один крок).</summary>
+            public bool HideOptional { get { return Drop >= 1; } }
             public string Text;
             public bool TwoLines;
             public bool Ellipsis;
@@ -740,27 +766,46 @@ namespace Game.Gameplay.Ring.Models
         /// </summary>
         public static StripNameFit FitStripName(string name, Func<string, float> widthAtBase, float availWith, float availWithout)
         {
+            return FitStripName(name, widthAtBase, new[] { availWith, availWithout });
+        }
+
+        /// <summary>
+        /// Те саме правило з кількома кроками місця (АД 14.11.2026: «Ім'я, яке набрав гравець, — це його герой. Обрізаємо його
+        /// останнім, після всіх приміток»): <paramref name="avail"/>[0] — місце до мітки з усім, [1] — без ґіміка, далі — по кроку
+        /// мітки (на стрічці героя-чемпіона: [2] — короткий напис поясу, [3] — пояс сховано). Порядок: кегль до 26 з усім; ґімік;
+        /// на кожному кроці від [1] — кегль до 18 одним рядком, два рядки 15…<see cref="StripNameTwoLineMax"/>, один рядок до 15; не
+        /// влізло — наступний крок; «…» —
+        /// лише на останньому. Менше двох кроків чи NaN — ім'я як є.
+        /// </summary>
+        public static StripNameFit FitStripName(string name, Func<string, float> widthAtBase, IList<float> avail)
+        {
             var r = new StripNameFit { Size = StripNameSize, Text = name ?? "" };
-            if (string.IsNullOrEmpty(name) || widthAtBase == null || float.IsNaN(availWith) || float.IsNaN(availWithout)) return r;
+            if (string.IsNullOrEmpty(name) || widthAtBase == null || avail == null || avail.Count < 2) return r;
+            foreach (float a in avail) if (float.IsNaN(a)) return r;
             float nat = widthAtBase(name);
             if (float.IsNaN(nat) || nat <= 0f) return r;
-            if (nat <= availWith) return r;
-            float s = availWith > 0f ? (float)Math.Floor(StripNameSize * availWith / nat) : 0f;
+            if (nat <= avail[0]) return r;
+            float s = avail[0] > 0f ? (float)Math.Floor(StripNameSize * avail[0] / nat) : 0f;
             if (s >= StripNameKeepTagMin) { r.Size = s; return r; }
-            r.HideOptional = true;
-            s = availWithout > 0f ? Math.Min(StripNameSize, (float)Math.Floor(StripNameSize * availWithout / nat)) : 0f;
-            if (s >= StripNameOneLineMin) { r.Size = s; return r; }
             string l1, l2;
-            if (SplitTwoLines(name, widthAtBase, out l1, out l2))
+            bool split = SplitTwoLines(name, widthAtBase, out l1, out l2);
+            float wide = split ? Math.Max(widthAtBase(l1), widthAtBase(l2)) : 0f;
+            for (int k = 1; k < avail.Count; k++)
             {
-                float wide = Math.Max(widthAtBase(l1), widthAtBase(l2));
-                float s2 = wide > 0f && availWithout > 0f ? Math.Min(StripNameTwoLineMax, (float)Math.Floor(StripNameSize * availWithout / wide)) : 0f;
-                if (s2 >= StripNameMinSize) { r.Size = s2; r.Text = l1 + "\n" + l2; r.TwoLines = true; return r; }
+                float av = avail[k];
+                r.Drop = k;
+                s = av > 0f ? Math.Min(StripNameSize, (float)Math.Floor(StripNameSize * av / nat)) : 0f;
+                if (s >= StripNameOneLineMin) { r.Size = s; return r; }
+                if (split)
+                {
+                    float s2 = wide > 0f && av > 0f ? Math.Min(StripNameTwoLineMax, (float)Math.Floor(StripNameSize * av / wide)) : 0f;
+                    if (s2 >= StripNameMinSize) { r.Size = s2; r.Text = l1 + "\n" + l2; r.TwoLines = true; return r; }
+                }
+                if (s >= StripNameMinSize) { r.Size = s; return r; }
             }
-            if (s >= StripNameMinSize) { r.Size = s; return r; }
             r.Size = StripNameMinSize;
             r.Ellipsis = true;
-            float room = availWithout * StripNameSize / StripNameMinSize;   // місце на 15 — у ширині на 40
+            float room = avail[avail.Count - 1] * StripNameSize / StripNameMinSize;   // місце на 15 — у ширині на 40
             for (int i = name.Length - 1; i > 0; i--)
             {
                 if (name[i] != ' ') continue;
