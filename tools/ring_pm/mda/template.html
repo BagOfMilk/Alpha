@@ -74,6 +74,9 @@ section{padding:34px 0 10px}
 .bar{height:12px;background:var(--panel2);border-radius:3px;position:relative;overflow:hidden}
 .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--accent-fill);border-radius:3px 4px 4px 3px}
 .rpct{font:700 24px/1 var(--display);text-align:right;font-variant-numeric:tabular-nums}
+.tag2{font:600 11px/1 var(--body);letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line2);border-radius:999px;padding:2px 7px;color:var(--text2);vertical-align:middle}
+.rrow.deferred .bar i{opacity:.35}
+.rrow.deferred .rpct{color:var(--muted)}
 .chev{color:var(--muted);transition:transform .15s}
 .rrow.open .chev{transform:rotate(90deg)}
 .rbody{display:none;padding:0 14px 14px;border-top:1px solid var(--line)}
@@ -182,8 +185,8 @@ blockquote .who{display:block;font-size:12px;color:var(--muted);margin-top:2px}
 .statline{font-size:13px;color:var(--text2);margin:-2px 0 10px}
 .statline b{font-variant-numeric:tabular-nums}
 /* --- звук --- */
-.sound-hero{display:grid;grid-template-columns:auto minmax(0,1fr);gap:18px;align-items:center;background:var(--panel);border:1px solid var(--crimson);border-radius:10px;padding:16px}
-.sound-hero .big{font:700 64px/1 var(--display);color:var(--danger);font-variant-numeric:tabular-nums}
+.sound-hero{display:grid;grid-template-columns:auto minmax(0,1fr);gap:18px;align-items:center;background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:16px}
+.sound-hero .big{font:700 64px/1 var(--display);color:var(--text2);font-variant-numeric:tabular-nums}
 .steps{counter-reset:s;list-style:none;padding:0;margin:8px 0}
 .steps li{counter-increment:s;padding-left:34px;position:relative;margin:8px 0}
 .steps li::before{content:counter(s);position:absolute;left:0;top:0;width:24px;height:24px;border-radius:50%;background:var(--accent-fill);color:#0E0D12;font-weight:700;display:grid;place-items:center;font-size:13px}
@@ -283,7 +286,7 @@ footer{padding:30px 0 60px;color:var(--muted);font-size:13px}
   <h2>Звук і музика</h2>
   <div class="sound-hero">
     <div class="big">0 / 43</div>
-    <div><b>Звуків схвалено. Через це кожна збірка зараз мовчить.</b><br>
+    <div><b>Звуків схвалено. Рішенням 15.11.2026 увесь звук перенесено в ітерацію 2, тож збірки ітерації 1 мовчать.</b><br>
     <span class="small">Ваше рішення 08.11.2026, дослівно: «Выключи все звуки пока я не скажу обратного из всех будущих сборок. Собери мне библиотеку всех треков где я смогу их заапрувить и тогда они идут в игру, если реджект нужны еще 3 пока какую-то не выберу».</span></div>
   </div>
   <div class="cols2" style="margin-top:14px">
@@ -382,14 +385,15 @@ function toast(msg){ const t=$('toast'); t.textContent=msg; t.style.display='blo
 
 // --- KPI ---
 function renderKpis(){
-  const pct = Math.round(DATA.ready.systems.reduce((s,x,i)=>s+x.pct*(WEIGHTS[i]||0),0)/WEIGHTS.reduce((a,b)=>a+b,0));
+  const live = DATA.ready.systems.map((x,i)=>({x, w:WEIGHTS[i]||0})).filter(o=>!o.x.deferred);
+  const pct = Math.round(live.reduce((s,o)=>s+o.x.pct*o.w,0)/live.reduce((a,o)=>a+o.w,0));
   const decided = ALLITEMS.filter(i=>APPR[i.id] && APPR[i.id].verdict).length;
   const k = [
-    [pct+' %','Готовність за кодом і даними (зважено, 11 систем)',''],
+    [pct+' %','Готовність ітерації 1 у затвердженому обсязі (за кодом і даними)',''],
     [M.length,'Механік у коді',''],
     [D.length,'Динамік, що з них виникають',''],
     [LINKS.length,'Зв\'язків з естетиками',''],
-    ['0 / 43','Звуків схвалено — збірки німі','hot'],
+    ['ітер. 2','Звук перенесено в ітерацію 2; збірки ітерації 1 німі',''],
     [decided+' / '+ALLITEMS.length,'Ваших рішень для ітерації 1','']
   ];
   $('kpis').innerHTML = k.map(([v,l,c])=>`<div class="kpi ${c}"><div class="v">${esc(v)}</div><div class="l">${esc(l)}</div></div>`).join('');
@@ -399,20 +403,22 @@ function renderKpis(){
 function renderReady(){
   const R = DATA.ready;
   const ov = R.overall || {};
-  const wsum = WEIGHTS.reduce((a,b)=>a+b,0), acc = R.systems.reduce((s,x,i)=>s+x.pct*(WEIGHTS[i]||0),0);
-  $('overall').innerHTML = `<b>Разом ${Math.round(acc/wsum)} % за кодом і даними.</b> Це зважене середнє одинадцяти систем. Анімації борців мають подвійну вагу, бо ви назвали їх пріоритетом 1 усіх ітерацій.
+  const liveR = R.systems.map((x,i)=>({x, w:WEIGHTS[i]||0})).filter(o=>!o.x.deferred);
+  const wsum = liveR.reduce((a,o)=>a+o.w,0), acc = liveR.reduce((s,o)=>s+o.x.pct*o.w,0);
+  $('overall').innerHTML = `<b>Разом ${Math.round(acc/wsum)} % за кодом і даними — у затвердженому вами обсязі ітерації 1.</b> Це зважене середнє десяти систем; звук у розрахунок не входить, бо перенесений в ітерацію 2.
     <ul class="plain" style="margin-top:6px">
-      <li><b>Ядро далеко попереду показу.</b> Правила матчу й кар'єри готові на 92–96 %. Те, що видно й чути (анімації, сцена, кіно фінішерів, звук, закулісся), — на 33–67 %.</li>
-      <li><b>Прийнято вами ще нічого.</b> За критерієм «перевірено очима ПМ і прийнято власником» М1 не закрита в жодній системі.</li>
-      <li><b>Для порівняння:</b> аудит 13.11 за 89 пунктами давав 48 % (21 готово, 43 частково, 13 не почато, 9 чекали вас).</li>
-      <li><b>Критичний шлях:</b> перша збірка кліпів (FBX v1) → підстановок кліпів 31 → 0 → фаз-тест → схвалений звук.</li>
+      <li><b>Ваше рішення 15.11.2026:</b> «Усе де є червоне окрім "кіна фінішерів" в ітерацію 2». В ітерацію 2 пішли звук, нові кліпи замість підстановок, жести очікування, QTE, показ наміру суперника, напарник у куті, бій за рингом і предмети «без дискваліфікації». Усього: в ітерації 1 — 114 пунктів, в ітерації 2 — 16.</li>
+      <li><b>Ядро далеко попереду показу.</b> Правила матчу й кар'єри готові на 92–96 %. Сцена, зали, закулісся й кіно фінішерів — на 33–67 %.</li>
+      <li><b>Обсяг затверджено, зроблене ще не прийнято.</b> За критерієм «перевірено очима ПМ і прийнято власником» ітерація 1 не закрита в жодній системі.</li>
+      <li><b>Для порівняння:</b> у старому обсязі (зі звуком і новими кліпами) було 63 %; аудит 13.11 за 89 пунктами давав 48 %.</li>
+      <li><b>Критичний шлях:</b> кіно фінішерів → кадри злитих екранів меню → зал за рівнем федерації, закулісся, виходи → приймання очима → ваш прохід.</li>
     </ul>
     <details style="margin-top:6px"><summary class="small" style="cursor:pointer">Формула дослівно</summary><p class="small">${esc(ov.basis||'')}</p></details>`;
   const rows = R.systems.map((s,i)=>({...s, w:WEIGHTS[i]||0})).sort((a,b)=>b.pct-a.pct);
   $('readyList').innerHTML = rows.map((s,i)=>`
-    <div class="rrow" data-i="${i}">
+    <div class="rrow${s.deferred?' deferred':''}" data-i="${i}">
       <button aria-expanded="false" title="${esc(s.system)}: ${s.pct} %">
-        <span class="rname">${esc(s.system)}<span class="w">вага ${s.w} зі 100</span></span>
+        <span class="rname">${esc(s.system)}${s.deferred?' <span class="tag2">ітерація 2</span>':''}<span class="w">${s.deferred?esc(s.deferred):'вага '+s.w+(s.scope?' · '+esc(s.scope):'')}</span></span>
         <span class="bar" aria-hidden="true"><i style="width:${Math.max(0,Math.min(100,s.pct))}%"></i></span>
         <span class="rpct">${s.pct}%</span>
         <span class="chev" aria-hidden="true">›</span>
