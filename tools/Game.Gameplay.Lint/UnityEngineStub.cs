@@ -845,3 +845,11 @@ namespace UnityEngine
         public static void SetString(string key, string value) { }
     }
 }
+
+namespace UnityEngine
+{
+    // Справжній тип Unity 6.4 (IMGUIModule, Event.pointerType). Заглушка — щоб лінт, як і редактор, бачив CS0104: у файлі з
+    // `using UnityEngine;` і `using UnityEngine.UIElements;` голе `PointerType` неоднозначне (знахідка «Изучение» 15.11.2026 на
+    // справжніх DLL редактора; лінт без цього типу пропустив 3 помилки в CreateScreenView і WeekScreenView).
+    public enum PointerType { Mouse = 0, Touch = 1, Pen = 2 }
+}

@@ -7,6 +7,8 @@ using Game.Gameplay.Ring.Models;
 using Game.Gameplay.Ring.UI.Menus;
 using UnityEngine;
 using UnityEngine.UIElements;
+// У Unity 6.4 є і UnityEngine.PointerType (IMGUI), і UnityEngine.UIElements.PointerType — без псевдоніма CS0104 (ПМ 15.11.2026).
+using PointerType = UnityEngine.UIElements.PointerType;
 
 namespace Game.Gameplay.Ring.UI
 {
