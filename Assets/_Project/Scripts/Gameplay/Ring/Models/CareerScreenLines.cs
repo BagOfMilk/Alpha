@@ -523,6 +523,60 @@ namespace Game.Gameplay.Ring.Models
             return true;
         }
 
+        /// <summary>Те саме, що <see cref="NormalizeFreePoints(CharacterDraft, int, int[], int, out RingAttr, out RingAttr)"/>, без «звідки й куди».</summary>
+        public static bool NormalizeFreePoints(CharacterDraft d, int freePoints, int[] baseAttr, int max)
+        {
+            RingAttr from, to;
+            return NormalizeFreePoints(d, freePoints, baseAttr, max, out from, out to);
+        }
+
+        /// <summary>
+        /// Зміна ґіміка (ПМ 14.11.2026: Монстр, вільний бал у Силу — 3, потім Силач — Сила 4 за стелею, і «Почати кар'єру» гасла з
+        /// attr_max): бал, що з основою <paramref name="baseAttr"/> нового ґіміка вийшов би вище <paramref name="max"/>, переходить у
+        /// перший за порядком рядків афіші атрибут, де ще є місце; у ґіміка з двома балами — кожен окремо, давніший першим. Ядро бал не
+        /// знімає (<see cref="CharacterDraft.FreePoint"/> завжди десь стоїть), тож переставляємо. true — переставлено:
+        /// <paramref name="from"/> → <paramref name="to"/> — перший переставлений бал (рядок афіші <see cref="FreeMovedLine"/>);
+        /// false — за стелю не вийшло нічого (заготовка та сама) або місця немає ніде.
+        /// </summary>
+        public static bool NormalizeFreePoints(CharacterDraft d, int freePoints, int[] baseAttr, int max, out RingAttr from, out RingAttr to)
+        {
+            from = to = RingAttr.Strength;
+            if (d == null || baseAttr == null || freePoints <= 0) return false;
+            bool two = freePoints >= 2;
+            var want = two ? new[] { d.FreePoint, d.FreePoint2 ?? d.FreePoint } : new[] { d.FreePoint };
+            var add = new int[baseAttr.Length];
+            bool moved = false;
+            for (int k = 0; k < want.Length; k++)
+            {
+                int a = (int)want[k];
+                if (a < 0 || a >= baseAttr.Length || baseAttr[a] + add[a] + 1 > max)
+                {
+                    int was = a;
+                    a = -1;
+                    for (int i = 0; i < baseAttr.Length && a < 0; i++) if (baseAttr[i] + add[i] + 1 <= max) a = i;
+                    if (a < 0) return false;
+                    if (!moved) { from = was >= 0 && was < baseAttr.Length ? (RingAttr)was : (RingAttr)a; to = (RingAttr)a; }
+                    want[k] = (RingAttr)a;
+                    moved = true;
+                }
+                add[a]++;
+            }
+            if (!moved) return false;
+            d.FreePoint = want[0];
+            d.FreePoint2 = two && want[1] != want[0] ? want[1] : (RingAttr?)null;
+            return true;
+        }
+
+        /// <summary>
+        /// Рядок афіші після перестановки (АД 14.11.2026, варіант (1)): «Вільний бал перейшов у {куди} — у {звідки} уже максимум»;
+        /// назви атрибутів — відмінками з ключів <c>attr.*.acc</c> (знахідний) і <c>attr.*.loc</c> (місцевий).
+        /// </summary>
+        public static string FreeMovedLine(RingText t, RingAttr from, RingAttr to)
+        {
+            if (t == null) return "";
+            return t.Format("create.note.free_moved", t.Get("attr." + FeudVars.AttrName(to) + ".acc"), t.Get("attr." + FeudVars.AttrName(from) + ".loc"));
+        }
+
         /// <summary>
         /// Частини ефекту плитки ґіміка на створенні: бонуси основи (<see cref="RingLabels.AttrBonusParts"/>) у порядку
         /// <see cref="CareerTileLayout.CreateEffectOrder"/> (Ш-1: найдовша — остання, підписна — перша) і, у ґіміка з двома вільними

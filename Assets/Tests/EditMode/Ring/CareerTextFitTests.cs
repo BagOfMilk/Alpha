@@ -1388,6 +1388,35 @@ namespace Game.Tests.EditMode
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
         /// <summary>
+        /// Рядок «вільний бал перейшов» (ПМ і АД 14.11.2026, варіант (1)): на папері афіші на місці опису ролі чи С-1 — Fixel 15, ширина
+        /// тексту афіші (<see cref="CareerTileLayout.StripW"/> без полів паперу); кожна пара різних атрибутів — не більше двох рядків,
+        /// жодного розриву посеред слова, гліфи — у шрифті, відмінки — з ключів.
+        /// </summary>
+        [Test]
+        public void FreeMovedLine_EveryAttributePair_TwoLinesOnThePoster()
+        {
+            var bad = new List<string>();
+            float width = CareerTileLayout.StripW - CareerTileLayout.CreatePosterPadLeft - CareerTileLayout.CreatePosterPadRight - RenderSlack;
+            var t = RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json"));
+            int pairs = 0;
+            for (int a = 0; a < 5; a++)
+                for (int b = 0; b < 5; b++)
+                {
+                    if (a == b) continue;
+                    string line = CareerScreenLines.FreeMovedLine(t, (RingAttr)a, (RingAttr)b);
+                    pairs++;
+                    if (line.Contains("⟦") || line.Contains("{")) { bad.Add("ключа чи підстави немає: «" + line + "»"); continue; }
+                    float widest;
+                    int n = TextFont.Lines(TextBreak.GlueDashes(line), Body, width, 0f, out widest);
+                    if (n > 2) bad.Add(string.Format("«{0}» — {1} рядки у {2:0}", line, n, width));
+                    if (widest > width) bad.Add(string.Format("«{0}»: слово {1:0.0} ширше за рядок {2:0}", line, widest, width));
+                    if (TextFont.Missing(line).Count > 0) bad.Add("«" + line + "»: немає гліфів " + string.Join("", TextFont.Missing(line)));
+                }
+            Assert.AreEqual(20, pairs);
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
         /// Б4-1 (ПМ і арт-директор 14.11.2026): з п'ятим ґіміком ролі — дві низькі плити над «Почати кар'єру». Колонка (золота плита,
         /// просвіт, дві плити) рівно заввишки два ряди ґіміків; просвіт не менший за 12 (кобальт не торкається золота) і вміщає рядок
         /// причини (кожна з create.reason.* — не більше двох рядків у ширину золотої плити); проміжок плит більший за підйом у фокусі

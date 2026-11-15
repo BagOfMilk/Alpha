@@ -81,7 +81,34 @@ namespace Game.Gameplay.Ring.UI
             _d.RingName = T.Get("c.create.default_name");
             _d.Gimmick = Gimmick.Monster;
             _d.FreePoint = RingAttr.Stamina;
+            CareerScreenLines.NormalizeFreePoints(_d, Current.FreePoints, Current.BaseAttr, _v.MaxAttr);   // стартова заготовка — без рядка
             Root.RegisterCallback<GeometryChangedEvent>(e => Fit());
+        }
+
+        // рядок «вільний бал перейшов» — для тієї заготовки, на якій перестановка сталась: переставив бал чи ґімік — на місце
+        // повертається опис ролі чи С-1 (АД 14.11.2026)
+        private bool _freeMoved;
+        private RingAttr _freeMovedFrom, _freeMovedTo;
+        private Gimmick _freeMovedGimmick;
+        private RingAttr _freeMovedFp;
+        private RingAttr? _freeMovedFp2;
+
+        /// <summary>
+        /// Вибір ґіміка — плитка, клавіша, огляд (ПМ 14.11.2026): вільний бал, що з новою основою вийшов би за стелю, переходить
+        /// (<see cref="CareerScreenLines.NormalizeFreePoints(CharacterDraft, int, int[], int, out RingAttr, out RingAttr)"/>), і на папері
+        /// афіші — рядок про це, доки заготовка та сама.
+        /// </summary>
+        private void PickGimmick(Gimmick g)
+        {
+            _d.Gimmick = g;
+            var cur = Current;
+            _freeMoved = CareerScreenLines.NormalizeFreePoints(_d, cur.FreePoints, cur.BaseAttr, _v.MaxAttr, out _freeMovedFrom, out _freeMovedTo);
+            _freeMovedGimmick = _d.Gimmick; _freeMovedFp = _d.FreePoint; _freeMovedFp2 = _d.FreePoint2;
+        }
+
+        private bool FreeMovedNote
+        {
+            get { return _freeMoved && _d.Gimmick == _freeMovedGimmick && _d.FreePoint == _freeMovedFp && _d.FreePoint2 == _freeMovedFp2; }
         }
 
         private GimmickView Current { get { foreach (var g in _v.Gimmicks) if (g.Def.Id == _d.Gimmick) return g; return _v.Gimmicks[0]; } }
@@ -97,7 +124,7 @@ namespace Game.Gameplay.Ring.UI
         /// <summary>Огляд: ґімік і роль — як клавіші 1–6 (<see cref="OnDigit"/>), і перебудова.</summary>
         internal void SetForShots(Gimmick g, CareerRole r)
         {
-            _d.Gimmick = g;
+            PickGimmick(g);
             _d.Role = r;
             Refresh();
         }
@@ -154,7 +181,7 @@ namespace Game.Gameplay.Ring.UI
                 // клавіша — місце плитки (1–8, Б4), а не номер ґіміка в даних: на екрані можуть бути не всі
                 // назва ґіміка — за тілом на екрані, як роль (ПМ 13.11.2026: «Силачка, Летунка…», RingLabels.GimmickName)
                 var tile = AddTile(gi + 1, RingLabels.GimmickName(T, g.Def.Key, HeroForms.ShowsHeroine(T)), "",
-                    () => { _d.Gimmick = gid; Refresh(); }, T.Get(g.Def.NameKey + ".desc"));
+                    () => { PickGimmick(gid); Refresh(); }, T.Get(g.Def.NameKey + ".desc"));
                 // переноси лише між характеристиками; найдовша частина — остання, підписна — перша (Шоумен V8: «Харизма +3 · Сила −1» /
                 // «Витривалість +1», Ш-1); у Самородка — «+2 вільні бали»
                 tile.SetEffectParts(CareerScreenLines.CreateTileParts(T, g.BaseAttr, g.FreePoints));
@@ -592,7 +619,10 @@ namespace Game.Gameplay.Ring.UI
             // лишається підказкою при наведенні на плитку ролі
             bool two = Current.FreePoints >= 2;
             string roleKey = _d.Role == CareerRole.Hero ? "role.hero.desc" : "role.villain.desc";
-            var desc = two ? MenuKit.Body(T.Get("c.create.freepoints.hint"), BrandTokens.TypeMinInfo, RingTheme.Bg)
+            // вільний бал перейшов після зміни ґіміка (ПМ і АД 14.11.2026, варіант (1)) — тимчасово на цьому ж місці: двох текстів
+            // тут не буває; опис ролі лишається підказкою плитки ролі (наведення, дотик, геймпад — та сама дорога, що в С-1)
+            var desc = FreeMovedNote ? MenuKit.Body(CareerScreenLines.FreeMovedLine(T, _freeMovedFrom, _freeMovedTo), BrandTokens.TypeMinInfo, RingTheme.Bg)
+                : two ? MenuKit.Body(T.Get("c.create.freepoints.hint"), BrandTokens.TypeMinInfo, RingTheme.Bg)
                 : MenuKit.Body(T.Get(roleKey), BrandTokens.TypeBody, RingTheme.Bg);
             desc.style.marginTop = 10f;
             col.Add(desc);
@@ -864,7 +894,7 @@ namespace Game.Gameplay.Ring.UI
             int d = CareerTileLayout.CreateDigit(n, _v.Gimmicks.Count);
             if (d == CareerTileLayout.CreateDigitHero) { _d.Role = CareerRole.Hero; Refresh(); }
             else if (d == CareerTileLayout.CreateDigitVillain) { _d.Role = CareerRole.Villain; Refresh(); }
-            else if (d >= 0) { _d.Gimmick = _v.Gimmicks[d].Def.Id; Refresh(); }
+            else if (d >= 0) { PickGimmick(_v.Gimmicks[d].Def.Id); Refresh(); }
         }
 
         public override void OnConfirm()

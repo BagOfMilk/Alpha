@@ -1861,6 +1861,136 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
+        /// Зміна ґіміка не лишає вільного балу за стелею (ПМ 14.11.2026): кожна пара ґімік → ґімік із будь-яким дозволеним розміщенням
+        /// вільних балів першого — після <see cref="CareerScreenLines.NormalizeFreePoints(CharacterDraft, int, int[], int, out RingAttr, out RingAttr)"/>
+        /// CanCreate без відмови; переставляється рівно тоді, коли ядро відмовило б attr_max, а бал, що влазить, не рухається (заготовка
+        /// та сама); «звідки» — атрибут, що вийшов за стелю, «куди» — під стелею. Сценарій ПМ: Монстр, бал у Силу (3), потім Силач — бал
+        /// переходить, Сила 3, і рядок афіші каже, куди й звідки.
+        /// </summary>
+        [Test]
+        public void GimmickChange_NeverLeavesAFreePointOverTheCap()
+        {
+            var s = CareerKit.NewAtCreate(7);
+            var v = s.GetCreationView();
+            // усі ґіміки даних, не лише ті, що зараз на екрані створення (5–8 виходять за onCreationScreen)
+            var all = new List<GimmickView>();
+            foreach (var g in s.Content.Gimmicks) all.Add(new GimmickView { Def = g, BaseAttr = (int[])g.Attr.Clone(), FreePoints = g.FreePoints });
+            var bad = new List<string>();
+            int pairs = 0, moved = 0;
+            foreach (var from in all)
+                foreach (var start in FreePlacements(from, v.MaxAttr))
+                    foreach (var to in all)
+                    {
+                        var d = CareerKit.Draft(from.Def.Id, CareerRole.Hero, start[0]);
+                        d.FreePoint2 = start.Length > 1 ? start[1] : (RingAttr?)null;
+                        string why;
+                        string where = from.Def.Key + " " + start[0] + (start.Length > 1 ? "+" + start[1] : "") + " → " + to.Def.Key;
+                        if (!s.CanCreate(d, out why)) { bad.Add(where + ": початкове розміщення не дозволене — " + why); continue; }
+                        d.Gimmick = to.Def.Id;
+                        bool over = !s.CanCreate(d, out why) && why == "attr_max";
+                        var fp = d.FreePoint; var fp2 = d.FreePoint2;
+                        RingAttr was, now;
+                        bool m = CareerScreenLines.NormalizeFreePoints(d, to.FreePoints, to.BaseAttr, v.MaxAttr, out was, out now);
+                        pairs++; if (m) moved++;
+                        if (m != over) bad.Add(where + ": переставлено — " + m + ", за стелею було — " + over);
+                        if (!m && (d.FreePoint != fp || d.FreePoint2 != fp2)) bad.Add(where + ": заготовка змінилась без перестановки");
+                        if (m && to.FreePoints < 2 && (was != fp || to.BaseAttr[(int)was] + 1 <= v.MaxAttr)) bad.Add(where + ": «звідки» " + was + " — не той бал, що вийшов за стелю");
+                        if (m && to.BaseAttr[(int)now] + CareerScreenLines.FreePointsIn(d, to.FreePoints, now) > v.MaxAttr) bad.Add(where + ": «куди» " + now + " за стелею");
+                        if (!s.CanCreate(d, out why)) bad.Add(where + ": після зміни ґіміка CanCreate — " + why);
+                        int sum = 0;
+                        for (int i = 0; i < to.BaseAttr.Length; i++) sum += CareerScreenLines.FreePointsIn(d, to.FreePoints, (RingAttr)i);
+                        if (sum != to.FreePoints) bad.Add(where + ": вільних балів " + sum + ", а має бути " + to.FreePoints);
+                    }
+            Assert.Greater(pairs, all.Count * all.Count, "пари справді перебрано");
+            Assert.Greater(moved, 0, "перестановка справді трапляється — гілка міряється");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+
+            // сценарій ПМ
+            GimmickView strong = null;
+            foreach (var g in all) if (g.Def.Id == Gimmick.Strongman) strong = g;
+            Assert.IsNotNull(strong, "передумова: Силач у даних ґіміків");
+            var pm = CareerKit.Draft(Gimmick.Monster, CareerRole.Hero, RingAttr.Strength);
+            string r;
+            Assert.IsTrue(s.CanCreate(pm, out r), "Монстр + Сила: " + r);
+            pm.Gimmick = Gimmick.Strongman;
+            Assert.IsFalse(s.CanCreate(pm, out r), "передумова: без перестановки Силач + Сила за стелею");
+            Assert.AreEqual("attr_max", r);
+            RingAttr f0, t0;
+            Assert.IsTrue(CareerScreenLines.NormalizeFreePoints(pm, strong.FreePoints, strong.BaseAttr, v.MaxAttr, out f0, out t0));
+            Assert.AreEqual(RingAttr.Strength, f0, "звідки — Сила");
+            Assert.AreEqual(pm.FreePoint, t0, "куди — туди, де бал тепер");
+            Assert.AreNotEqual(RingAttr.Strength, pm.FreePoint, "бал пішов із Сили");
+            Assert.AreEqual(0, CareerScreenLines.FreePointsIn(pm, strong.FreePoints, RingAttr.Strength), "Сила — основа Силача, 3");
+            Assert.IsTrue(s.CanCreate(pm, out r), r);
+            string line = CareerScreenLines.FreeMovedLine(T, f0, t0);
+            NoMissingKey(line, "рядок афіші");
+            StringAssert.Contains("у Силі", line, "звідки — місцевим відмінком");
+            StringAssert.Contains("у " + T.Get("attr." + FeudVars.AttrName(t0) + ".acc"), line, "куди — знахідним");
+            Assert.IsFalse(CareerScreenLines.NormalizeFreePoints(null, 1, strong.BaseAttr, v.MaxAttr));
+            Assert.IsFalse(CareerScreenLines.NormalizeFreePoints(pm, 0, strong.BaseAttr, v.MaxAttr), "без вільних балів — нічого");
+
+            // два бали, обидва за стелею (у даних такого ґіміка немає — Самородок з основами 0): кожен шукає місце з урахуванням
+            // уже поставленого — Спритність 2 + 1, далі Техніка 2 + 1, а не обидва в Спритність (2 + 2 > 3)
+            var syn = new[] { 3, 2, 2, 3, 3 };
+            var two = CareerKit.Draft(Gimmick.Rookie, CareerRole.Hero, RingAttr.Strength);
+            two.FreePoint2 = null;   // обидва — у Силу
+            Assert.IsTrue(CareerScreenLines.NormalizeFreePoints(two, 2, syn, v.MaxAttr, out f0, out t0));
+            Assert.AreEqual(RingAttr.Strength, f0); Assert.AreEqual(RingAttr.Agility, t0);
+            for (int i = 0; i < syn.Length; i++)
+                Assert.LessOrEqual(syn[i] + CareerScreenLines.FreePointsIn(two, 2, (RingAttr)i), v.MaxAttr, "атрибут " + (RingAttr)i + " за стелею");
+            Assert.AreEqual(1, CareerScreenLines.FreePointsIn(two, 2, RingAttr.Agility));
+            Assert.AreEqual(1, CareerScreenLines.FreePointsIn(two, 2, RingAttr.Technique));
+            // місця немає ніде — заготовка та сама, false
+            var full = CareerKit.Draft(Gimmick.Monster, CareerRole.Hero, RingAttr.Charisma);
+            Assert.IsFalse(CareerScreenLines.NormalizeFreePoints(full, 1, new[] { 3, 3, 3, 3, 3 }, v.MaxAttr));
+            Assert.AreEqual(RingAttr.Charisma, full.FreePoint, "без місця бал не рухається");
+        }
+
+        /// <summary>Усі дозволені розміщення вільних балів ґіміка: один — кожен атрибут під стелею; два — кожна пара (давніший, новіший).</summary>
+        private static IEnumerable<RingAttr[]> FreePlacements(GimmickView g, int max)
+        {
+            int n = g.BaseAttr.Length;
+            if (g.FreePoints < 2)
+            {
+                for (int a = 0; a < n; a++) if (g.BaseAttr[a] + 1 <= max) yield return new[] { (RingAttr)a };
+                yield break;
+            }
+            for (int a = 0; a < n; a++)
+                for (int b = 0; b < n; b++)
+                    if (a == b ? g.BaseAttr[a] + 2 <= max : g.BaseAttr[a] + 1 <= max && g.BaseAttr[b] + 1 <= max)
+                        yield return new[] { (RingAttr)a, (RingAttr)b };
+        }
+
+        /// <summary>
+        /// Проводка зміни ґіміка на створенні (ПМ 14.11.2026): плитка, клавіша й огляд ідуть через PickGimmick (перестановка вільного
+        /// балу), інших присвоєнь ґіміка заготовці немає; рядок — на папері на місці опису ролі чи С-1 (АД, варіант (1)), чорнилом
+        /// паперу, і лише доки заготовка та сама.
+        /// </summary>
+        [Test]
+        public void Sources_GimmickChange_NormalizesTheFreePoint()
+        {
+            string create = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI", "Career", "CreateScreenView.cs"));
+            var bad = new List<string>();
+            foreach (var l in new[] {
+                "() => { PickGimmick(gid); Refresh(); }, T.Get(g.Def.NameKey + \".desc\"));",
+                "else if (d >= 0) { PickGimmick(_v.Gimmicks[d].Def.Id); Refresh(); }",
+                "_freeMoved = CareerScreenLines.NormalizeFreePoints(_d, cur.FreePoints, cur.BaseAttr, _v.MaxAttr, out _freeMovedFrom, out _freeMovedTo);",
+                "_freeMovedGimmick = _d.Gimmick; _freeMovedFp = _d.FreePoint; _freeMovedFp2 = _d.FreePoint2;",
+                "get { return _freeMoved && _d.Gimmick == _freeMovedGimmick && _d.FreePoint == _freeMovedFp && _d.FreePoint2 == _freeMovedFp2; }",
+                "CareerScreenLines.NormalizeFreePoints(_d, Current.FreePoints, Current.BaseAttr, _v.MaxAttr);",
+                "var desc = FreeMovedNote ? MenuKit.Body(CareerScreenLines.FreeMovedLine(T, _freeMovedFrom, _freeMovedTo), BrandTokens.TypeMinInfo, RingTheme.Bg)",
+                ": two ? MenuKit.Body(T.Get(\"c.create.freepoints.hint\"), BrandTokens.TypeMinInfo, RingTheme.Bg)" })
+                if (!CodeLine(create, l)) bad.Add("CreateScreenView: немає «" + l + "»");
+            int shotsAt = create.IndexOf("internal void SetForShots(Gimmick g, CareerRole r)");
+            int pick = shotsAt < 0 ? -1 : create.IndexOf("PickGimmick(g);", shotsAt);
+            if (pick < 0 || pick > create.IndexOf("Refresh();", shotsAt)) bad.Add("CreateScreenView: огляд ставить ґімік повз PickGimmick");
+            int assigns = Regex.Matches(create, @"_d\.Gimmick\s*=[^=]").Count;
+            if (assigns != 2) bad.Add("CreateScreenView: присвоєнь _d.Gimmick " + assigns + " — лише стартове і в PickGimmick");
+            if (create.Contains("create.note.free_moved")) bad.Add("CreateScreenView: рядок — лише через CareerScreenLines.FreeMovedLine");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
         /// Б4: два вільні бали Самородка — клік ставить бал сюди, найдавніший переходить; двічі по тому самому — обидва там; вище стелі
         /// бал не ставиться. Один бал — просто переходить. Ядро рахує заготовку так само (CreateHero дає основу + бали).
         /// </summary>
@@ -2116,7 +2246,8 @@ namespace Game.Tests.EditMode
                 || !create.Contains("CareerScreenLines.FreePointsIn(_d, Current.FreePoints, a)")) bad.Add("CreateScreenView: вільні бали не з моделі");
             if (!create.Contains("CareerTileLayout.CreateAttrCells(baseValue, free, _v.MaxAttr)")) bad.Add("CreateScreenView: клітинки шкали не з моделі");
             if (!create.Contains("T.Get(two ? \"c.create.freepoints\" : \"c.create.freepoint\")")) bad.Add("CreateScreenView: заголовок «Вільні бали (+2)»");
-            if (!create.Contains("var desc = two ? MenuKit.Body(T.Get(\"c.create.freepoints.hint\")")) bad.Add("CreateScreenView: С-1 — підказка Самородка не на місці опису ролі");
+            // С-1 — на місці опису ролі; тимчасово його заступає лише рядок «вільний бал перейшов» (АД 14.11.2026, варіант (1))
+            if (!create.Contains(": two ? MenuKit.Body(T.Get(\"c.create.freepoints.hint\")")) bad.Add("CreateScreenView: С-1 — підказка Самородка не на місці опису ролі");
             if (!CodeLine(create, "bool eight = CareerTileLayout.CreateEight(_v.Gimmicks.Count);")) bad.Add("CreateScreenView: Б4-1 не за моделлю");
             if (!CodeLine(create, "tile.SetLow();") || !create.Contains("_roleCol.Add(tile);")) bad.Add("CreateScreenView: Б4-1 — ролі не низькими плитами в колонці");
             if (!create.Contains("_reasonBox.style.height = eight ? CareerTileLayout.CreateRoleReasonH : 45f;")) bad.Add("CreateScreenView: Б4-1 — причина не в просвіті");
