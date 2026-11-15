@@ -664,12 +664,18 @@ namespace Game.Core.Ring.Career
         {
             var r = Begin(WeekActionKind.Recovery);
             int z = (int)zone;
-            if (r.Ok && State.Injury[z] <= 0 && State.ZoneDamage[z] <= 0) { r.Ok = false; r.Reason = "nothing"; }
+            // що дала дія — для стрічки тижня: зона й «було → стало» (при відмові «стало» = «було»)
+            r.RecoveredZone = z;
+            r.InjuryWeeksBefore = r.InjuryWeeksAfter = State.Injury[z];
+            r.ZoneDamageBefore = r.ZoneDamageAfter = State.ZoneDamage[z];
+            if (r.Ok && State.Injury[z] <= 0 && State.ZoneDamage[z] <= 0) { r.Ok = false; r.Reason = "nothing"; r.NothingToHeal = true; }
             if (r.Ok && withDoctor && State.Money < CareerRules.DoctorCost) { r.Ok = false; r.Reason = "money"; }
             if (!r.Ok) return r;
             if (withDoctor) { State.Money -= CareerRules.DoctorCost; r.MoneyDelta = -CareerRules.DoctorCost; }
             State.ZoneDamage[z] = Math.Max(0, State.ZoneDamage[z] - CareerRules.RecoverZoneHeal);
             if (State.Injury[z] > 0) State.Injury[z] = Math.Max(0, State.Injury[z] - (withDoctor ? 2 : 1));
+            r.InjuryWeeksAfter = State.Injury[z];
+            r.ZoneDamageAfter = State.ZoneDamage[z];
             return Done(r);
         }
 

@@ -139,6 +139,18 @@ namespace Game.Core.Ring.Career
         public bool RivalBoosted;
         /// <summary>Нова травма від підробітку: зона або −1.</summary>
         public int InjuredZone = -1;
+        /// <summary>
+        /// «Відновлення»: зона, яку відновлювали (<see cref="BodyZone"/> як число), або −1 — інша дія. Разом із «було → стало»
+        /// нижче — щоб стрічка тижня показала, що дія дала (АД через «Меню», 15.11.2026). Заповнюється й при відмові: тоді
+        /// «було» = «стало».
+        /// </summary>
+        public int RecoveredZone = -1;
+        /// <summary>«Відновлення»: тижні травми зони до й після дії (рівні — травми не було або дію не виконано).</summary>
+        public int InjuryWeeksBefore, InjuryWeeksAfter;
+        /// <summary>«Відновлення»: накопичене ушкодження зони до й після дії (рівні — ушкодження не було або дію не виконано).</summary>
+        public int ZoneDamageBefore, ZoneDamageAfter;
+        /// <summary>«Відновлення»: у зоні не було ні травми, ні ушкодження — лікувати нічого, дію не витрачено (Reason "nothing").</summary>
+        public bool NothingToHeal;
         public string RumorKey;
         /// <summary>«7–9» на промо: треба обрати нагороду (<see cref="CareerSession.ChoosePromoReward"/>).</summary>
         public bool NeedsChoice;
