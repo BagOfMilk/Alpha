@@ -543,6 +543,41 @@ namespace Game.Gameplay.Ring.Models
         /// <summary>Плечі героя на кінці сезону 4:3 — 16 % кадру (заміри «Изучение» на 1024×768); ліворуч від колонки вільно не менше.</summary>
         public const float SeasonHeroShouldersW = 0.16f * 1200f;
 
+        // ---------------- тиждень: стрічка дії й шухляда (АД 15.11.2026) ----------------
+
+        /// <summary>Стрічка дії тижня: не ширша за колонку грошей (<see cref="StripW"/>), поля тексту 24 / 26 — як у панелі грошей.</summary>
+        public const float WeekStripPadL = 24f, WeekStripPadR = 26f;
+
+        /// <summary>Ширина тексту стрічки дії — 360: кожен з двох рядків уміщається в неї одним рядком.</summary>
+        public const float WeekStripTextW = StripW - WeekStripPadL - WeekStripPadR;
+
+        /// <summary>
+        /// Найвужчий рядок-підказка шапки тижня: 4:3, очки розвитку двоцифрові — аудит 11.11.2026 виміряв 355,7, з запасом. За ним
+        /// підказка стрічки дії тримає два рядки (міра в рушії — на цю ширину, тож на ширшій шапці лише вільніше).
+        /// </summary>
+        public const float WeekHintNarrowest = 340f;
+
+        /// <summary>Шухляда «Розвиток / Витрати» на широкій панелі (16:9 — 40 % кадру).</summary>
+        public const float WeekDrawerW = 560f;
+
+        /// <summary>
+        /// Шухляда тижня: на 4:3 (та сама межа, що скрізь, — <see cref="CreateSingleColumn"/>) — 472, як колонка кінця сезону, щоб разом
+        /// із краєм не ширше за <see cref="ColumnMaxFrac"/> (було 560 — 53 %; АД 15.11.2026); ширша — 560.
+        /// </summary>
+        public static float WeekDrawerWidth(float panelWidth, float panelHeight)
+        {
+            return CreateSingleColumn(panelWidth, panelHeight) ? SeasonColumnW : WeekDrawerW;
+        }
+
+        /// <summary>
+        /// Шухляда відкривається сама (є очки розвитку) лише на широкій панелі; на 4:3 — лише гравцем, число очок і так на вкладці
+        /// «РОЗВИТОК N» (АД 15.11.2026: сцена й букерка — світ, шухляда — інструмент; на вузькому екрані світ першим).
+        /// </summary>
+        public static bool WeekDrawerAutoOpen(float panelWidth, float panelHeight, int devPoints)
+        {
+            return devPoints > 0 && !CreateSingleColumn(panelWidth, panelHeight);
+        }
+
         /// <summary>Між низом паперу кінця сезону й канатами — як в охоронцях паперу.</summary>
         public const float SeasonPaperClear = 10f;
 

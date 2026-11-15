@@ -1516,6 +1516,167 @@ namespace Game.Tests.EditMode
             NoMissingKey(CareerScreenLines.TurnLine(T, r, true), "c.delta.turn");
         }
 
+        // ---------------- стрічка дії тижня (АД 15.11.2026, варіант (А)) ----------------
+
+        /// <summary>Результат з усіма дельтами разом — синтетичний найгірший випадок стрічки (у грі одночасно їх не буває).</summary>
+        internal static WeekActionResult WeekStripWorst(WeekActionKind kind = WeekActionKind.Backstage)
+        {
+            return new WeekActionResult
+            {
+                Kind = kind, Ok = true, HasRoll = true, Roll = 12, Modifier = -9, Total = 3, Tier = RollTier.Miss,
+                MoneyDelta = -9999, DevPointsDelta = 99, TrustDelta = -99, FeudDelta = 99, HypeBonusDelta = -99, RivalBoosted = true,
+                InjuredZone = 1, PopularityDelta = -99, LockerDelta = -99, ActionsDelta = -9, PlanChanged = true, OpponentChanged = true,
+                CoachRaised = true, TurnedTo = RingPath.Rebel, NeedsChoice = true, RumorKey = "rumor.next_opponent",
+            };
+        }
+
+        /// <summary>
+        /// Порядок дельт — одна стала таблиця (АД 15.11.2026): що важливіше, те лівіше, однаково для всіх дій. Зміна порядку — рішення
+        /// директора, а не побічна правка: таблиця тут закріплена поіменно, кожна дельта в ній рівно раз, а рядок 2 стрічки йде саме нею.
+        /// </summary>
+        [Test]
+        public void WeekStrip_DeltaOrder_IsOneStableTable_ForEveryAction()
+        {
+            var pinned = new[]
+            {
+                CareerScreenLines.WeekDelta.Injury, CareerScreenLines.WeekDelta.Turn, CareerScreenLines.WeekDelta.Money,
+                CareerScreenLines.WeekDelta.DevPoints, CareerScreenLines.WeekDelta.Trust, CareerScreenLines.WeekDelta.Popularity,
+                CareerScreenLines.WeekDelta.Feud, CareerScreenLines.WeekDelta.Hype, CareerScreenLines.WeekDelta.Rival,
+                CareerScreenLines.WeekDelta.Opponent, CareerScreenLines.WeekDelta.Plan, CareerScreenLines.WeekDelta.Locker,
+                CareerScreenLines.WeekDelta.Actions, CareerScreenLines.WeekDelta.Coach, CareerScreenLines.WeekDelta.PromoChoice,
+            };
+            CollectionAssert.AreEqual(pinned, CareerScreenLines.WeekDeltaOrder, "порядок важливості змінено — спершу У0 директора");
+            var all = (CareerScreenLines.WeekDelta[])System.Enum.GetValues(typeof(CareerScreenLines.WeekDelta));
+            Assert.AreEqual(all.Length, CareerScreenLines.WeekDeltaOrder.Length, "кожна дельта — у таблиці");
+            CollectionAssert.AllItemsAreUnique(CareerScreenLines.WeekDeltaOrder);
+            foreach (WeekActionKind kind in System.Enum.GetValues(typeof(WeekActionKind)))
+            {
+                var r = WeekStripWorst(kind);
+                var expect = new List<string>();
+                foreach (var d in pinned) expect.Add(CareerScreenLines.WeekDeltaText(T, r, d, "Сталевий", false));
+                var got = CareerScreenLines.WeekResultDeltas(T, r, "Сталевий", false);
+                CollectionAssert.AreEqual(expect, got, kind + ": дельти не в порядку таблиці");
+                foreach (var s in got) NoMissingKey(s, kind + ": дельта");
+            }
+            // дельти — ті самі рядки, що й у колишньому відгуку: поворот у роді героя, суперник Б6, травма — зоною
+            var w = WeekStripWorst();
+            Assert.AreEqual(CareerScreenLines.TurnLine(T, w, true), CareerScreenLines.WeekDeltaText(T, w, CareerScreenLines.WeekDelta.Turn, "Сталевий", true));
+            Assert.AreEqual(CareerScreenLines.OpponentLine(T, w, "Сталевий"), CareerScreenLines.WeekDeltaText(T, w, CareerScreenLines.WeekDelta.Opponent, "Сталевий", false));
+            Assert.AreEqual(T.Format("c.delta.injury", T.Get("bodyzone.1")), CareerScreenLines.WeekDeltaText(T, w, CareerScreenLines.WeekDelta.Injury, null, false));
+            Assert.AreEqual(T.Format("c.delta.money", "−9999"), CareerScreenLines.WeekDeltaText(T, w, CareerScreenLines.WeekDelta.Money, null, false));
+            Assert.IsEmpty(CareerScreenLines.WeekResultDeltas(T, new WeekActionResult { Ok = true }, null, false), "дельт немає — рядка 2 немає");
+        }
+
+        /// <summary>
+        /// Рядок 1 — «Дія · Результат» словом (АД 15.11.2026): рівень кидка з порогом у слові, без арифметики (вона — у підказці);
+        /// без кидка — «Зроблено»; відмова — лише дія, а причина ядра — рядком 2.
+        /// </summary>
+        [Test]
+        public void WeekStrip_Head_IsActionAndResultInWords_TheRollOnlyInTheHover()
+        {
+            var r = new WeekActionResult { Kind = WeekActionKind.Promo, Ok = true, HasRoll = true, Roll = 5, Modifier = 1, Total = 6, Tier = RollTier.Miss };
+            Assert.AreEqual(T.Get("week.action.2") + " · " + T.Get("tier.miss"), CareerScreenLines.WeekResultHead(T, r));
+            StringAssert.Contains("(до 6)", CareerScreenLines.WeekResultHead(T, r), "поріг лишається в слові");
+            StringAssert.DoesNotContain("=", CareerScreenLines.WeekResultHead(T, r), "арифметика кидка — лише в підказці");
+            Assert.AreEqual(T.Format("c.roll", 5, RingChances.Term(1), 6, T.Get("tier.miss")), CareerScreenLines.WeekResultRoll(T, r));
+            var done = new WeekActionResult { Kind = WeekActionKind.Training, Ok = true, DevPointsDelta = 2 };
+            Assert.AreEqual(T.Get("week.action.0") + " · " + T.Get("c.week.result.done"), CareerScreenLines.WeekResultHead(T, done));
+            Assert.IsNull(CareerScreenLines.WeekResultRoll(T, done), "без кидка арифметики немає");
+            var no = new WeekActionResult { Kind = WeekActionKind.SideJob, Ok = false, Reason = "exclusive" };
+            Assert.AreEqual(T.Get("week.action.4"), CareerScreenLines.WeekResultHead(T, no));
+            CollectionAssert.AreEqual(new[] { T.Get("week.reason.exclusive") }, CareerScreenLines.WeekResultDeltas(T, no, null, false));
+            Assert.IsNull(CareerScreenLines.WeekResultRoll(T, no));
+            NoMissingKey(CareerScreenLines.WeekResultHead(T, done), "c.week.result.done");
+            // кидок підробітку — лише перевірка травми: результат «Зроблено», не «Провал»
+            var job = new WeekActionResult { Kind = WeekActionKind.SideJob, Ok = true, HasRoll = true, Roll = 5, Total = 5, Tier = RollTier.Miss, MoneyDelta = 40 };
+            Assert.AreEqual(T.Get("week.action.4") + " · " + T.Get("c.week.result.done"), CareerScreenLines.WeekResultHead(T, job));
+            Assert.IsNotNull(CareerScreenLines.WeekResultRoll(T, job), "кидок підробітку — у підказці");
+        }
+
+        /// <summary>
+        /// Смуга стрічки — Gold, коли дія вдалась, Signal — коли ні (АД 15.11.2026). «Ok» ядра — лише «дію дозволено»: провал кидка, що
+        /// вирішує результат (промо, закулісся), — не вдалась; частковий успіх і дії без кидка — вдались; кидок підробітку (травма) колір не
+        /// міняє; відмова — ні.
+        /// </summary>
+        [Test]
+        public void WeekStrip_Stripe_GoldOnlyWhenTheActionSucceeded()
+        {
+            foreach (var kind in new[] { WeekActionKind.Promo, WeekActionKind.Backstage })
+            {
+                Assert.IsFalse(CareerScreenLines.WeekResultSucceeded(new WeekActionResult { Kind = kind, Ok = true, HasRoll = true, Tier = RollTier.Miss }), kind + ": провал");
+                Assert.IsTrue(CareerScreenLines.WeekResultSucceeded(new WeekActionResult { Kind = kind, Ok = true, HasRoll = true, Tier = RollTier.Partial }), kind + ": частково");
+                Assert.IsTrue(CareerScreenLines.WeekResultSucceeded(new WeekActionResult { Kind = kind, Ok = true, HasRoll = true, Tier = RollTier.Strong }), kind + ": успіх");
+                Assert.IsTrue(CareerScreenLines.WeekResultSucceeded(new WeekActionResult { Kind = kind, Ok = true }), kind + ": без кидка (вибір нагороди, сцена)");
+            }
+            Assert.IsTrue(CareerScreenLines.WeekResultSucceeded(new WeekActionResult { Kind = WeekActionKind.SideJob, Ok = true, HasRoll = true, Tier = RollTier.Miss, InjuredZone = 2 }),
+                "підробіток заробив — вдався; травма — словом у дельті");
+            Assert.IsTrue(CareerScreenLines.WeekResultSucceeded(new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = true }));
+            Assert.IsFalse(CareerScreenLines.WeekResultSucceeded(new WeekActionResult { Kind = WeekActionKind.Training, Ok = false, Reason = "money" }), "відмова");
+            Assert.IsFalse(CareerScreenLines.WeekResultSucceeded(null));
+        }
+
+        /// <summary>
+        /// «· ще N» ховає найменш важливі (кінець таблиці), а не будь-які: показано завжди найдовший префікс, що влазить разом із хвостом;
+        /// влазить усе — хвоста немає; не влазить нічого — лише «ще N». Підказка — сховане: спершу арифметика кидка, далі сховані дельти
+        /// тим самим порядком, і те саме «ще N», коли й підказці тісно.
+        /// </summary>
+        [Test]
+        public void WeekStrip_More_HidesTheLeastImportant_AndTheHoverShowsOnlyTheHidden()
+        {
+            var parts = new List<string> { "аа", "бб", "вв", "гг" };
+            string line;
+            Assert.AreEqual(4, CareerScreenLines.FitParts(T, parts, s => true, out line));
+            Assert.AreEqual("аа · бб · вв · гг", line);
+            Assert.AreEqual(2, CareerScreenLines.FitParts(T, parts, s => s.Length <= 16, out line));
+            Assert.AreEqual("аа · бб · " + T.Format("c.week.more", 2), line, "сховано два останні — найменш важливі");
+            Assert.AreEqual(0, CareerScreenLines.FitParts(T, parts, s => false, out line));
+            Assert.AreEqual(T.Format("c.week.more", 4), line);
+            NoMissingKey(line, "c.week.more");
+            // стрічка: найважливіша за «ще N» не ховається — не влазить і з хвостом, то її кінець обрізано «…», хвіст лишається, а сховане — усе
+            bool clipped;
+            Assert.AreEqual(2, CareerScreenLines.StripParts(T, parts, s => s.Length <= 16, out line, out clipped));
+            Assert.IsFalse(clipped);
+            Assert.AreEqual("аа · бб · " + T.Format("c.week.more", 2), line);
+            var longFirst = new List<string> { "абвгде", "бб" };
+            Assert.AreEqual(0, CareerScreenLines.StripParts(T, longFirst, s => s.Length <= 10, out line, out clipped));
+            Assert.IsTrue(clipped);
+            Assert.AreEqual("аб… · " + T.Format("c.week.more", 1), line, "кінець найважливішої — «…», хвіст «ще N» — на місці");
+            Assert.AreEqual(0, CareerScreenLines.StripParts(T, new List<string> { "абвгде" }, s => s.Length <= 3, out line, out clipped));
+            Assert.AreEqual("аб…", line, "одна дельта — без хвоста");
+            Assert.AreEqual(0, CareerScreenLines.StripParts(T, parts, s => false, out line, out clipped));
+            Assert.AreEqual("… · " + T.Format("c.week.more", 3), line);
+            Assert.AreEqual(0, CareerScreenLines.StripParts(T, new List<string>(), s => false, out line, out clipped));
+            Assert.IsFalse(clipped, "дельт немає — нічого обрізати");
+            // підказка: кидок першим, далі сховане в порядку стрічки
+            var hidden = new List<string> { "вввввв", "гггггг" };
+            Assert.AreEqual("кидок · вввввв · гггггг", CareerScreenLines.WeekResultHover(T, "кидок", hidden, s => true));
+            Assert.AreEqual("кидок · вввввв · " + T.Format("c.week.more", 1), CareerScreenLines.WeekResultHover(T, "кидок", hidden, s => s.Length <= 21));
+            Assert.AreEqual("вввввв · гггггг", CareerScreenLines.WeekResultHover(T, null, hidden, s => true), "без кидка — лише сховані дельти");
+            Assert.IsNull(CareerScreenLines.WeekResultHover(T, null, new List<string>(), s => true), "нічого не сховано — підказки немає");
+        }
+
+        /// <summary>
+        /// Чутка (голос зали, не букера — «Чутка: …», АД 15.11.2026) стоїть у рядку-підказці шапки до наступної дії; вибір нагороди промо
+        /// й перевтома — інструкція й попередження — важливіші й лишаються першими; чутки немає — рядок порожній.
+        /// </summary>
+        [Test]
+        public void WeekHint_Default_TheRumorUnlessPromoChoiceOrStrain()
+        {
+            var r = new WeekActionResult { Ok = true, RumorKey = "rumor.defense" };
+            string rumor = CareerScreenLines.WeekRumor(T, r);
+            Assert.AreEqual(T.Format("c.week.rumor", T.Get("rumor.defense")), rumor);
+            StringAssert.StartsWith("Чутка: ", rumor);
+            NoMissingKey(rumor, "c.week.rumor");
+            Assert.IsNull(CareerScreenLines.WeekRumor(T, new WeekActionResult { Ok = true }));
+            Assert.IsNull(CareerScreenLines.WeekRumor(T, new WeekActionResult { Ok = false, RumorKey = "rumor.defense" }), "відмова чуток не приносить");
+            Assert.IsNull(CareerScreenLines.WeekRumor(T, null));
+            Assert.AreEqual(rumor, CareerScreenLines.WeekHintDefault(null, null, rumor));
+            Assert.AreEqual("п", CareerScreenLines.WeekHintDefault("п", null, rumor));
+            Assert.AreEqual("с", CareerScreenLines.WeekHintDefault(null, "с", rumor));
+            Assert.AreEqual("п с", CareerScreenLines.WeekHintDefault("п", "с", rumor));
+            Assert.AreEqual("", CareerScreenLines.WeekHintDefault(null, null, null));
+        }
+
         /// <summary>
         /// №8: «Прочитати дрібний шрифт» — у ряду кінця сезону поряд із рішенням, раз на пропозицію: після читання зникає, з менеджеркою
         /// його немає (вона читає сама). Рядки контракту на папері — аванс, дрібний шрифт — з ключами.
@@ -1637,7 +1798,8 @@ namespace Game.Tests.EditMode
             // №11
             if (Regex.Matches(week, Regex.Escape("CareerScreenLines.TrainReason(")).Count < 4) bad.Add("WeekScreenView: тренування (плитки й клавіші 1–2) без причини зірки");
             if (!week.Contains("new LateRoleModel(C, T).CurrentText")) bad.Add("WeekScreenView: хаб без рядка пізньої ролі");
-            if (!week.Contains("CareerScreenLines.TurnLine(T, r, HeroForms.ShowsHeroine(T))")) bad.Add("WeekScreenView: відгук без повороту ролі");
+            // поворот ролі й суперник Б6 — серед дельт стрічки (CareerScreenLines.WeekDeltaText; тест WeekStrip_DeltaOrder_…)
+            if (!week.Contains("CareerScreenLines.WeekResultDeltas(T, r, OpponentName(), HeroForms.ShowsHeroine(T))")) bad.Add("WeekScreenView: відгук без повороту ролі");
             if (!show.Contains("if (CareerScreenLines.LateRoleShown(C, CareerScreenLines.SeasonEndActions(C))) LateRoleBlock(col);")) bad.Add("ShowScreens: немає вибору пізньої ролі");
             // правки слоту 31
             // наліпку рахує CareerTileLayout.DrawerOverPoster (через DrawerRoomUnderPoster; тест WeekDrawer_FoldDecision_…) — вид лише передає її
@@ -2543,7 +2705,32 @@ namespace Game.Tests.EditMode
             if (!kit.Contains("CareerTileLayout.KeyLabel(key)")) bad.Add("ArenaKit: квадрат клавіші без «0»");
             if (!week.Contains("CareerScreenLines.ScarTail(T, T.Format(\"c.injury.tile\"") || !CodeLine(week, "i.ScarWeeks);   // Б5: слід"))
                 bad.Add("WeekScreenView: ризик травми без сліду");
-            if (!CodeLine(week, "string opp = CareerScreenLines.OpponentLine(T, r, OpponentName());")) bad.Add("WeekScreenView: Б6 — без рядка суперника");
+            if (!CodeLine(week, "var deltas = CareerScreenLines.WeekResultDeltas(T, r, OpponentName(), HeroForms.ShowsHeroine(T));")) bad.Add("WeekScreenView: Б6 — без рядка суперника");
+            // стрічка дії (АД 15.11.2026, (А)): лівий низ на базовій лінії шухляди, колір лише в смузі, два рядки за моделлю, «ще N» за
+            // виміром шрифту, сховане — у рядку-підказці, поява лише для нового результату; шухляда 472 на 4:3 і не відкривається сама
+            if (!CodeLine(week, "if (_last != null) _last.style.bottom = CareerTileLayout.DrawerBottom + lift;") || week.Contains("_last.style.top"))
+                bad.Add("WeekScreenView: стрічка дії не на базовій лінії шухляди");
+            if (!CodeLine(week, "box.style.maxWidth = ArenaKit.StripW;")
+                || !CodeLine(week, "box.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaPanel), Stripe = CareerScreenLines.WeekResultSucceeded(r) ? RingTheme.Gold : RingTheme.Signal });")
+                || !CodeLine(week, "head.style.paddingBottom = deltas.Count == 0 ? 8f : 0f;")
+                || !CodeLine(week, "var head = MenuKit.Body(CareerScreenLines.WeekResultHead(T, r), BrandTokens.TypeMinInfo, RingTheme.Text);")
+                || !CodeLine(week, "var line2 = MenuKit.Body(_stripDeltas ?? \"\", BrandTokens.TypeMinInfo, RingTheme.Text);"))
+                bad.Add("WeekScreenView: стрічка дії не стилем панелі грошей або колір не лише в смузі");
+            if (!CodeLine(week, "int k = CareerScreenLines.StripParts(T, deltas, fits, out line, out clipped);") || !week.Contains("<= CareerTileLayout.WeekStripTextW;")
+                || !CodeLine(week, "line2.style.whiteSpace = WhiteSpace.NoWrap; line2.style.overflow = Overflow.Hidden; line2.style.textOverflow = TextOverflow.Ellipsis;   // рівно один рядок")
+                || !CodeLine(week, "_stripHidden = deltas.GetRange(k, deltas.Count - k);"))
+                bad.Add("WeekScreenView: рядок 2 стрічки не за виміром «ще N»");
+            if (!CodeLine(week, "return CareerScreenLines.WeekResultHover(T, CareerScreenLines.WeekResultRoll(T, r), _stripHidden, fits);")
+                || !week.Contains("CareerTileLayout.WeekHintNarrowest, VisualElement.MeasureMode.Exactly")
+                || !week.Contains("internal sealed class WeekResultStrip : VisualElement, IPadTarget") || !CodeLine(week, "PadFocus.Hover(this, _show, _hide);")
+                || !week.Contains("e.pointerType == PointerType.touch") || !CodeLine(week, "if (_frame == null) { _frame = PadFocus.Frame(); Add(_frame); }"))
+                bad.Add("WeekScreenView: сховане стрічки не показується наведенням, фокусом чи дотиком");
+            if (!CodeLine(week, "if (_stripDeltas != null) { if (fresh) Appear(box); return box; }") || !CodeLine(week, "_anim.Tick(unscaledDeltaTime * 1000f);")
+                || !week.Contains("BrandTokens.MotionMenuPlateInMs, Ease.OutCubic"))
+                bad.Add("WeekScreenView: стрічка дії блимає (поява не раз на результат) або рух не з токенів");
+            if (!CodeLine(week, "_hintDefault = CareerScreenLines.WeekHintDefault(promo, strained, CareerScreenLines.WeekRumor(T, Host.LastWeekResult));"))
+                bad.Add("WeekScreenView: чутки немає в рядку-підказці");
+            if (!CodeLine(week, "_dev = CareerTileLayout.WeekDrawerAutoOpen(pw, ph, w.DevPoints);")) bad.Add("WeekScreenView: шухляда на 4:3 відкривається сама");
             if (!CodeLine(show, "string age = CareerScreenLines.AgeingNextLine(T, C, CareerScreenLines.SeasonEndActions(C));")
                 || !CodeLine(show, "if (age != null) { var a = MenuKit.Body(age, BrandTokens.TypeMinInfo, RingTheme.Bg, true); a.style.whiteSpace = WhiteSpace.Normal; a.style.marginTop = 8f; col.Add(a); }"))
                 bad.Add("ShowScreens: Б5 — рядок «Тіло старіє…» не на папері кінця сезону так, як прийняв директор (Body 15 напівжирний, відступ 8)");
@@ -2551,7 +2738,8 @@ namespace Game.Tests.EditMode
                 bad.Add("CreateScreenView: менша назва афіші не на базовій лінії 52 (У0 директора: не пливе від плашки ролі)");
             // шапка шухляди — ті розміри, за якими CareerTextFitTests.DrawerHead_Hint_… міряє підказки атрибутів і тренерів
             string rui = File.ReadAllText(Path.Combine(ui, "RingUi.cs"));
-            if (!week.Contains("ArenaKit.Abs(null, null, ArenaKit.Edge, CareerTileLayout.DrawerBottom, 560f, null)")
+            if (!week.Contains("ArenaKit.Abs(null, null, ArenaKit.Edge, CareerTileLayout.DrawerBottom, CareerTileLayout.WeekDrawerW, null)")
+                || !CodeLine(week, "_drawer.style.width = CareerTileLayout.WeekDrawerWidth(width, Root.layout.height);")
                 || !CodeLine(week, "top.style.paddingLeft = 18f; top.style.paddingRight = 24f;")
                 || !CodeLine(week, "var head = MenuKit.Display(_dev ? T.Get(\"dev.title\") : T.Get(\"c.hub.shop\"), 25f, RingTheme.Text, RingFontRole.Display900, 0.02f);")
                 || !CodeLine(week, "hint.style.marginTop = 0f; hint.style.marginLeft = 16f;")
