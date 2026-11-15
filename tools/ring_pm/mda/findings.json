@@ -1,0 +1,280 @@
+{
+ "results": [
+  {
+   "key": "match",
+   "checked": 45,
+   "confirmed": 41,
+   "unverifiable": 0,
+   "findings": [
+    {
+     "id": "F1",
+     "field": "d.match.dirty_gamble.from",
+     "claimed": "Посилання на m.match.stipulations_placeholder",
+     "actual": "Механіки з таким id у розділі match немає. Умови матчу (NoDq, NoAlly) описані в m.match.weapon_nodq й m.match.ally.",
+     "evidence": "У розділі mechanics 34 id, серед них немає m.match.stipulations_placeholder. NoDq/NoAlly живуть у RingContracts.cs:22 (MatchStipulations).",
+     "severity": "wrong",
+     "fix": "У d.match.dirty_gamble.from прибрати m.match.stipulations_placeholder; умову «без дискваліфікації» покриває вже наявна m.match.weapon_nodq."
+    },
+    {
+     "id": "F2",
+     "field": "d.match.gimmick_spread.numbers (рядок Бувалий)",
+     "claimed": "Бувалий 56/42/41 · 41",
+     "actual": "Це числа до виправлення. Після +1 до реверсу (14.11.2026): кар'єра 60/46/47, перший матч 44 % (ШІ) / 48 % (читає шанси).",
+     "evidence": "docs/ring/iter1_gaps.md:116-119 «Замір «Кар'єри» після: перший матч 44 / 48 % (ШІ / «читає шанси»), кар'єра 60 / 46 / 47». Сама m.match.reverse_bonus цитує вже нові 44/48.",
+     "severity": "outdated",
+     "fix": "Бувалий (після +1 до реверсу) 60/46/47 · 44; решта рядків без змін."
+    },
+    {
+     "id": "F3",
+     "field": "gaps[8] (Баланс)",
+     "claimed": "Шоумен і Самородок нижче смуги 45–65 на першому матчі",
+     "actual": "Перший матч Шоумена — 49 %, тобто в смузі. Нижче смуги лише Самородок (38). Бувалий (41) уже виправлений.",
+     "evidence": "docs/ring/iter1_gaps.md:104-111 (таблиця V8) та :114: перший матч нижче смуги — Самородок і Бувалий (вирішено); у Шоумена 51/40/33 · 49.",
+     "severity": "imprecise",
+     "fix": "Самородок на першому матчі нижче смуги 45–65 (38 %, задумом); Шоумен у ворожнечі й титулі (40 / 33 %) нижче смуги; Монстр щотижневі 66, Хардкорник титул 55."
+    },
+    {
+     "id": "F4",
+     "field": "m.match.perks.numbers",
+     "claimed": "+1 / +2 / +1 / +2 / +1 / +1 жетон / +2 (Development.cs:146-152)",
+     "actual": "Друге дихання +1, Улюбленець публіки +2 ажіотажу, Холодна кров +2 імпульсу, Без страховки +1, Ветеран +1 жетон, Залізна щелепа +2. «Очі на потилиці» — булевий прапор без числа; у переліку зайве «+1».",
+     "evidence": "Progression/Development.cs:146-152: SecondWind +1; CrowdFavorite +2; EyesBehind=true; ColdBlood +2; NoNet +1; Veteran +1; IronJaw +2.",
+     "severity": "imprecise",
+     "fix": "Друге дихання +1 до «Вирватися»; Улюбленець публіки +2 ажіотажу; Холодна кров +2 імпульсу; Без страховки +1 до трюка й відчайдушного; Ветеран +1 жетон; Залізна щелепа +2 до порогів; «Очі на потилиці» — прапор без числа (Development.cs:146-152)."
+    },
+    {
+     "id": "F5",
+     "field": "m.match.dirty_dq.rule / d.match.dirty_gamble.description",
+     "claimed": "лиходій на чистому успіху без попередження +1 ажіотажу",
+     "actual": "Лиходій отримує +1 ажіотажу на будь-якому успіху (10+ або 7–9), якщо попередження не видано.",
+     "evidence": "MatchEngine.cs:683: if (role == RingPath.Heel && t != RollTier.Miss && !warned) Hype(1)",
+     "severity": "imprecise",
+     "fix": "Лиходій на успіху (10+ чи 7–9), якщо попередження не видано, отримує +1 ажіотажу."
+    },
+    {
+     "id": "F6",
+     "field": "m.match.submission.numbers (розбіжність документа)",
+     "claimed": "свіжий +4 (:54)",
+     "actual": "Число +4 у коді вірне (FirstHoldBonus = 4). Але TRPG_DESIGN.md (баланс 08.11) і коментар MatchRules.cs:48-51 досі кажуть +3 до «Терпіти».",
+     "evidence": "MatchRules.cs:54 FirstHoldBonus = 4; коментар MatchRules.cs:48-49 і TRPG_DESIGN.md «перший больовий — +3 до «Терпіти»».",
+     "severity": "outdated",
+     "fix": "Лишити +4 (код чинний); у TRPG_DESIGN §4.5 і коментарі MatchRules.cs виправити +3 на +4."
+    }
+   ]
+  },
+  {
+   "key": "career",
+   "checked": 46,
+   "confirmed": 38,
+   "unverifiable": 0,
+   "findings": [
+    {
+     "id": "m.career.gimmicks",
+     "field": "numbers (замір V8, рядок Бувалий)",
+     "claimed": "Бувалий 56/42/41 (тижневі/ворожнеча/титул)",
+     "actual": "Після +1 до кидка реверсу (рішення власника 14.11.2026, VeteranReverseBonus = 1) замір Бувалого змінився: iter1_gaps.md дає кар'єра 60 / 46 / 47, TRPG_DECISIONS.md (запис 14.11) дає 57/41/43 -> 60/47/44. Рядок 56/42/41 застарілий (до виправлення).",
+     "evidence": "Assets/_Project/Scripts/Core/Ring/Progression/GimmickRules.cs:25 (VeteranReverseBonus = 1); docs/ring/iter1_gaps.md:101-119 (таблиця V8 і примітка про Бувалого); docs/TRPG_DECISIONS.md:637-638",
+     "severity": "outdated",
+     "fix": "Бувалий після +1 до реверсу: приблизно 60 / 46 / 47 % (тижневі / ворожнеча / титул; документи дають 60/46/47 і 60/47/44 — шум заміру); таблицю 56/42/41 лишити лише як стан до виправлення."
+    },
+    {
+     "id": "d.career.injury_vs_money",
+     "field": "description",
+     "claimed": "Два удари по зоні — травма",
+     "actual": "Травма настає при накопиченому ушкодженні зони 3 (Хардкорник 4). Ушкодження зони = очки ударів по ній / 3, тож травма потребує приблизно 9 очок ударів по зоні; підробіток дає за раз 2 ушкодження.",
+     "evidence": "CareerRules.cs:167-169 (InjuryAtZoneDamage 3, ZonePointsDivisor 3), CareerRules.cs:42 (SideJobZoneDamage 2), CareerSession.cs:1477-1485",
+     "severity": "imprecise",
+     "fix": "Накопичене ушкодження зони 3 (у Хардкорника 4) — це травма; підробіток додає 2, удари суперника — по одному очку за кожні 3 очки ударів по зоні."
+    },
+    {
+     "id": "d.career.arc_story",
+     "field": "numbers/description",
+     "claimed": "3 сцени, лише федерація 1; once — дуга Сталевого ev_friend -> ev_veteran -> ev_betrayal",
+     "actual": "ev_betrayal має умову «не жінка» (career female not), тож у героїні дуга зупиняється на ev_veteran: зради й розплати в матчі немає. ev_friend і ev_veteran доступні обом дивізіонам.",
+     "evidence": "Assets/Resources/Ring/career_backstage.json: ev_betrayal requires [{flag veteran_partner},{seen_before ev_veteran},{career female, not true},{career tier min 2, not true}]",
+     "severity": "imprecise",
+     "fix": "3 сцени, лише федерація 1, once; повна дуга (з ev_betrayal) — лише для чоловічого дивізіону, у героїні вона закінчується на ev_veteran."
+    },
+    {
+     "id": "m.career.role_turn",
+     "field": "rule",
+     "claimed": "«Погодитися» — поворот і довіра +1; «Піти за залом» — поворот і ажіотаж +1; «Лишитися собою» — +1 своїй ролі (подано як три варіанти одного вибору)",
+     "actual": "У кожної ролі в сцені лише два видимі вибори: поворот і «залишитися». Варіант повороту залежить від last_swerved: якщо останній план не звернуто — «Погодитися» (довіра +1), якщо звернуто — «Піти за залом» (ажіотаж +1). Вони ніколи не показуються разом.",
+     "evidence": "Assets/Resources/Ring/career_backstage.json ev_turn: вузли fc і hc, опції turn (requires last_swerved not) і turn_sw (requires last_swerved)",
+     "severity": "imprecise",
+     "fix": "Вибір у сцені: «Лишитися собою» (+1 своїй ролі) або поворот; якщо останнім планом не звернуто — «Погодитися» (поворот і довіра +1), якщо звернуто — «Піти за залом» (поворот і ажіотаж +1 на наступний матч)."
+    },
+    {
+     "id": "d.career.role_choice",
+     "field": "numbers",
+     "claimed": "ранг = очки/2 (макс 3); вінець 3 очки",
+     "actual": "Ранг 3 («вінець») потребує 6 очок шляху; 3 очки — це ціна перка рангу 3 в очках розвитку. Формулювання змішує дві різні шкали.",
+     "evidence": "Development.cs:24 (MaxRank 3, «~6 очок шляху»), Development.cs:30-35 (PathRank 6 -> 3), PerkCatalog: hero_of_crowd/dirty_game/improvise Cost 3",
+     "severity": "imprecise",
+     "fix": "ранг = очки шляху/2 (макс 3); вінець — ранг 3 (6 очок шляху), перк-вінець коштує 3 очки розвитку"
+    },
+    {
+     "id": "d.career.fall_not_end",
+     "field": "description/numbers",
+     "claimed": "Звільнення на місцевій повертає на мінімум, у вищих федераціях — на рівень нижче. Ворожнечі з NPC скидаються. FiredPopularity 1; FiredTrust 1",
+     "actual": "Скидання ворожнеч з NPC, пояса й популярність 1 — лише при звільненні на місцевій. У вищих федераціях EnterFederation(DemotionTier(), Popularity, FiredTrust) лишає поточну популярність, ворожнечі з NPC не обнуляються (очищаються лише Grudges), довіра = 1.",
+     "evidence": "CareerSession.cs:1905-1925 (гілки Fired && Federation > 1 та Fired), CareerSession.cs:140-152 (EnterFederation)",
+     "severity": "imprecise",
+     "fix": "На місцевій: популярність 1, довіра 1, пояс стартовому чемпіону, ворожнечі з NPC скинуто. У вищих: рівень нижче, довіра 1, популярність зберігається; ворожнечі з NPC не скидаються; гроші не нижче 2 тижнів життя скрізь."
+    },
+    {
+     "id": "m.career.money",
+     "field": "evidence",
+     "claimed": "у знайдених тестах окремого заміру балансу грошей за рівнями федерації немає (тестів лише 2)",
+     "actual": "EconomyPerksFeelTests.Economy_HasChoice_AndPointsGetSpent є заміром балансу грошей: стверджує 25–40 % тижнів з нестачею грошей і не більше ~110 вільних грошей наприкінці сезону 1 (на 300 кар'єр, 3 сезони) — але справді не окремо за рівнями федерації.",
+     "evidence": "Assets/Tests/EditMode/Ring/EconomyPerksFeelTests.cs:149-163",
+     "severity": "imprecise",
+     "fix": "Є загальний замір (EconomyPerksFeelTests: 25–40 % тижнів з нестачею грошей, ≤ ~110 вільних грошей після сезону 1); окремого заміру за рівнями федерації немає."
+    },
+    {
+     "id": "m.career.transfer_a2",
+     "field": "evidence",
+     "claimed": "CareerTransitionTests (18)",
+     "actual": "У класі CareerTransitionTests 17 тестів; вісімнадцятий у файлі — Tempo_AndWinWindows_OnEveryTier з окремого класу CareerTempoTests (той самий файл CareerTransitionTests.cs:579+).",
+     "evidence": "Assets/Tests/EditMode/Ring/CareerTransitionTests.cs:19 (клас CareerTransitionTests) і :579 (клас CareerTempoTests)",
+     "severity": "imprecise",
+     "fix": "CareerTransitionTests (17) і CareerTempoTests (1) — обидва в файлі CareerTransitionTests.cs."
+    }
+   ]
+  },
+  {
+   "key": "show",
+   "checked": 31,
+   "confirmed": 25,
+   "unverifiable": 2,
+   "findings": [
+    {
+     "id": "show-crowd-count",
+     "field": "m.show.crowd.numbers",
+     "claimed": "кількість глядачів у коді не знайдено — «немає»",
+     "actual": "У коді кількість глядачів є: attendance = 120 за замовчуванням (добирається з кандидатів файлу розстановки), на Низькій графіці видно лише 60 (lowTierAttendance); аргумент -ring-crowd обмежує значення 0..200.",
+     "evidence": "Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/RingVenueDress.cs:21 (attendance = 120), :27 (lowTierAttendance = 60), :196 (GetRange(0, Min(attendance, cand.Count))); RingStage3D.cs:551-554 (Clamp(v, 0, 200))",
+     "severity": "wrong",
+     "fix": "Кількість глядачів: за замовчуванням 120 фанатів (не більше за кандидатів файлу розстановки), на Низькій графіці видно 60; для огляду значення задає -ring-crowd (0..200)."
+    },
+    {
+     "id": "show-venues-connected",
+     "field": "m.show.venues.rule/numbers (і d.show.arena_climb)",
+     "claimed": "клубна зала й Палац — у сцену не підключені; у грі підключено 1 зал із 3",
+     "actual": "У звичайній збірці гри лише спортзал. Клубна зала й Палац підключаються до сцени лише для збірки огляду (змінна RING_REVIEW_VENUES=1, запуск з -ring-venue hall|arena); вибору залу за федерацією немає.",
+     "evidence": "RingStageSceneSetup.cs:42-56 (venueSets лише при RING_REVIEW_VENUES=1); RingStage3D.cs:379-382 (у грі — спортзал, -ring-venue для огляду); RingStageAssets.cs:47",
+     "severity": "imprecise",
+     "fix": "У грі підключено лише спортзал (venue_gym); клубна зала й Палац підключаються тільки в збірці огляду (RING_REVIEW_VENUES=1, -ring-venue hall|arena), вибору залу за федерацією немає."
+    },
+    {
+     "id": "show-venue-file-rows",
+     "field": "m.show.venues.numbers (і d.show.arena_climb.numbers)",
+     "claimed": "файли натовпу: 428 / 508 / 3871 рядків; сцен світла (cues): 4 / 5 / 5 рядків",
+     "actual": "У кожному файлі перший рядок — коментар-заголовок. Тож натовпу 427 / 507 / 3870 місць, а сцен світла 3 / 4 / 4 (рядків з заголовком 4 / 5 / 5).",
+     "evidence": "Assets/Art/Ring/venue_gym_crowd.txt, venue_hall_crowd.txt, venue_arena_crowd.txt (рядок 1 починається з «# Натовп»); venue_*_cues.txt (рядок 1 «# Сцени світла»)",
+     "severity": "imprecise",
+     "fix": "Місць натовпу у файлах розстановки: 427 / 507 / 3870 (спортзал / клубна зала / Палац); сцен світла: 3 / 4 / 4."
+    },
+    {
+     "id": "show-gate-exit-music",
+     "field": "m.sound.gate.numbers",
+     "claimed": "20 файлів CC0 рингу (… 4 музики виходу …)",
+     "actual": "Файлів справді 20, але музик 4 — це 3 виходні доріжки (music_rock_city_ransom, music_hammer_of_the_berserker, music_downtown_destruction) і ще music_rock_theme_loop — музика титулу й вступу, не виходу.",
+     "evidence": "Assets/ThirdParty/CC0/Audio/Ring (20 файлів, без LICENSES.md); RingStageSceneSetup.cs:96-99 (musicTitle = music_rock_theme_loop); EVENT_SOUND.md:57-58",
+     "severity": "imprecise",
+     "fix": "20 файлів CC0 рингу (…, 3 музики виходу і 1 музика титулу music_rock_theme_loop, …)."
+    },
+    {
+     "id": "show-hud-log-rows",
+     "field": "m.show.hud_match.rule/numbers",
+     "claimed": "журнал — 3 останні рядки",
+     "actual": "3 рядки показує стрічка журналу на екрані матчу; повний журнал на вимогу тримає до 8 рядків (LogLines = 8).",
+     "evidence": "MatchScreenView.cs:278-279 (Max(0, lines.Count - 3)); MatchScreenView.cs:510 (усі LogTexts); MatchScreenModel.cs:181 (LogLines = 8)",
+     "severity": "imprecise",
+     "fix": "журнал: стрічка на екрані — 3 останні рядки, повний журнал на вимогу — до 8 рядків; обидва лише до такту, який уже показала 3D."
+    },
+    {
+     "id": "show-centerlimit-source",
+     "field": "m.show.clips.source",
+     "claimed": "CenterLimit 1,5 м — джерело RingClipTable.cs:12,135,259-301",
+     "actual": "Значення 1,5 м (CenterLimit) лежить у RingMatchDirector.cs, а не в RingClipTable.cs.",
+     "evidence": "Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/RingMatchDirector.cs:256 (public const float CenterLimit = 1.5f)",
+     "severity": "imprecise",
+     "fix": "Джерело центру кроку: RingMatchDirector.cs:256 (CenterLimit = 1,5 м)."
+    }
+   ]
+  },
+  {
+   "key": "ready",
+   "checked": 34,
+   "confirmed": 28,
+   "unverifiable": 2,
+   "findings": [
+    {
+     "id": "R1",
+     "field": "ready.systems[Інтеграція й тести].missing[2] і ready.systems[Екрани й меню].missing[3]",
+     "claimed": "Незлите на паузі: «Меню» aeb88b24/a38cbabf/e3c12c90; рядок «Відновлення» на стрічці готовий, кадри не зняті (подано як окрема гілка)",
+     "actual": "aeb88b24 і a38cbabf уже в магістралі: злиті 15.11 комітом 93d06ba2 (HEAD = origin). Поза магістраллю лишається тільки e3c12c90 (вкладка «Гра»).",
+     "evidence": "git merge-base --is-ancestor: aeb88b24 і a38cbabf предки HEAD, e3c12c90 ні; повідомлення 93d06ba2 «Злиття «Меню» a38cbabf у бій: стрічка «Відновлення» ... охоронець обличчя букерки». Нотатка pm_2026-11-15.md:146 цього ще не знає.",
+     "severity": "outdated",
+     "fix": "Незлите на паузі: Кліпи-1/2/3/4 (WIP 994823f4, 25bdd1c4, 48f1fae3, b24f3fcf), «Изучение» 2b026941, «Меню» e3c12c90 (вкладка «Гра»). Стрічка «Відновлення» (aeb88b24) і охоронець обличчя букерки (a38cbabf) злиті в магістраль 15.11 (93d06ba2); кадри стрічки ще не зняті."
+    },
+    {
+     "id": "R2",
+     "field": "ready.systems[Кіно фінішерів].basis",
+     "claimed": "Файли RingFinisherCine.cs і RingFinisherCinePlan.cs у магістралі відсутні (є лише у гілці АД, ZONES.md:60-64)",
+     "actual": "Відсутність у магістралі підтверджена, але «є у гілці АД» не підтверджується: жоден коміт у жодній гілці не торкався цих файлів. ZONES.md:60-64 лише закріплює їх за арт-директором як заплановані, а список незакомічених робіт АД у pm_2026-11-15.md:~145 їх не містить (аудит, anim_audit, RingIdleLife*, ring_anims_idle.py).",
+     "evidence": "git log --all -- <обидва шляхи> порожній; git log --all -S\"RingFinisherCinePlan\" знаходить лише e9ba2ef9 (документ ZONES); Glob **/RingFinisherCine* порожній. Так само tools/blender/ring_anims_finishers58.py і moves/Fin_*.json не відстежуються git.",
+     "severity": "imprecise",
+     "fix": "Файлів RingFinisherCine.cs і RingFinisherCinePlan.cs ще немає ні в магістралі, ні в закомічених гілках; вони закріплені за арт-директором у ZONES.md:60-64, а чи є чернетка в його робочій копії, невідомо."
+    },
+    {
+     "id": "R3",
+     "field": "ready.systems[Анімації борців].basis",
+     "claimed": "324 рядки маніфесту на стать",
+     "actual": "У кожному з двох файлів 324 рядки, але один з них заголовок-коментар: кліпів 323 на стать (ring_anims_manifest.txt і ring_anims_f_manifest.txt).",
+     "evidence": "wc -l = 324 в обох; grep -vc '^\\s*\\(#\\|$\\)' = 323 в обох. 323/385 теж ≈ 84 %, відсоток не міняється.",
+     "severity": "imprecise",
+     "fix": "323 кліпи на стать (324 рядки з заголовком) у ring_anims_manifest.txt і ring_anims_f_manifest.txt."
+    },
+    {
+     "id": "R4",
+     "field": "ready.systems[Інтеграція й тести].done[0] і ready.m1_criteria[10]",
+     "claimed": "2815 тестів, 0 падінь, лінт 0 на dd3d8f29 — подано як стан на 15.11",
+     "actual": "Прогін зроблено на dd3d8f29. Після нього в магістраль потрапили кодові коміти 5aa3c82e (псевдонім PointerType) і 93d06ba2 (злиття «Відновлення» й охоронця обличчя), нотатка ж каже «після нього лише документи». Повного прогону після них не видно.",
+     "evidence": "git log: 93d06ba2, 5aa3c82e над dd3d8f29; pm_2026-11-15.md:66 і :119.",
+     "severity": "imprecise",
+     "fix": "2815 тестів / 0 падінь / лінт 0 — на dd3d8f29; після нього злито код 5aa3c82e і 93d06ba2, повний прогін на кінчику ще не зроблено."
+    },
+    {
+     "id": "R5",
+     "field": "ready.systems[Кар'єра, Виходи, Закулісся].pct",
+     "claimed": "Кар'єра 95 (за формулою 96, «знижено»), Виходи 70 (за формулою 69), Закулісся 40 (за формулою 36)",
+     "actual": "Три відсотки відхилені від власної формули вручну: +4 п.п. у закулісся, -1 у кар'єри, +1 у виходів. Арифметика формул інакше правильна (92,3; 96,2; 79,4; 66,7; 42; 33,3; 68,75; 56,25; 36; 61,1; 45). Із чистими значеннями 96/69/36 зважена сума 6259, тобто 62,6 %, округлення до 63 лишається. Також у кар'єри done має 11 пунктів при «повністю 12».",
+     "evidence": "Перерахунок: сума ваг·% з 92,95,79,67,42,33,70,56,45,40,60 при вагах 10,10,12,10,20,4,5,8,8,6,7 (сума 100) = 6278, 62,8 % — збігається.",
+     "severity": "imprecise",
+     "fix": "Позначити ручні правки як експертні: «закулісся 36 % за формулою, 40 — за статичну кімнату». Загальний відсоток 63 не змінюється."
+    },
+    {
+     "id": "R6",
+     "field": "ready.systems[Звук і музика].done[5] і music_sound",
+     "claimed": "CC0-музика в грі: 3 музичні файли (downtown_destruction, hammer_of_the_berserker, rock_city_ransom)",
+     "actual": "У Assets/ThirdParty/CC0/Audio/Ring 4 музичні файли: ще music_rock_theme_loop.wav. Загальна цифра «20 CC0-файлів» правильна (applause, bell x2, crowd, gong, hit x4, land, mat_slap, music x4, slam x5).",
+     "evidence": "ls Assets/ThirdParty/CC0/Audio/Ring без .meta: 20 файлів, 4 з префіксом music_.",
+     "severity": "imprecise",
+     "fix": "Файли CC0: 4 музичні (downtown_destruction, hammer_of_the_berserker, rock_city_ransom, rock_theme_loop), удари hit_01–04, падіння slam_01–05, land, mat_slap, bell x2, gong, crowd_shouting, applause_hall (разом 20)."
+    },
+    {
+     "id": "R7",
+     "field": "ready.systems[Кіно фінішерів].basis",
+     "claimed": "Пунктів 6: повністю 1, частково 2, ні 3",
+     "actual": "У done 1 пункт, у missing 6 пунктів (разом 7), тож розбивка 1+2+3 з переліком не зводиться. Один missing-пункт (39e1b036) у магістралі, тобто частково; решта п'ять не почато. Результат (1+0,5*2)/6=33 % збігається з 33, але склад пунктів нечіткий.",
+     "evidence": "Лічба елементів масиву done/missing.",
+     "severity": "imprecise",
+     "fix": "Пунктів 7: повністю 1, частково 1 (кіноплан з матом 39e1b036), не почато 5 -> (1+0,5)/7 = 21 %; або лишити 6 пунктів, прибравши дубль «власник 14.11» як причину."
+    }
+   ]
+  }
+ ],
+ "missing": []
+}

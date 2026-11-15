@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Карта механік Рингу</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fira+Sans+Extra+Condensed:wght@600;700&family=Fira+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EDE5D6; --panel:#F8F3EA; --panel2:#E4DACA; --line:#CDC1AC; --line2:#B9AC95;
+  --text:#17151D; --text2:#3F3A46; --muted:#615C68;
+  --accent:#7A5A08; --accent-fill:#B8891A; --accent-soft:rgba(184,137,26,.16);
+  --crimson:#AA141C; --danger:#A3121A;
+  --good:#2E6B3B; --warn:#8A5A00; --crit:#A3121A;
+  --edge:#7A5A08; --dimop:.28;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+  --display:"Fira Sans Extra Condensed","Arial Narrow",sans-serif;
+  --body:"Fira Sans","Segoe UI",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E0D12; --panel:#17151D; --panel2:#221F2B; --line:#2E2A39; --line2:#433D52;
+    --text:#EDE5D6; --text2:#C9C1B3; --muted:#9A948A;
+    --accent:#E8BA3C; --accent-fill:#E8BA3C; --accent-soft:rgba(232,186,60,.14);
+    --crimson:#AA141C; --danger:#E5483F;
+    --good:#7FC48A; --warn:#E3A33A; --crit:#E5483F;
+    --edge:#E8BA3C; --dimop:.24;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E0D12; --panel:#17151D; --panel2:#221F2B; --line:#2E2A39; --line2:#433D52;
+  --text:#EDE5D6; --text2:#C9C1B3; --muted:#9A948A;
+  --accent:#E8BA3C; --accent-fill:#E8BA3C; --accent-soft:rgba(232,186,60,.14);
+  --crimson:#AA141C; --danger:#E5483F;
+  --good:#7FC48A; --warn:#E3A33A; --crit:#E5483F;
+  --edge:#E8BA3C; --dimop:.24;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:56px}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 var(--body);-webkit-text-size-adjust:100%;overflow-wrap:anywhere}
+a{color:var(--accent)}
+button{font:inherit;color:inherit}
+.wrap{max-width:1320px;margin:0 auto;padding:0 16px}
+.stripe{height:6px;background:var(--crimson)}
+header.top{padding:28px 0 8px}
+.kicker{font:600 13px/1 var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+h1{font:700 44px/1.02 var(--display);letter-spacing:.01em;margin:8px 0 10px;text-transform:uppercase}
+h2{font:700 30px/1.1 var(--display);text-transform:uppercase;letter-spacing:.02em;margin:0 0 6px}
+h3{font:600 22px/1.15 var(--display);margin:0 0 6px;letter-spacing:.01em}
+.lead{max-width:860px;color:var(--text2);margin:0 0 6px}
+.small{font-size:13px;color:var(--muted)}
+nav.sec{position:sticky;top:0;z-index:30;background:var(--bg);border-bottom:1px solid var(--line)}
+nav.sec .wrap{display:flex;gap:4px;overflow-x:auto;padding-top:8px;padding-bottom:8px;scrollbar-width:none}
+nav.sec a{flex:none;text-decoration:none;color:var(--text2);font:600 14px/1 var(--body);padding:8px 10px;border-radius:6px}
+nav.sec a:hover{background:var(--panel2);color:var(--text)}
+section{padding:34px 0 10px}
+.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin:18px 0 6px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.kpi .v{font:700 34px/1 var(--display);font-variant-numeric:tabular-nums}
+.kpi .l{font-size:13px;color:var(--text2);margin-top:6px;line-height:1.3}
+.kpi.hot{border-color:var(--crimson)}
+.kpi.hot .v{color:var(--danger)}
+.note{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent-fill);border-radius:8px;padding:12px 14px;margin:12px 0;color:var(--text2)}
+.note b{color:var(--text)}
+/* --- готовність --- */
+.ready{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;margin-top:14px}
+.rrow{background:var(--panel);border:1px solid var(--line);border-radius:8px}
+.rrow>button{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:minmax(150px,240px) minmax(0,1fr) 56px 22px;align-items:center;gap:12px;width:100%;padding:10px 12px}
+.rrow>button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
+.rname{font-weight:600}
+.rname .w{display:block;font-size:12px;color:var(--muted);font-weight:400}
+.bar{height:12px;background:var(--panel2);border-radius:3px;position:relative;overflow:hidden}
+.bar i{position:absolute;left:0;top:0;bottom:0;background:var(--accent-fill);border-radius:3px 4px 4px 3px}
+.rpct{font:700 24px/1 var(--display);text-align:right;font-variant-numeric:tabular-nums}
+.chev{color:var(--muted);transition:transform .15s}
+.rrow.open .chev{transform:rotate(90deg)}
+.rbody{display:none;padding:0 14px 14px;border-top:1px solid var(--line)}
+.rrow.open .rbody{display:block}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.cols3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.rbody h4,.card h4{font:600 13px/1 var(--body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:14px 0 6px}
+.rbody ul,.card ul,.plain{margin:0;padding-left:18px}
+.rbody li,.card li,.plain li{margin:3px 0}
+.tbl{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px}
+.tbl th,.tbl td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl th{font-weight:600;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.tbl td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+/* --- статуси --- */
+.st{display:inline-flex;align-items:center;gap:5px;font-size:13px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);background:var(--panel2);white-space:nowrap}
+.st .ico{font-weight:700}
+.st.done .ico{color:var(--good)} .st.partial .ico{color:var(--warn)} .st.none .ico{color:var(--crit)}
+.pips{display:inline-flex;gap:3px;vertical-align:middle}
+.pip{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--muted)}
+.pip.done{background:var(--good);border-color:var(--good)}
+.pip.partial{background:linear-gradient(90deg,var(--warn) 50%,transparent 50%);border-color:var(--warn)}
+.pip.none{background:transparent;border-color:var(--crit)}
+/* --- карта --- */
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px 0 10px}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--panel);padding:7px 12px;cursor:pointer;font-weight:500;font-size:14px}
+.seg button+button{border-left:1px solid var(--line2)}
+.seg button[aria-pressed="true"]{background:var(--accent-fill);color:#0E0D12}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--text2);margin:4px 0 10px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.lg-line{display:inline-block;width:26px;height:0;border-top:2.5px solid var(--edge)}
+.lg-line.weak{border-top-width:1.25px}
+.lg-line.planned{border-top-style:dashed;border-top-width:2px}
+.mapgrid{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:16px;align-items:start}
+.map{position:relative;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr) minmax(0,.8fr);gap:56px}
+.map svg.edges{position:absolute;left:0;top:0;pointer-events:none;overflow:visible;z-index:1}
+.col{position:relative;z-index:2;min-width:0}
+.colhead{font:700 18px/1 var(--display);text-transform:uppercase;letter-spacing:.04em;margin:0 0 4px}
+.colsub{font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.3}
+.grp{font:600 12px/1 var(--body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:14px 0 6px}
+.node{display:flex;gap:8px;align-items:flex-start;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:6px 8px;margin:0 0 5px;cursor:pointer;font-size:13.5px;line-height:1.3;transition:opacity .12s,border-color .12s}
+.node:hover{border-color:var(--line2)}
+.node:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.node .nm{flex:1;min-width:0}
+.node .meta{flex:none;display:flex;align-items:center;gap:6px;padding-top:2px}
+.node .ab{font-size:11px;font-weight:700;color:var(--accent)}
+.node.a{padding:10px 10px}
+.node.a .nm b{display:block;font:700 17px/1.1 var(--display);text-transform:uppercase;letter-spacing:.03em}
+.node.a .nm span{font-size:12px;color:var(--muted)}
+.node .cnt{font:700 18px/1 var(--display);color:var(--text2);font-variant-numeric:tabular-nums}
+.map.has-sel .node{opacity:var(--dimop)}
+.map.has-sel .node.rel,.map.has-sel .node.sel{opacity:1}
+.node.rel{border-color:var(--accent-fill)}
+.node.sel{border-color:var(--accent-fill);background:var(--accent-soft);box-shadow:0 0 0 1px var(--accent-fill) inset}
+.map.focus.has-sel .node:not(.rel):not(.sel){display:none}
+.chk{display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--text2);cursor:pointer}
+.chk input{width:16px;height:16px;accent-color:var(--accent-fill)}
+.vbadge{font-size:11px;font-weight:700;padding:1px 6px;border-radius:999px;border:1px solid var(--line2);white-space:nowrap}
+.vbadge.yes{color:var(--good);border-color:var(--good)}
+.vbadge.no{color:var(--crit);border-color:var(--crit)}
+.vbadge.later{color:var(--warn);border-color:var(--warn)}
+/* --- картка --- */
+aside.detail{position:sticky;top:60px;max-height:calc(100vh - 76px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+aside.detail .empty{color:var(--muted)}
+.close{display:none}
+.card .kind{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.card p{margin:4px 0 8px}
+.card .nums{background:var(--panel2);border-radius:8px;padding:10px 12px;font-variant-numeric:tabular-nums}
+.card .src{font:12px/1.45 var(--mono);color:var(--muted)}
+.card .sts{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line2);background:var(--panel2);border-radius:999px;padding:3px 10px;font-size:13px;cursor:pointer;text-align:left}
+.chip:hover{border-color:var(--accent-fill)}
+.alink{border-left:3px solid var(--edge);padding:4px 0 4px 10px;margin:6px 0}
+.alink.weak{border-left-width:1.5px}
+.alink.planned{border-left-style:dashed}
+.alink .h{font-weight:600}
+.alink .s{font-size:12px;color:var(--muted)}
+blockquote{margin:6px 0;padding:6px 0 6px 12px;border-left:3px solid var(--crimson);color:var(--text2)}
+blockquote .who{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+/* --- схвалення --- */
+.appr{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+.appr .q{font-weight:600;margin-bottom:8px}
+.appr .btns{display:flex;flex-wrap:wrap;gap:6px}
+.vbtn{border:1px solid var(--line2);background:var(--panel2);border-radius:7px;padding:7px 12px;cursor:pointer;font-weight:600;font-size:14px}
+.vbtn:hover{border-color:var(--text2)}
+.vbtn[aria-pressed="true"].yes{background:var(--good);border-color:var(--good);color:#0E0D12}
+.vbtn[aria-pressed="true"].no{background:var(--crit);border-color:var(--crit);color:#fff}
+.vbtn[aria-pressed="true"].later{background:var(--warn);border-color:var(--warn);color:#0E0D12}
+.vbtn:disabled{opacity:.5;cursor:not-allowed}
+.appr textarea{width:100%;min-height:58px;margin-top:8px;background:var(--bg);color:var(--text);border:1px solid var(--line2);border-radius:7px;padding:8px;font:inherit;font-size:14px;resize:vertical}
+.appr .row{display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap}
+.appr .stamp{font-size:12px;color:var(--muted)}
+/* --- список --- */
+.items details{background:var(--panel);border:1px solid var(--line);border-radius:8px;margin:0 0 6px}
+.items summary{cursor:pointer;list-style:none;display:flex;gap:10px;align-items:center;padding:9px 12px}
+.items summary::-webkit-details-marker{display:none}
+.items summary .nm{flex:1;min-width:0;font-weight:500}
+.items summary::before{content:"›";color:var(--muted);font-weight:700;transition:transform .15s;display:inline-block}
+.items details[open] summary::before{transform:rotate(90deg)}
+.items .body{padding:0 14px 14px;border-top:1px solid var(--line)}
+.grouphead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:18px 0 8px}
+.grouphead h3{margin:0}
+.bulk{border:1px dashed var(--line2);background:transparent;border-radius:7px;padding:6px 10px;cursor:pointer;font-size:13px;color:var(--text2)}
+.bulk:disabled{opacity:.45;cursor:not-allowed}
+.statline{font-size:13px;color:var(--text2);margin:-2px 0 10px}
+.statline b{font-variant-numeric:tabular-nums}
+/* --- звук --- */
+.sound-hero{display:grid;grid-template-columns:auto minmax(0,1fr);gap:18px;align-items:center;background:var(--panel);border:1px solid var(--crimson);border-radius:10px;padding:16px}
+.sound-hero .big{font:700 64px/1 var(--display);color:var(--danger);font-variant-numeric:tabular-nums}
+.steps{counter-reset:s;list-style:none;padding:0;margin:8px 0}
+.steps li{counter-increment:s;padding-left:34px;position:relative;margin:8px 0}
+.steps li::before{content:counter(s);position:absolute;left:0;top:0;width:24px;height:24px;border-radius:50%;background:var(--accent-fill);color:#0E0D12;font-weight:700;display:grid;place-items:center;font-size:13px}
+.gaps li{margin:6px 0}
+.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 14px;border-radius:8px;font-size:14px;z-index:60;display:none;max-width:calc(100vw - 32px)}
+.dbline{font-size:13px;color:var(--muted);margin-top:4px}
+footer{padding:30px 0 60px;color:var(--muted);font-size:13px}
+@media (max-width:1100px){
+  .kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .mapgrid{grid-template-columns:minmax(0,1fr)}
+  aside.detail{position:fixed;left:0;right:0;bottom:0;top:auto;max-height:78vh;border-radius:14px 14px 0 0;z-index:50;transform:translateY(105%);transition:transform .2s;box-shadow:0 -10px 40px rgba(0,0,0,.35)}
+  aside.detail.open{transform:none}
+  .close{display:block;position:sticky;top:0;margin:-16px -16px 8px auto;width:44px;height:40px;border:0;background:transparent;font-size:24px;cursor:pointer;color:var(--text2)}
+}
+@media (max-width:900px){
+  .map{grid-template-columns:minmax(0,1fr);gap:18px}
+  .map svg.edges{display:none}
+  .cols2,.cols3{grid-template-columns:1fr}
+  h1{font-size:34px}
+}
+@media (max-width:620px){
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .rrow>button{grid-template-columns:minmax(0,1fr) 52px 18px;gap:8px}
+  .rrow .bar{grid-column:1 / -1;grid-row:2}
+  .sound-hero{grid-template-columns:1fr}
+  .tbl.sound td:first-child{width:40%}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<div class="stripe"></div>
+<header class="top"><div class="wrap">
+  <div class="kicker">«Ринг» · ітерація 1 (М1) · стан на 15.11.2026</div>
+  <h1>Механіки, динаміки й естетики</h1>
+  <p class="lead">Що в грі вже є, що з чого виникає і що це має давати гравцеві. Натисніть будь-який пункт, і сторінка покаже його зв'язки, а розгорнута картка — числа й докази. Під кожним пунктом є ваше рішення для першої ітерації: «в ітерацію 1», «переробити» чи «пізніше».</p>
+  <div class="kpis" id="kpis"></div>
+  <div class="dbline" id="dbline">Сховище рішень: підключаю…</div>
+</div></header>
+<nav class="sec" aria-label="Розділи"><div class="wrap">
+  <a href="#ready">Готовність</a><a href="#map">Карта зв'язків</a><a href="#items">Усі пункти</a><a href="#aes">Естетики</a><a href="#sound">Звук і музика</a><a href="#gaps">Прогалини</a><a href="#pending">Чекає рішення</a><a href="#criteria">Критерії М1</a>
+</div></nav>
+<main class="wrap">
+
+<section id="ready">
+  <h2>Готовність за системами</h2>
+  <p class="lead">Відсоток показує, скільки зроблено в коді й даних. Це ще не приймання. Натисніть рядок: там формула, зроблене й те, чого бракує.</p>
+  <div class="note" id="overall"></div>
+  <div class="ready" id="readyList"></div>
+</section>
+
+<section id="map">
+  <h2>Карта зв'язків</h2>
+  <p class="lead"><b>Механіка</b> — правило з числами в коді. <b>Динаміка</b> — що виникає під час гри, коли кілька механік працюють разом. <b>Естетика</b> — що від цього відчуває гравець. Лінія веде від механіки до динаміки, яку вона породжує, і далі до естетики, якій служить.</p>
+  <div class="toolbar">
+    <div class="seg" role="group" aria-label="Система" id="sysSeg"></div>
+    <label class="chk"><input type="checkbox" id="focusChk" checked> Показувати лише пов'язане з вибраним</label>
+    <button class="bulk" id="clearSel" hidden>✕ Скинути вибір</button>
+    <span class="small" id="mapCount"></span>
+  </div>
+  <div class="legend">
+    <span><span class="lg-line"></span>сильний зв'язок</span>
+    <span><span class="lg-line weak"></span>слабкий</span>
+    <span><span class="lg-line planned"></span>заплановано, ще не працює</span>
+    <span><span class="pips"><i class="pip done"></i><i class="pip partial"></i><i class="pip none"></i></span>ядро · видно в грі · прийнято (повний · частково · немає)</span>
+  </div>
+  <div class="mapgrid">
+    <div class="map" id="mapEl">
+      <svg class="edges" id="edges" aria-hidden="true"></svg>
+      <div class="col" id="colM"></div>
+      <div class="col" id="colD"></div>
+      <div class="col" id="colA"></div>
+    </div>
+    <aside class="detail" id="detail" aria-live="polite">
+      <button class="close" id="closeDetail" aria-label="Закрити">×</button>
+      <div id="detailBody"><p class="empty">Натисніть механіку, динаміку чи естетику на карті, і тут з'явиться її картка: правило, числа, стан, звук і ваше рішення.</p></div>
+    </aside>
+  </div>
+</section>
+
+<section id="items">
+  <h2>Усі пункти докладно</h2>
+  <p class="lead">Ті самі дані списком. Розгорніть рядок, щоб побачити картку. Кнопка біля групи ставить «в ітерацію 1» лише тим пунктам групи, де рішення ще немає.</p>
+  <div class="toolbar">
+    <div class="seg" role="group" aria-label="Тип" id="kindSeg"></div>
+  </div>
+  <div id="itemList"></div>
+</section>
+
+<section id="aes">
+  <h2>Естетики</h2>
+  <p class="lead">Вісім естетик із рамки «механіки → динаміки → естетики». Біля кожної ваші слова з документів і всі пункти гри, що на неї працюють.</p>
+  <div id="aesList" class="items"></div>
+</section>
+
+<section id="sound">
+  <h2>Звук і музика</h2>
+  <div class="sound-hero">
+    <div class="big">0 / 43</div>
+    <div><b>Звуків схвалено. Через це кожна збірка зараз мовчить.</b><br>
+    <span class="small">Ваше рішення 08.11.2026, дослівно: «Выключи все звуки пока я не скажу обратного из всех будущих сборок. Собери мне библиотеку всех треков где я смогу их заапрувить и тогда они идут в игру, если реджект нужны еще 3 пока какую-то не выберу».</span></div>
+  </div>
+  <div class="cols2" style="margin-top:14px">
+    <div>
+      <h3>Що вже є</h3>
+      <ul class="plain">
+        <li><b>Бібліотека на 43 слоти:</b> 7 музичних тем, 7 звуків залу й рингу, 9 ударів і падінь, 10 звуків меню. Ще 10 подій матчу: зчеп, накриття, больовий, канати, кут, падіння за ринг, підйом, QTE (поява, влучно, пропуск). <a href="https://claude.ai/artifact/FYezfbUX7JhY9nFNugdKw4" target="_blank" rel="noopener">Відкрити бібліотеку</a>.</li>
+        <li><b>Відхилено вами 17 слотів:</b> 3 теми меню, гул натовпу, обидва дзвони, гонг, долоня рефері, приземлення, удари 2–4, падіння 1–5. Раунд 1 дав по 3 нові варіанти (51 файл). Раунд 2 (21 кандидат) ще не опубліковано.</li>
+        <li><b>Напрям:</b> «Роби звук більш брутальний меньше радості» (08.11.2026). Музика меню в мі мінорі, фригійський лад, пауер-акорди. Вхід: 96 BPM, 32 такти, 80 с. Гучність −16 LUFS, пік не вище −1,6 dBTP. Один лейтмотив у трьох варіаціях. Усе згенеровано нами, без чужих мелодій.</li>
+        <li><b>Код готовий:</b> таблиця «подія → звук» без порожніх подій (охоронець RingSoundMapTests), шини Master/Music/SFX/Voice. Ворота RingSoundGate глушать кожен програвач, доки слот не схвалено.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Шлях, щоб гра зазвучала</h3>
+      <ol class="steps">
+        <li>Ви слухаєте бібліотеку й ставите «так» або «ні». На «ні» з'являються 3 нові варіанти.</li>
+        <li>Схвалені назви записуються в <code>sound_approvals.json</code>. Чіпати код не треба.</li>
+        <li>ПМ перевіряє збірку на слух: кожна подія таблиці грає свій звук.</li>
+      </ol>
+      <div class="note">Звук — головне джерело естетики «Відчуття» (удар, падіння, натовп, дзвін). Поки схвалено 0 слотів, у кожній механіці нижче звук прописано лише в коді, а в збірці він не грає.</div>
+    </div>
+  </div>
+  <h3 style="margin-top:18px">Який звук дає кожна механіка</h3>
+  <p class="small">Із коду (RingSoundMap). Грає лише після схвалення слота.</p>
+  <div id="soundTable"></div>
+  <details class="items" style="margin-top:12px"><summary style="padding:9px 12px;cursor:pointer"><span class="nm">Повна довідка дослідження про звук</span></summary><div class="body" id="soundFull"></div></details>
+</section>
+
+<section id="gaps">
+  <h2>Прогалини</h2>
+  <p class="lead">Чого бракує в кожній системі. Перевага — доробити й виправити зроблене, а не додавати нове.</p>
+  <div class="cols3" id="gapList"></div>
+</section>
+
+<section id="pending">
+  <h2>Чекає вашого рішення</h2>
+  <ol class="plain gaps" id="pendingList"></ol>
+</section>
+
+<section id="criteria">
+  <h2>Критерії М1</h2>
+  <ul class="plain gaps" id="critList"></ul>
+</section>
+
+<footer>Дані зібрано з коду, тестів і документів репозиторію (claude/ring-combat-overhaul, 15.11.2026): файл і рядок указано в кожній картці. Відсотки рахував ПМ, формула кожного — в розгорнутому рядку готовності.</footer>
+</main>
+<div class="toast" id="toast" role="status"></div>
+<script type="application/json" id="data">/*__DATA__*/null</script>
+<script>
+(function(){
+'use strict';
+const DATA = JSON.parse(document.getElementById('data').textContent);
+const SYSKEYS = ['match','career','show'];
+const SYSNAME = {match:'Матч', career:"Кар'єра", show:'Шоу й показ'};
+const AES = [
+  ['sensation','Відчуття','Гра як чуттєва насолода: удар, падіння, звук, світло, плавність руху.'],
+  ['challenge','Виклик','Гра як перешкода: ризик, шанси, рішення під тиском.'],
+  ['narrative','Історія','Гра як драма: ворожнечі, повороти, матч як оповідь.'],
+  ['fantasy','Фантазія','Гра як уявний світ: бути борцем, пройти шлях від бару до палацу.'],
+  ['expression','Самовираження','Гра як спосіб показати себе: ґімік, роль, стиль, образ.'],
+  ['discovery','Відкриття','Гра як незвідана територія: нові федерації, події, кінцівки.'],
+  ['submission','Легкий луп','Гра як приємне проведення часу: зрозумілий цикл без тертя.'],
+  ['fellowship','Спільнота','Гра як соціальна рамка. У М1 цього свідомо немає: один борець, без кооперативу.']
+];
+const AESNAME = Object.fromEntries(AES.map(a=>[a[0],a[1]]));
+const STRN = {strong:'сильний', weak:'слабкий', planned:'заплановано'};
+const STL = {done:'є', partial:'частково', none:'немає'};
+const STICO = {done:'✓', partial:'◐', none:'○'};
+const VLAB = {yes:'В ітерацію 1', no:'Переробити', later:'Пізніше'};
+const VBADGE = {yes:'✓ так', no:'✗ переробити', later:'… пізніше'};
+const WEIGHTS = [10,10,12,10,20,4,5,8,8,6,7];
+
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $ = id => document.getElementById(id);
+
+// --- індекс ---
+const byId = {}, M = [], D = [], LINKS = [], dynOf = {}, aesOf = {};
+SYSKEYS.forEach(k=>{
+  const s = DATA[k];
+  s.mechanics.forEach(m=>{ m.kind='m'; m.sys=k; M.push(m); byId[m.id]=m; });
+  s.dynamics.forEach(d=>{ d.kind='d'; d.sys=k; D.push(d); byId[d.id]=d; });
+  s.aesthetics.forEach(a=>{ a.sys=k; LINKS.push(a); });
+});
+AES.forEach(([key,name,def])=>{ byId['a.'+key] = {id:'a.'+key, kind:'a', key, name, def, sys:''}; });
+D.forEach(d=> d.from.forEach(f=>{ (dynOf[f]=dynOf[f]||[]).push(d.id); }));
+LINKS.forEach(l=>{ (aesOf[l.target]=aesOf[l.target]||[]).push(l); });
+const STATED = DATA.ready.stated_aesthetics || [];
+const ALLITEMS = [...M, ...D, ...AES.map(a=>byId['a.'+a[0]])];
+
+// --- стан ---
+let SYS = 'all', KIND = 'm', SEL = null;
+let db = null, canWrite = null, dbState = 'loading', APPR = {};
+const inflight = {};
+
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>t.style.display='none',3200); }
+
+// --- KPI ---
+function renderKpis(){
+  const pct = Math.round(DATA.ready.systems.reduce((s,x,i)=>s+x.pct*(WEIGHTS[i]||0),0)/WEIGHTS.reduce((a,b)=>a+b,0));
+  const decided = ALLITEMS.filter(i=>APPR[i.id] && APPR[i.id].verdict).length;
+  const k = [
+    [pct+' %','Готовність за кодом і даними (зважено, 11 систем)',''],
+    [M.length,'Механік у коді',''],
+    [D.length,'Динамік, що з них виникають',''],
+    [LINKS.length,'Зв\'язків з естетиками',''],
+    ['0 / 43','Звуків схвалено — збірки німі','hot'],
+    [decided+' / '+ALLITEMS.length,'Ваших рішень для ітерації 1','']
+  ];
+  $('kpis').innerHTML = k.map(([v,l,c])=>`<div class="kpi ${c}"><div class="v">${esc(v)}</div><div class="l">${esc(l)}</div></div>`).join('');
+}
+
+// --- готовність ---
+function renderReady(){
+  const R = DATA.ready;
+  const ov = R.overall || {};
+  const wsum = WEIGHTS.reduce((a,b)=>a+b,0), acc = R.systems.reduce((s,x,i)=>s+x.pct*(WEIGHTS[i]||0),0);
+  $('overall').innerHTML = `<b>Разом ${Math.round(acc/wsum)} % за кодом і даними.</b> Це зважене середнє одинадцяти систем. Анімації борців мають подвійну вагу, бо ви назвали їх пріоритетом 1 усіх ітерацій.
+    <ul class="plain" style="margin-top:6px">
+      <li><b>Ядро далеко попереду показу.</b> Правила матчу й кар'єри готові на 92–96 %. Те, що видно й чути (анімації, сцена, кіно фінішерів, звук, закулісся), — на 33–67 %.</li>
+      <li><b>Прийнято вами ще нічого.</b> За критерієм «перевірено очима ПМ і прийнято власником» М1 не закрита в жодній системі.</li>
+      <li><b>Для порівняння:</b> аудит 13.11 за 89 пунктами давав 48 % (21 готово, 43 частково, 13 не почато, 9 чекали вас).</li>
+      <li><b>Критичний шлях:</b> перша збірка кліпів (FBX v1) → підстановок кліпів 31 → 0 → фаз-тест → схвалений звук.</li>
+    </ul>
+    <details style="margin-top:6px"><summary class="small" style="cursor:pointer">Формула дослівно</summary><p class="small">${esc(ov.basis||'')}</p></details>`;
+  const rows = R.systems.map((s,i)=>({...s, w:WEIGHTS[i]||0})).sort((a,b)=>b.pct-a.pct);
+  $('readyList').innerHTML = rows.map((s,i)=>`
+    <div class="rrow" data-i="${i}">
+      <button aria-expanded="false" title="${esc(s.system)}: ${s.pct} %">
+        <span class="rname">${esc(s.system)}<span class="w">вага ${s.w} зі 100</span></span>
+        <span class="bar" aria-hidden="true"><i style="width:${Math.max(0,Math.min(100,s.pct))}%"></i></span>
+        <span class="rpct">${s.pct}%</span>
+        <span class="chev" aria-hidden="true">›</span>
+      </button>
+      <div class="rbody">
+        <h4>Як пораховано</h4><p>${esc(s.basis)}</p>
+        <div class="cols2">
+          <div><h4>Зроблено</h4><ul>${(s.done||[]).map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>
+          <div><h4>Бракує</h4><ul>${(s.missing||[]).map(x=>`<li>${esc(x)}</li>`).join('')||'<li>—</li>'}</ul></div>
+        </div>
+      </div>
+    </div>`).join('');
+  $('readyList').querySelectorAll('.rrow>button').forEach(b=>b.addEventListener('click',()=>{
+    const r=b.parentElement; r.classList.toggle('open'); b.setAttribute('aria-expanded', r.classList.contains('open'));
+  }));
+}
+
+// --- статуси ---
+function pips(m){
+  if(m.kind!=='m') return '';
+  return `<span class="pips" title="ядро: ${STL[m.core]} · видно в грі: ${STL[m.shown]} · прийнято: ${STL[m.accepted]}"><i class="pip ${m.core}"></i><i class="pip ${m.shown}"></i><i class="pip ${m.accepted}"></i></span>`;
+}
+function stPill(label, v){ return `<span class="st ${v}"><span class="ico">${STICO[v]}</span>${esc(label)}: ${STL[v]}</span>`; }
+function vbadge(id){ const a=APPR[id]; return a&&a.verdict ? `<span class="vbadge ${a.verdict}">${VBADGE[a.verdict]}</span>` : ''; }
+
+// --- зв'язки ---
+function related(id){
+  const it = byId[id]; const nodes = new Set([id]); const edges = [];
+  if(!it) return {nodes, edges};
+  if(it.kind==='m'){
+    (dynOf[id]||[]).forEach(d=>{ nodes.add(d); edges.push([id,d,'strong']);
+      (aesOf[d]||[]).forEach(l=>{ nodes.add('a.'+l.aesthetic); edges.push([d,'a.'+l.aesthetic,l.strength]); }); });
+    (aesOf[id]||[]).forEach(l=>{ nodes.add('a.'+l.aesthetic); edges.push([id,'a.'+l.aesthetic,l.strength]); });
+  } else if(it.kind==='d'){
+    it.from.forEach(m=>{ nodes.add(m); edges.push([m,id,'strong']); });
+    (aesOf[id]||[]).forEach(l=>{ nodes.add('a.'+l.aesthetic); edges.push([id,'a.'+l.aesthetic,l.strength]); });
+  } else {
+    LINKS.filter(l=>l.aesthetic===it.key).forEach(l=>{
+      nodes.add(l.target); edges.push([l.target,id,l.strength]);
+      const t = byId[l.target];
+      if(t && t.kind==='d') t.from.forEach(m=>{ nodes.add(m); edges.push([m,t.id,'weak']); });
+    });
+  }
+  return {nodes, edges};
+}
+const inSys = it => SYS==='all' || it.kind==='a' || it.sys===SYS;
+
+// --- карта ---
+function nodeBtn(it){
+  if(it.kind==='a'){
+    const n = LINKS.filter(l=>l.aesthetic===it.key && (SYS==='all'||l.sys===SYS)).length;
+    return `<button class="node a" data-id="${esc(it.id)}"><span class="nm"><b>${esc(it.name)}</b><span>${esc(it.def)}</span></span><span class="meta"><span class="cnt" title="зв'язків">${n}</span>${vbadge(it.id)}</span></button>`;
+  }
+  return `<button class="node" data-id="${esc(it.id)}"><span class="nm">${esc(it.name)}</span><span class="meta">${vbadge(it.id)}${pips(it)}</span></button>`;
+}
+function renderMap(){
+  const ms = M.filter(inSys), ds = D.filter(inSys);
+  const grouped = (arr)=> SYSKEYS.filter(k=>SYS==='all'||k===SYS).map(k=>{
+    const g = arr.filter(x=>x.sys===k); if(!g.length) return '';
+    return (SYS==='all'?`<div class="grp">${esc(SYSNAME[k])} · ${g.length}</div>`:'') + g.map(nodeBtn).join('');
+  }).join('');
+  $('colM').innerHTML = `<div class="colhead">Механіки</div><div class="colsub">правило й числа в коді · ${ms.length}</div>` + grouped(ms);
+  $('colD').innerHTML = `<div class="colhead">Динаміки</div><div class="colsub">що виникає під час гри · ${ds.length}</div>` + grouped(ds);
+  $('colA').innerHTML = `<div class="colhead">Естетики</div><div class="colsub">що відчуває гравець · число = зв'язків</div>` + AES.map(a=>nodeBtn(byId['a.'+a[0]])).join('');
+  const nl = LINKS.filter(l=>SYS==='all'||l.sys===SYS).length;
+  $('mapCount').textContent = `${ms.length} механік · ${ds.length} динамік · ${nl} зв'язків з естетиками`;
+  $('mapEl').querySelectorAll('.node').forEach(b=>b.addEventListener('click',()=>select(b.dataset.id)));
+  applySel();
+}
+function applySel(){
+  const map = $('mapEl');
+  const rel = SEL ? related(SEL) : {nodes:new Set(), edges:[]};
+  map.classList.toggle('has-sel', !!SEL);
+  map.classList.toggle('focus', $('focusChk').checked);
+  $('clearSel').hidden = !SEL;
+  map.querySelectorAll('.node').forEach(b=>{
+    const id=b.dataset.id;
+    b.classList.toggle('sel', id===SEL);
+    b.classList.toggle('rel', id!==SEL && rel.nodes.has(id));
+  });
+  // заголовки груп без видимих пунктів ховаємо
+  map.querySelectorAll('.grp').forEach(g=>{
+    let n=g.nextElementSibling, any=false;
+    while(n && !n.classList.contains('grp')){ if(n.classList.contains('node') && getComputedStyle(n).display!=='none'){ any=true; break; } n=n.nextElementSibling; }
+    g.style.display = any ? '' : 'none';
+  });
+  drawEdges(rel.edges);
+}
+function drawEdges(edges){
+  const svg = $('edges'), map = $('mapEl');
+  if(!window.matchMedia('(min-width: 901px)').matches || !edges.length){ svg.innerHTML=''; return; }
+  const mr = map.getBoundingClientRect();
+  svg.setAttribute('width', map.scrollWidth); svg.setAttribute('height', map.scrollHeight);
+  const pos = id => { const el = map.querySelector(`.node[data-id="${CSS.escape(id)}"]`); if(!el) return null; const r=el.getBoundingClientRect(); return {l:r.left-mr.left, r:r.right-mr.left, y:r.top-mr.top+r.height/2}; };
+  const seen = new Set(); let out='';
+  edges.forEach(([a,b,s])=>{
+    const key=a+'>'+b; if(seen.has(key)) return; seen.add(key);
+    const pa=pos(a), pb=pos(b); if(!pa||!pb) return;
+    const x1=pa.r, x2=pb.l, dx=Math.max(30,(x2-x1)*.45);
+    const w = s==='strong'?2.25:(s==='weak'?1.2:1.8);
+    const dash = s==='planned'?' stroke-dasharray="6 5"':'';
+    const op = (byId[a]&&byId[a].kind==='m'&&byId[b]&&byId[b].kind==='a')?.55:.9;
+    out += `<path d="M${x1},${pa.y} C${x1+dx},${pa.y} ${x2-dx},${pb.y} ${x2},${pb.y}" fill="none" stroke="var(--edge)" stroke-width="${w}" stroke-opacity="${op}"${dash}/>`;
+    out += `<circle cx="${x2}" cy="${pb.y}" r="2.6" fill="var(--edge)"/>`;
+  });
+  svg.innerHTML = out;
+}
+function select(id){
+  SEL = (SEL===id && !window.matchMedia('(max-width:1100px)').matches) ? null : id;
+  applySel();
+  if(SEL && $('focusChk').checked){ const top=$('mapEl').getBoundingClientRect().top; if(top<60 || top>innerHeight*.6) window.scrollTo({top: scrollY+top-150, behavior:'instant'}); }
+  if(SEL){ $('detailBody').innerHTML=''; $('detailBody').appendChild(card(byId[SEL])); $('detail').classList.add('open'); $('detail').scrollTop=0; }
+  else { $('detailBody').innerHTML='<p class="empty">Натисніть механіку, динаміку чи естетику на карті.</p>'; $('detail').classList.remove('open'); }
+}
+$('focusChk').addEventListener('change', applySel);
+$('clearSel').addEventListener('click',()=>{ if(SEL){ SEL=null; applySel(); $('detailBody').innerHTML='<p class="empty">Натисніть механіку, динаміку чи естетику на карті.</p>'; $('detail').classList.remove('open'); } });
+$('closeDetail').addEventListener('click',()=>{ $('detail').classList.remove('open'); });
+
+// --- картка ---
+function chip(id){ const it=byId[id]; if(!it) return ''; return `<button class="chip" data-go="${esc(id)}">${esc(it.kind==='m'?'М · ':it.kind==='d'?'Д · ':'')}${esc(it.name)}</button>`; }
+function linkBlock(l, showTarget){
+  const t = byId[l.target];
+  return `<div class="alink ${l.strength}"><div class="h">${esc(showTarget ? (t?t.name:l.target) : AESNAME[l.aesthetic])} <span class="s">· ${STRN[l.strength]||l.strength}${showTarget&&t?' · '+(t.kind==='m'?'механіка':'динаміка')+' · '+SYSNAME[t.sys]:''}</span></div><div>${esc(l.how)}</div>${showTarget?`<div style="margin-top:4px">${chip(l.target)}</div>`:''}</div>`;
+}
+function card(it){
+  const el = document.createElement('div'); el.className='card';
+  let h='';
+  if(it.kind==='m'){
+    const dyn = dynOf[it.id]||[], al = aesOf[it.id]||[];
+    h += `<div class="kind">Механіка · ${esc(SYSNAME[it.sys])}</div><h3>${esc(it.name)}</h3>
+      <div class="sts">${stPill('ядро',it.core)}${stPill('видно в грі',it.shown)}${stPill('прийнято',it.accepted)}</div>
+      <h4>Правило</h4><p>${esc(it.rule)}</p>
+      <h4>Числа</h4><div class="nums">${esc(it.numbers)}</div>
+      <h4>Докази</h4><p>${esc(it.evidence)}</p>
+      ${it.sound?`<h4>Звук</h4><p>${esc(it.sound)}</p>`:''}
+      <h4>Джерело</h4><div class="src">${esc(it.source)}</div>
+      <h4>Породжує динаміки · ${dyn.length}</h4><div class="chips">${dyn.map(chip).join('')||'<span class="small">окремої динаміки немає</span>'}</div>
+      <h4>Прямо служить естетикам · ${al.length}</h4>${al.map(l=>linkBlock(l,false)).join('')||'<p class="small">прямих зв\'язків немає, лише через динаміки</p>'}`;
+    const via = [...new Set(dyn.flatMap(d=>(aesOf[d]||[]).map(l=>l.aesthetic)))];
+    if(via.length) h += `<p class="small">Через динаміки: ${via.map(a=>esc(AESNAME[a])).join(', ')}.</p>`;
+  } else if(it.kind==='d'){
+    const al = aesOf[it.id]||[];
+    h += `<div class="kind">Динаміка · ${esc(SYSNAME[it.sys])}</div><h3>${esc(it.name)}</h3>
+      <h4>Що відбувається</h4><p>${esc(it.description)}</p>
+      <h4>Числа</h4><div class="nums">${esc(it.numbers)}</div>
+      <h4>Джерело</h4><div class="src">${esc(it.source)}</div>
+      <h4>З яких механік · ${it.from.length}</h4><div class="chips">${it.from.map(chip).join('')}</div>
+      <h4>Служить естетикам · ${al.length}</h4>${al.map(l=>linkBlock(l,false)).join('')||'<p class="small">зв\'язку з естетикою не знайдено</p>'}`;
+  } else {
+    const al = LINKS.filter(l=>l.aesthetic===it.key);
+    const st = STATED.filter(s=>s.aesthetic===it.key);
+    const cnt = {strong:0,weak:0,planned:0}; al.forEach(l=>cnt[l.strength]=(cnt[l.strength]||0)+1);
+    h += `<div class="kind">Естетика</div><h3>${esc(it.name)}</h3><p>${esc(it.def)}</p>
+      <div class="sts"><span class="st">сильних: ${cnt.strong}</span><span class="st">слабких: ${cnt.weak}</span><span class="st">запланованих: ${cnt.planned}</span></div>
+      <h4>Ваші слова й документи</h4>${st.map(s=>`<blockquote>«${esc(s.quote)}»<span class="who">${esc(s.who)} · ${esc(s.source)}</span></blockquote>`).join('')||'<p class="small">прямих цитат немає</p>'}
+      ${SYSKEYS.map(k=>{ const g=al.filter(l=>l.sys===k).sort((a,b)=>['strong','weak','planned'].indexOf(a.strength)-['strong','weak','planned'].indexOf(b.strength)); return g.length?`<h4>${esc(SYSNAME[k])} · ${g.length}</h4>`+g.map(l=>linkBlock(l,true)).join(''):''; }).join('')}`;
+  }
+  el.innerHTML = h;
+  el.appendChild(apprBox(it));
+  el.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>goTo(b.dataset.go, el)));
+  return el;
+}
+function goTo(id, from){
+  if(from.closest('#detail')) { if(SYS!=='all' && byId[id].kind!=='a' && byId[id].sys!==SYS){ setSys('all'); } select(id); return; }
+  const d = document.querySelector(`#itemList details[data-id="${CSS.escape(id)}"], #aesList details[data-id="${CSS.escape(id)}"]`);
+  if(!d){ KIND = byId[id].kind; renderKindSeg(); renderItems(); return goTo(id, from); }
+  d.open = true; d.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+// --- схвалення ---
+function apprBox(it){
+  const box = document.createElement('div'); box.className='appr'; box.dataset.appr = it.id;
+  const q = it.kind==='a' ? 'Ця естетика — ціль ітерації 1?' : 'Ваше рішення для ітерації 1';
+  box.innerHTML = `<div class="q">${q}</div><div class="btns">
+    <button class="vbtn yes" data-v="yes" aria-pressed="false">✓ ${VLAB.yes}</button>
+    <button class="vbtn no" data-v="no" aria-pressed="false">✗ ${VLAB.no}</button>
+    <button class="vbtn later" data-v="later" aria-pressed="false">… ${VLAB.later}</button></div>
+    <textarea placeholder="Коментар: що змінити, чого бракує (необов'язково)" aria-label="Коментар"></textarea>
+    <div class="row"><button class="vbtn" data-save>Зберегти коментар</button><span class="stamp"></span></div>`;
+  box.querySelectorAll('[data-v]').forEach(b=>b.addEventListener('click',()=>{
+    const cur = APPR[it.id] && APPR[it.id].verdict;
+    save(it, cur===b.dataset.v ? null : b.dataset.v, undefined);
+  }));
+  box.querySelector('[data-save]').addEventListener('click',()=>save(it, undefined, box.querySelector('textarea').value));
+  fillAppr(box);
+  return box;
+}
+function fillAppr(box){
+  const id = box.dataset.appr, a = APPR[id] || {};
+  const writable = db && dbState==='ok' && canWrite!==false;
+  box.querySelectorAll('[data-v]').forEach(b=>{ b.setAttribute('aria-pressed', a.verdict===b.dataset.v); b.disabled=!writable; });
+  const ta = box.querySelector('textarea');
+  if(document.activeElement!==ta) ta.value = a.note || '';
+  ta.disabled = !writable; box.querySelector('[data-save]').disabled = !writable;
+  let st = '';
+  if(!db) st = 'Рішення зберігаються, коли сторінку відкрито на claude.ai.';
+  else if(dbState==='loading') st = 'Підключаю сховище…';
+  else if(dbState!=='ok') st = 'Сховище не відповідає. Оновіть сторінку пізніше.';
+  else if(canWrite===false) st = 'Рішення ставить лише власник сторінки.';
+  else if(a.at) st = 'Записано ' + new Date(a.at).toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  box.querySelector('.stamp').textContent = st;
+}
+function save(it, verdict, note){
+  if(!db) return;
+  const cur = APPR[it.id] || {};
+  const body = { verdict: verdict===undefined ? (cur.verdict||null) : verdict, note: note===undefined ? (cur.note||'') : String(note).slice(0,4000),
+    at: new Date().toISOString(), kind: it.kind, name: it.name, sys: it.sys||'' };
+  APPR[it.id] = body; refreshAppr();
+  const p = (inflight[it.id] || Promise.resolve()).then(()=>db.doc('approvals/'+it.id).set(body)).catch(e=>{
+    if(e && e.code==='invalid_argument'){ canWrite=false; toast('Запис відхилено: рішення ставить лише власник.'); }
+    else toast('Не збереглось ('+((e&&e.code)||'помилка')+'). Спробуйте ще раз.');
+    refreshAppr();
+  });
+  inflight[it.id] = p; return p;
+}
+async function bulkYes(items, btn){
+  const todo = items.filter(i=>!(APPR[i.id]&&APPR[i.id].verdict));
+  if(!todo.length) return;
+  if(!confirm(`Поставити «${VLAB.yes}» для ${todo.length} пунктів без рішення?`)) return;
+  btn.disabled = true;
+  for(const it of todo){ await save(it,'yes',undefined); if(canWrite===false) break; }
+  btn.disabled = false; toast('Записано: '+todo.length);
+}
+function refreshAppr(){
+  document.querySelectorAll('.appr').forEach(fillAppr);
+  document.querySelectorAll('[data-badge]').forEach(s=>{ s.innerHTML = vbadge(s.dataset.badge); });
+  $('mapEl').querySelectorAll('.node').forEach(b=>{ const m=b.querySelector('.meta'); const old=m.querySelector('.vbadge'); if(old) old.remove(); const v=vbadge(b.dataset.id); if(v) m.insertAdjacentHTML('afterbegin', v); });
+  renderKpis(); renderStatlines();
+  const decided = ALLITEMS.filter(i=>APPR[i.id]&&APPR[i.id].verdict);
+  const c = {yes:0,no:0,later:0}; decided.forEach(i=>c[APPR[i.id].verdict]++);
+  $('dbline').textContent = !db ? 'Сховище рішень недоступне в цьому перегляді: відкрийте сторінку на claude.ai.' :
+    dbState==='loading' ? 'Сховище рішень: підключаю…' : dbState!=='ok' ? 'Сховище рішень не відповідає.' :
+    `Ваші рішення: в ітерацію 1 — ${c.yes}, переробити — ${c.no}, пізніше — ${c.later}, без рішення — ${ALLITEMS.length-decided.length}.`;
+}
+
+// --- список ---
+const KINDS = [['m','Механіки'],['d','Динаміки']];
+function renderKindSeg(){
+  $('kindSeg').innerHTML = KINDS.map(([k,n])=>`<button data-k="${k}" aria-pressed="${KIND===k}">${n}</button>`).join('');
+  $('kindSeg').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ KIND=b.dataset.k; renderKindSeg(); renderItems(); }));
+}
+function rowDetails(it){
+  const d = document.createElement('details'); d.dataset.id = it.id;
+  d.innerHTML = `<summary><span class="nm">${esc(it.name)}</span><span data-badge="${esc(it.id)}">${vbadge(it.id)}</span>${pips(it)}</summary><div class="body"></div>`;
+  d.addEventListener('toggle',()=>{ if(d.open && !d._r){ d._r=1; d.querySelector('.body').appendChild(card(it)); } });
+  return d;
+}
+function statText(arr){
+  const dec = arr.filter(i=>APPR[i.id]&&APPR[i.id].verdict).length;
+  if(arr[0] && arr[0].kind==='m'){
+    const n=k=>arr.filter(m=>m[k]==='done').length, p=k=>arr.filter(m=>m[k]==='partial').length;
+    return `Ядро: <b>${n('core')}</b> повністю, <b>${p('core')}</b> частково · видно в грі: <b>${n('shown')}</b> / <b>${p('shown')}</b> · прийнято: <b>${n('accepted')}</b> / <b>${p('accepted')}</b> · ваших рішень: <b>${dec}</b> з ${arr.length}`;
+  }
+  return `Ваших рішень: <b>${dec}</b> з ${arr.length}`;
+}
+function renderItems(){
+  const host = $('itemList'); host.innerHTML=''; host.className='items';
+  const src = KIND==='m' ? M : D;
+  SYSKEYS.forEach(k=>{
+    const g = src.filter(x=>x.sys===k);
+    const head = document.createElement('div'); head.className='grouphead';
+    head.innerHTML = `<h3>${esc(SYSNAME[k])} · ${g.length}</h3>`;
+    const b = document.createElement('button'); b.className='bulk'; b.textContent='Усім без рішення — «'+VLAB.yes+'»';
+    b.addEventListener('click',()=>bulkYes(g,b)); head.appendChild(b);
+    host.appendChild(head);
+    const sl = document.createElement('div'); sl.className='statline'; sl.dataset.stat = KIND+'|'+k; host.appendChild(sl);
+    g.forEach(it=>host.appendChild(rowDetails(it)));
+  });
+  renderStatlines(); refreshBulk();
+}
+function renderStatlines(){
+  document.querySelectorAll('[data-stat]').forEach(s=>{
+    const [kd,k] = s.dataset.stat.split('|');
+    const arr = kd==='a' ? AES.map(a=>byId['a.'+a[0]]) : (kd==='m'?M:D).filter(x=>x.sys===k);
+    s.innerHTML = statText(arr);
+  });
+  refreshBulk();
+}
+function refreshBulk(){ document.querySelectorAll('.bulk').forEach(b=>{ b.disabled = !(db && dbState==='ok' && canWrite!==false); }); }
+function renderAes(){
+  const host = $('aesList'); host.innerHTML='';
+  const sl = document.createElement('div'); sl.className='statline'; sl.dataset.stat='a|'; host.appendChild(sl);
+  AES.forEach(a=>host.appendChild(rowDetails(byId['a.'+a[0]])));
+}
+
+// --- звук, прогалини, рішення, критерії ---
+function renderSound(){
+  const rows = SYSKEYS.map(k=>{
+    const g = M.filter(m=>m.sys===k && m.sound && m.sound.trim());
+    if(!g.length) return '';
+    return `<tr><th colspan="2">${esc(SYSNAME[k])} · ${g.length}</th></tr>` + g.map(m=>`<tr><td><button class="chip" data-go="${esc(m.id)}">${esc(m.name)}</button></td><td>${esc(m.sound)}</td></tr>`).join('');
+  }).join('');
+  $('soundTable').innerHTML = `<table class="tbl sound"><thead><tr><th>Механіка</th><th>Звук у коді</th></tr></thead><tbody>${rows}</tbody></table>`;
+  $('soundTable').querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{ setSys('all'); select(b.dataset.go); if(window.matchMedia('(min-width:1101px)').matches) $('map').scrollIntoView({behavior:'smooth'}); }));
+  $('soundFull').innerHTML = `<p>${esc(DATA.ready.music_sound)}</p>`;
+}
+function renderGaps(){
+  $('gapList').innerHTML = SYSKEYS.map(k=>`<div><h3>${esc(SYSNAME[k])} · ${DATA[k].gaps.length}</h3><ul class="plain gaps">${DATA[k].gaps.map(g=>`<li>${esc(g)}</li>`).join('')}</ul></div>`).join('');
+  $('pendingList').innerHTML = (DATA.ready.owner_pending||[]).map(p=>`<li>${esc(p)}</li>`).join('');
+  $('critList').innerHTML = (DATA.ready.m1_criteria||[]).map(p=>`<li>${esc(p)}</li>`).join('');
+}
+
+// --- фільтр систем ---
+function setSys(s){ SYS=s; renderSysSeg(); renderMap(); }
+function renderSysSeg(){
+  const opts = [['all','Усі'],...SYSKEYS.map(k=>[k,SYSNAME[k]])];
+  $('sysSeg').innerHTML = opts.map(([k,n])=>`<button data-s="${k}" aria-pressed="${SYS===k}">${esc(n)}</button>`).join('');
+  $('sysSeg').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>setSys(b.dataset.s)));
+}
+
+// --- старт ---
+renderKpis(); renderReady(); renderSysSeg(); renderMap(); renderKindSeg(); renderItems(); renderAes(); renderSound(); renderGaps(); refreshAppr();
+let rt; window.addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(applySel,120); });
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(applySel);
+
+(async()=>{
+  const timer = setTimeout(()=>{ if(dbState==='loading'){ dbState='timeout'; refreshAppr(); } }, 10000);
+  try{ db = (window.claude && window.claude.use) ? await window.claude.use('db') : null; }catch(e){ db=null; }
+  if(!db){ clearTimeout(timer); dbState='none'; refreshAppr(); return; }
+  try{ const u = await window.claude.use('user'); if(u){ canWrite = await u.isOwner(); } }catch(e){}
+  try{
+    db.collection('approvals').onSnapshot(s=>{
+      clearTimeout(timer); dbState='ok'; const next={};
+      s.docs.forEach(d=>{ if(d.exists){ const v=d.data(); if(v && typeof v==='object') next[d.id]=v; } });
+      APPR = next; refreshAppr();
+    }, e=>{ clearTimeout(timer); dbState='error'; refreshAppr(); });
+  }catch(e){ clearTimeout(timer); dbState='error'; refreshAppr(); }
+})();
+})();
+</script>
+</body>
+</html>
