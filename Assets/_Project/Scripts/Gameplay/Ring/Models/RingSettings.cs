@@ -17,6 +17,79 @@ namespace Game.Gameplay.Ring.Models
     public enum RingActionShots { Off = 0, Rare = 1, Normal = 2, Often = 3 }
 
     /// <summary>
+    /// Вкладки налаштувань у порядку панелі (власник 07.11.2026 — Графіка, Звук, Керування, Доступність, Мова; АД 15.11.2026 — «Гра»
+    /// першою: «Там лежить те, що змінює саму гру; «Екран», «Звук» і решта — після неї. Налаштування відкриваються на першій
+    /// вкладці»). Номер — місце вкладки в рядку.
+    /// </summary>
+    public enum RingSettingsTab { Game = 0, Graphics, Sound, Controls, Access, Language }
+
+    /// <summary>
+    /// Підписи, ширини й розміри вкладок і рядків налаштувань (<c>SettingsPanel</c>) без рушія — щоб охоронець TTF
+    /// (<c>CareerTextFitTests.Settings_TabsAndGameRows_FitTheirPlaces</c>) міряв те саме, що малює екран.
+    /// </summary>
+    public static class RingSettingsTabs
+    {
+        public const int Count = 6;
+
+        /// <summary>Кнопка вкладки: висота, кегль і лівий відступ напису, проміжок до наступної; рядок вкладок — від x <see cref="Left"/>.</summary>
+        public const float TabH = 40f, TabText = 22f, TabTextLeft = 16f, TabGap = 10f, Left = 80f;
+
+        /// <summary>
+        /// Рядок налаштування: ширина, висота, початок поля значення; назва — від <see cref="NameLeft"/> кеглем <see cref="NameText"/>;
+        /// значення — кеглем <see cref="ValueText"/> у рамці з відступами <see cref="KeycapPad"/> між стрілками ‹ › по <see cref="ArrowW"/>.
+        /// </summary>
+        public const float RowW = 900f, RowH = 52f, ValueX = 430f, NameLeft = 30f, NameText = 26f, ValueText = 24f, ArrowW = 34f, KeycapPad = 14f;
+
+        public static string Key(RingSettingsTab t)
+        {
+            switch (t)
+            {
+                case RingSettingsTab.Game: return "m.set.tab.game";
+                case RingSettingsTab.Graphics: return "m.set.tab.graphics";
+                case RingSettingsTab.Sound: return "m.set.tab.sound";
+                case RingSettingsTab.Controls: return "m.set.tab.controls";
+                case RingSettingsTab.Access: return "m.set.tab.access";
+                default: return "m.set.tab.language";
+            }
+        }
+
+        /// <summary>Ширина кнопки вкладки. «Гра» — 100: шість вкладок і «LB · RB» лишаються в найвужчій панелі 5:4 (1125).</summary>
+        public static float Width(RingSettingsTab t)
+        {
+            switch (t)
+            {
+                case RingSettingsTab.Game: return 100f;
+                case RingSettingsTab.Controls: return 176f;
+                case RingSettingsTab.Access: return 190f;
+                default: return 140f;
+            }
+        }
+
+        /// <summary>
+        /// Рядки вкладки «Гра» — подача матчу (<see cref="RingMatchPrefs"/>): швидкі натискання, кадри дії, сповільнення фінішера. Під
+        /// рядком підпису немає — підказка фокусованого рядка внизу панелі (АД 15.11.2026: «Підпису під кожним рядком не треба: та
+        /// сама підказка рядка внизу панелі»). Назви — пропозиції АД (через ПМ, 15.11.2026): «QTE» → «Швидкі натискання» (слово QTE — у
+        /// підказці), «Екшн-кадри» → «Кадри дії», «Звично» → «Помірно».
+        /// </summary>
+        public static readonly string[] GameRows = { "m.set.qte", "m.set.actionshots", "m.set.slowmo" };
+
+        /// <summary>Підказка кожного рядка <see cref="GameRows"/> (той самий номер).</summary>
+        public static readonly string[] GameHints = { "m.set.hint.qte", "m.set.hint.actionshots", "m.set.hint.slowmo" };
+
+        /// <summary>Значення рядка «Кадри дії»: Вимкнено / Рідко / Помірно / Часто.</summary>
+        public static string ActionShotsKey(RingActionShots s)
+        {
+            switch (s)
+            {
+                case RingActionShots.Off: return "m.val.off";
+                case RingActionShots.Rare: return "m.val.rare";
+                case RingActionShots.Often: return "m.val.often";
+                default: return "m.val.normal";
+            }
+        }
+    }
+
+    /// <summary>
     /// Мови інтерфейсу «Рингу» (Налаштування → Мова). Код потрапляє в <see cref="Available"/>, лише коли перекладено ВСЕ:
     /// охоронець <c>RingMenuModelTests.Languages_EveryAvailableLanguage_IsFullyTranslated</c> звіряє <c>ui_&lt;код&gt;.json</c> і
     /// <c>ring_strings_&lt;код&gt;.txt</c> з українськими (ключі й місця підстановки {0}). Англійська — ітерація 1 (П4 ПМ 08.11.2026),
@@ -85,7 +158,7 @@ namespace Game.Gameplay.Ring.Models
 
         /// <summary>
         /// Частка накопичувача екшн-кадрів за рівнем (без випадковості: кадр, коли накопичене ≥ 1; два поспіль — ні, §4.12).
-        /// «Звично» — 0,34, як у бойовій камері, з якої механізм узято (≈ один кадр на три великі прийоми). ПЛЕЙСХОЛДЕР —
+        /// «Помірно» (Normal) — 0,34, як у бойовій камері, з якої механізм узято (≈ один кадр на три великі прийоми). ПЛЕЙСХОЛДЕР —
         /// камера може тюнити числа, сенс рівнів лишається: Off — ніколи, Rare &lt; Normal &lt; Often.
         /// </summary>
         public static float ActionShotChance(RingActionShots level)

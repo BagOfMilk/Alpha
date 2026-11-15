@@ -3,19 +3,19 @@ using System.Collections.Generic;
 using Game.Gameplay.Ring.Models;
 using UnityEngine;
 using UnityEngine.UIElements;
+using Tab = Game.Gameplay.Ring.Models.RingSettingsTab;
 
 namespace Game.Gameplay.Ring.UI.Menus
 {
     /// <summary>
-    /// Налаштування (ТЗ B08 §4; власник 07.11.2026 — вкладки Графіка, Звук, Керування, Доступність, Мова): рядки-пластини
-    /// мови «Енергія», кнопки «За замовчуванням», «Скасувати», «Застосувати», діалог при виході з незбереженими змінами.
-    /// Гучність чути одразу (тестовий звук шини); усе інше діє після «Застосувати» і зберігається між запусками.
+    /// Налаштування (ТЗ B08 §4; власник 07.11.2026 — вкладки Графіка, Звук, Керування, Доступність, Мова; АД 15.11.2026 — «Гра»
+    /// першою, на ній налаштування й відкриваються): рядки-пластини мови «Енергія», кнопки «За замовчуванням», «Скасувати»,
+    /// «Застосувати», діалог при виході з незбереженими змінами. Гучність чути одразу (тестовий звук шини); усе інше діє після
+    /// «Застосувати» і зберігається між запусками. Порядок, підписи й розміри вкладок і рядків — <see cref="RingSettingsTabs"/>.
     /// </summary>
     public sealed class SettingsPanel : IMenuNavigable
     {
-        private enum Tab { Graphics = 0, Sound, Controls, Access, Language }
-
-        private const float RowW = 900f, RowH = 52f, RowGap = 8f, RowStep = 8f, ValueX = 430f;
+        private const float RowW = RingSettingsTabs.RowW, RowH = RingSettingsTabs.RowH, RowGap = 8f, RowStep = 8f, ValueX = RingSettingsTabs.ValueX;
 
         public readonly VisualElement Root;
         private readonly RingText _t;
@@ -28,6 +28,7 @@ namespace Game.Gameplay.Ring.UI.Menus
         private readonly MenuFocus _focus = new MenuFocus();
         private readonly VisualElement _rowsBox;
         private readonly Label _hints, _toast, _note;
+        private Label _rowHint;      // «Гра»: підказка фокусованого рядка під рядками (замість підпису під кожним, АД 15.11.2026)
         private Tab _tab;
         private MenuDialog _dialog;
         private RingAction? _capturing;
@@ -53,17 +54,17 @@ namespace Game.Gameplay.Ring.UI.Menus
 
             var tabsRow = new VisualElement();
             tabsRow.style.position = Position.Absolute;
-            tabsRow.style.left = 80f; tabsRow.style.top = 134f;
+            tabsRow.style.left = RingSettingsTabs.Left; tabsRow.style.top = 134f;
             tabsRow.style.flexDirection = FlexDirection.Row;
             tabsRow.style.alignItems = Align.Center;
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < RingSettingsTabs.Count; i++)
             {
                 int idx = i;
-                var b = MenuKit.Button(_t.Get(TabKey((Tab)i)), TabWidth((Tab)i), 40f);
-                b.Text.style.fontSize = 22f;
-                b.Text.style.marginLeft = 16f;
+                var b = MenuKit.Button(_t.Get(RingSettingsTabs.Key((Tab)i)), RingSettingsTabs.Width((Tab)i), RingSettingsTabs.TabH);
+                b.Text.style.fontSize = RingSettingsTabs.TabText;
+                b.Text.style.marginLeft = RingSettingsTabs.TabTextLeft;
                 b.Plate.Stripe = 0f;
-                b.style.marginRight = 10f;
+                b.style.marginRight = RingSettingsTabs.TabGap;
                 b.OnClick = () => SwitchTab((Tab)idx, true);
                 _tabs.Add(b);
                 tabsRow.Add(b);
@@ -95,7 +96,7 @@ namespace Game.Gameplay.Ring.UI.Menus
             Root.Add(btnRow);
 
             Root.Add(MenuKit.Footer(out _hints, null));
-            SwitchTab(Tab.Graphics, false);
+            SwitchTab(Tab.Game, false);   // перша вкладка — «Гра», фокус — на першому рядку, тож його підказку видно одразу (АД 15.11.2026)
             _anim.FromTo(Root, MenuProp.Opacity, 0f, 1f, BrandTokens.MotionMenuWipeMs, Ease.OutCubic);
             _anim.FromTo(head, MenuProp.X, -120f, 0f, BrandTokens.MotionMenuPlateInMs, Ease.OutBack);
         }
@@ -113,20 +114,6 @@ namespace Game.Gameplay.Ring.UI.Menus
             row.Add(b);
             return b;
         }
-
-        private static string TabKey(Tab t)
-        {
-            switch (t)
-            {
-                case Tab.Graphics: return "m.set.tab.graphics";
-                case Tab.Sound: return "m.set.tab.sound";
-                case Tab.Controls: return "m.set.tab.controls";
-                case Tab.Access: return "m.set.tab.access";
-                default: return "m.set.tab.language";
-            }
-        }
-
-        private static float TabWidth(Tab t) { return t == Tab.Access ? 190f : t == Tab.Controls ? 176f : 140f; }
 
         // ---------------- вкладки й рядки ----------------
 
@@ -146,8 +133,15 @@ namespace Game.Gameplay.Ring.UI.Menus
             foreach (var old in _rows) { _anim.Forget(old); _anim.Forget(old.Plate); _anim.Forget(old.Content); }
             _rowsBox.Clear();
             _rows.Clear();
+            _rowHint = null;
             switch (_tab)
             {
+                case Tab.Game:   // подача матчу (RingMatchPrefs): діє після «Застосувати», як і все, крім гучності
+                    Choice(RingSettingsTabs.GameRows[0], () => _t.Get(D.Qte ? "m.val.on" : "m.val.off"), d => { D.Qte = !D.Qte; });
+                    Choice(RingSettingsTabs.GameRows[1], () => _t.Get(RingSettingsTabs.ActionShotsKey(D.ActionShots)),
+                        d => { D.ActionShots = (RingActionShots)Wrap((int)D.ActionShots + d, 4); });
+                    Choice(RingSettingsTabs.GameRows[2], () => _t.Get(D.FinisherSlowMo ? "m.val.on" : "m.val.off"), d => { D.FinisherSlowMo = !D.FinisherSlowMo; });
+                    break;
                 case Tab.Graphics:
                     Choice("m.set.display", () => _t.Get(D.Display == RingDisplayMode.Windowed ? "m.val.windowed" : "m.val.fullscreen"),
                         d => { D.Display = D.Display == RingDisplayMode.Windowed ? RingDisplayMode.Fullscreen : RingDisplayMode.Windowed; });
@@ -192,6 +186,14 @@ namespace Game.Gameplay.Ring.UI.Menus
                 n.style.maxWidth = RowW;
                 _rowsBox.Add(n);
             }
+            if (_tab == Tab.Game)
+            {
+                // те саме місце й той самий вигляд, що в примітки інших вкладок, але текст — фокусованого рядка (UpdateHints)
+                _rowHint = MenuKit.Body("", BrandTokens.TypeLabel, RingTheme.TextDim);
+                _rowHint.style.marginTop = 6f;
+                _rowHint.style.maxWidth = RowW;
+                _rowsBox.Add(_rowHint);
+            }
             if (!keepFocus)
                 for (int i = 0; i < _rows.Count; i++)
                     _anim.FromTo(_rows[i], MenuProp.X, -100f, 0f, BrandTokens.MotionMenuPlateInMs, Ease.OutBack, MenuMotion.StaggerMs(i) * 0.5f);
@@ -218,6 +220,8 @@ namespace Game.Gameplay.Ring.UI.Menus
             r.style.marginLeft = _rows.Count * RowStep;
             int idx = _rows.Count;
             r.OnHover = () => { if (RingMenuInput.MouseArmed && _dialog == null && _capturing == null && _focus.Set(idx)) { Sync(); RingMenuServices.Play(MenuSfx.Move); } };
+            // дотик: наведення немає — торкання рядка ставить фокус і показує його підказку (АД 15.11.2026)
+            r.OnPress = () => { if (_dialog == null && _capturing == null && _focus.Set(idx)) { Sync(); RingMenuServices.Play(MenuSfx.Move); } };
             _rows.Add(r);
             _rowsBox.Add(r);
             return r;
@@ -289,6 +293,12 @@ namespace Game.Gameplay.Ring.UI.Menus
         {
             bool pad = _device == MenuDevice.Gamepad;
             _note.text = pad ? "LB · RB" : "Q · E";
+            if (_rowHint != null)
+            {
+                int row = _focus.Index;
+                _rowHint.text = row >= 0 && row < _rows.Count && row < RingSettingsTabs.GameHints.Length
+                    ? TextBreak.GlueDashes(_t.Get(RingSettingsTabs.GameHints[row])) : "";
+            }
             if (_capturing != null) { _hints.text = _t.Get("m.footer.capture"); return; }
             _hints.text = _t.Get(pad ? "m.footer.set.pad" : "m.footer.set.keys");
         }
@@ -415,8 +425,8 @@ namespace Game.Gameplay.Ring.UI.Menus
                     }
                     else if (_rows[_focus.Index].Kind != SettingRow.RowKind.Slider) { _rows[_focus.Index].Change(1); Sync(); }
                     break;
-                case RingAction.TabPrev: SwitchTab((Tab)Wrap((int)_tab - 1, 5), true); break;
-                case RingAction.TabNext: SwitchTab((Tab)Wrap((int)_tab + 1, 5), true); break;
+                case RingAction.TabPrev: SwitchTab((Tab)Wrap((int)_tab - 1, RingSettingsTabs.Count), true); break;
+                case RingAction.TabNext: SwitchTab((Tab)Wrap((int)_tab + 1, RingSettingsTabs.Count), true); break;
                 case RingAction.Back: Back(); break;
             }
         }
@@ -433,7 +443,7 @@ namespace Game.Gameplay.Ring.UI.Menus
 
         // ---------------- для огляду (-ring-menu-shots) ----------------
 
-        public void ShotTab(int t) { SwitchTab((Tab)Wrap(t, 5), true); }
+        public void ShotTab(int t) { SwitchTab((Tab)Wrap(t, RingSettingsTabs.Count), true); }
         public void ShotFocus(int i) { if (_focus.Set(Math.Max(0, Math.Min(i, _rows.Count + _buttons.Count - 1)))) Sync(); }
         public int RowCount { get { return _rows.Count; } }
     }
@@ -454,6 +464,8 @@ namespace Game.Gameplay.Ring.UI.Menus
         public Action<int> Change;
         public Action<int> SetAbs;
         public Action OnHover;
+        /// <summary>Натискання на рядок (миша чи дотик) — до кліку по стрілках чи назві: панель ставить фокус на рядок.</summary>
+        public Action OnPress;
 
         public SettingRow(string name, float width, float height, float valueX)
         {
@@ -469,9 +481,9 @@ namespace Game.Gameplay.Ring.UI.Menus
             Content.style.flexDirection = FlexDirection.Row;
             Content.style.alignItems = Align.Center;
             Add(Content);
-            _name = MenuKit.Display(name, 26f, RingTheme.Text, RingFontRole.Display800, 0.05f);
+            _name = MenuKit.Display(name, RingSettingsTabs.NameText, RingTheme.Text, RingFontRole.Display800, 0.05f);
             _name.style.position = Position.Absolute;
-            _name.style.left = 30f;
+            _name.style.left = RingSettingsTabs.NameLeft;
             _name.style.top = (height - 32f) * 0.5f;
             Content.Add(_name);
             var val = new VisualElement();
@@ -482,7 +494,7 @@ namespace Game.Gameplay.Ring.UI.Menus
             Content.Add(val);
             _left = MenuKit.Display("‹", 30f, RingTheme.TextDim, RingFontRole.Display900, 0f);
             _left.pickingMode = PickingMode.Position;
-            _left.style.width = 34f;
+            _left.style.width = RingSettingsTabs.ArrowW;
             _left.style.flexShrink = 0f;
             _left.style.unityTextAlign = TextAnchor.MiddleCenter;
             _left.RegisterCallback<ClickEvent>(e => { if (Change != null && Kind != RowKind.Key) Change(-1); Refresh(true, false); });
@@ -500,23 +512,24 @@ namespace Game.Gameplay.Ring.UI.Menus
             });
             val.Add(_bar);
             _keycap = new VisualElement();
-            _keycap.style.paddingLeft = 14f; _keycap.style.paddingRight = 14f; _keycap.style.paddingTop = 2f; _keycap.style.paddingBottom = 2f;
+            _keycap.style.paddingLeft = RingSettingsTabs.KeycapPad; _keycap.style.paddingRight = RingSettingsTabs.KeycapPad; _keycap.style.paddingTop = 2f; _keycap.style.paddingBottom = 2f;
             _keycap.style.borderTopWidth = 2f; _keycap.style.borderBottomWidth = 2f; _keycap.style.borderLeftWidth = 2f; _keycap.style.borderRightWidth = 2f;
             _keycap.style.borderTopLeftRadius = BrandTokens.SpaceRadiusControl; _keycap.style.borderTopRightRadius = BrandTokens.SpaceRadiusControl;
             _keycap.style.borderBottomLeftRadius = BrandTokens.SpaceRadiusControl; _keycap.style.borderBottomRightRadius = BrandTokens.SpaceRadiusControl;
             _keycap.pickingMode = PickingMode.Ignore;
             _keycap.style.flexShrink = 0f;
             val.Add(_keycap);
-            _value = MenuKit.Display("", 24f, RingTheme.Text, RingFontRole.Display800, 0.06f);
+            _value = MenuKit.Display("", RingSettingsTabs.ValueText, RingTheme.Text, RingFontRole.Display800, 0.06f);
             _keycap.Add(_value);
             _right = MenuKit.Display("›", 30f, RingTheme.TextDim, RingFontRole.Display900, 0f);
             _right.pickingMode = PickingMode.Position;
-            _right.style.width = 34f;
+            _right.style.width = RingSettingsTabs.ArrowW;
             _right.style.flexShrink = 0f;
             _right.style.unityTextAlign = TextAnchor.MiddleCenter;
             _right.RegisterCallback<ClickEvent>(e => { if (Change != null && Kind != RowKind.Key) Change(1); Refresh(true, false); });
             val.Add(_right);
             RegisterCallback<PointerEnterEvent>(e => { if (OnHover != null) OnHover(); });
+            RegisterCallback<PointerDownEvent>(e => { if (OnPress != null) OnPress(); });   // натискання раніше за клік — фокус уже стоїть
             // клік по назві: вибір — наступне значення, клавіша — «натисни клавішу»
             _name.pickingMode = PickingMode.Position;
             _name.RegisterCallback<ClickEvent>(e => { if (Change != null && Kind != RowKind.Slider) { Change(1); Refresh(true, false); } });

@@ -325,6 +325,13 @@ namespace Game.Gameplay.Ring
             yield return Wait(0.06f);
             yield return Snap(h, "settings_opening");
             yield return Wait(0.7f);
+            yield return Snap(h, "settings_game");         // «Гра» — перша (АД 15.11.2026): фокус на першому рядку, його підказка внизу
+            Nav(h, RingAction.Down);                      // «Кадри дії» — своя підказка
+            Nav(h, RingAction.Right);                     // «Помірно» → «Часто»
+            yield return Wait(0.3f);
+            yield return Snap(h, "settings_game_shots_often");
+            Nav(h, RingAction.TabNext);
+            yield return Wait(0.5f);
             yield return Snap(h, "settings_graphics");
             Nav(h, RingAction.Down); Nav(h, RingAction.Down);
             yield return Wait(0.25f);
@@ -369,6 +376,7 @@ namespace Game.Gameplay.Ring
             // ---- кнопки дій у налаштуваннях: «Застосувати» ----
             Nav(h, RingAction.Confirm);                   // фокус — «Налаштування»
             yield return Wait(0.6f);
+            Nav(h, RingAction.TabNext);                   // «Графіка» (відкривається на «Грі»)
             Nav(h, RingAction.TabNext);                   // «Звук»
             yield return Wait(0.4f);
             for (int i = 0; i < 5; i++) Nav(h, RingAction.Down);
