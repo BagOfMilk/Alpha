@@ -1,0 +1,179 @@
+{
+ "findings": [
+  {
+   "title": "Begin повертає true, але перший план не ставить, якщо його мить пізніша за старт кліпа",
+   "file": "Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/RingFinisherCine.cs",
+   "line": 146,
+   "scenario": "Begin шукає k = BeatAt(tl, t0). Якщо t0 раніший за ClipTime першого плану, k = -1: CutTo не викликається, а Begin все одно ставить Active = true і повертає true. Так буває, коли Repeat = true (заклику немає, хват стоїть на c - 0.9 с, наприклад 0.3-1.0 с), коли мітка cam_call > 0 (Call = m.Call) і коли пізній кліп стартує з StartTime = 0. Режисер за документом (§5 крок 3) не ставить свій кадр, бо cine == true. Камера лишається на попередньому плані (загальний або утримання) до першої склейки, тобто перші 0.3-1 с фінішера йдуть без кіно й без FinisherShot. Fallback у Tick спрацьовує лише для плану, що не став, а не для відсутнього. Те саме, якщо t0 >= tl.End: BeatAt дає -1, Begin повертає true, а перший Tick одразу викликає End.",
+   "fix": "Після обчислення k додати: `if (k < 0 && tl.Beats.Count > 0 && t0 < tl.End) k = 0;` Тоді перший план стає в кадрі старту. Якщо t0 >= tl.End, повертати false, щоб режисер поставив свій кадр: `if (t0 >= tl.End) return false;`.",
+   "severity": "bug"
+  },
+  {
+   "title": "Застарілий кліп того самого імені дає _seen = true, і кіно вмирає без камери",
+   "file": "Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/RingFinisherCine.cs",
+   "line": 133,
+   "scenario": "`_seen = r.Attacker.CurrentClip == r.Clip`. Begin кличуть ДО PlayAtTime. Якщо нападник досі тримає той самий AnimationClip (останній кадр попереднього фінішера, Finished = true, ClipTime ≈ length), _seen стає true. Тоді t0 = ClipTime ≈ length, Scene(false) бере живі (старі) місця замість AttackerStart/VictimStart, вісь і бік камер хибні, BeatAt дає -1, а Begin повертає true. Далі PlayAtTime перезапускає кліп, і Tick бачить t < _lastT - 0.1: викликає End() і виходить. Кіно немає, а режисер свого кадру не ставив, бо Begin повернув true.",
+   "fix": "`_seen = r.Attacker.CurrentClip == r.Clip && !r.Attacker.Finished && r.Attacker.ClipTime <= r.StartTime + 0.1f;` Для виклику після PlayAtTime це лишається true, бо Finished скинуто, а ClipTime ≈ StartTime. Для застарілого кліпа стає false.",
+   "severity": "bug"
+  },
+  {
+   "title": "Після Skip() сповільнення режисера все одно вмикається",
+   "file": "Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/RingFinisherCine.cs",
+   "line": 228,
+   "scenario": "Skip() викликає Abort() -> End(), тож Active = false. За документом (§5 крок 4) RingStage3D.TimeWarp ігнорується лише поки FinisherCine.Active. Корутина RingMatchDirector.BeatAt, запущена на старті кроку, на моменті contact - 0.15 с кличе _s.TimeWarp(0.4f, 1.25f). Гравець пропустив кіно, а 1.25 с сповільнення 0.4× йде. Це суперечить тексту `темп звичайний` у документі й у коментарі до Skip. Те саме для Abort після MaxWaitFrames.",
+   "fix": "Додати в RingFinisherCine `public bool SlowSuppressed { get; private set; }`. Begin ставить false, Skip() ставить true перед Abort(). Перший рядок RingStage3D.TimeWarp: `if (FinisherCine != null && (FinisherCine.Active || FinisherCine.SlowSuppressed)) return;`. Оновити §5 крок 4.",
+   "severity": "bug"
+  },
+  {
+   "title": "Крок 1 документа не каже, що FinisherCine має існувати до ShowIdle() в Awake",
+   "file": "docs/ring/FINISHER_CINE.md",
+   "line": 156,
+   "scenario": "Крок 7 велить викликати FinisherCine.End() у RingMatchDirector.EndMatch. RingStage3D.Awake викликає `_director.Init(this)`, а далі `ShowIdle()`, який викликає `_director.EndMatch()`. Якщо FinisherCine створити `разом зі сценою` після ShowIdle (як у тексті кроку 1, місце не вказано), director.EndMatch() у Awake кине NullReferenceException на `_s.FinisherCine.End()`. Awake перерветься до ShowIdle/SnapCamera. Ще: коли Awake завершується раніше через відсутність assets (`enabled = false`), FinisherCine лишається null.",
+   "fix": "У кроці 1 вказати: створити `FinisherCine = new RingFinisherCine(this);` одразу після `BuildActors()`, до `_director.Init(this)` і `ShowIdle()`. Додати захист у кроках 3 і 7: `if (_s.FinisherCine != null) ...` або `_s.FinisherCine?.End()` (звичайний C# клас, `?.` безпечний).",
+   "severity": "bug"
+  },
+  {
+   "title": "Крок 5: Fx.Finisher() не має режиму без строба, а подія Sell обходить умову Active",
+   "file": "docs/ring/FINISHER_CINE.md",
+   "line": 181,
+   "scenario": "(а) У RingMatchDirector.BeatNow Fx.Finisher() кличеться для Kind == Action І Kind == Sell (рядок 465), а умови IsFinisherHit (Kind == Action) стосуються лише Shake і Impact. Sell приходить після Action, коли кіно вже могло закінчитись (End = after + 1.2 с кліпа), тож гілка `кіно не йде — як зараз` запускає повний строб, навіть якщо Timeline.Strobe = false. (б) RingFx.Finisher() не має параметрів. Строб увімкнений умовою `Flashes ? Strobe() ...` на рядку 254 і не знає про GraphicsTier.IsLow. Тому `Fx.Finisher() лише за Timeline.Strobe` для найнижчої якості означає або не викликати метод узагалі (зникає все світло-кю: house, haze, PAR, headMode), або викликати зі стробом. Розрізнити строб і кю не можна без змін у RingFx.",
+   "fix": "Додати `RingFx.Finisher(bool strobe = true)` і поле `_noStrobe`, яке в `case \"finisher\"` (RingFx.cs:254) дає `parMul = 1.2f` замість `Strobe() ? 1.8f : 0.15f`. У BeatNow: `bool cine = _s.FinisherCine != null && _s.FinisherCine.Active; _s.Fx.Finisher(!cine || _s.FinisherCine.Timeline.Strobe);` Для Sell-події брати прапор, збережений у режисері на момент Action (наприклад `_finStrobe`), а не поточне Active.",
+   "severity": "bug"
+  },
+  {
+   "title": "Приклад Request у кроці 3 написаний лише для FinisherShot, змінні й fallback для FinisherFrame інші",
+   "file": "docs/ring/FINISHER_CINE.md",
+   "line": 166,
+   "scenario": "Документ каже `у тому самому місці`, але в RunPairRoots (RingMatchDirector.cs ~1803) немає pAStart, yawAStart, tStart, pB, yawA, ia. Там є pA0, pB0, pAc, pBc, rotA, slotA, а старт кліпа дорівнює 0f. Fallback `FinisherShot(A, B, ca, pB, yawA, ia)` у цьому місці не скомпілюється; потрібен `FinisherFrame(A, B, pAc, pBc)`. У RunChain змінні pAStart, yawAStart, tStart, pB, yawA, ia існують. Хто підключатиме, у другому місці або вгадає, або отримає помилку компіляції. Також у режисері немає жодного механізму для Repeat (чи був цей фінішер у матчі) і Gimmick (ґімік нападника не лежить у MatchSetup). Крок 3 каже `<...>`, але не вказує джерело.",
+   "fix": "Додати в §5 таблицю для двох місць: RunChain (1391): AttackerStart = pAStart, VictimStart = pB, AttackerYaw = yawAStart, StartTime = tStart, ContactVictim = pB, Fallback = FinisherShot(...). RunPairRoots (1803): AttackerStart = pA0, VictimStart = pB0, AttackerYaw = rotA, StartTime = 0f, ContactVictim = pBc, Fallback = FinisherFrame(A, B, pAc, pBc). Для Repeat додати в режисер `HashSet<(MatchSide, ...)> _finisherSeen`, що скидається в Begin/BeginReplay. Для Gimmick вказати, що передавати −1, поки ядро не дає ґімік у MatchSetup.",
+   "severity": "nit"
+  },
+  {
+   "title": "Timeline лишається від кіно, що не стартувало",
+   "file": "Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/RingFinisherCine.cs",
+   "line": 129,
+   "scenario": "`_r = r; _tl = tl;` присвоєні до перевірки першого плану. Якщо перший план не став, Begin повертає false, але Timeline вказує на розкладку, що ніколи не йшла. Якщо Begin повернув false раніше (tl.Empty), Timeline лишається від попереднього фінішера. Публічна властивість доку `Timeline` каже `поточного чи останнього`, тож код, що читає Timeline.Strobe/Flash/Shake без перевірки Active (як у кроці 5, якщо його спростять), візьме чужі прапорці.",
+   "fix": "На початку Begin після End() ставити `_tl = null;`, а `_tl = tl` присвоювати лише коли кіно реально стартує (після успішного першого CutTo, перед `Active = true`).",
+   "severity": "nit"
+  },
+  {
+   "title": "Охоронців немає для Begin/Tick/Skip/End виконавця (Unity-залежний, поза лінтом)",
+   "file": "Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/RingFinisherCine.cs",
+   "line": 114,
+   "scenario": "Виконавець у теці Stage/Unity не лінтується й не має EditMode-тестів: обидві вади Begin вище, пропуск, повернення темпу після знесення сцени й `Warp = 1` після End не перевіряються нічим до ручного запуску у Unity.",
+   "fix": "Додати EditMode-тест із двома RingActor на тестовій сцені (або з тонкою обгорткою над ClipTime/CurrentClip) для: Begin-before-PlayAtTime, Skip -> RingTime.Warp == 1 і Time.timeScale == RingTime.Scale, End під паузою -> timeScale == 0, повторний Begin з тим самим кліпом.",
+   "severity": "test-gap"
+  },
+  {
+   "title": "Гілки Subject() для плану наслідку (Attacker/Pair) не перевіряються геометрією",
+   "file": "Assets/Tests/EditMode/Ring/RingFinisherCinePlanTests.cs",
+   "line": 378,
+   "scenario": "Framing_KeepsTheSubjectBetweenThePanelAndTheWord і всі Solve-тести беруть Hit() з Gimmick=0, тому план After завжди дивиться на жертву. Мутація: у RingFinisherCinePlan.Subject (default-гілка) поміняти місцями AttackerHead та VictimHead, прибрати середню точку для CineSubject.Pair або змінити span Pair 0.45 на 0.1 — жоден тест не впаде. AfterSubject перевіряється лише таблицею, а не кадром.",
+   "severity": "test-gap",
+   "fix": "Додати тест: для Hit(5) (Attacker) і Hit(7) (Pair) розв'язати останній Beat через Solve на hitScene й перевірити FromBottom голови нападника (або середини пари) у межах [SafeBottom-0.01, SafeTop+0.01]."
+  },
+  {
+   "title": "Імовірності вставок 45% і 70% (проміжок 2 і 3 петлі) майже не закріплені",
+   "file": "Assets/Tests/EditMode/Ring/RingIdleLifePlanTests.cs",
+   "line": 126,
+   "scenario": "Rate_IsLivelyButNotConstant лише вимагає частку 0.25–0.5 при ґіміку -1 для одного актора (за моєю симуляцією хеша — 0.38). Мутація 45→60 або 70→100 у RingIdleLifePlan.Pick здебільшого лишає частку в цьому вікні й тест проходить; AfterThreePlainLoops_InsertIsCertain перевіряє лише gap=4. Гілка gap==3 жодним тестом не перевіряється окремо.",
+   "severity": "test-gap",
+   "fix": "Додати тест із точною кількістю вставок для фіксованого актора (еталон з симуляції, як для Hash), або перевірити, що при gap==3 вставка трапляється строго рідше, ніж у 100% випадків на 300 петлях, а при gap==2 — рідше, ніж при gap==3."
+  },
+  {
+   "title": "Hash_IsTheSameOnEveryMachine — тавтологічний еталон",
+   "file": "Assets/Tests/EditMode/Ring/RingIdleLifePlanTests.cs",
+   "line": 103,
+   "scenario": "Еталонні значення (1055093019, 3392854406, 3926017556, 303560709, 967117349) я перерахував незалежно в Python на 32-бітній арифметиці — вони збігаються з моделлю, тож тест коректний. Але він закріплює саму формулу, а не поведінку: будь-яка легітимна зміна констант хеша ламає тест, а розподіл залежить від решти тестів.",
+   "severity": "nit",
+   "fix": "Залишити як є; за потреби лишити тільки один-два еталони, щоб тест не був бар'єром для рефакторингу."
+  },
+  {
+   "title": "Числові допуски ExtraTime (1.08±0.04, 0.91±0.04) не перевірені прогоном",
+   "file": "Assets/Tests/EditMode/Ring/RingFinisherCinePlanTests.cs",
+   "line": 330,
+   "scenario": "ExtraRealSeconds інтегрує Speed з кроком 1/480 с; моя ручна оцінка за smoothstep дає ≈1.06 при темпі 1.0 (вікно 1.04–1.12) і ≈0.90 при 1.2 (0.87–0.95). Запас малий; якщо інтеграція дасть ≈1.03, тест хибно впаде. Прогнати я не міг (заборонено).",
+   "severity": "unity-only-risk",
+   "fix": "Прогнати один раз і за потреби розширити допуск до ±0.06 або перевіряти лише відношення e12/e10 та межі бюджету."
+  }
+ ],
+ "verdicts": [
+  {
+   "title": "Begin повертає true, але перший план не ставить, якщо його мить пізніша за старт кліпа",
+   "real": true,
+   "reason": "Простежено: Build ставить перший план на ClipTime = clamp(Call/Grip/c-0.9, 0..cap); при Repeat або мітці cam_call > 0 він > 0. Begin бере t0 = StartTime (0), BeatAt дає -1, CutTo не кличеться, Active = true, повертається true. Режисер за кроком 3 не ставить свого кадру. Якщо t0 >= tl.End, BeatAt теж -1, і Begin повертає true, хоча кіно одразу закінчиться.",
+   "fix": "У Begin замінити блок після `int k = ...`:\nint k = RingFinisherCinePlan.BeatAt(tl, t0);\nif (t0 >= tl.End) { _beat = -1; return false; }          // кіно вже мало б скінчитись — кадр ставить режисер\nif (k >= 0)\n{\n    _beat = k;\n    CutTo(tl.Beats[k]);\n    if (!_shotOk) { _beat = -1; return false; }\n}\nelse\n{\n    // перший план ще попереду: до нього кадр фінішера — режисерів (раз)\n    _fellBack = true;\n    if (r.Fallback != null) r.Fallback();\n}\nActive = true;"
+  },
+  {
+   "title": "Застарілий кліп того самого імені дає _seen = true, і кіно вмирає без камери",
+   "real": true,
+   "reason": "RingActor.Tick тримає недограний кліп завмерлим (_finished = true), CurrentClip лишається до наступного Play. Якщо Begin кличуть до PlayAtTime, а нападник досі тримає той самий кліп, _seen = true, t0 = ClipTime ≈ length. Після PlayAtTime перший Tick бачить t < _lastT - 0.1 і викликає End без камери. Сценарій вузький (той самий кліп підряд без проміжного), але захист тривіальний.",
+   "fix": "`_seen = r.Attacker.CurrentClip == r.Clip && !r.Attacker.Finished;`"
+  },
+  {
+   "title": "Після Skip() сповільнення режисера все одно вмикається",
+   "real": true,
+   "reason": "Простежено: RingMatchDirector.BeatAt (рядок 403) кличе _s.TimeWarp(0.4f,1.25f) на contact-0.15 с без перевірки; крок 4 документа блокує його лише за FinisherCine.Active. Після Skip/Abort Active = false, тож сповільнення, яке гравець пропустив, усе одно йде. Малий за наслідком, але суперечить 'темп звичайний'.",
+   "fix": "У RingFinisherCine: `public bool SlowSuppressed { get; private set; }`; у Begin на початку `SlowSuppressed = false;`; у Skip() перед Abort() `SlowSuppressed = true;`. Крок 4 документа: `if (FinisherCine != null && (FinisherCine.Active || FinisherCine.SlowSuppressed)) return;`"
+  },
+  {
+   "title": "Крок 1 документа не каже, що FinisherCine має існувати до ShowIdle() в Awake",
+   "real": true,
+   "reason": "RingStage3D.Awake: _director.Init(this) на рядку 241, ShowIdle() на 249, а ShowIdle кличе _director.EndMatch(). Крок 7 велить EndMatch викликати FinisherCine.End(). Місце створення в кроці 1 не вказано; створення після ShowIdle дало б NullReferenceException. Це недоговореність у документі (інтеграція — зона ПМ).",
+   "fix": "Крок 1: `FinisherCine = new RingFinisherCine(this);` створювати одразу після BuildActors(), до _director.Init(this) і ShowIdle(). У кроках 3 і 7 писати `_s.FinisherCine?.End()` / перевіряти на null."
+  },
+  {
+   "title": "Крок 5: Fx.Finisher() не має режиму без строба, а подія Sell обходить умову Active",
+   "real": false,
+   "reason": "RingFx.cs:254 уже враховує RingAccessibility.Flashes (parMul 1.2 без строба), а Timeline.Strobe = Flash && !Cheap лише звужує. Виклик Fx.Finisher() на Sell — наявна поведінка 'як зараз'. Це побажання до інтегратора щодо найнижчої якості, а не помилка коду чи документа, яку можна простежити.",
+   "fix": ""
+  },
+  {
+   "title": "Приклад Request у кроці 3 написаний лише для FinisherShot, змінні й fallback для FinisherFrame інші",
+   "real": true,
+   "reason": "Звірено: pAStart/yawAStart/tStart існують лише в RunChain (рядки 1250-1391); у RunPairRoots (1803, 1914) виклик FinisherFrame(A,B,pAc,pBc/pB). Документ це лише частково відзначає ('за коренями — pBc'). Дрібна документальна недоговореність, не код.",
+   "fix": "У кроці 3 додати таблицю двох місць: RunChain: AttackerStart=pAStart, VictimStart=pB, AttackerYaw=yawAStart, StartTime=tStart, Fallback=FinisherShot(A,B,ca,pB,yawA,ia); RunPairRoots: старт=pA0/pB0 (кореневі позиції цього методу), StartTime=0f, ContactVictim=pBc, Fallback=FinisherFrame(A,B,pAc,pBc). Repeat/Gimmick — режисер передає false/-1, поки ядро їх не дає."
+  },
+  {
+   "title": "Timeline лишається від кіно, що не стартувало",
+   "real": true,
+   "reason": "У Begin `_r = r; _tl = tl;` виконуються до перевірки першого плану; при !_shotOk повертається false, а Timeline вказує на розкладку, що не йшла; при tl.Empty лишається старий. Властивість документована як 'поточного чи останнього'.",
+   "fix": "Після End() ставити `_tl = null;`, а `_tl = tl;` присвоювати лише перед `Active = true` (використавши локальну tl до цього: у CutTo/Scene замінити _tl на tl або присвоїти _tl = tl перед CutTo і скидати `_tl = null` у гілках return false)."
+  },
+  {
+   "title": "Охоронців немає для Begin/Tick/Skip/End виконавця",
+   "real": false,
+   "reason": "Це побажання щодо тестів, а не дефект коду; симптоми реальних вад описані окремо.",
+   "fix": ""
+  },
+  {
+   "title": "Гілки Subject() для плану наслідку не перевіряються геометрією",
+   "real": false,
+   "reason": "Прогалина покриття, не помилка поведінки; без запуску мутацій не підтверджено.",
+   "fix": ""
+  },
+  {
+   "title": "Імовірності вставок 45% і 70% майже не закріплені",
+   "real": false,
+   "reason": "Прогалина покриття тестами, не дефект; не простежено хибної поведінки.",
+   "fix": ""
+  },
+  {
+   "title": "Hash_IsTheSameOnEveryMachine — тавтологічний еталон",
+   "real": false,
+   "reason": "Сама знахідка визнає, що тест коректний; це стильове зауваження.",
+   "fix": ""
+  },
+  {
+   "title": "Числові допуски ExtraTime не перевірені прогоном",
+   "real": false,
+   "reason": "Припущення без доказу; запуск тестів заборонений, простежити хибне падіння читанням неможливо.",
+   "fix": ""
+  }
+ ],
+ "notes": [
+  "Звірено проти робочого дерева магістралі.\n\nКомпіляція RingFinisherCine.cs, помилок не знайдено:\n- RingActor (public sealed): Slot (public readonly Transform), CurrentClip, Finished, ClipTime, PosePos, PoseYaw, HeadPos, усі public.\n- RingStage3D: Cine(Vector3, Vector3, float, bool) і CutTo(StageCam) public; Events public (RingClipEvents); static MatY, RingHalf, const PlaySpeed.\n- StageCam.Overview існує. CineMarks.Read -> RingBeats.MarkTime(RingClipEvents, string, string) public static.\n- RingCapsules.SegmentDistance і CapPoint(double, double, double) public. float неявно переходить у double.\n- RingTime (Models): Warp, Paused, Scale, Base. RingAccessibility.ReduceMotion/Flashes/ScreenShake (Game.Gameplay.Ring.UI.Menus) public static. GraphicsTier.IsLow (Visual/GraphicsTier.cs) існує.\n- Імена Request/Scene/Cut/CutTo не конфліктують, using-ів достатньо.\n\nЗвірено з RingFinisherCinePlan.cs: сигнатури Build, BeatAt, Speed, ExtraRealSeconds, Axis, Side, RefereeSpot, Solve, FreezeReal, FreezeSpeed збігаються з викликами. Ділення на нуль не знайдено: len > 1e-3 в dolly, Room, Frame з max(1e-6), ExtraRealSeconds захищена від playSpeed ≤ 0. Beats відсортовано, тож BeatAt коректний.\n\nЗаписи RingTime.Warp у магістралі: лише RingStage3D.SetWarp (TimeWarpCo) і RingFinisherCine. Скидання `RingTime.Reset()` є в RingGameBootstrap. Time.timeScale пишуть RingGameBootstrap(.Menus) із RingTime.Scale, бойова арена (інший режим) і сам виконавець. Пауза: SetWarp і End ставлять timeScale = RingTime.Scale, тобто 0 під паузою; _freezeLeft і наїзд не рухаються під паузою. На знесення сцени сповільнення не переживе лише з End() у OnDestroy (крок 7). Поточний RingStage3D.OnDestroy скидає тільки власний _timeCo, тож без кроку 7 Warp лишиться. Після OnDisable/SetActive(false) сцени без знесення Tick зупиниться, а Warp збережеться, але в коді такого шляху немає (OnDisable відсутній).\n\n§5 документа: існують FinisherShot(A, B, ca, pB, yawA, ia) (RingMatchDirector.cs:2068), FinisherFrame(A, B, aC, pB) (2081), корутина BeatAt (395) із _s.TimeWarp(0.4f, 1.25f) (403), BeatNow (451) із гілкою IsFinisherHit (467), TimeWarp у RingStage3D (147), LateUpdate (1476; три Tick, далі `if (_cam == null) return;`), RingStage3D.EndMatch (1057), OnDestroy (256), PlayAtTime (RingActor), director.Begin(MatchEngine) (143) і EndMatch (222) із StopAllCoroutines, BeatPlan.ClipTime. Порядок у RunChain: Transit, потім FinisherShot (1391), потім A.PlayAtTime (1402) в одному фреймі, тож `Begin до PlayAtTime`, а потім чекання до 3 кадрів дає роботу. У RunPairRoots FinisherFrame (1803) іде перед PlayInSlot (1812). Mapping ґіміків 0-7 збігається з enum Gimmick у CareerContent.cs. Крок 2 (місце Tick до розрахунку камери) і крок 8 (камера лишається на Cine до наступного SetShot) відповідають коду. SetShot із Cine скидає _camInit.\n\nНе перевірялося (за умовою не запускалось): тести плану, поведінка PlaceReferee (чи оновлює PosePos рефері одразу після Place), точний порядок Unity-апдейтів, Unity-NUnit 3.5 у RingFinisherCinePlanTests.cs (поза моєю ділянкою). Нових літералів кольору, шрифтів і кегля у файлах моєї ділянки немає.",
+  "Вад, які треба виправляти, не знайшов.\n\n(1) Компіляція RingIdleLife.cs (читав 0997849c проти робочого дерева магістралі). У файлі `using System; System.Collections.Generic; UnityEngine`, простір імен `Game.Gameplay.Ring.Stage`, збігається з RingActor.\n- RingActor — `public sealed class` у `Stage/Unity/RingActor.cs`.\n- Виклики звірено: `CurrentClip` (рядок 50), `Finished` (51), `ClipTime` (54), `ClipTimeTotal` (57), `PosePos` (623), `PoseYaw` (633), усе public get-властивості.\n- `PlayAtBlend(AnimationClip, float t, bool loop, Vector3 pos, float yaw, float fade, float speed = 1f, bool travel = false)` (рядок 309) — public, нестатичний. Усі три виклики (з 6 аргументами: clip, t, loop, pos, yaw, fade, плюс speed) підходять.\n- `RingIdlePhase` лише згадується в `<see cref>`: це `public static class` у тому ж просторі, тож cref резолвиться. `RingStage3D` тільки в коментарях.\n- Динаміка: Play скидає `_finished` і `_curLoops` (рядки 181–183). Нелупований кліп завмирає за 0,02 с до кінця й ставить `Finished` (612–617), як припускає виконавець. `_curLoops` росте лише для поточного лупа (536), тож лічба обертів у `Enter`/`Tick` коректна.\n- Перегляд перекладу `Math.Floor`/`Math.Max(float,float)` — неоднозначності немає, `Math` лише System.\n- Імена локальних змінних у `Tick` (s, cur, clip, total, left) між вкладеними й зовнішньою областями не конфліктують.\n- Логіка вставка/повернення перевірена трасуванням: перша вставка не раніше другої межі, вікно рахується в секундах часу кліпа (window*speed), дострокове повернення, режисерський кліп скидає стан. Помилок не знайшла.\n- Дрібниця, не вада: словник `_st` тримає знищених акторів, якщо власник сцени не викличе `Forget`. Виконавець у сцену не підключений.\n\n(2) RingIdleLifePlan.cs — чиста модель: є лише `using System` (не використовується), UnityEngine немає, System.Random немає. Хеш `Hash(int,int)` — цілочисельний unchecked, детермінований. Матриця `GimmickWeights` 8 рядків × 10 колонок, довжина збігається з `WrestlerClips` (10). Для ролі рефері вага 1 для 3 кліпів, `total > 0` завжди. Негативні `actorKey` безпечні (unchecked-приведення). У `Game.Tests.EditMode.csproj` підключено лише RingIdleLifePlan.cs; RingIdleLife.cs (Unity API) туди не потрапляє, і це правильно. Нових Color/hex/шрифтів/кегля у файлах немає.\n\n(3) ring_anims_idle.py сам нічого не пише на диск: немає open/write/export/save і шляхів до Assets. Це модуль для `exec` усередині ring_anims.py. Він розширює `apply_w` обгорткою з охоронцем `\"_idle_apply_w\" not in globals()` і додає кліпи в `MOVE_CLIPS` / `MOVE_CLIP_NODES` лише при виконанні в контексті генератора. Рядка exec у ring_anims.py немає. У `git diff --name-only 939f434c 0997849c` немає жодного ring_anims.py, FBX, маніфесту чи Assets/Art; змінені лише docs, tools, тести й .cs/.meta.\n\n(4) Коміт 68a38522 (tools/ring_design/anim_audit/* і ANIM_AUDIT_2026-11-14.md): пошук у доданих рядках (диски, /Users/, ім'я облікового запису, e-mail, password, token, api key, secret, AppData, LocalLow, .claude, dev\\, Alpha\\) дав лише `C:/Windows/Fonts/arial.ttf` і `arialbd.ttf` у render_clips.py (стандартний системний шлях, чутливих даних немає). README використовує відносні шляхи й `<тимчасова тека>`. Ключів, паролів і шляхів із ім'ям користувача немає.\nПобічне зауваження, не вада коду: у метаданих комітів автор — BagOfMilk <bagofmilk@protonmail.com>. Це e-mail автора коміту, який з'явиться в публічній історії, якщо гілку опублікують; змінювати чи ні, вирішує власник.",
+  "Звірено читанням (git show 0997849c) обох тестових файлів і обох моделей, плюс типи з магістралі. (1) NUnit 3.5: використано лише Is.EqualTo/Within/GreaterThan(OrEqual)/LessThan(OrEqual)/True/False/Null/NotNull/Not.EqualTo, Has.Member, Has.No.Member, CollectionAssert.AreEqual, Assert.That(..., Has.Member) — усе є в 3.5; Is.AnyOf, Assert.Multiple, ThrowsAsync відсутні. Синтаксис C# 9 (LangVersion 9) сумісний; змінні в сусідніх foreach не конфліктують; CineScene/CineMarks — структури, копії `var up = s` коректні. (2) Зовнішні залежності існують і публічні: CapPoint(double,double,double) з полями X,Y,Z (RingCapsules.cs), RingCapsules.SegmentDistance (public static), RingClipEvents.Parse (public static), RingBeats.MarkTime (public static, шукає базу пари без _A/_B), RingIdlePhase.IsWaitingLoop (public static, містить Ring_Stance_Loop і Ref_Idle_Loop), namespace Game.Gameplay.Ring.Stage; asmdef тестів посилається на Game.Gameplay. Дубльованих імен класів/enum у репозиторії немає. (3) csproj: додано лише два Compile-рядки на RingIdleLifePlan.cs і RingFinisherCinePlan.cs (теки Stage, не Stage/Unity); їхні залежності (RingBeats.cs, RingCapsules.cs, RingIdlePhase.cs) уже підключені на рядках 99–104; моделі не використовують UnityEngine (лише System, System.Collections.Generic). Тести підтягуються глобом Assets/Tests/EditMode/**/*.cs, тож нові файли потрапляють у headless автоматично. (4) Файлів, часу, випадковості й порядку виконання тести не використовують: жодних File./Path./Application, жодного System.Random, стан ні між тестами, ні статичний не зберігається; Hash еталони я незалежно відтворив у Python (збігаються), Rate=0.38, Rivals same=1/both=36 (пороги 15/60 ок), з нульовою вагою жести Fists для Літуна і Bounce для Силача не трапляються, 10 різних жестів без ґіміка. (5) Читання з диска за відносними шляхами відсутнє — під Unity Test Runner проблем немає. Ручна арифметика для ключових тестів (порядок планів, MinShot, фіксація сторони камери, Side у крайових сценах, різниця early/e10 > 0.1, крок рампи 0.04 < 0.05) сходиться; прогнати нічого не можна, тому єдиний реальний ризик — вузькі допуски ExtraTime (знахідка 4). Основні мутації моделей (вікно/запас/NaN, хват/наслідок/промах/повтор, рампа й бюджет, ReduceMotion/Cheap/Flashes/Shake, вісь, рефері, канати, кадрування) тестами ловляться; перелічені знахідки — другорядні прогалини, помилок компіляції чи гарантованих падінь не знайдено.\"}"
+ ]
+}
