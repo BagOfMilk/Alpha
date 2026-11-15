@@ -1527,6 +1527,7 @@ namespace Game.Tests.EditMode
                 MoneyDelta = -9999, DevPointsDelta = 99, TrustDelta = -99, FeudDelta = 99, HypeBonusDelta = -99, RivalBoosted = true,
                 InjuredZone = 1, PopularityDelta = -99, LockerDelta = -99, ActionsDelta = -9, PlanChanged = true, OpponentChanged = true,
                 CoachRaised = true, TurnedTo = RingPath.Rebel, NeedsChoice = true, RumorKey = "rumor.next_opponent",
+                RecoveredZone = 1, InjuryWeeksBefore = 99, InjuryWeeksAfter = 97, ZoneDamageBefore = 99, ZoneDamageAfter = 97,
             };
         }
 
@@ -1539,7 +1540,7 @@ namespace Game.Tests.EditMode
         {
             var pinned = new[]
             {
-                CareerScreenLines.WeekDelta.Injury, CareerScreenLines.WeekDelta.Turn, CareerScreenLines.WeekDelta.Money,
+                CareerScreenLines.WeekDelta.Injury, CareerScreenLines.WeekDelta.Recovery, CareerScreenLines.WeekDelta.Turn, CareerScreenLines.WeekDelta.Money,
                 CareerScreenLines.WeekDelta.DevPoints, CareerScreenLines.WeekDelta.Trust, CareerScreenLines.WeekDelta.Popularity,
                 CareerScreenLines.WeekDelta.Feud, CareerScreenLines.WeekDelta.Hype, CareerScreenLines.WeekDelta.Rival,
                 CareerScreenLines.WeekDelta.Opponent, CareerScreenLines.WeekDelta.Plan, CareerScreenLines.WeekDelta.Locker,
@@ -1565,6 +1566,94 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(T.Format("c.delta.injury", T.Get("bodyzone.1")), CareerScreenLines.WeekDeltaText(T, w, CareerScreenLines.WeekDelta.Injury, null, false));
             Assert.AreEqual(T.Format("c.delta.money", "−9999"), CareerScreenLines.WeekDeltaText(T, w, CareerScreenLines.WeekDelta.Money, null, false));
             Assert.IsEmpty(CareerScreenLines.WeekResultDeltas(T, new WeekActionResult { Ok = true }, null, false), "дельт немає — рядка 2 немає");
+        }
+
+        /// <summary>
+        /// «Відновлення» (дані «Кар'єри» 15.11.2026, рядок — доручення ПМ, У0 АД): рядок 1 — «Відновлення · Зона», бо зону обирає гра;
+        /// перша дельта — що дало: тижні травми, якщо їх поменшало, інакше ушкодження (правило «Кар'єри»); гроші лікаря — за нею; смуга
+        /// Gold. «Лікувати нічого» — за ознакою ядра, причиною рядком 2, Signal. Інша відмова — назва дії й причина, «було» = «стало» нічого
+        /// не показує. Наскрізно — справжнім <see cref="CareerSession.Recover"/>.
+        /// </summary>
+        [Test]
+        public void WeekStrip_Recovery_ZoneInTheHead_WhatItGaveFirst_NothingToHealAsTheReason()
+        {
+            string act = T.Get("week.action.1");
+            Assert.AreEqual("Відновлення", act);
+            // з лікарем: травма 3 → 1, ушкодження 4 → 2 — показано травму
+            var doc = new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = true, MoneyDelta = -CareerRules.DoctorCost, RecoveredZone = (int)BodyZone.Legs,
+                InjuryWeeksBefore = 3, InjuryWeeksAfter = 1, ZoneDamageBefore = 4, ZoneDamageAfter = 2 };
+            Assert.AreEqual(act + " · " + T.Get("bodyzone.2"), CareerScreenLines.WeekResultHead(T, doc));
+            Assert.AreEqual("Відновлення · Ноги", CareerScreenLines.WeekResultHead(T, doc));
+            var d = CareerScreenLines.WeekResultDeltas(T, doc, null, false);
+            CollectionAssert.AreEqual(new[] { "травма 3 → 1 тиж.", T.Format("c.delta.money", RingChances.Signed(-CareerRules.DoctorCost)) }, d,
+                "травма першою, гроші лікаря — за нею; ушкодження не показано, бо тижні травми зменшились");
+            Assert.AreEqual(CareerScreenLines.WeekHeal.Injury, CareerScreenLines.WeekRecoveryHealed(doc));
+            Assert.IsTrue(CareerScreenLines.WeekResultSucceeded(doc), "відновлення вдалось — Gold");
+            Assert.IsNull(CareerScreenLines.WeekResultRoll(T, doc), "кидка немає — підказка лише зі схованого");
+            foreach (var s in d) NoMissingKey(s, "відновлення: дельта");
+            NoMissingKey(CareerScreenLines.WeekResultHead(T, doc), "відновлення: рядок 1");
+            // травми немає, ушкодження зменшилось — ушкодження
+            var dmg = new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = true, RecoveredZone = (int)BodyZone.Body, ZoneDamageBefore = 4, ZoneDamageAfter = 2 };
+            Assert.AreEqual("Відновлення · Корпус", CareerScreenLines.WeekResultHead(T, dmg));
+            CollectionAssert.AreEqual(new[] { "ушкодження 4 → 2" }, CareerScreenLines.WeekResultDeltas(T, dmg, null, false));
+            Assert.AreEqual(CareerScreenLines.WeekHeal.Damage, CareerScreenLines.WeekRecoveryHealed(dmg));
+            // травма дійшла до нуля — словом «травма зажила» (пропозиція АД 15.11.2026), а не «1 → 0 тиж.»; ушкодження поруч не показано
+            var healed = new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = true, RecoveredZone = (int)BodyZone.Head, InjuryWeeksBefore = 1, InjuryWeeksAfter = 0,
+                ZoneDamageBefore = 2, ZoneDamageAfter = 0 };
+            Assert.AreEqual("травма зажила", CareerScreenLines.RecoveryLine(T, healed));
+            Assert.AreEqual("Відновлення · Голова", CareerScreenLines.WeekResultHead(T, healed));
+            CollectionAssert.AreEqual(new[] { "травма зажила" }, CareerScreenLines.WeekResultDeltas(T, healed, null, false));
+            NoMissingKey(CareerScreenLines.RecoveryLine(T, healed), "c.delta.recover.healed");
+            Assert.AreEqual("травма зажила", CareerScreenLines.RecoveryLine(T, new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = true, RecoveredZone = 0,
+                InjuryWeeksBefore = 2, InjuryWeeksAfter = 0 }), "лікар знімає два тижні до нуля — теж «зажила»");
+            Assert.AreEqual("травма 2 → 1 тиж.", CareerScreenLines.RecoveryLine(T, new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = true, RecoveredZone = 0,
+                InjuryWeeksBefore = 2, InjuryWeeksAfter = 1 }), "не до нуля — числами");
+            // тижні травми не зменшились (а ушкодження — так) — ушкодження; нічого не зменшилось — ні зони в рядку 1, ні дельти
+            var injSame = new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = true, RecoveredZone = 1, InjuryWeeksBefore = 2, InjuryWeeksAfter = 2, ZoneDamageBefore = 3, ZoneDamageAfter = 1 };
+            Assert.AreEqual("ушкодження 3 → 1", CareerScreenLines.RecoveryLine(T, injSame));
+            var same = new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = true, RecoveredZone = 1, InjuryWeeksBefore = 2, InjuryWeeksAfter = 2, ZoneDamageBefore = 3, ZoneDamageAfter = 3 };
+            Assert.AreEqual(CareerScreenLines.WeekHeal.None, CareerScreenLines.WeekRecoveryHealed(same));
+            Assert.AreEqual(act + " · " + T.Get("c.week.result.done"), CareerScreenLines.WeekResultHead(T, same), "нічого не змінилось — «Зроблено», зони немає");
+            Assert.IsEmpty(CareerScreenLines.WeekResultDeltas(T, same, null, false));
+            var worse = new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = true, RecoveredZone = 1, InjuryWeeksBefore = 1, InjuryWeeksAfter = 2, ZoneDamageBefore = 1, ZoneDamageAfter = 3 };
+            Assert.IsNull(CareerScreenLines.RecoveryLine(T, worse), "зростання — не «що дало відновлення»");
+            // інша дія (зона −1) — дельти відновлення немає
+            Assert.IsNull(CareerScreenLines.RecoveryLine(T, new WeekActionResult { Kind = WeekActionKind.Training, Ok = true, InjuryWeeksBefore = 3, InjuryWeeksAfter = 1 }));
+            // зона заповнена, але дія не тієї категорії — рядок 1 за своєю дією
+            Assert.AreEqual(T.Get("week.action.0") + " · " + T.Get("c.week.result.done"),
+                CareerScreenLines.WeekResultHead(T, new WeekActionResult { Kind = WeekActionKind.Training, Ok = true, RecoveredZone = 0, InjuryWeeksBefore = 2, InjuryWeeksAfter = 1 }));
+            // лікувати нічого — ознака ядра, причина рядком 2, Signal; навіть коли слово причини інше
+            var nothing = new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = false, Reason = "nothing", NothingToHeal = true, RecoveredZone = 0 };
+            Assert.AreEqual(act, CareerScreenLines.WeekResultHead(T, nothing));
+            CollectionAssert.AreEqual(new[] { "Нема що лікувати" }, CareerScreenLines.WeekResultDeltas(T, nothing, null, false));
+            Assert.IsFalse(CareerScreenLines.WeekResultSucceeded(nothing));
+            var flagOnly = new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = false, Reason = "stage", NothingToHeal = true, RecoveredZone = 0 };
+            CollectionAssert.AreEqual(new[] { T.Get("week.reason.nothing") }, CareerScreenLines.WeekResultDeltas(T, flagOnly, null, false), "«нічого лікувати» — за ознакою, не за словом");
+            // інша відмова: «було» = «стало», зона є — назва дії й причина, без дельти відновлення
+            var money = new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = false, Reason = "money", RecoveredZone = 1, InjuryWeeksBefore = 3, InjuryWeeksAfter = 3 };
+            Assert.AreEqual(act, CareerScreenLines.WeekResultHead(T, money));
+            CollectionAssert.AreEqual(new[] { T.Get("week.reason.money") }, CareerScreenLines.WeekResultDeltas(T, money, null, false));
+            Assert.IsNull(CareerScreenLines.RecoveryLine(T, money));
+            // наскрізно: справжнє відновлення ядра
+            var s1 = CareerKit.NewHero(3);
+            s1.State.Money = 100;
+            s1.State.Injury[(int)BodyZone.Legs] = 3; s1.State.ZoneDamage[(int)BodyZone.Legs] = 4;
+            var real = s1.Recover(BodyZone.Legs, true);
+            Assert.AreEqual("Відновлення · Ноги", CareerScreenLines.WeekResultHead(T, real));
+            Assert.AreEqual("травма 3 → 1 тиж.", CareerScreenLines.WeekResultDeltas(T, real, null, false)[0]);
+            s1.State.ZoneDamage[(int)BodyZone.Body] = 3;
+            var realDmg = s1.Recover(BodyZone.Body, false);
+            Assert.AreEqual("Відновлення · Корпус", CareerScreenLines.WeekResultHead(T, realDmg));
+            CollectionAssert.AreEqual(new[] { "ушкодження 3 → 1" }, CareerScreenLines.WeekResultDeltas(T, realDmg, null, false));
+            var s2 = CareerKit.NewHero(3);   // дій тижня три — новий тиждень для «зажила» і «нічого»
+            s2.State.Injury[(int)BodyZone.Head] = 1;
+            var realHealed = s2.Recover(BodyZone.Head, false);
+            Assert.AreEqual("Відновлення · Голова", CareerScreenLines.WeekResultHead(T, realHealed));
+            CollectionAssert.AreEqual(new[] { "травма зажила" }, CareerScreenLines.WeekResultDeltas(T, realHealed, null, false));
+            var realNone = s2.Recover(BodyZone.Head, false);
+            Assert.IsTrue(realNone.NothingToHeal);
+            Assert.AreEqual(act, CareerScreenLines.WeekResultHead(T, realNone));
+            CollectionAssert.AreEqual(new[] { "Нема що лікувати" }, CareerScreenLines.WeekResultDeltas(T, realNone, null, false));
         }
 
         /// <summary>
@@ -1630,6 +1719,8 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(CareerScreenLines.WeekResultSucceeded(new WeekActionResult { Kind = WeekActionKind.SideJob, Ok = true, HasRoll = true, Tier = RollTier.Miss, MoneyDelta = 40 }),
                 "підробіток без травми — вдався, хоч рівень кидка «Провал»");
             Assert.IsTrue(CareerScreenLines.WeekResultSucceeded(new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = true }));
+            Assert.IsFalse(CareerScreenLines.WeekResultSucceeded(new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = false, Reason = "nothing", NothingToHeal = true }),
+                "лікувати нічого — відмова, Signal");
             Assert.IsFalse(CareerScreenLines.WeekResultSucceeded(new WeekActionResult { Kind = WeekActionKind.Training, Ok = false, Reason = "money" }), "відмова");
             Assert.IsFalse(CareerScreenLines.WeekResultSucceeded(null));
         }

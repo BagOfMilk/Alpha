@@ -226,7 +226,9 @@ namespace Game.Gameplay.Ring
 
         /// <summary>
         /// Стрічка дії тижня (АД 15.11.2026, крок 10 пакета 4:3): дія вдалась — золота смуга й чутка в рядку-підказці; провал кидка і
-        /// підробіток з травмою — Signal; відмова ядра — причина рядком 2; найгірший випадок — усі дельти з «ще N» і найширше ім'я ростера в рядку суперника Б6
+        /// підробіток з травмою — Signal; відновлення — зона в рядку 1, «травма 3 → 1 тиж.» з лікарем, «травма зажила» на нулі, а «нема що
+        /// лікувати» — причиною (Signal);
+        /// відмова ядра — причина рядком 2; найгірший випадок — усі дельти з «ще N» і найширше ім'я ростера в рядку суперника Б6
         /// (кінець «…»), а з фокусом на стрічці — сховане в рядку-підказці (кидок першим). Результати синтетичні й лише на кадр: стан
         /// кар'єри не змінюється, наостанок повертається справжній останній результат.
         /// </summary>
@@ -236,7 +238,8 @@ namespace Game.Gameplay.Ring
             // найширше ім'я ростера шрифтом стрічки — виміряв CareerTextFitTests.WeekStrip_Deltas_AndTheHover_FitOnTheSyntheticWorst
             var widest = h.CareerForShots != null ? h.CareerForShots.Content.FindNpc("kharakternyk") : null;
             if (widest == null) Debug.LogError("[Ринг] огляд меню: немає борця kharakternyk — кадр найгіршої стрічки з іменем картки");
-            var names = new[] { "week_strip_ok", "week_strip_miss", "week_strip_job_injury", "week_strip_refusal", "week_strip_worst" };
+            var names = new[] { "week_strip_ok", "week_strip_miss", "week_strip_job_injury", "week_strip_recovery", "week_strip_recovery_healed",
+                "week_strip_recovery_nothing", "week_strip_refusal", "week_strip_worst" };
             var results = new[]
             {
                 new WeekActionResult { Kind = WeekActionKind.Promo, Ok = true, HasRoll = true, Roll = 9, Modifier = 2, Total = 11, Tier = RollTier.Strong,
@@ -246,6 +249,14 @@ namespace Game.Gameplay.Ring
                 // підробіток з травмою (АД 15.11.2026): вердикт «Травма», Signal; травма першою дельтою, гроші — за нею
                 new WeekActionResult { Kind = WeekActionKind.SideJob, Ok = true, HasRoll = true, Roll = 3, Total = 3, Tier = RollTier.Miss,
                     MoneyDelta = 40, InjuredZone = 1 },
+                // відновлення з лікарем (дані «Кар'єри» 15.11.2026): «Відновлення · Ноги», «травма 3 → 1 тиж. · гроші −N»
+                new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = true, MoneyDelta = -CareerRules.DoctorCost, RecoveredZone = (int)BodyZone.Legs,
+                    InjuryWeeksBefore = 3, InjuryWeeksAfter = 1, ZoneDamageBefore = 4, ZoneDamageAfter = 2 },
+                // травма дійшла до нуля — «Відновлення · Голова», «травма зажила» (пропозиція АД 15.11.2026)
+                new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = true, RecoveredZone = (int)BodyZone.Head,
+                    InjuryWeeksBefore = 1, InjuryWeeksAfter = 0, ZoneDamageBefore = 2, ZoneDamageAfter = 0 },
+                // лікувати нічого: дію не витрачено — причина рядком 2, Signal
+                new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = false, Reason = "nothing", NothingToHeal = true, RecoveredZone = (int)BodyZone.Head },
                 new WeekActionResult { Kind = WeekActionKind.SideJob, Ok = false, Reason = "exclusive" },
                 new WeekActionResult { Kind = WeekActionKind.Backstage, Ok = true, HasRoll = true, Roll = 4, Modifier = -1, Total = 3, Tier = RollTier.Miss,
                     OpponentChanged = true, PlanChanged = true, LockerDelta = -2, ActionsDelta = -1, CoachRaised = true, NeedsChoice = true },   // суперник першим, за ним ще 5 (Б6, 36 з 50)

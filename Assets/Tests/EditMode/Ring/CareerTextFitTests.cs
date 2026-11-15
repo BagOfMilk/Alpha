@@ -440,6 +440,13 @@ namespace Game.Tests.EditMode
                         TextFont.Width(h, Body) + RenderSlack, CareerTileLayout.WeekStripTextW));
                 }
             }
+            for (int z = 0; z < 3; z++)
+            {
+                string h = CareerScreenLines.WeekResultHead(TAll, new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = true, RecoveredZone = z, InjuryWeeksBefore = 2, InjuryWeeksAfter = 1 });
+                if (h.IndexOf('⟦') >= 0) bad.Add("відновлення: немає ключа в «" + h + "»");
+                if (!StripFits(h)) bad.Add(string.Format(CultureInfo.InvariantCulture, "відновлення: «{0}» — {1:0.0} > {2:0}", h,
+                    TextFont.Width(h, Body) + RenderSlack, CareerTileLayout.WeekStripTextW));
+            }
             int reasons = 0;
             foreach (var file in new[] { "ui_uk.json", "backstage_uk.json" })
                 foreach (var kv in MiniJson.ParseObject(CareerKit.Read(file)))
@@ -454,6 +461,76 @@ namespace Game.Tests.EditMode
                         TextFont.Width(line2[0], Body) + RenderSlack, CareerTileLayout.WeekStripTextW));
                 }
             Assert.GreaterOrEqual(reasons, 9, "причини ядра — week.reason.* в ui_uk.json і backstage_uk.json");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// «Відновлення» (доручення ПМ 15.11.2026: «Охоронці TTF на 360/340, як для решти»): для кожної зони, травми й ушкодження з
+        /// двозначними «було → стало» і «травма зажила», з лікарем і без, героєм і героїнею — рядок 1 і рядок 2 (дельта відновлення першою, гроші лікаря —
+        /// за нею) цілими в 360, без «ще N» і без обрізання; підказка (кидка немає, сховане — нічого чи все, крім першої) — не більше
+        /// двох рядків на 340; «Нема що лікувати» — одним рядком. Гліфи («→») — у шрифті тексту.
+        /// </summary>
+        [Test]
+        public void WeekStrip_Recovery_FitsTheMoneyColumn_AndTheHover()
+        {
+            var bad = new List<string>();
+            void Glyphs(string where, string s)
+            {
+                if (TextFont.Missing(s).Count > 0) bad.Add(where + ": у шрифті тексту немає «" + new string(TextFont.Missing(s).ToArray()) + "»");
+            }
+            var heroine = RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json"), CareerKit.Read("backstage_uk.json"));
+            HeroForms.Apply(heroine, true);
+            int cases = 0;
+            float widest1 = 0f, widest2 = 0f;
+            string w1 = null, w2 = null;
+            foreach (var t in new[] { TAll, heroine })
+                for (int z = 0; z < 3; z++)
+                    foreach (int mode in new[] { 0, 1, 2 })   // травма числами, травма зажила, ушкодження
+                        foreach (bool doctor in new[] { true, false })
+                        {
+                            cases++;
+                            var r = new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = true, RecoveredZone = z,
+                                InjuryWeeksBefore = mode == 2 ? 0 : 99, InjuryWeeksAfter = mode == 0 ? 97 : 0, ZoneDamageBefore = 99, ZoneDamageAfter = 97,
+                                MoneyDelta = doctor ? -9999 : 0 };
+                            string head = CareerScreenLines.WeekResultHead(t, r);
+                            var deltas = CareerScreenLines.WeekResultDeltas(t, r, null, false);
+                            string first = CareerScreenLines.RecoveryLine(t, r);
+                            if (first == null || deltas.Count == 0 || deltas[0] != first) { bad.Add("відновлення без своєї дельти першою: «" + string.Join(" · ", deltas) + "»"); continue; }
+                            if (!StripFits(head)) bad.Add(string.Format(CultureInfo.InvariantCulture, "рядок 1: «{0}» — {1:0.0} > {2:0}", head,
+                                TextFont.Width(head, Body) + RenderSlack, CareerTileLayout.WeekStripTextW));
+                            Glyphs("рядок 1", head);
+                            string line;
+                            bool clipped;
+                            int k = CareerScreenLines.StripParts(t, deltas, StripFits, out line, out clipped);
+                            if (k != deltas.Count || clipped || !StripFits(line))
+                                bad.Add(string.Format(CultureInfo.InvariantCulture, "рядок 2: «{0}» — {1:0.0} > {2:0} (показано {3} з {4})", line,
+                                    TextFont.Width(line, Body) + RenderSlack, CareerTileLayout.WeekStripTextW, k, deltas.Count));
+                            Glyphs("рядок 2", line);
+                            float hw = TextFont.Width(head, Body) + RenderSlack, lw = TextFont.Width(line, Body) + RenderSlack;
+                            if (hw > widest1) { widest1 = hw; w1 = head; }
+                            if (lw > widest2) { widest2 = lw; w2 = line; }
+                            // підказка будується лише з того, що влазить (FitParts), тож міряється повнота: сховане цілим, без «ще N»
+                            Assert.IsNull(CareerScreenLines.WeekResultRoll(t, r), "кидка у відновлення немає");
+                            string hover = CareerScreenLines.WeekResultHover(t, null, deltas.GetRange(1, deltas.Count - 1), HoverFits);
+                            if (deltas.Count > 1 && (hover == null || hover.IndexOf(deltas[1], StringComparison.Ordinal) < 0))
+                                bad.Add("підказка без схованих грошей лікаря цілими: «" + hover + "»");
+                            string all = CareerScreenLines.WeekResultHover(t, null, deltas, HoverFits);
+                            foreach (var d in deltas)
+                                if (all == null || all.IndexOf(d, StringComparison.Ordinal) < 0) bad.Add("підказка з усім — не ціла на " + WeekHintNarrowest + ": «" + all + "»");
+                        }
+            Assert.AreEqual(36, cases);
+            TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "відновлення: найширший рядок 1 «{0}» — {1:0.0}, рядок 2 «{2}» — {3:0.0} з {4:0}",
+                w1, widest1, w2, widest2, CareerTileLayout.WeekStripTextW));
+            foreach (var t in new[] { TAll, heroine })
+                for (int z = 0; z < 3; z++)
+                {
+                    var nothing = new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = false, Reason = "nothing", NothingToHeal = true, RecoveredZone = z };
+                    var n2 = CareerScreenLines.WeekResultDeltas(t, nothing, null, false);
+                    string shown, nh = CareerScreenLines.WeekResultHead(t, nothing);
+                    if (n2.Count != 1 || CareerScreenLines.FitParts(t, n2, StripFits, out shown) != 1) bad.Add("«нема що лікувати» — не один рядок: «" + string.Join(" · ", n2) + "»");
+                    if (!StripFits(nh)) bad.Add("«нема що лікувати», рядок 1: «" + nh + "»");
+                    Glyphs("нема що лікувати", n2[0]);
+                }
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
 
