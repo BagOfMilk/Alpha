@@ -113,6 +113,8 @@
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/BackstageCast.cs" />
     <!-- Ринг: живе очікування (вставки в стійку, власник 14.11.2026) — чистий C#, охоронці RingIdleLifePlanTests. -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingIdleLifePlan.cs" />
+    <!-- Ринг: фінішер як кіно (розкадровка, рампа сповільнення, місце камери; власник 14.11.2026) — чистий C#, охоронці RingFinisherCinePlanTests. -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingFinisherCinePlan.cs" />
   </ItemGroup>
 
   <ItemGroup>
