@@ -680,8 +680,15 @@ namespace Game.Gameplay.Ring.UI
         }
 
         /// <summary>Ім'я суперника найближчого шоу з картки тижня (як «Суперник: …» на картці вечора); немає картки — null.</summary>
+        /// <summary>
+        /// Огляд меню (<c>RingMenuShots</c>): ім'я в рядку суперника Б6 стрічки дії замість суперника картки — кадр найгіршого випадку
+        /// (найширше ім'я ростера); null — суперник картки. Гра його не ставить.
+        /// </summary>
+        internal static string OpponentNameForShots;
+
         private string OpponentName()
         {
+            if (OpponentNameForShots != null) return OpponentNameForShots;
             var w = C.GetWeekView();
             return w != null && w.Card != null && w.Card.Opponent != null ? T.Get(w.Card.Opponent.NameKey) : null;
         }
