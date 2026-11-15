@@ -351,6 +351,8 @@ namespace Game.Tests.EditMode
         /// «ҐІМІК»), теж із запасом. Обидва числа — не з моделі (шапку збирає екран), тож це оцінка, а не точна межа.
         /// </summary>
         private const float WeekHintNarrowest = CareerTileLayout.WeekHintNarrowest, CreateHintNarrowest = 650f;
+        /// <summary>Найвужча підказка шапки тижня, виміряна аудитом 11.11.2026 (4:3, очки розвитку двоцифрові).</summary>
+        private const float WeekHintMeasured = 355.7f;
         /// <summary>
         /// Шапка тижня, коли треба обрати нагороду за промо: крапок дій і «лишилось» немає — аудит виміряв 515,9 на 4:3; саме тоді
         /// підказка може бути двома текстами разом («промо наполовину» + «грошей на життя не було»), як у WeekScreenView.
@@ -361,6 +363,9 @@ namespace Game.Tests.EditMode
         public void Hints_TwoFullLinesAtMost_OnTheNarrowestHeader()
         {
             var bad = new List<string>();
+            // межа міри — не ширша за виміряну шапку: інакше всі охоронці підказки (і підказка стрічки дії в рушії) міряють вільніше,
+            // ніж гравець бачить на 4:3 (мутація 340 → 400 проходила, 15.11.2026)
+            Assert.LessOrEqual(CareerTileLayout.WeekHintNarrowest, WeekHintMeasured, "найвужча підказка шапки тижня — не ширша за виміряну аудитом");
             float box = CareerTileLayout.HintMaxLines * TextFont.LineHeight(Body) + CareerTileLayout.HintPadV;
             if (box > CareerTileLayout.HintMaxHeight + 0.5f)
                 bad.Add(string.Format("підказка: {0} рядки = {1:0.0} > HintMaxHeight {2:0}", CareerTileLayout.HintMaxLines, box, CareerTileLayout.HintMaxHeight));
