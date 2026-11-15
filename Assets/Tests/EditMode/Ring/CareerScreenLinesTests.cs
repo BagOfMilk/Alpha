@@ -419,6 +419,234 @@ namespace Game.Tests.EditMode
             return t;
         }
 
+        /// <summary>Ширина-заглушка для правила імені: 20 на знак на кеглі 40 (лінійна за кеглем).</summary>
+        private static float Px20(string s) { return 20f * (s ?? "").Length; }
+
+        /// <summary>
+        /// Довге ім'я на стрічці (ПМ 14.11.2026: «можна зменшувати кегль до мінімуму токенів (не нижче 15 — охоронець), а далі
+        /// другий рядок або «…». Мітка ролі й силует мають лишатися вільними»): правило <see cref="CareerTileLayout.FitStripName"/>
+        /// крок за кроком — 40; менший з ґіміком до 26; без ґіміка до 18; два рядки 19…15; один рядок до 15; «…» на 15.
+        /// </summary>
+        [Test]
+        public void StripName_FitRule_StepByStep()
+        {
+            var f = CareerTileLayout.FitStripName("ЛЕВ", Px20, 200f, 300f);
+            Assert.AreEqual(40f, f.Size); Assert.IsFalse(f.HideOptional); Assert.AreEqual("ЛЕВ", f.Text); Assert.IsFalse(f.TwoLines || f.Ellipsis);
+            // 15 знаків = 300 на 40; до мітки з ґіміком 210 → 28: ґімік лишається
+            string n15 = new string('А', 15);
+            f = CareerTileLayout.FitStripName(n15, Px20, 210f, 300f);
+            Assert.AreEqual(28f, f.Size); Assert.IsFalse(f.HideOptional, "28 ≥ 26 — ґімік на місці");
+            // 180 → 24 < 26: ґімік ховається, без нього 250 → 33
+            f = CareerTileLayout.FitStripName(n15, Px20, 180f, 250f);
+            Assert.AreEqual(33f, f.Size); Assert.IsTrue(f.HideOptional); Assert.IsFalse(f.TwoLines || f.Ellipsis);
+            // без ґіміка місця вдосталь — кегль не більший за 40
+            f = CareerTileLayout.FitStripName(n15, Px20, 180f, 1000f);
+            Assert.AreEqual(40f, f.Size); Assert.IsTrue(f.HideOptional);
+            // 10 + пробіл + 11 = 440; без ґіміка 150 → 13 < 18: два рядки, довший 220 → 27, але не більше StripNameTwoLineMax
+            string two = new string('А', 10) + " " + new string('Б', 11);
+            f = CareerTileLayout.FitStripName(two, Px20, 100f, 150f);
+            Assert.IsTrue(f.TwoLines); Assert.IsTrue(f.HideOptional); Assert.IsFalse(f.Ellipsis);
+            Assert.AreEqual(CareerTileLayout.StripNameTwoLineMax, f.Size);
+            Assert.AreEqual(new string('А', 10) + "\n" + new string('Б', 11), f.Text);
+            // два рядки на 16: довший 220, місця 88
+            f = CareerTileLayout.FitStripName(two, Px20, 50f, 88f);
+            Assert.IsTrue(f.TwoLines); Assert.AreEqual(16f, f.Size);
+            // без пробілу двох рядків немає: один рядок 16 (300 у 120)
+            f = CareerTileLayout.FitStripName(n15, Px20, 50f, 120f);
+            Assert.IsFalse(f.TwoLines || f.Ellipsis); Assert.AreEqual(16f, f.Size); Assert.AreEqual(n15, f.Text);
+            // і на 15 не влазить — «…» на 15: місце 100 на 15 = 266,7 на 40 → 12 літер + «…» (260)
+            f = CareerTileLayout.FitStripName(n15, Px20, 50f, 100f);
+            Assert.IsTrue(f.Ellipsis); Assert.IsTrue(f.HideOptional); Assert.IsFalse(f.TwoLines);
+            Assert.AreEqual(CareerTileLayout.StripNameMinSize, f.Size); Assert.AreEqual(new string('А', 12) + "…", f.Text);
+            // перше слово не влазить і на 15 (200 > 160) — «…» одним рядком: 7 літер + «…»
+            f = CareerTileLayout.FitStripName(two, Px20, 50f, 60f);
+            Assert.IsTrue(f.Ellipsis); Assert.IsFalse(f.TwoLines); Assert.AreEqual(new string('А', 7) + "…", f.Text);
+            // перше слово влазить на 15, а рівні рядки — ні (240 > 160): перший рядок цілим, другий — з «…»
+            f = CareerTileLayout.FitStripName("АААА " + new string('Б', 12), Px20, 50f, 60f);
+            Assert.IsTrue(f.Ellipsis); Assert.IsTrue(f.TwoLines); Assert.AreEqual(CareerTileLayout.StripNameMinSize, f.Size);
+            Assert.AreEqual("АААА\n" + new string('Б', 7) + "…", f.Text);
+            // кілька слів: першим рядком — найбільше слів, що влазять
+            f = CareerTileLayout.FitStripName("АА ББ ВВ " + new string('Г', 12), Px20, 50f, 60f);
+            Assert.AreEqual("АА ББ ВВ\n" + new string('Г', 7) + "…", f.Text);
+            Assert.AreEqual("…", CareerTileLayout.Clip("ААА", Px20, 10f), "і перша літера не влазить — лише «…»");
+            Assert.AreEqual("ААА", CareerTileLayout.Clip("ААА", Px20, 60f), "влазить — як є");
+            Assert.AreEqual("А…", CareerTileLayout.Clip("А БВ", Px20, 50f), "пробіл перед «…» знято");
+            // розкладки ще немає — ім'я як є
+            f = CareerTileLayout.FitStripName(n15, Px20, float.NaN, 100f);
+            Assert.AreEqual(40f, f.Size); Assert.IsFalse(f.HideOptional || f.Ellipsis || f.TwoLines);
+            f = CareerTileLayout.FitStripName(n15, Px20, 100f, float.NaN);
+            Assert.AreEqual(40f, f.Size); Assert.IsFalse(f.HideOptional || f.Ellipsis);
+            f = CareerTileLayout.FitStripName(null, Px20, 10f, 10f);
+            Assert.AreEqual("", f.Text); Assert.AreEqual(40f, f.Size);
+        }
+
+        /// <summary>
+        /// Хоч яким буде місце, ім'я не лягає на мітку ролі й ляльку: кожен рядок у місці (з ґіміком чи без нього — як вирішено),
+        /// кегль 15…40, ґімік на місці лише від 26, два рядки — не більше StripNameTwoLineMax, «…» — лише на 15.
+        /// </summary>
+        [Test]
+        public void StripName_Fit_NeverCoversTheTagOrTheDoll()
+        {
+            string[] names = { "ЛЕВ", "МАКСИМІЛІАН ШЕРШЕНЬКОВИЙ", new string('Ю', 24), "А Б В Г Д Е Є Ж З И І Ї", "ДУЖЕ  ДОВГЕ  ІМ'Я" };
+            int fits = 0, ell = 0;
+            foreach (var n in names)
+                for (float without = 20f; without <= 420f; without += 7f)
+                    for (float with = 0f; with <= without; with += 11f)
+                    {
+                        var f = CareerTileLayout.FitStripName(n, Px20, with, without);
+                        string where = string.Format("«{0}», з ґіміком {1}, без {2}", n, with, without);
+                        Assert.GreaterOrEqual(f.Size, CareerTileLayout.StripNameMinSize, where);
+                        Assert.LessOrEqual(f.Size, CareerTileLayout.StripNameSize, where);
+                        if (!f.HideOptional) Assert.GreaterOrEqual(f.Size, CareerTileLayout.StripNameKeepTagMin, where + ": ґімік лишився на дрібному імені");
+                        if (f.TwoLines) Assert.LessOrEqual(f.Size, CareerTileLayout.StripNameTwoLineMax, where);
+                        float room = f.HideOptional ? without : with;
+                        string[] lines = f.Text.Split('\n');
+                        foreach (var line in lines)
+                            if (line != "…") Assert.LessOrEqual(Px20(line) * f.Size / CareerTileLayout.StripNameSize, room + 0.01f, where + ": рядок «" + line + "»");
+                        Assert.AreEqual(f.TwoLines, f.Text.Contains("\n"), where);
+                        Assert.LessOrEqual(lines.Length, 2, where);
+                        if (f.Ellipsis)
+                        {
+                            Assert.AreEqual(CareerTileLayout.StripNameMinSize, f.Size, where);
+                            Assert.IsTrue(f.Text.EndsWith("…"), where + ": урізане — з «…» в кінці");
+                            string seen = f.Text.Replace("\n", " ").TrimEnd('…').TrimEnd();
+                            Assert.IsTrue(n.Replace(" ", "").StartsWith(seen.Replace(" ", "")), where + ": видно початок імені, а не щось інше («" + seen + "»)");
+                            ell++;
+                            continue;
+                        }
+                        Assert.AreEqual(n.Replace(" ", ""), f.Text.Replace("\n", "").Replace(" ", ""), where + ": ціле ім'я — без утрат");
+                        fits++;
+                    }
+            Assert.Greater(fits, 0); Assert.Greater(ell, 0, "і «…» справді трапляється (24 знаки без пробілу у 20)");
+        }
+
+        /// <summary>Поділ на два рядки — за пробілом, де довший рядок найкоротший; без пробілу всередині — ні.</summary>
+        [Test]
+        public void StripName_TwoLines_SplitWhereTheLongerLineIsShortest()
+        {
+            string a, b;
+            Assert.IsTrue(CareerTileLayout.SplitTwoLines("А ББББ ВВВВ", Px20, out a, out b));
+            Assert.AreEqual("А ББББ", a); Assert.AreEqual("ВВВВ", b);
+            Assert.IsTrue(CareerTileLayout.SplitTwoLines("МАКСИМІЛІАН ШЕРШЕНЬКОВИЙ", Px20, out a, out b));
+            Assert.AreEqual("МАКСИМІЛІАН", a); Assert.AreEqual("ШЕРШЕНЬКОВИЙ", b);
+            Assert.IsTrue(CareerTileLayout.SplitTwoLines("А  Б", Px20, out a, out b), "подвійний пробіл");
+            Assert.AreEqual("А", a); Assert.AreEqual("Б", b);
+            Assert.IsFalse(CareerTileLayout.SplitTwoLines("БЕЗПРОБІЛУ", Px20, out a, out b));
+            Assert.IsFalse(CareerTileLayout.SplitTwoLines(" КРАЙ ", Px20, out a, out b), "пробіл лише з країв — не поділ");
+            Assert.IsFalse(CareerTileLayout.SplitTwoLines(null, Px20, out a, out b));
+        }
+
+        /// <summary>
+        /// Числа стрічки й поля імені: два рядки на найбільшому кеглі — над рядками зон (і він найбільший такий); пороги правила
+        /// впорядковані; поле — ширина плити без полів і запасу під курсор, кегль 30 → не нижче 15.
+        /// </summary>
+        [Test]
+        public void StripName_AndNameField_Numbers()
+        {
+            float max = CareerTileLayout.StripNameTwoLineMax;
+            Assert.LessOrEqual(CareerTileLayout.StripNameTop + 2f * CareerTileLayout.DisplayLineEm * max, CareerTileLayout.StripZonesTop, "два рядки — над зонами");
+            Assert.Greater(CareerTileLayout.StripNameTop + 2f * CareerTileLayout.DisplayLineEm * (max + 1f), CareerTileLayout.StripZonesTop, "найбільший можливий");
+            Assert.GreaterOrEqual(max, CareerTileLayout.StripNameMinSize);
+            Assert.GreaterOrEqual(CareerTileLayout.StripNameMinSize, 15f, "мінімум токенів, не нижче 15");
+            Assert.Less(CareerTileLayout.StripNameOneLineMin, CareerTileLayout.StripNameKeepTagMin);
+            Assert.Less(CareerTileLayout.StripNameKeepTagMin, CareerTileLayout.StripNameSize);
+            Assert.AreEqual(CareerTileLayout.StripW - CareerTileLayout.NameWellLeft - CareerTileLayout.NameWellRight - 2f * CareerTileLayout.NameFieldInset
+                - CareerTileLayout.NameInputPadLeft - CareerTileLayout.NameFieldCaretRoom, CareerTileLayout.NameFieldTextWidth);
+            Assert.AreEqual(30f, CareerTileLayout.FitNameField(100f));
+            Assert.AreEqual(30f, CareerTileLayout.FitNameField(CareerTileLayout.NameFieldTextWidth));
+            Assert.AreEqual(15f, CareerTileLayout.FitNameField(10000f), "не нижче 15");
+            Assert.AreEqual((float)System.Math.Floor(30f * CareerTileLayout.NameFieldTextWidth / 500f), CareerTileLayout.FitNameField(500f));
+            Assert.IsNaN(CareerTileLayout.FitNameField(float.NaN));
+        }
+
+        /// <summary>
+        /// Довге ім'я вбудовано в екрани (ПМ 14.11.2026): стрічки героя й суперника вміщають ім'я правилом FitStripName з мір кожної
+        /// розкладки (лялька — перешкода героя), числа стрічки — з моделі; поле створення меншає за FitNameField із межею довжини.
+        /// </summary>
+        [Test]
+        public void Sources_LongName_AreWired()
+        {
+            string ui = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI");
+            string show = File.ReadAllText(Path.Combine(ui, "Career", "ShowScreens.cs"));
+            string create = File.ReadAllText(Path.Combine(ui, "Career", "CreateScreenView.cs"));
+            string kit = File.ReadAllText(Path.Combine(ui, "Career", "ArenaKit.cs"));
+            var bad = new List<string>();
+            foreach (var l in new[] {
+                "var name = ArenaKit.Big(v.RingName, CareerTileLayout.StripNameSize, RingTheme.Text);",
+                "ArenaKit.Place(name, CareerTileLayout.StripNameLeft, CareerTileLayout.StripNameTop, null, null);",
+                "ArenaKit.Place(tag, null, CareerTileLayout.StripTagTop, CareerTileLayout.StripTagRight, null);",
+                "ArenaKit.FitNameAndTag(box, name, tag, gimmick, true, doll);",
+                "ArenaKit.Place(zones, CareerTileLayout.StripNameLeft, CareerTileLayout.StripZonesTop, null, null);",
+                "ArenaKit.Place(doll, null, CareerTileLayout.StripDollTop, CareerTileLayout.StripDollRight, null);",
+                "var nl = ArenaKit.Big(nick, CareerTileLayout.StripNameSize, RingTheme.Text);",
+                "ArenaKit.Place(nl, null, CareerTileLayout.StripNameTop, CareerTileLayout.StripNameLeft, null);",
+                "ArenaKit.FitNameAndTag(box, nl, tag, rg, false);",
+                "ArenaKit.Place(real, null, CareerTileLayout.StripZonesTop, CareerTileLayout.StripNameLeft, null);" })
+                if (!CodeLine(show, l)) bad.Add("ShowScreens: немає «" + l + "»");
+            int dollAt = show.IndexOf("var doll = new InjuryDoll();"), fitAt = show.IndexOf("ArenaKit.FitNameAndTag(box, name, tag, gimmick, true, doll);");
+            if (dollAt < 0 || fitAt < 0 || dollAt > fitAt) bad.Add("ShowScreens: лялька має бути створена до FitNameAndTag (перешкода імені)");
+            foreach (var l in new[] {
+                "public static void FitNameAndTag(VisualElement box, Label name, VisualElement tag, VisualElement optional, bool nameLeft, VisualElement obstacle = null)",
+                "var probe = Big(text, CareerTileLayout.StripNameSize, RingTheme.Text);",
+                "probe.style.visibility = Visibility.Hidden;",
+                "var f = CareerTileLayout.FitStripName(text, measure, availWith, availWithout);",
+                "name.style.fontSize = f.Size;",
+                "name.style.letterSpacing = new Length(f.Size * CareerTileLayout.StripNameTrack);",
+                "name.style.whiteSpace = WhiteSpace.NoWrap;",
+                "name.style.width = StyleKeyword.Auto;",
+                "string key = f.Size + \"|\" + f.HideOptional + \"|\" + f.Text;",
+                "float ob = obstacle != null && !float.IsNaN(obstacle.layout.x) ? obstacle.layout.x : float.MaxValue;",
+                "availWith = Math.Min(t.xMax - tagWith, ob) - CareerTileLayout.StripNameGap - n.x;",
+                "availWithout = Math.Min(t.xMax - tagWithout, ob) - CareerTileLayout.StripNameGap - n.x;",
+                "availWith = n.xMax - (t.x + tagWith) - CareerTileLayout.StripNameGap;",
+                "availWithout = n.xMax - (t.x + tagWithout) - CareerTileLayout.StripNameGap;",
+                "optional.style.display = hidden ? DisplayStyle.None : DisplayStyle.Flex;",
+                "name.text = f.Text;",
+                "box.RegisterCallback(fit);", "tag.RegisterCallback(fit);", "probe.RegisterCallback(fit);",
+                "style.width = CareerTileLayout.StripDollW; style.height = CareerTileLayout.StripDollH;" })
+                if (!CodeLine(kit, l)) bad.Add("ArenaKit: немає «" + l + "»");
+            if (Regex.IsMatch(kit, @"FitNameAndTag\([^)]*float size")) bad.Add("ArenaKit: старий ланцюг кроків FitNameAndTag(…, size, minSize) повернувся");
+            foreach (var l in new[] {
+                "var well = ArenaKit.Abs(CareerTileLayout.NameWellLeft, 36f, CareerTileLayout.NameWellRight, null, null, 58f);",
+                "var field = new TextField { value = _d.RingName, maxLength = _v.MaxNameLength };",
+                "field.style.left = CareerTileLayout.NameFieldInset; field.style.right = CareerTileLayout.NameFieldInset;",
+                "var probe = RingUi.Lbl(\"\", CareerTileLayout.NameFieldSize, RingTheme.Text);",
+                "RingFonts.Apply(probe, RingFontRole.TextBold);",
+                "field.RegisterValueChangedCallback(e => { _d.RingName = e.newValue; FitNameText(field, probe); });",
+                "well.RegisterCallback<GeometryChangedEvent>(e => FitNameText(field, probe));",
+                "input.style.fontSize = CareerTileLayout.NameFieldSize;",
+                "input.style.paddingLeft = CareerTileLayout.NameInputPadLeft;",
+                "float size = nat <= 0f ? CareerTileLayout.NameFieldSize : CareerTileLayout.FitNameField(nat);",
+                "if (!float.IsNaN(size)) input.style.fontSize = size;" })
+                if (!CodeLine(create, l)) bad.Add("CreateScreenView: немає «" + l + "»");
+            // варіант афіші «роль під назвою» — лише кадри огляду: вмикає й вимикає тільки RingMenuShots
+            foreach (var f in Directory.GetFiles(Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring"), "*.cs", SearchOption.AllDirectories))
+            {
+                if (Path.GetFileName(f) == "RingMenuShots.cs") continue;
+                foreach (var l in File.ReadAllText(f).Split('\n'))
+                    if (l.Contains("PosterRoleBelowForShots = true")) bad.Add(Path.GetFileName(f) + ": вмикає варіант огляду «роль під назвою» поза RingMenuShots");
+            }
+            // і сама RingMenuShots вимикає його навіть після винятку в кадрі (рев'ю 14.11.2026)
+            string shots = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "RingMenuShots.cs"));
+            if (!shots.Contains("finally { UI.CreateScreenView.PosterRoleBelowForShots = false; }"))
+                bad.Add("RingMenuShots.cs: варіант «роль під назвою» не вимикається в finally");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Базова лінія назви афіші (У0 арт-директора 14.11.2026): назва кегля s, прибита до верху рядка зі зсувом
+        /// <see cref="CareerTileLayout.PosterNameTopShift"/>, має базову лінію там само, де назва 52 (висхідна × кегль від верху тексту).
+        /// </summary>
+        [Test]
+        public void PosterName_SmallerSize_KeepsTheBaselineOf52()
+        {
+            float b52 = CareerTileLayout.PosterNameAscent * CareerTileLayout.PosterNameSize;
+            for (float s = CareerTileLayout.PosterNameMinSize; s <= CareerTileLayout.PosterNameSize; s += 1f)
+                Assert.AreEqual(b52, CareerTileLayout.PosterNameTopShift(s) + CareerTileLayout.PosterNameAscent * s, 0.01f, "кегль " + s);
+            Assert.AreEqual(0f, CareerTileLayout.PosterNameTopShift(CareerTileLayout.PosterNameSize), "на 52 — без зсуву");
+            Assert.AreEqual(0f, CareerTileLayout.PosterNameTopShift(float.NaN), "до розкладки — без зсуву");
+        }
+
         /// <summary>
         /// Злиття «Кар'єри» (74a7d4b1, тіло старіє, §5.5; ПМ 12.11.2026, п. А1): з сезону 4 витривалість дорожча — і в очках розвитку, і в
         /// тренувань тренера. Екран показує ту ціну, що спише покупка, і той крок, що рахує тренування: стала <c>Development.AttrCost</c> /
@@ -1896,7 +2124,11 @@ namespace Game.Tests.EditMode
             if (!week.Contains("CareerScreenLines.ScarTail(T, T.Format(\"c.injury.tile\"") || !CodeLine(week, "i.ScarWeeks);   // Б5: слід"))
                 bad.Add("WeekScreenView: ризик травми без сліду");
             if (!CodeLine(week, "string opp = CareerScreenLines.OpponentLine(T, r, OpponentName());")) bad.Add("WeekScreenView: Б6 — без рядка суперника");
-            if (show.Contains("AgeingNextLine")) bad.Add("ShowScreens: рядок «Тіло старіє…» на папері — лише після У0 арт-директора (ПМ 14.11.2026)");
+            if (!CodeLine(show, "string age = CareerScreenLines.AgeingNextLine(T, C, CareerScreenLines.SeasonEndActions(C));")
+                || !CodeLine(show, "if (age != null) { var a = MenuKit.Body(age, BrandTokens.TypeMinInfo, RingTheme.Bg, true); a.style.whiteSpace = WhiteSpace.Normal; a.style.marginTop = 8f; col.Add(a); }"))
+                bad.Add("ShowScreens: Б5 — рядок «Тіло старіє…» не на папері кінця сезону так, як прийняв директор (Body 15 напівжирний, відступ 8)");
+            if (!CodeLine(create, "gname.style.alignSelf = Align.FlexStart;") || !CodeLine(create, "gname.style.marginTop = CareerTileLayout.PosterNameTopShift(s);"))
+                bad.Add("CreateScreenView: менша назва афіші не на базовій лінії 52 (У0 директора: не пливе від плашки ролі)");
             // шапка шухляди — ті розміри, за якими CareerTextFitTests.DrawerHead_Hint_… міряє підказки атрибутів і тренерів
             string rui = File.ReadAllText(Path.Combine(ui, "RingUi.cs"));
             if (!week.Contains("ArenaKit.Abs(null, null, ArenaKit.Edge, CareerTileLayout.DrawerBottom, 560f, null)")

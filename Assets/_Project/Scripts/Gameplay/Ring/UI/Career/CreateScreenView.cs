@@ -34,6 +34,17 @@ namespace Game.Gameplay.Ring.UI
         /// ПМ). Тепер там відкриті «Прийоми» стають на папір замість опису ролі, а характеристики лишаються видимі (<see cref="Fit"/>).
         /// </summary>
         private VisualElement _desc, _paperMoves, _movesCard, _posterCol;
+        /// <summary>Назва ґіміка на афіші (кегль після вміщення — для кадрів огляду).</summary>
+        private Label _posterName;
+
+        /// <summary>
+        /// Лише кадри огляду У2 (арт-директор 14.11.2026: назви, стиснуті нижче 36, — «стиснуто» і «роль під назвою», вирішує
+        /// власник): плита ролі рядком під назвою, назва на 52 цілим. Гра цього не вмикає; чинне — назва в рядку з плитою.
+        /// </summary>
+        internal static bool PosterRoleBelowForShots;
+
+        /// <summary>Кегль назви ґіміка на афіші зараз (огляд); NaN — афіші ще немає.</summary>
+        internal float PosterNameSizeForShots { get { return _posterName == null ? float.NaN : _posterName.resolvedStyle.fontSize; } }
         /// <summary>Рядки характеристик афіші — Fit робить їх нижчими на вузькій панелі (<see cref="CareerTileLayout.CreateAttrRowNarrowH"/>).</summary>
         private readonly List<VisualElement> _attrRows = new List<VisualElement>();
         private string _hintDefault = "";
@@ -331,7 +342,7 @@ namespace Game.Gameplay.Ring.UI
             tag.Add(ArenaKit.Tag(" " + RingLabels.PathName(T, path, HeroForms.ShowsHeroine(T)), ArenaKit.RoleText(path)));   // рід — за тілом на екрані
             box.Add(tag);
 
-            var well = ArenaKit.Abs(24f, 36f, 38f, null, null, 58f);
+            var well = ArenaKit.Abs(CareerTileLayout.NameWellLeft, 36f, CareerTileLayout.NameWellRight, null, null, 58f);
             well.pickingMode = PickingMode.Position;
             well.style.backgroundColor = RingTheme.PanelRaised;
             var field = new TextField { value = _d.RingName, maxLength = _v.MaxNameLength };
@@ -340,9 +351,19 @@ namespace Game.Gameplay.Ring.UI
             field.style.color = RingTheme.Text;
             field.style.backgroundColor = Color.clear;
             field.style.position = Position.Absolute;
-            field.style.left = 8f; field.style.right = 8f; field.style.top = 2f; field.style.height = 50f;
+            field.style.left = CareerTileLayout.NameFieldInset; field.style.right = CareerTileLayout.NameFieldInset; field.style.top = 2f; field.style.height = 50f;
             field.style.marginLeft = 0f; field.style.marginRight = 0f; field.style.marginTop = 0f; field.style.marginBottom = 0f;
-            field.RegisterValueChangedCallback(e => _d.RingName = e.newValue);
+            // проба ширини набраного — тим самим шрифтом і кеглем 30, невидима: довге ім'я меншає, і весь текст із курсором у
+            // кінці видно (ПМ 14.11.2026: було «Максиміліан Шершен» без кінця)
+            var probe = RingUi.Lbl("", CareerTileLayout.NameFieldSize, RingTheme.Text);
+            RingFonts.Apply(probe, RingFontRole.TextBold);
+            probe.style.position = Position.Absolute;
+            probe.style.visibility = Visibility.Hidden;
+            probe.style.whiteSpace = WhiteSpace.NoWrap;
+            probe.pickingMode = PickingMode.Ignore;
+            well.Add(probe);
+            field.RegisterValueChangedCallback(e => { _d.RingName = e.newValue; FitNameText(field, probe); });
+            well.RegisterCallback<GeometryChangedEvent>(e => FitNameText(field, probe));
             // внутрішнє поле вводу має своє біле тло з теми Unity — інакше світлий текст на білому не читався (кадр 08.11.2026)
             var input = field.Q(null, "unity-base-text-field__input");
             if (input != null)
@@ -353,8 +374,8 @@ namespace Game.Gameplay.Ring.UI
                 // Fixel, не display: гравець набирає малими, а малі кириличні display — болгарських форм («в», «к»; Статут
                 // TYPE-03, кадр 1080 08.11.2026). У стрічках ім'я й далі ВЕЛИКИМИ display.
                 RingFonts.Apply(input, RingFontRole.TextBold);
-                input.style.fontSize = 30f;
-                input.style.paddingLeft = 6f;
+                input.style.fontSize = CareerTileLayout.NameFieldSize;
+                input.style.paddingLeft = CareerTileLayout.NameInputPadLeft;
             }
             well.Add(field);
             // ціль фокусу без миші: A / Enter ставить курсор у поле (друкувати — з клавіатури); ранг 5 — першою стає плитка ґіміка.
@@ -366,6 +387,19 @@ namespace Game.Gameplay.Ring.UI
             well.Add(under);
             box.Add(well);
             return box;
+        }
+
+        /// <summary>
+        /// Кегль тексту поля імені за <see cref="CareerTileLayout.FitNameField"/>: ширина набраного на 30 — пробою; порожнє — 30.
+        /// </summary>
+        private static void FitNameText(TextField field, Label probe)
+        {
+            var input = field.Q(null, "unity-base-text-field__input");
+            if (input == null || probe.panel == null) return;
+            string s = field.value ?? "";
+            float nat = s.Length == 0 ? 0f : probe.MeasureTextSize(s, 0f, VisualElement.MeasureMode.Undefined, 0f, VisualElement.MeasureMode.Undefined).x;
+            float size = nat <= 0f ? CareerTileLayout.NameFieldSize : CareerTileLayout.FitNameField(nat);
+            if (!float.IsNaN(size)) input.style.fontSize = size;
         }
 
         private VisualElement LookPlate(Color roleColor)
@@ -529,12 +563,30 @@ namespace Game.Gameplay.Ring.UI
             head.Add(strut);
             var gname = ArenaKit.Big(gimmickName, CareerTileLayout.PosterNameSize, RingTheme.Bg);
             gname.style.flexShrink = 0f;   // природна ширина — для FitPosterName
+            // до верху рядка (висоту тримає розпірка на 52), а не по центру: менший кегль лягає на базову лінію 52 зсувом
+            // PosterNameTopShift — не пливе від плашки ролі (У0 арт-директора 14.11.2026)
+            gname.style.alignSelf = Align.FlexStart;
             head.Add(gname);
-            head.Add(ArenaKit.Spacer());
+            _posterName = gname;
             var plate = RolePlate(path, roleColor);
-            head.Add(plate);
-            col.Add(head);
-            FitPosterName(head, gname, plate);
+            if (PosterRoleBelowForShots)
+            {
+                // варіант «роль під назвою» (лише огляд): назва сама в рядку, плита — нижче, вирівняна з назвою ліворуч
+                col.Add(head);
+                var under = ArenaKit.Row();
+                under.style.marginTop = 4f;
+                under.Add(plate);
+                under.Add(ArenaKit.Spacer());
+                col.Add(under);
+                FitPosterName(head, gname, null);
+            }
+            else
+            {
+                head.Add(ArenaKit.Spacer());
+                head.Add(plate);
+                col.Add(head);
+                FitPosterName(head, gname, plate);
+            }
 
             // С-1 (арт-директор 14.11.2026): у Самородка (два вільні бали) замість опису ролі — як ставити бали; опис ролі
             // лишається підказкою при наведенні на плитку ролі
@@ -576,20 +628,22 @@ namespace Game.Gameplay.Ring.UI
 
         /// <summary>
         /// Назва ґіміка в один рядок до плити ролі (жіночі назви довші — ПМ 13.11.2026): після розкладки кегль за
-        /// <see cref="CareerTileLayout.FitPosterName"/>; ширина лінійна за кеглем, тож природна на 52 — з поточної.
+        /// <see cref="CareerTileLayout.FitPosterName"/>; ширина лінійна за кеглем, тож природна на 52 — з поточної. Без плити (варіант
+        /// огляду «роль під назвою») — увесь рядок назві.
         /// </summary>
         private static void FitPosterName(VisualElement head, Label gname, VisualElement plate)
         {
             float cur = CareerTileLayout.PosterNameSize;
             EventCallback<GeometryChangedEvent> fit = e =>
             {
-                float w = gname.layout.width, row = head.layout.width, p = plate.layout.width;
+                float w = gname.layout.width, row = head.layout.width, p = plate != null ? plate.layout.width : -CareerTileLayout.PosterNameGap;
                 if (float.IsNaN(w) || float.IsNaN(row) || float.IsNaN(p) || w <= 0f) return;
                 float s = CareerTileLayout.FitPosterName(w * CareerTileLayout.PosterNameSize / cur, row - p - CareerTileLayout.PosterNameGap);
                 if (float.IsNaN(s) || Math.Abs(s - cur) < 0.5f) return;
                 cur = s;
                 gname.style.fontSize = s;
-                gname.style.letterSpacing = new Length(s * CareerTileLayout.PosterNameTrack);
+                gname.style.letterSpacing = new Length(s * CareerTileLayout.PosterNameTrack);   // розрядка та сама — 0,01 кегля
+                gname.style.marginTop = CareerTileLayout.PosterNameTopShift(s);
             };
             // і рядок, і сама назва: ширина назви може змінитись без зміни рядка (рев'ю 13.11.2026); поріг 0,5 не дає зациклитись
             head.RegisterCallback(fit);

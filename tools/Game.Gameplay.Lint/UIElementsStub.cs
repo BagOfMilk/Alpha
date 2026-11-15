@@ -16,6 +16,8 @@ namespace UnityEngine.UIElements
     public enum WhiteSpace { Normal = 0, NoWrap = 1 }
     public enum Justify { FlexStart = 0, Center = 1, FlexEnd = 2, SpaceBetween = 3, SpaceAround = 4, SpaceEvenly = 5 }
     public enum Overflow { Visible = 0, Hidden = 1 }
+    public enum TextOverflow { Clip = 0, Ellipsis = 1 }
+    public enum Visibility { Visible = 0, Hidden = 1 }
     public enum Wrap { NoWrap = 0, Wrap = 1, WrapReverse = 2 }
     public enum ScrollViewMode { Vertical = 0, Horizontal = 1, VerticalAndHorizontal = 2 }
     public enum PanelScaleMode { ConstantPixelSize = 0, ConstantPhysicalSize = 1, ScaleWithScreenSize = 2 }
@@ -230,6 +232,8 @@ namespace UnityEngine.UIElements
         StyleLength minHeight { get; set; }
         StyleLength maxHeight { get; set; }
         StyleEnum<TextAnchor> unityTextAlign { get; set; }
+        StyleEnum<TextOverflow> textOverflow { get; set; }
+        StyleEnum<Visibility> visibility { get; set; }
         StyleLength borderTopLeftRadius { get; set; }
         StyleLength borderTopRightRadius { get; set; }
         StyleLength borderBottomLeftRadius { get; set; }
@@ -303,6 +307,8 @@ namespace UnityEngine.UIElements
         public StyleLength minHeight { get; set; }
         public StyleLength maxHeight { get; set; }
         public StyleEnum<TextAnchor> unityTextAlign { get; set; }
+        public StyleEnum<TextOverflow> textOverflow { get; set; }
+        public StyleEnum<Visibility> visibility { get; set; }
         public StyleLength borderTopLeftRadius { get; set; }
         public StyleLength borderTopRightRadius { get; set; }
         public StyleLength borderBottomLeftRadius { get; set; }
@@ -427,6 +433,7 @@ namespace UnityEngine.UIElements
         float paddingBottom { get; }
         DisplayStyle display { get; }
         Position position { get; }
+        float fontSize { get; }
     }
 
     public class TextElement : VisualElement

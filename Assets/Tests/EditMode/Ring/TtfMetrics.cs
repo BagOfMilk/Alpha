@@ -70,6 +70,9 @@ namespace Game.Tests.EditMode
             return units * size / _unitsPerEm + track * size * (s.Length - 1);
         }
 
+        /// <summary>Висхідна (hhea) у частках кегля — від верху рядка тексту до базової лінії.</summary>
+        public float AscentEm { get { return _ascender / (float)_unitsPerEm; } }
+
         /// <summary>Висота рядка (висхідна − низхідна + проміжок) для кегля.</summary>
         public float LineHeight(float size) { return (_ascender - _descender + _lineGap) * size / (float)_unitsPerEm; }
 

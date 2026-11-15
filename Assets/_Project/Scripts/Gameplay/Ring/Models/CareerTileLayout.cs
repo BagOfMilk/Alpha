@@ -249,6 +249,20 @@ namespace Game.Gameplay.Ring.Models
         public const float PosterNameSize = 52f, PosterNameTrack = 0.01f, PosterNameGap = 8f;
         /// <summary>Нижня межа кегля назви — заголовний кегль токенів: назва лишається заголовком афіші, а не підписом.</summary>
         public const float PosterNameMinSize = BrandTokens.TypeTitle;
+        /// <summary>
+        /// Висхідна шрифту назви (display Black, Fira Sans Extra Condensed Black: 935 з 1000 — і hhea, і typo) у частках кегля.
+        /// Базова лінія рядка — висхідна від верху тексту, тож назва меншого кегля, прибита до верху рядка, лягає на ту саму базову
+        /// лінію, що й на 52, зсувом <see cref="PosterNameTopShift"/> (У0 арт-директора 14.11.2026: «менша назва не пливе вгору чи
+        /// вниз від плашки ролі»). Число звіряє тест із TTF.
+        /// </summary>
+        public const float PosterNameAscent = 0.935f;
+
+        /// <summary>Відступ зверху назви кегля <paramref name="size"/>: її базова лінія — там само, де в назви на <see cref="PosterNameSize"/>.</summary>
+        public static float PosterNameTopShift(float size)
+        {
+            if (float.IsNaN(size) || size >= PosterNameSize) return 0f;
+            return PosterNameAscent * (PosterNameSize - size);
+        }
         public const float RolePlateWordSize = 26f, RolePlateWordTrack = 0.04f, RolePlatePadLeft = 24f, RolePlatePadRight = 22f;
 
         /// <summary>
@@ -672,6 +686,153 @@ namespace Game.Gameplay.Ring.Models
             if (next.Bottom - next.Top > view - RowEps) return t;  // вищий за вікно — цілим не стане ніколи: краще частина, ніж порожнеча
             if (next.Top < bottom - RowEps) extra = bottom - next.Top;
             return t;
+        }
+
+        // ---- ім'я борця: стрічка гравця й суперника, поле «Ім'я на рингу» (довге ім'я — ПМ 14.11.2026) ----
+
+        /// <summary>
+        /// Стрічка гравця (ShowKit.PlayerStrip) — ім'я ліворуч угорі, мітка «ҐІМІК · РОЛЬ» праворуч, лялька травм під міткою, рядки
+        /// зон під іменем. Логічні одиниці від лівого й верхнього країв стрічки ширини <see cref="StripW"/>.
+        /// </summary>
+        public const float StripNameLeft = 24f, StripNameTop = 8f, StripTagRight = 34f, StripTagTop = 12f;
+        public const float StripDollRight = 48f, StripDollTop = 34f, StripDollW = 36f, StripDollH = 70f, StripZonesTop = 54f;
+        /// <summary>Ім'я: display Black 40 з розрядкою 0,01; просвіт до мітки й ляльки — 14.</summary>
+        public const float StripNameSize = 40f, StripNameTrack = 0.01f, StripNameGap = 14f;
+        /// <summary>Доки ім'я не нижче 26 — ґімік у мітці лишається; далі ґімік ховається (роль лишається завжди).</summary>
+        public const float StripNameKeepTagMin = 26f;
+        /// <summary>Один рядок — не нижче 18; далі — два рядки (за пробілом), а тоді — один рядок до 15 і «…».</summary>
+        public const float StripNameOneLineMin = 18f;
+        /// <summary>Найменший кегль імені — мінімум токенів (не нижче 15, Статут: охоронець кегля).</summary>
+        public const float StripNameMinSize = BrandTokens.TypeMinInfo;
+        /// <summary>Висота рядка display (Fira Sans Extra Condensed: висхідна 935 + низхідна 265 з 1000) у частках кегля.</summary>
+        public const float DisplayLineEm = 1.2f;
+
+        /// <summary>Кегль двох рядків: обидва вміщаються між верхом імені й рядками зон (<see cref="StripZonesTop"/>).</summary>
+        public static float StripNameTwoLineMax
+        {
+            get { return (float)Math.Floor((StripZonesTop - StripNameTop) / (2f * DisplayLineEm)); }
+        }
+
+        /// <summary>
+        /// Рішення для імені на стрічці: кегль, чи ховати ґімік у мітці, текст до показу (з «\n» між двома рядками; урізаний — уже з «…»
+        /// в кінці), чи два рядки, чи урізано.
+        /// </summary>
+        public struct StripNameFit
+        {
+            public float Size;
+            public bool HideOptional;
+            public string Text;
+            public bool TwoLines;
+            public bool Ellipsis;
+        }
+
+        /// <summary>
+        /// Як умістити ім'я на стрічці (ПМ 14.11.2026: «можна зменшувати кегль до мінімуму токенів, а далі другий рядок або «…»;
+        /// мітка ролі й силует мають лишатися вільними»): (1) <see cref="StripNameSize"/>, якщо влазить до мітки з ґіміком;
+        /// (2) менший кегль, доки не нижче <see cref="StripNameKeepTagMin"/>, — ґімік лишається; (3) ґімік сховано, кегль — скільки
+        /// влазить до мітки без нього, не нижче <see cref="StripNameOneLineMin"/>; (4) два рядки за пробілом (поділ, за якого довший
+        /// рядок найкоротший), кегль — не більше <see cref="StripNameTwoLineMax"/> і не нижче <see cref="StripNameMinSize"/>;
+        /// (5) один рядок до <see cref="StripNameMinSize"/>; (6) «…» на <see cref="StripNameMinSize"/>: два рядки — перший (найбільше
+        /// слів, що влазять) цілим, другий урізано з «…»; якщо й перше слово не влазить — один рядок із «…». Урізає модель сама (текст
+        /// уже з «…»), тож охоронець міряє те, що на екрані. <paramref name="widthAtBase"/> — ширина тексту на <see cref="StripNameSize"/> (з розрядкою;
+        /// ширина лінійна за кеглем). <paramref name="availWith"/> / <paramref name="availWithout"/> — місце для імені до мітки з
+        /// ґіміком / без нього (і до ляльки). NaN — розкладки ще немає: ім'я як є.
+        /// </summary>
+        public static StripNameFit FitStripName(string name, Func<string, float> widthAtBase, float availWith, float availWithout)
+        {
+            var r = new StripNameFit { Size = StripNameSize, Text = name ?? "" };
+            if (string.IsNullOrEmpty(name) || widthAtBase == null || float.IsNaN(availWith) || float.IsNaN(availWithout)) return r;
+            float nat = widthAtBase(name);
+            if (float.IsNaN(nat) || nat <= 0f) return r;
+            if (nat <= availWith) return r;
+            float s = availWith > 0f ? (float)Math.Floor(StripNameSize * availWith / nat) : 0f;
+            if (s >= StripNameKeepTagMin) { r.Size = s; return r; }
+            r.HideOptional = true;
+            s = availWithout > 0f ? Math.Min(StripNameSize, (float)Math.Floor(StripNameSize * availWithout / nat)) : 0f;
+            if (s >= StripNameOneLineMin) { r.Size = s; return r; }
+            string l1, l2;
+            if (SplitTwoLines(name, widthAtBase, out l1, out l2))
+            {
+                float wide = Math.Max(widthAtBase(l1), widthAtBase(l2));
+                float s2 = wide > 0f && availWithout > 0f ? Math.Min(StripNameTwoLineMax, (float)Math.Floor(StripNameSize * availWithout / wide)) : 0f;
+                if (s2 >= StripNameMinSize) { r.Size = s2; r.Text = l1 + "\n" + l2; r.TwoLines = true; return r; }
+            }
+            if (s >= StripNameMinSize) { r.Size = s; return r; }
+            r.Size = StripNameMinSize;
+            r.Ellipsis = true;
+            float room = availWithout * StripNameSize / StripNameMinSize;   // місце на 15 — у ширині на 40
+            for (int i = name.Length - 1; i > 0; i--)
+            {
+                if (name[i] != ' ') continue;
+                string a = name.Substring(0, i).TrimEnd(), b = name.Substring(i + 1).TrimStart();
+                if (a.Length == 0 || b.Length == 0 || widthAtBase(a) > room) continue;
+                r.Text = a + "\n" + Clip(b, widthAtBase, room);
+                r.TwoLines = true;
+                return r;
+            }
+            r.Text = Clip(name, widthAtBase, room);
+            return r;
+        }
+
+        /// <summary>Знак урізаного імені.</summary>
+        public const string Ellipsis = "…";
+
+        /// <summary>
+        /// Найдовший початок <paramref name="text"/> з «…», що влазить у <paramref name="room"/> (ширина на базовому кеглі); весь текст —
+        /// як є, якщо влазить. Пробіли перед «…» знято. Якщо не влазить і перша літера — лише «…».
+        /// </summary>
+        public static string Clip(string text, Func<string, float> width, float room)
+        {
+            if (string.IsNullOrEmpty(text) || width == null || width(text) <= room) return text ?? "";
+            for (int n = text.Length - 1; n > 0; n--)
+            {
+                string p = text.Substring(0, n).TrimEnd();
+                if (p.Length > 0 && width(p + Ellipsis) <= room) return p + Ellipsis;
+            }
+            return Ellipsis;
+        }
+
+        /// <summary>
+        /// Поділ імені на два рядки за пробілом: той, за якого довший рядок найкоротший (рівновага рядків). Без пробілу — ні.
+        /// </summary>
+        public static bool SplitTwoLines(string name, Func<string, float> width, out string first, out string second)
+        {
+            first = name; second = null;
+            if (string.IsNullOrEmpty(name) || width == null) return false;
+            float best = float.MaxValue;
+            for (int i = 0; i < name.Length; i++)
+            {
+                if (name[i] != ' ') continue;
+                string a = name.Substring(0, i).TrimEnd(), b = name.Substring(i + 1).TrimStart();
+                if (a.Length == 0 || b.Length == 0) continue;
+                float w = Math.Max(width(a), width(b));
+                if (w < best) { best = w; first = a; second = b; }
+            }
+            return second != null;
+        }
+
+        /// <summary>
+        /// Поле «Ім'я на рингу» на створенні: шрифт Fixel напівжирний 30 (гравець набирає малими — Статут TYPE-03); ім'я, що не
+        /// влазить, меншає до мінімуму токенів 15 — увесь набраний текст і курсор у кінці видно (довге ім'я — ПМ 14.11.2026).
+        /// Межа довжини — <c>CareerSession.MaxNameLength</c> (24): найширше справжнє ім'я цієї довжини влазить (тест).
+        /// Плита поля: ліворуч 24, праворуч 38 від країв стрічки; поле в ній — поля 8 і 8; текст — від лівого поля вводу 6.
+        /// </summary>
+        public const float NameFieldSize = 30f, NameFieldMinSize = BrandTokens.TypeMinInfo;
+        public const float NameWellLeft = 24f, NameWellRight = 38f, NameFieldInset = 8f, NameInputPadLeft = 6f;
+
+        /// <summary>Ширина тексту в полі імені (без поля вводу ліворуч і запасу під курсор праворуч).</summary>
+        public static float NameFieldTextWidth
+        {
+            get { return StripW - NameWellLeft - NameWellRight - 2f * NameFieldInset - NameInputPadLeft - NameFieldCaretRoom; }
+        }
+
+        /// <summary>Запас праворуч під курсор після останньої літери й рамку поля вводу Unity (поля й обведення input).</summary>
+        public const float NameFieldCaretRoom = 8f;
+
+        /// <summary>Кегль поля імені: 30, якщо влазить; інакше менший пропорційно, не нижче 15. NaN — розкладки ще немає.</summary>
+        public static float FitNameField(float naturalAtBase)
+        {
+            return FitOneLine(NameFieldSize, NameFieldMinSize, naturalAtBase, NameFieldTextWidth);
         }
     }
 

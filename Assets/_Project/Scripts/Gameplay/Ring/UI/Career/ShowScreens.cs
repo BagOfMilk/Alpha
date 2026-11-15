@@ -21,11 +21,11 @@ namespace Game.Gameplay.Ring.UI
             var box = ArenaKit.Abs(ArenaKit.Edge, ArenaKit.Top, null, null, ArenaKit.StripW, ArenaKit.StripH);
             box.style.overflow = Overflow.Visible;
             box.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaPanel), Outline = ArenaKit.RoleColor(v.Role), Stripe = ArenaKit.RoleColor(v.Role) });
-            var name = ArenaKit.Big(v.RingName, 40f, RingTheme.Text);
-            ArenaKit.Place(name, 24f, 8f, null, null);
+            var name = ArenaKit.Big(v.RingName, CareerTileLayout.StripNameSize, RingTheme.Text);
+            ArenaKit.Place(name, CareerTileLayout.StripNameLeft, CareerTileLayout.StripNameTop, null, null);
             box.Add(name);
             var tag = ArenaKit.Row();
-            ArenaKit.Place(tag, null, 12f, 34f, null);
+            ArenaKit.Place(tag, null, CareerTileLayout.StripTagTop, CareerTileLayout.StripTagRight, null);
             // пробіл після «·» — на початку наступного напису: кінцевий пробіл напис не малює («ЛЕТУН ·ГЕРОЙ» проти «ГЕРОЙ · ЛЕТУН»
             // суперника — кадри слоту 27, 09.11.2026)
             // назва ґіміка — за статтю героя, як шлях (ПМ 13.11.2026, RingLabels.GimmickName 7d1510f4: героїня бачила себе «Силачем»)
@@ -34,11 +34,12 @@ namespace Game.Gameplay.Ring.UI
             tag.Add(ArenaKit.Tag(" " + RingLabels.PathName(t, v.Role, HeroForms.ShowsHeroine(t)), ArenaKit.RoleText(v.Role)));
             if (v.IsChampion) tag.Add(ArenaKit.Tag(" · " + t.Get("c.champion"), RingTheme.Gold));
             box.Add(tag);
-            ArenaKit.FitNameAndTag(box, name, tag, gimmick, true, 40f, 26f);
-            var zones = new VisualElement();
-            ArenaKit.Place(zones, 24f, 54f, null, null);
-            zones.pickingMode = PickingMode.Ignore;
             var doll = new InjuryDoll();
+            // довге ім'я не лягає ні на мітку ролі, ні на ляльку (ПМ 14.11.2026)
+            ArenaKit.FitNameAndTag(box, name, tag, gimmick, true, doll);
+            var zones = new VisualElement();
+            ArenaKit.Place(zones, CareerTileLayout.StripNameLeft, CareerTileLayout.StripZonesTop, null, null);
+            zones.pickingMode = PickingMode.Ignore;
             for (int z = 0; z < 3; z++)
             {
                 // сегментів — поріг травми зони з виду (у Хардкорника 4), а не стала 3 (рев'ю 13.11.2026 — той самий клас, що А2)
@@ -57,7 +58,7 @@ namespace Game.Gameplay.Ring.UI
                 doll.Set(z, filled > 0);
             }
             box.Add(zones);
-            ArenaKit.Place(doll, null, 34f, 48f, null);   // нижче мітки ролі: голова ляльки торкалась її кінця (рев'ю 08.11.2026)
+            ArenaKit.Place(doll, null, CareerTileLayout.StripDollTop, CareerTileLayout.StripDollRight, null);   // нижче мітки ролі: голова ляльки торкалась її кінця (рев'ю 08.11.2026)
             box.Add(doll);
             return box;
         }
@@ -108,8 +109,8 @@ namespace Game.Gameplay.Ring.UI
             if (npc == null) return box;
             string nick, name;
             ArenaKit.SplitNick(t.Get(npc.NameKey), out nick, out name);
-            var nl = ArenaKit.Big(nick, 40f, RingTheme.Text);
-            ArenaKit.Place(nl, null, 8f, 24f, null);
+            var nl = ArenaKit.Big(nick, CareerTileLayout.StripNameSize, RingTheme.Text);
+            ArenaKit.Place(nl, null, CareerTileLayout.StripNameTop, CareerTileLayout.StripNameLeft, null);
             box.Add(nl);
             var tag = ArenaKit.Row();
             ArenaKit.Place(tag, 40f, 12f, null, null);
@@ -117,11 +118,11 @@ namespace Game.Gameplay.Ring.UI
             var rg = ArenaKit.Tag(" · " + RingLabels.GimmickName(t, c.Content.GimmickOf(npc.Gimmick).Key, npc.Female), RingTheme.TextDim);   // рід суперника — свій
             tag.Add(rg);
             box.Add(tag);
-            ArenaKit.FitNameAndTag(box, nl, tag, rg, false, 40f, 26f);
+            ArenaKit.FitNameAndTag(box, nl, tag, rg, false);
             if (!string.IsNullOrEmpty(name))
             {
                 var real = ArenaKit.Tag(name, RingTheme.TextDim);
-                ArenaKit.Place(real, null, 54f, 24f, null);
+                ArenaKit.Place(real, null, CareerTileLayout.StripZonesTop, CareerTileLayout.StripNameLeft, null);   // під двома рядками прізвиська
                 box.Add(real);
             }
             if (showFeud)
@@ -874,6 +875,10 @@ namespace Game.Gameplay.Ring.UI
                 col.Add(ShowKit.Bullet(T.Format("c.season.goal", CareerRules.TitleShotTrust, CareerRules.MaxFeud)));
             if (CareerScreenLines.OfferShown(C, _offer)) OfferBlock(col, _offer);
             if (CareerScreenLines.LateRoleShown(C, CareerScreenLines.SeasonEndActions(C))) LateRoleBlock(col);
+            // Б5 (§5.5): кінець сезонів 3 і 6, останній крок — з наступного сезону витривалість і її тренер дорожчі; один рядок
+            // (ПМ 14.11.2026), Body 15 напівжирний на папері, відступ 8 (У0 арт-директора 14.11.2026)
+            string age = CareerScreenLines.AgeingNextLine(T, C, CareerScreenLines.SeasonEndActions(C));
+            if (age != null) { var a = MenuKit.Body(age, BrandTokens.TypeMinInfo, RingTheme.Bg, true); a.style.whiteSpace = WhiteSpace.Normal; a.style.marginTop = 8f; col.Add(a); }
             box.Add(col);
             return box;
         }

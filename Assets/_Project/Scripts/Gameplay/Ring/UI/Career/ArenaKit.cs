@@ -146,33 +146,70 @@ namespace Game.Gameplay.Ring.UI
 
         /// <summary>
         /// Ім'я й мітка ролі в одному рядку стрічки (рев'ю 08.11.2026: довге ім'я наїжджало на мітку — нічого їх не міряло).
-        /// Після розкладки, доки ім'я не влазить до мітки з проміжком: (1) зменшити кегль імені пропорційно, не нижче
-        /// <paramref name="minSize"/>; (2) сховати <paramref name="optional"/> (ґімік у мітці); (3) обрізати ім'я по ширині.
-        /// <paramref name="nameLeft"/> — ім'я ліворуч, мітка праворуч (стрічка гравця), інакше дзеркально (суперник).
+        /// Довге ім'я (ПМ 14.11.2026: «Максиміліан Шершеньковий» лягав на мітку «ЛЕТУН · ГЕРОЙ» і на ляльку): колишній ланцюг
+        /// кроків ішов лише з першої розкладки стрічки — після першого зменшення кегля решти кроків не було, а ляльку він не бачив.
+        /// Тепер одне рішення <see cref="CareerTileLayout.FitStripName"/> з мір кожної розкладки: ширина імені на 40 — невидимою
+        /// пробою (тим самим шрифтом і розрядкою), мітка з ґіміком (<paramref name="optional"/>) і без нього, перешкода
+        /// <paramref name="obstacle"/> (лялька травм) праворуч від імені. Мітка ролі й лялька лишаються вільними: ім'я меншає, ховає
+        /// ґімік, стає у два рядки, а в крайньому разі — «…» (урізає модель). <paramref name="nameLeft"/> — ім'я ліворуч, мітка праворуч (стрічка
+        /// гравця), інакше дзеркально (суперник).
         /// </summary>
-        public static void FitNameAndTag(VisualElement box, Label name, VisualElement tag, VisualElement optional, bool nameLeft, float size, float minSize)
+        public static void FitNameAndTag(VisualElement box, Label name, VisualElement tag, VisualElement optional, bool nameLeft, VisualElement obstacle = null)
         {
-            float cur = size;
-            int stage = 0;
-            box.RegisterCallback<GeometryChangedEvent>(e =>
+            string text = name.text ?? "";
+            var probe = Big(text, CareerTileLayout.StripNameSize, RingTheme.Text);
+            probe.style.position = Position.Absolute;
+            probe.style.left = 0f; probe.style.top = 0f;
+            probe.style.visibility = Visibility.Hidden;
+            probe.pickingMode = PickingMode.Ignore;
+            box.Add(probe);
+            Func<string, float> measure = s => probe.MeasureTextSize(s, 0f, VisualElement.MeasureMode.Undefined, 0f, VisualElement.MeasureMode.Undefined).x;
+            float optW = -1f;
+            bool hidden = false;
+            string applied = null;
+            EventCallback<GeometryChangedEvent> fit = e =>
             {
-                Rect n = name.layout, t = tag.layout;
-                if (float.IsNaN(n.width) || float.IsNaN(t.width) || n.width <= 0f) return;
-                float avail = nameLeft ? t.x - n.x - 14f : (n.x + n.width) - (t.x + t.width) - 14f;
-                if (stage >= 3 || n.width <= avail + 0.5f) return;
-                if (stage == 0 && cur > minSize)
+                Rect t = tag.layout, n = name.layout;
+                if (float.IsNaN(t.width) || float.IsNaN(n.x) || float.IsNaN(n.width) || t.width <= 0f) return;
+                if (optional != null && !hidden && !float.IsNaN(optional.layout.width)) optW = optional.layout.width;
+                float opt = Math.Max(0f, optW);
+                float tagWith = t.width + (hidden ? opt : 0f), tagWithout = tagWith - opt;
+                float availWith, availWithout;
+                if (nameLeft)
                 {
-                    cur = Mathf.Max(minSize, (float)Math.Floor(cur * avail / n.width));
-                    name.style.fontSize = cur;
-                    name.style.letterSpacing = new Length(cur * 0.01f);
-                    if (cur <= minSize) stage = 1;
-                    return;
+                    float ob = obstacle != null && !float.IsNaN(obstacle.layout.x) ? obstacle.layout.x : float.MaxValue;
+                    availWith = Math.Min(t.xMax - tagWith, ob) - CareerTileLayout.StripNameGap - n.x;
+                    availWithout = Math.Min(t.xMax - tagWithout, ob) - CareerTileLayout.StripNameGap - n.x;
                 }
-                if (stage <= 1 && optional != null) { optional.style.display = DisplayStyle.None; stage = 2; return; }
-                name.style.width = Mathf.Max(40f, avail);
-                name.style.overflow = Overflow.Hidden;
-                stage = 3;
-            });
+                else
+                {
+                    availWith = n.xMax - (t.x + tagWith) - CareerTileLayout.StripNameGap;
+                    availWithout = n.xMax - (t.x + tagWithout) - CareerTileLayout.StripNameGap;
+                }
+                var f = CareerTileLayout.FitStripName(text, measure, availWith, availWithout);
+                // вигляд імені — лише з рішення (кегль, ґімік, текст): ширина рамки не задається, тож застарілою не стане (рев'ю 14.11.2026)
+                string key = f.Size + "|" + f.HideOptional + "|" + f.Text;
+                if (key == applied) return;   // мітка змінюється від схованого ґіміка — рішення те саме, без циклу
+                applied = key;
+                if (optional != null)
+                {
+                    hidden = f.HideOptional;
+                    optional.style.display = hidden ? DisplayStyle.None : DisplayStyle.Flex;
+                }
+                name.text = f.Text;
+                name.style.fontSize = f.Size;
+                name.style.letterSpacing = new Length(f.Size * CareerTileLayout.StripNameTrack);
+                name.style.unityTextAlign = nameLeft ? TextAnchor.UpperLeft : TextAnchor.UpperRight;
+                // без переносу за шириною: два рядки — лише явним «\n» моделі (NoWrap його тримає — підпис титулу 4:3 двома рядками,
+                // кадр слоту 34), «…» модель уже поставила; рамка — за текстом. Перенос у рамці впритул міг дати третій рядок на зонах
+                // (рев'ю 14.11.2026)
+                name.style.whiteSpace = WhiteSpace.NoWrap;
+                name.style.width = StyleKeyword.Auto;
+                name.style.overflow = Overflow.Visible;
+            };
+            box.RegisterCallback(fit);
+            tag.RegisterCallback(fit);
+            probe.RegisterCallback(fit);
         }
 
         /// <summary>Число / коротке слово display Black.</summary>
@@ -397,7 +434,7 @@ namespace Game.Gameplay.Ring.UI
 
         public InjuryDoll()
         {
-            style.width = 36f; style.height = 70f;
+            style.width = CareerTileLayout.StripDollW; style.height = CareerTileLayout.StripDollH;
             pickingMode = PickingMode.Ignore;
             generateVisualContent = Draw;
         }
