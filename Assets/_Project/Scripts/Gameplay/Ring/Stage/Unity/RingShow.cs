@@ -209,6 +209,8 @@ namespace Game.Gameplay.Ring.Stage
             // Шрифт — лише через роль (ТЗ B00 §2).
             RingFonts.Apply(_tronTitle, RingFontRole.Text);
             RingFonts.Apply(_tronSub, RingFontRole.Text);
+            FitToScreen(_tronTitle);
+            FitToScreen(_tronSub);
             _titleLayer.Add(_tronTitle);
             _titleLayer.Add(_tronSub);
             _tronRoot.Add(_titleLayer);
@@ -271,6 +273,26 @@ namespace Game.Gameplay.Ring.Stage
             _tronSub.text = "";
             _titleLayer.style.backgroundColor = RingTheme.WithAlpha(RingTheme.Black, 0f);
             _tronLight.intensity = 0f;
+        }
+
+        /// <summary>Найширший напис назви на полотні екрана (1024 px) — з полями по 48 px.</summary>
+        private const float TronTextMax = 1024f - 2f * 48f;
+
+        /// <summary>
+        /// Назва й підпис над завісою не ширші за полотно: довгий напис пропорційно стискається, як ім'я в ролику виходу
+        /// (<see cref="EntranceScreenPlayer"/>). Раніше підпис вступу «Місцева федерація. Один борець. Сезон за сезоном.»
+        /// (44 px, ~1080 px) виходив за текстуру й обрізався з обох боків: «ісцева федерація. … Сезон за сезо» (слот 33,
+        /// s33_k_ending_4x3/002–003; від пропорцій екрана не залежить — текстура та сама).
+        /// </summary>
+        private static void FitToScreen(Label l)
+        {
+            l.RegisterCallback<GeometryChangedEvent>(e =>
+            {
+                float w = e.newRect.width;
+                if (w < 1f) return;
+                float k = w > TronTextMax ? TronTextMax / w : 1f;
+                l.style.scale = new Scale(new Vector3(k, k, 1f));
+            });
         }
 
         /// <summary>Назва гри на екрані (вступ, рецепт B01): напис, підпис і колір тла — токен, прозорістю з кроків екрана.</summary>
@@ -1021,7 +1043,7 @@ namespace Game.Gameplay.Ring.Stage
             Vector3 o = BackstageOrigin;
             _s.Place(hero, o + HeroSpot, 70f, "Ring_Stance_Loop");
             if (_booker != null) _s.Place(_booker, o + BookerSpot, -110f, "Ref_Idle_Loop");
-            Look(o + new Vector3(0.6f, 1.75f, -3.6f), o + new Vector3(0f, 1.2f, 0.4f), 46f, true);
+            Look(o + new Vector3(0.6f, 1.75f, -3.6f), o + new Vector3(0f, 1.2f, 0.4f), 46f, true, true);
         }
 
         // Місця в роздягальні від BackstageOrigin: герой біля лавки, букер біля свого столу; гість, що стоїть поруч із букером
@@ -1079,7 +1101,7 @@ namespace Game.Gameplay.Ring.Stage
             Vector3 across = Vector3.Cross(Vector3.up, (b - h).normalized);
             if (talker != null) Look(h + (h - b).normalized * 0.9f + across * 0.45f + Vector3.up * 0.1f, b, 34f, true);
             else if (speaker == "player") Look(b + (b - h).normalized * 0.9f - across * 0.45f + Vector3.up * 0.1f, h, 34f, true);
-            else { var o = BackstageOrigin; Look(o + new Vector3(0.6f, 1.75f, -3.6f), o + new Vector3(0f, 1.2f, 0.4f), 46f, false); }
+            else { var o = BackstageOrigin; Look(o + new Vector3(0.6f, 1.75f, -3.6f), o + new Vector3(0f, 1.2f, 0.4f), 46f, false, true); }
         }
 
         private RingActor _guest;
@@ -1186,8 +1208,15 @@ namespace Game.Gameplay.Ring.Stage
 
         // ============================ спільне ============================
 
-        private void Look(Vector3 pos, Vector3 look, float fov, bool cut)
+        /// <summary>
+        /// Загальний план роздягальні (тиждень, оповідач) — камера показу кладе героя між панелями екрана тижня
+        /// (<see cref="RingFrameZone"/>); кадри розмови через плече — ні.
+        /// </summary>
+        public bool BackstageWide { get; private set; }
+
+        private void Look(Vector3 pos, Vector3 look, float fov, bool cut, bool wide = false)
         {
+            BackstageWide = wide;
             CamPos = pos;
             CamLook = look;
             CamFov = fov;

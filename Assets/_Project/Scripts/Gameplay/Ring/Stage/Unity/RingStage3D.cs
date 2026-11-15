@@ -110,7 +110,7 @@ namespace Game.Gameplay.Ring.Stage
             runRope.Sort(StringComparer.Ordinal);
             return string.Format(CultureInfo.InvariantCulture, "[Ринг] кліпи: зіграно {0} логічних з {1} у маніфесті рингу (усього різних {2}); біг, канати, кидки: {3}",
                 inMatch, _matchClips.Count, played.Count, runRope.Count > 0 ? string.Join(", ", runRope) : "—")
-                + (director ? "\n" + DirectorReport() : "") + "\n" + Watch.Report();
+                + (director ? "\n" + DirectorReport() : "") + "\n" + Watch.Report() + "\n" + Contact.Report();
         }
 
         /// <summary>
@@ -606,13 +606,17 @@ namespace Game.Gameplay.Ring.Stage
                 {
                     var face = r as SkinnedMeshRenderer;
                     if (face != null) face.updateWhenOffscreen = true;
+                    var block = new MaterialPropertyBlock();
+                    r.GetPropertyBlock(block);
+                    // Обличчя без відблиску. Під прожектором фінішера очі ставали білими й світилися, а над ними — білий
+                    // пунктир (кадри слоту 34: 129, 140, 143, 14.11.2026). Текстури є: пунктир — це альфа-зріз карти брів.
+                    // Біле — дзеркальний відблиск матеріалу імпорту (блиск до 0,25) на темних картках брів і вій і на
+                    // кулі ока. Матовий матеріал лишає їм власний колір.
+                    block.SetFloat("_Smoothness", 0f);
                     // Білки очей у темній залі світилися (знімок промо 03.11.2026) — приглушити, не прибираючи текстуру.
                     if (Characters.CharacterAssembler.PartOf(r.name).ToLowerInvariant() == "low-poly")
-                    {
-                        var block = new MaterialPropertyBlock();
                         block.SetColor("_BaseColor", new Color(0.62f, 0.6f, 0.58f));
-                        r.SetPropertyBlock(block);
-                    }
+                    r.SetPropertyBlock(block);
                     continue;
                 }
                 var mats = new Material[Mathf.Max(1, r.sharedMaterials.Length)];
@@ -879,12 +883,27 @@ namespace Game.Gameplay.Ring.Stage
             return Mathf.Atan2(d.x, d.z) * Mathf.Rad2Deg;
         }
 
-        /// <summary>Поставити постать прямо (без ковзання) і зіграти кліп.</summary>
+        /// <summary>
+        /// Поставити постать прямо (без ковзання) і зіграти кліп. Петлі очікування стартують зі своєї миті й у своєму темпі
+        /// за роллю (<see cref="RingIdlePhase"/>): інакше борці й рефері дихали в такт, як дзеркальні манекени.
+        /// </summary>
         public void Place(RingActor a, Vector3 pos, float yaw, string clip, bool loop = true)
         {
             a.Slot.SetPositionAndRotation(pos, Quaternion.Euler(0f, yaw, 0f));
             var c = Clip(clip);
-            if (c != null) a.PlayAt(c, loop, pos, yaw);
+            if (c == null) return;
+            var role = IdleRole(a);
+            float t = loop ? RingIdlePhase.StartTime(clip, c.length, role) : 0f;
+            float speed = loop ? RingIdlePhase.Speed(clip, role) : 1f;
+            a.PlayAtTime(c, t, loop, pos, yaw, speed);
+        }
+
+        private RingIdleRole IdleRole(RingActor a)
+        {
+            if (a == _player) return RingIdleRole.Player;
+            if (a == _rival) return RingIdleRole.Rival;
+            if (a == _ref) return RingIdleRole.Referee;
+            return RingIdleRole.Other;
         }
 
         // ============================ режими ============================
@@ -1460,10 +1479,295 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Пропорції кадру камери (ширина / висота) — для розкладки кіноплану.</summary>
         public float CamAspect { get { return _cam != null ? _cam.aspect : 16f / 9f; } }
 
+        // ============================ вільна зона кадру ============================
+
+        private Func<IList<RingFrameZone.Box>> _uiSource;
+        private readonly List<RingFrameZone.Box> _uiPanels = new List<RingFrameZone.Box>();
+        private readonly List<RingFrameZone.Box> _zoneMust = new List<RingFrameZone.Box>(2), _zoneNice = new List<RingFrameZone.Box>(2);
+        private float _zoneYaw, _zoneVel, _zoneFrom, _zoneFromVel, _zoneTo, _zoneRampT = 1f;
+        private float _zoneCutAge = 99f, _zonePullAge = 99f, _zoneCheckAge;
+        private int _zonePanelsHash = int.MinValue;
+        private bool _zoneDirty = true, _zoneUseNice = true;
+        private string _zoneScreen, _zoneLog;
+
+        public void SetUiPanelSource(Func<IList<RingFrameZone.Box>> source)
+        {
+            _uiSource = source;
+            ForgetPanels();
+        }
+
+        /// <summary>Жорстка межа повороту під вільну зону, градуси (У0 арт-директора 14.11.2026): далі кадр уже інший.</summary>
+        private const float FreeZoneMaxYaw = 18f;
+        /// <summary>Розкладка змінилась, поки екран відкритий (аркуш висувається), — поворот доганяє плавно за стільки секунд.</summary>
+        private const float ZoneRamp = 0.4f;
+        /// <summary>Стільки секунд після склейки поворот теж ставиться склейкою: розкладка нового екрана встоюється за кадр-два.</summary>
+        private const float ZoneCutWindow = 0.35f;
+        /// <summary>Перевірка без зміни панелей (раз на 0,5 с — хтось зрушив) повертає камеру, лише якщо треба більше за стільки градусів.</summary>
+        private const float ZoneDeadband = 0.3f;
+        /// <summary><c>-ring-diag-nozone</c> (лише огляди): вільна зона вимкнена — кадри «було» для пар «було / стало» (У2 директора).</summary>
+        private static readonly bool ZoneOff = RingLaunchArgs.Has("-ring-diag-nozone");
+
+        private void ForgetPanels()
+        {
+            _uiPanels.Clear();
+            _zonePanelsHash = int.MinValue;
+            _zonePullAge = 99f;
+            _zoneDirty = true;
+            _zoneUseNice = true;
+        }
+
+        /// <summary>
+        /// Вільна зона кадру (огляд слотів 32–33, ПМ 13.11.2026; У0 арт-директора 14.11.2026 — «так» з чотирма правками). Екран
+        /// кар'єри дає межі своїх панелей (<see cref="SetUiPanelSource"/>), і камера повертається по курсу, поки той, кого вона
+        /// показує, не ляже між ними з полем <see cref="RingFrameZone.Pad"/>. Вільним має бути не точка голови, а «маківка —
+        /// ключиці» на всю ширину плечей (<see cref="AddBust"/>):
+        /// <list type="bullet">
+        /// <item>герой сам (створення, кінець сезону) — він; на святі доброго сезону бажано й піднята рука;</item>
+        /// <item>загальний план рингу (картка шоу) — по прямокутнику на кожного борця;</item>
+        /// <item>закулісся, загальний план тижня — герой; бажано й букер чи гість.</item>
+        /// </list>
+        /// Поворот, а не зсув: камера лишається, де стояла, — всередині канатів і стін роздягальні, кут на обличчя той самий.
+        /// Межа <see cref="FreeZoneMaxYaw"/>; не влізло — кадр як є і рядок у лог. Поворот ставиться склейкою разом зі склейкою
+        /// камери (відкриття екрана); зміна розкладки на відкритому екрані — плавно за <see cref="ZoneRamp"/> (кубічна крива
+        /// з тією швидкістю, яку поворот уже мав, — аркуш, що висувається кількома кроками, не смикає камеру). Без панелей, у
+        /// матчі, промо, виходах і розмові через плече поворот нуль. Накладається після згладжування камери — своїм шаром.
+        /// </summary>
+        private void ZoneStep(Vector3 pos, Vector3 aim, float fov, bool show, float dt, bool cut)
+        {
+            if (ZoneOff) { _zoneYaw = 0f; return; }
+            if (cut) { _zoneCutAge = 0f; ForgetPanels(); }
+            else _zoneCutAge += dt;
+            bool window = _zoneCutAge <= ZoneCutWindow;
+            RingActor second, extra;
+            bool hand;
+            string screen = ZoneScreen(show, out second, out extra, out hand);
+            if (screen != _zoneScreen) { _zoneScreen = screen; ForgetPanels(); }
+
+            // Панелі — щойно після склейки щокадру, далі 10 разів на секунду.
+            _zonePullAge += dt;
+            if (screen != null && _uiSource != null && (window || _zonePullAge >= 0.1f))
+            {
+                _zonePullAge = 0f;
+                var got = _uiSource();
+                if (got != null)
+                {
+                    int h = PanelsHash(got);
+                    if (h != _zonePanelsHash)
+                    {
+                        _zonePanelsHash = h;
+                        _uiPanels.Clear();
+                        _uiPanels.AddRange(got);
+                        _zoneDirty = true;
+                        _zoneUseNice = true;
+                    }
+                }
+            }
+
+            _zoneCheckAge += dt;
+            if (_zoneDirty || window || _zoneCheckAge >= 0.5f)
+            {
+                _zoneCheckAge = 0f;
+                float target = screen != null && _uiPanels.Count > 0 ? ZoneTarget(screen, pos, aim, fov, second, extra, hand) : 0f;
+                if (window)
+                {
+                    _zoneYaw = _zoneFrom = _zoneTo = target;
+                    _zoneVel = _zoneFromVel = 0f;
+                    _zoneRampT = 1f;
+                }
+                else if (Mathf.Abs(target - _zoneTo) > (_zoneDirty ? 0.02f : ZoneDeadband))
+                {
+                    _zoneFrom = _zoneYaw; _zoneFromVel = _zoneVel; _zoneTo = target; _zoneRampT = 0f;
+                }
+                _zoneDirty = false;
+            }
+
+            if (_zoneRampT < 1f && dt > 0f)
+            {
+                // Кубічна крива Ерміта: від поточного повороту з поточною швидкістю — до цілі зі швидкістю нуль.
+                _zoneRampT = Mathf.Min(1f, _zoneRampT + dt / ZoneRamp);
+                float t = _zoneRampT, t2 = t * t, t3 = t2 * t, v0 = _zoneFromVel * ZoneRamp;
+                _zoneYaw = (2f * t3 - 3f * t2 + 1f) * _zoneFrom + (t3 - 2f * t2 + t) * v0 + (3f * t2 - 2f * t3) * _zoneTo;
+                _zoneVel = ((6f * t2 - 6f * t) * _zoneFrom + (3f * t2 - 4f * t + 1f) * v0 + (6f * t - 6f * t2) * _zoneTo) / ZoneRamp;
+                _zoneYaw = Mathf.Clamp(_zoneYaw, -FreeZoneMaxYaw, FreeZoneMaxYaw);
+            }
+            else if (_zoneRampT >= 1f) _zoneVel = 0f;
+        }
+
+        /// <summary>Який кадр кар'єри зараз (для повороту й рядка в лог) і кого в ньому показуємо; <c>null</c> — кадр не наш.</summary>
+        private string ZoneScreen(bool show, out RingActor second, out RingActor extra, out bool hand)
+        {
+            second = extra = null;
+            hand = false;
+            if (_mode != RingStageMode.Idle || _player == null || _player.Model == null || !_player.Model.activeSelf) return null;
+            if (show)
+            {
+                if (_show == null || !_show.InBackstage || !_show.BackstageWide) return null;
+                extra = _show.Guest != null && _show.Guest.Model.activeSelf ? _show.Guest : _show.Booker;
+                return "закулісся";
+            }
+            if (_heroOnly)
+            {
+                if (_shot != StageCam.Cine) return null;
+                hand = _heroGood && _player.RightHand != null;
+                return _heroCreate ? "створення" : "кінець сезону";
+            }
+            if (_shot == StageCam.Overview && _rival != null && _rival.Model != null && _rival.Model.activeSelf)
+            {
+                second = _rival;
+                return "ринг, загальний план";
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Поворот під вільну зону для пози камери (<paramref name="pos"/> → <paramref name="aim"/>): найменший, з яким кожен
+        /// обов'язковий прямокутник вільний, у межах ±<see cref="FreeZoneMaxYaw"/>. Бажане (рука, букер) — якщо влізе; вирішене
+        /// тримається до зміни панелей чи екрана, щоб кадр не гойдався між «з рукою» і «без». Дві-три спроби: з нахилом камери
+        /// <see cref="RingFrameZone.YawFor"/> наближений, тож друга рахує від нової проекції.
+        /// </summary>
+        private float ZoneTarget(string screen, Vector3 pos, Vector3 aim, float fov, RingActor second, RingActor extra, bool hand)
+        {
+            float aspect = CamAspect, yaw = 0f;
+            bool fit = true, nice = false, hadNice = false, tryNice = _zoneUseNice;
+            for (int pass = 0; pass < 3; pass++)
+            {
+                Vector3 a = pos + Quaternion.Euler(0f, yaw, 0f) * (aim - pos);
+                _zoneMust.Clear();
+                _zoneNice.Clear();
+                if (!AddBust(pos, a, fov, aspect, _player, _zoneMust)) return 0f;
+                if (second != null && !AddBust(pos, a, fov, aspect, second, _zoneMust)) return 0f;
+                if (tryNice)
+                {
+                    if (extra != null) AddBust(pos, a, fov, aspect, extra, _zoneNice);
+                    if (hand) AddPoint(pos, a, fov, aspect, _player.RightHand.position, 0.1f, _zoneNice);
+                }
+                if (pass == 0) hadNice = _zoneNice.Count > 0;
+                float x0 = 1f, x1 = 0f;
+                foreach (var b in _zoneMust) { x0 = Mathf.Min(x0, b.X0); x1 = Mathf.Max(x1, b.X1); }
+                float cx = (x0 + x1) * 0.5f;
+                // Межі зсуву — під поворот, що лишився до ±18°: камера праворуч — люди їдуть ліворуч.
+                float dxMin = RingFrameZone.ShiftForYaw(cx, FreeZoneMaxYaw - yaw, fov, aspect);
+                float dxMax = RingFrameZone.ShiftForYaw(cx, -FreeZoneMaxYaw - yaw, fov, aspect);
+                float dx;
+                bool withNice;
+                if (!RingFrameZone.Shift(_uiPanels, _zoneMust, _zoneNice, RingFrameZone.Pad, dxMin, dxMax, out dx, out withNice))
+                {
+                    if (pass == 0) fit = false;
+                    break;
+                }
+                if (pass == 0) nice = withNice;
+                tryNice = nice;
+                if (Mathf.Abs(dx) < 0.002f) break;
+                yaw += RingFrameZone.YawFor(cx, dx, fov, aspect);
+            }
+            if (hadNice) _zoneUseNice = nice;
+            yaw = fit ? Mathf.Clamp(yaw, -FreeZoneMaxYaw, FreeZoneMaxYaw) : 0f;
+            ZoneLog(screen, fit, yaw, hadNice, nice);
+            return yaw;
+        }
+
+        /// <summary>
+        /// Рядок у лог раз на екран, розмір і результат (У0 арт-директора 14.11.2026: «вільна зона: не влізло &lt;екран&gt;
+        /// &lt;аспект&gt;» — ці випадки директор дивиться окремо; решта — для пар «було / стало»).
+        /// </summary>
+        private void ZoneLog(string screen, bool fit, float yaw, bool hadNice, bool nice)
+        {
+            int w = Screen.width, h = Screen.height;
+            string asp = AspectLabel(w, h);
+            string key = screen + "|" + w + "x" + h + "|" + fit + "|" + nice;
+            if (key == _zoneLog) return;
+            _zoneLog = key;
+            if (!fit) Debug.Log(string.Format("[Ринг] вільна зона: не влізло {0} {1} ({2}×{3})", screen, asp, w, h));
+            else
+                Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] вільна зона: {0} {1} ({2}×{3}) — поворот {4:F1}°{5}",
+                    screen, asp, w, h, yaw, hadNice ? (nice ? ", бажане — так" : ", бажане — не влізло") : ""));
+        }
+
+        private static readonly int[] AspectW = { 21, 16, 16, 3, 4, 5 }, AspectH = { 9, 9, 10, 2, 3, 4 };
+
+        /// <summary>Пропорції кадру словами: «16:9», «4:3»…, інакше число (2.37).</summary>
+        private static string AspectLabel(int w, int h)
+        {
+            if (w <= 0 || h <= 0) return "?";
+            float r = (float)w / h;
+            for (int i = 0; i < AspectW.Length; i++)
+                if (Mathf.Abs(r - (float)AspectW[i] / AspectH[i]) < 0.02f) return AspectW[i] + ":" + AspectH[i];
+            return r.ToString("F2", CultureInfo.InvariantCulture);
+        }
+
+        private static int PanelsHash(IList<RingFrameZone.Box> panels)
+        {
+            int h = 17 + panels.Count;
+            for (int i = 0; i < panels.Count; i++)
+            {
+                var r = panels[i];
+                h = h * 31 + (int)(r.X0 * 1000f);
+                h = h * 31 + (int)(r.Y0 * 1000f);
+                h = h * 31 + (int)(r.X1 * 1000f);
+                h = h * 31 + (int)(r.Y1 * 1000f);
+            }
+            return h;
+        }
+
+        /// <summary>
+        /// «Маківка — ключиці» на всю ширину плечей (У0 арт-директора 14.11.2026, правка 1): куля голови з волоссям (0,12 м,
+        /// трохи над кісткою голови) і кулі плечових суглобів (0,07 м — дельта) — їхній спільний екранний прямокутник. Без
+        /// кісток рук — плечі на 0,2 м нижче й ширше голови.
+        /// </summary>
+        private static bool AddBust(Vector3 pos, Vector3 aim, float fov, float aspect, RingActor a, List<RingFrameZone.Box> into)
+        {
+            if (a == null || a.Model == null || !a.Model.activeSelf) return false;
+            var box = default(RingFrameZone.Box);
+            Vector3 head = a.HeadPos;
+            if (!PointBox(pos, aim, fov, aspect, head + Vector3.up * 0.08f, 0.12f, ref box, false)) return false;
+            Transform l = a.GetBone(HumanBodyBones.LeftUpperArm), r = a.GetBone(HumanBodyBones.RightUpperArm);
+            if (l != null && r != null)
+            {
+                PointBox(pos, aim, fov, aspect, l.position, 0.07f, ref box, true);
+                PointBox(pos, aim, fov, aspect, r.position, 0.07f, ref box, true);
+            }
+            else
+            {
+                Vector3 side = Vector3.Cross(Vector3.up, (aim - pos).normalized).normalized * 0.2f;
+                PointBox(pos, aim, fov, aspect, head - Vector3.up * 0.2f + side, 0.07f, ref box, true);
+                PointBox(pos, aim, fov, aspect, head - Vector3.up * 0.2f - side, 0.07f, ref box, true);
+            }
+            into.Add(box);
+            return true;
+        }
+
+        private static void AddPoint(Vector3 pos, Vector3 aim, float fov, float aspect, Vector3 p, float r, List<RingFrameZone.Box> into)
+        {
+            var box = default(RingFrameZone.Box);
+            if (PointBox(pos, aim, fov, aspect, p, r, ref box, false)) into.Add(box);
+        }
+
+        /// <summary>
+        /// Екранний прямокутник кулі радіуса <paramref name="r"/> для камери в <paramref name="pos"/>, що дивиться на
+        /// <paramref name="aim"/> (без крену, як <c>LookRotation(…, up)</c>). <paramref name="merge"/> — додати до наявного.
+        /// </summary>
+        private static bool PointBox(Vector3 pos, Vector3 aim, float fov, float aspect, Vector3 p, float r, ref RingFrameZone.Box box, bool merge)
+        {
+            Vector3 f = (aim - pos).normalized;
+            Vector3 right = Vector3.Cross(Vector3.up, f).normalized;
+            Vector3 up = Vector3.Cross(f, right);
+            Vector3 d = p - pos;
+            float depth = Vector3.Dot(d, f);
+            if (depth < 0.3f) return false;
+            float x = RingFrameZone.ScreenX(Vector3.Dot(d, right), depth, fov, aspect);
+            float y = RingFrameZone.ScreenY(Vector3.Dot(d, up), depth, fov);
+            float ry = 0.5f * r / (depth * Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad)), rx = ry / aspect;
+            var b = new RingFrameZone.Box(x - rx, y - ry, x + rx, y + ry);
+            box = merge ? new RingFrameZone.Box(Mathf.Min(box.X0, b.X0), Mathf.Min(box.Y0, b.Y0), Mathf.Max(box.X1, b.X1), Mathf.Max(box.Y1, b.Y1)) : b;
+            return true;
+        }
+
         private void SnapCamera() { _camInit = false; }
 
         /// <summary>Фаз-тест матчу (телепорти, крізь канати, ковзання стоп) — підсумок у <see cref="PlayedReport"/>.</summary>
         public RingStageWatch Watch { get; } = new RingStageWatch();
+        /// <summary>Вимірювач контакту тіл (QA «Скилы», критерій М1 №4: проникнення до 3 см) — підсумок у <see cref="PlayedReport"/>.</summary>
+        public RingContactWatch Contact { get; } = new RingContactWatch();
         private readonly RingActor[] _watchActors = new RingActor[3];
         private readonly RingActor[] _watchShow = new RingActor[1];
 
@@ -1484,7 +1788,9 @@ namespace Game.Gameplay.Ring.Stage
             if (_mode == RingStageMode.Match)
             {
                 _watchActors[0] = _player; _watchActors[1] = _rival; _watchActors[2] = _ref;
+                Watch.Referee = _ref;   // ковзання рефері — окремим числом (запит ПМ 14.11.2026)
                 Watch.Tick(_watchActors, Time.deltaTime, !_camInit);
+                Contact.Tick(_watchActors);
             }
             else if (_show != null && _show.Busy && _show.EntranceActor != null)
             {
@@ -1588,6 +1894,7 @@ namespace Game.Gameplay.Ring.Stage
             Vector3 aim = look - up * (halfH * (show || cine ? 0f : _frameShift));
             Quaternion rot = Quaternion.LookRotation(aim - pos, Vector3.up);
 
+            bool cutNow = !_camInit;
             if (!_camInit)
             {
                 _camPos = pos; _camRot = rot; _camFov = fov; _camInit = true;
@@ -1611,7 +1918,10 @@ namespace Game.Gameplay.Ring.Stage
                     shake = new Vector3(Mathf.PerlinNoise(_shakeT * 31f, 0.1f) - 0.5f, Mathf.PerlinNoise(0.7f, _shakeT * 29f) - 0.5f, 0f) * (2f * a2);
                 }
             }
-            _cam.transform.SetPositionAndRotation(_camPos + _camRot * shake, _camRot);
+            // Вільна зона кадру — своїм шаром поверх згладженої камери: склейкою разом зі склейкою, інакше за 0,4 с.
+            ZoneStep(pos, aim, fov, show, dt, cutNow);
+            Quaternion camRot = Mathf.Abs(_zoneYaw) > 1e-3f ? Quaternion.Euler(0f, _zoneYaw, 0f) * _camRot : _camRot;
+            _cam.transform.SetPositionAndRotation(_camPos + camRot * shake, camRot);
             if (_dress != null)
             {
                 KeepOutsideClear();

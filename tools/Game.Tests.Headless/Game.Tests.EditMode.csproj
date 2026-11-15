@@ -111,6 +111,8 @@
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingVenue.cs" />
     <!-- Ринг: люди кар'єри поза рингом (букери, гості закулісся, менеджерка) — чистий C#, охоронці BackstageCastTests (вигляд NPC — CareerLooks вище). -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/BackstageCast.cs" />
+    <!-- Ринг: вільна зона кадру між панелями UI (герой наодинці, закулісся, картка шоу) — чистий C#, охоронці RingFrameZoneTests. -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingFrameZone.cs" />
   </ItemGroup>
 
   <ItemGroup>
