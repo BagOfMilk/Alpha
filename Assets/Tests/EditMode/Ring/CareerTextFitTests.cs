@@ -974,6 +974,24 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
+        /// Виняток 5:4, АД 15.11.2026: мета (герой вільний) виконана, % — ні. Колонка кінця сезону на 5:4 — 49 % кадру з краєм, тож тут
+        /// міряється мета правила ≤ 46 %, а не відсотки: лівий край колонки не лівіше за середину кадру, героєві вільно не менше за
+        /// подвійні плечі. Загальне правило для інших екранів і для 4:3 не послаблюється. Якщо на кадрі У2 5:4 тісно — до АД, варіант (б).
+        /// </summary>
+        [Test]
+        public void SeasonEnd_Column_FiveFour_Exception_KeepsTheHeroFree()
+        {
+            // плечі — 21 % кадру 4:3 (замір «Изучение»), більші з двох замірів
+            float w54 = CareerTileLayout.CreateNarrowestAspect * 900f;
+            Assert.IsTrue(CareerTileLayout.CreateSingleColumn(w54, 900f), "5:4 — колонка");
+            Assert.Greater((CareerTileLayout.Edge + CareerTileLayout.SeasonColumnW) / w54, CareerTileLayout.ColumnMaxFrac,
+                "на 5:4 колонка вже в межах 46 % — виняток АД 15.11.2026 більше не потрібен, прибрати його з коментарів і охоронця");
+            Assert.GreaterOrEqual(CareerTileLayout.SeasonColumnLeft(w54), w54 / 2f, "5:4: колонка кінця сезону заходить на ліву половину кадру");
+            Assert.GreaterOrEqual(CareerTileLayout.SeasonColumnLeft(w54), 2f * CareerTileLayout.HeroShouldersW, "5:4: героєві ліворуч від колонки вільно менше за подвійні плечі");
+            Assert.AreEqual(CareerTileLayout.SeasonColumnLeft(1200f) / 1200f, 1f - CareerTileLayout.ColumnMaxFrac, 0.0001f, "4:3: правило 46 % не послаблене");
+        }
+
+        /// <summary>
         /// Підсумок сезону на папері (без блоку пропозиції й нижнього відступу) — найдовшими рядками, як у тесті вище; <paramref name="scales"/> —
         /// з рядком шкал (на 4:3 його немає), <paramref name="folded"/> — згорнутий до назви, федерації й рекорду (4:3, контракт і пізня роль).
         /// </summary>
