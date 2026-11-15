@@ -1587,16 +1587,33 @@ namespace Game.Tests.EditMode
             CollectionAssert.AreEqual(new[] { T.Get("week.reason.exclusive") }, CareerScreenLines.WeekResultDeltas(T, no, null, false));
             Assert.IsNull(CareerScreenLines.WeekResultRoll(T, no));
             NoMissingKey(CareerScreenLines.WeekResultHead(T, done), "c.week.result.done");
-            // кидок підробітку — лише перевірка травми: результат «Зроблено», не «Провал»
+            // кидок підробітку — лише перевірка травми: без травми «Зроблено», не «Провал»; з травмою — вердикт «Травма» (АД 15.11.2026)
             var job = new WeekActionResult { Kind = WeekActionKind.SideJob, Ok = true, HasRoll = true, Roll = 5, Total = 5, Tier = RollTier.Miss, MoneyDelta = 40 };
             Assert.AreEqual(T.Get("week.action.4") + " · " + T.Get("c.week.result.done"), CareerScreenLines.WeekResultHead(T, job));
             Assert.IsNotNull(CareerScreenLines.WeekResultRoll(T, job), "кидок підробітку — у підказці");
+            var hurt = new WeekActionResult { Kind = WeekActionKind.SideJob, Ok = true, HasRoll = true, Roll = 3, Total = 3, Tier = RollTier.Miss, MoneyDelta = 40, InjuredZone = 1 };
+            Assert.AreEqual(T.Get("week.action.4") + " · " + T.Get("c.week.result.injury"), CareerScreenLines.WeekResultHead(T, hurt));
+            NoMissingKey(CareerScreenLines.WeekResultHead(T, hurt), "c.week.result.injury");
+            var hurtDeltas = CareerScreenLines.WeekResultDeltas(T, hurt, null, false);
+            Assert.AreEqual(CareerScreenLines.WeekDeltaText(T, hurt, CareerScreenLines.WeekDelta.Injury, null, false), hurtDeltas[0], "травма — першою дельтою, зоною");
+            Assert.AreEqual(CareerScreenLines.WeekDeltaText(T, hurt, CareerScreenLines.WeekDelta.Money, null, false), hurtDeltas[1], "гроші лишаються в дельтах");
+            // кидок ≤ 4 без нової травми (зона вже травмована) — травми немає: «Зроблено»
+            var roughNoHurt = new WeekActionResult { Kind = WeekActionKind.SideJob, Ok = true, HasRoll = true, Roll = 3, Total = 3, Tier = RollTier.Miss, MoneyDelta = 40 };
+            Assert.AreEqual(T.Get("week.action.4") + " · " + T.Get("c.week.result.done"), CareerScreenLines.WeekResultHead(T, roughNoHurt));
+            // вердикт «Травма» — лише підробітку (там кидок і є перевіркою травми); травма іншої дії — дельтою, вердикт — її кидок
+            var promoHurt = new WeekActionResult { Kind = WeekActionKind.Promo, Ok = true, HasRoll = true, Roll = 11, Total = 11, Tier = RollTier.Strong, InjuredZone = 0 };
+            Assert.AreEqual(T.Get("week.action.2") + " · " + T.Get("tier.strong"), CareerScreenLines.WeekResultHead(T, promoHurt));
+            Assert.IsTrue(CareerScreenLines.WeekResultSucceeded(promoHurt), "успіх промо з травмою — колір за кидком, травма — дельтою");
+            // частковий успіх вирішального кидка — словом «Частково» в рядку 1
+            var part = new WeekActionResult { Kind = WeekActionKind.Promo, Ok = true, HasRoll = true, Roll = 8, Total = 8, Tier = RollTier.Partial };
+            Assert.AreEqual(T.Get("week.action.2") + " · " + T.Get("tier.partial"), CareerScreenLines.WeekResultHead(T, part));
+            StringAssert.StartsWith("Частково", T.Get("tier.partial"));
         }
 
         /// <summary>
         /// Смуга стрічки — Gold, коли дія вдалась, Signal — коли ні (АД 15.11.2026). «Ok» ядра — лише «дію дозволено»: провал кидка, що
-        /// вирішує результат (промо, закулісся), — не вдалась; частковий успіх і дії без кидка — вдались; кидок підробітку (травма) колір не
-        /// міняє; відмова — ні.
+        /// вирішує результат (промо, закулісся), — не вдалась; частковий успіх і дії без кидка — вдались; підробіток — за перевіркою травми:
+        /// з травмою не вдався (травма важливіша за гроші, АД 15.11.2026), без — вдався; відмова — ні.
         /// </summary>
         [Test]
         public void WeekStrip_Stripe_GoldOnlyWhenTheActionSucceeded()
@@ -1608,8 +1625,10 @@ namespace Game.Tests.EditMode
                 Assert.IsTrue(CareerScreenLines.WeekResultSucceeded(new WeekActionResult { Kind = kind, Ok = true, HasRoll = true, Tier = RollTier.Strong }), kind + ": успіх");
                 Assert.IsTrue(CareerScreenLines.WeekResultSucceeded(new WeekActionResult { Kind = kind, Ok = true }), kind + ": без кидка (вибір нагороди, сцена)");
             }
-            Assert.IsTrue(CareerScreenLines.WeekResultSucceeded(new WeekActionResult { Kind = WeekActionKind.SideJob, Ok = true, HasRoll = true, Tier = RollTier.Miss, InjuredZone = 2 }),
-                "підробіток заробив — вдався; травма — словом у дельті");
+            Assert.IsFalse(CareerScreenLines.WeekResultSucceeded(new WeekActionResult { Kind = WeekActionKind.SideJob, Ok = true, HasRoll = true, Tier = RollTier.Miss, InjuredZone = 2, MoneyDelta = 40 }),
+                "підробіток з травмою — Signal: золото поверх травми бреше (АД 15.11.2026)");
+            Assert.IsTrue(CareerScreenLines.WeekResultSucceeded(new WeekActionResult { Kind = WeekActionKind.SideJob, Ok = true, HasRoll = true, Tier = RollTier.Miss, MoneyDelta = 40 }),
+                "підробіток без травми — вдався, хоч рівень кидка «Провал»");
             Assert.IsTrue(CareerScreenLines.WeekResultSucceeded(new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = true }));
             Assert.IsFalse(CareerScreenLines.WeekResultSucceeded(new WeekActionResult { Kind = WeekActionKind.Training, Ok = false, Reason = "money" }), "відмова");
             Assert.IsFalse(CareerScreenLines.WeekResultSucceeded(null));

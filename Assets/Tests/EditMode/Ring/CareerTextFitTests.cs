@@ -431,6 +431,7 @@ namespace Game.Tests.EditMode
                 foreach (RollTier tier in Enum.GetValues(typeof(RollTier)))
                     heads.Add(CareerScreenLines.WeekResultHead(TAll, new WeekActionResult { Kind = kind, Ok = true, HasRoll = true, Tier = tier }));
                 heads.Add(CareerScreenLines.WeekResultHead(TAll, new WeekActionResult { Kind = kind, Ok = true }));
+                heads.Add(CareerScreenLines.WeekResultHead(TAll, new WeekActionResult { Kind = kind, Ok = true, HasRoll = true, Tier = RollTier.Miss, InjuredZone = 1 }));
                 heads.Add(CareerScreenLines.WeekResultHead(TAll, new WeekActionResult { Kind = kind, Ok = false, Reason = "money" }));
                 foreach (var h in heads)
                 {
@@ -1163,6 +1164,115 @@ namespace Game.Tests.EditMode
             Assert.GreaterOrEqual(CareerTileLayout.SeasonColumnLeft(w54), w54 / 2f, "5:4: колонка кінця сезону заходить на ліву половину кадру");
             Assert.GreaterOrEqual(CareerTileLayout.SeasonColumnLeft(w54), 2f * CareerTileLayout.HeroShouldersW, "5:4: героєві ліворуч від колонки вільно менше за подвійні плечі");
             Assert.AreEqual(CareerTileLayout.SeasonColumnLeft(1200f) / 1200f, 1f - CareerTileLayout.ColumnMaxFrac, 0.0001f, "4:3: правило 46 % не послаблене");
+        }
+
+        // ---------------- шухляда тижня: мета замість відсотка (АД 15.11.2026) ----------------
+
+        /// <summary>
+        /// Сцена закулісся на екрані (панель висотою 900): камера, місця героя й букера і поворот героя — з джерела
+        /// <c>RingShow.ShowBackstage</c>, тож охоронець іде за камерою, коли її змінять (поворот на 0° — сесія «Изучение»).
+        /// Проєкція — як у Unity: LookRotation зі світовим «вгору», вертикальне поле зору; кадр зсуву не має (показ — <c>aim = look</c>).
+        /// Звірено з кадром слоту 34 (s34b_m1080, week_drawer_open, 16:9): букер 967–1075 на кадрі — 953–1070 тут (плечі ±0,22 м);
+        /// кисті героя 725 — 752 тут (досяг 0,55 м уперед — із запасом).
+        /// </summary>
+        private sealed class BackstageView
+        {
+            public double[] Cam, Look, Hero, Booker;
+            public double Fov, HeroYaw;
+
+            public static BackstageView FromSource()
+            {
+                string path = System.IO.Path.Combine(UnityEngine.Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "Stage", "Unity", "RingShow.cs");
+                string src = System.IO.File.ReadAllText(path);
+                int at = src.IndexOf("public void ShowBackstage()", StringComparison.Ordinal);
+                Assert.GreaterOrEqual(at, 0, "RingShow.ShowBackstage не знайдено — охоронець мети шухляди тижня не бачить камеру закулісся");
+                int end = src.IndexOf("\n        }", at, StringComparison.Ordinal);
+                string body = src.Substring(at, end - at);
+                var look = System.Text.RegularExpressions.Regex.Match(body,
+                    @"Look\(o \+ new Vector3\(([^)]*)\), o \+ new Vector3\(([^)]*)\), ([-0-9.]+)f, true\)");
+                var yaw = System.Text.RegularExpressions.Regex.Match(body, @"Place\(hero, o \+ HeroSpot, ([-0-9.]+)f");
+                var hero = System.Text.RegularExpressions.Regex.Match(src, @"Vector3 HeroSpot = new Vector3\(([^)]*)\);");
+                var booker = System.Text.RegularExpressions.Regex.Match(src, @"Vector3 BookerSpot = new Vector3\(([^)]*)\);");
+                Assert.IsTrue(look.Success && yaw.Success && hero.Success && booker.Success,
+                    "камера чи місця закулісся записані інакше — онови розбір охоронця мети шухляди тижня (CareerTextFitTests.BackstageView)");
+                return new BackstageView
+                {
+                    Cam = V3(look.Groups[1].Value), Look = V3(look.Groups[2].Value), Fov = F(look.Groups[3].Value),
+                    Hero = V3(hero.Groups[1].Value), Booker = V3(booker.Groups[1].Value), HeroYaw = F(yaw.Groups[1].Value),
+                };
+            }
+
+            private static double F(string s) { return double.Parse(s.Trim().TrimEnd('f'), CultureInfo.InvariantCulture); }
+
+            private static double[] V3(string s)
+            {
+                var p = s.Split(',');
+                return new[] { F(p[0]), F(p[1]), F(p[2]) };
+            }
+
+            /// <summary>X точки світу на панелі шириною <paramref name="panelW"/> і висотою 900.</summary>
+            public double ScreenX(double[] world, double panelW)
+            {
+                double[] f = Norm(Sub(Look, Cam)), r = Norm(Cross(new[] { 0d, 1d, 0d }, f));
+                double[] d = Sub(world, Cam);
+                double tan = Math.Tan(Fov * 0.5 * Math.PI / 180.0), aspect = panelW / 900.0;
+                return panelW * (0.5 + Dot(d, r) / Dot(d, f) / (tan * aspect) * 0.5);
+            }
+
+            /// <summary>Тіло на висоті грудей (1,3 м), плечі ±<paramref name="half"/> м; для героя — ще й кисті на 0,55 м уперед за поворотом.</summary>
+            public void Extent(double[] spot, double half, bool hands, double panelW, out double left, out double right)
+            {
+                left = double.MaxValue; right = double.MinValue;
+                var pts = new List<double[]>
+                {
+                    new[] { spot[0] - half, 1.3, spot[2] }, new[] { spot[0] + half, 1.3, spot[2] },
+                    new[] { spot[0], 1.3, spot[2] - half }, new[] { spot[0], 1.3, spot[2] + half },
+                };
+                if (hands)
+                {
+                    double a = HeroYaw * Math.PI / 180.0;
+                    pts.Add(new[] { spot[0] + 0.55 * Math.Sin(a), 1.2, spot[2] + 0.55 * Math.Cos(a) });
+                }
+                foreach (var p in pts)
+                {
+                    double x = ScreenX(p, panelW);
+                    left = Math.Min(left, x); right = Math.Max(right, x);
+                }
+            }
+
+            private static double[] Sub(double[] a, double[] b) { return new[] { a[0] - b[0], a[1] - b[1], a[2] - b[2] }; }
+            private static double Dot(double[] a, double[] b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+            private static double[] Cross(double[] a, double[] b) { return new[] { a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0] }; }
+            private static double[] Norm(double[] a) { double l = Math.Sqrt(Dot(a, a)); return new[] { a[0] / l, a[1] / l, a[2] / l }; }
+        }
+
+        /// <summary>
+        /// Мета шухляди тижня (АД 15.11.2026: «охоронець міряє мету, а не відсоток»; 3:2 — шухляда 560 = 47 %): герой не під шухлядою на
+        /// жодному співвідношенні, де шухляда буває, — від найвужчого обіцяного 5:4 до 21:9; на 4:3 і 5:4 — 472, ширше — 560. Герой —
+        /// тіло й кисті (він тримає руки перед собою); шухляда — від лівого краю (панель − край − ширина) донизу, тож уся смуга праворуч
+        /// від краю. Букер — лише вимір у лог: на кадрах 16:9 відкрита шухляда вже стоїть на його тілі (рішення — за АД).
+        /// </summary>
+        [Test]
+        public void WeekDrawer_LeavesTheHeroFree_OnEveryAspect()
+        {
+            var view = BackstageView.FromSource();
+            var bad = new List<string>();
+            var aspects = new[] { 1.25, 4.0 / 3.0, 1.5, 1.6, 16.0 / 9.0, 2102.0 / 900.0 };
+            var names = new[] { "5:4", "4:3", "3:2", "16:10", "16:9", "21:9" };
+            for (int i = 0; i < aspects.Length; i++)
+            {
+                double w = 900.0 * aspects[i];
+                double drawerLeft = w - CareerTileLayout.Edge - CareerTileLayout.WeekDrawerWidth((float)w, 900f);
+                double hl, hr, bl, br;
+                view.Extent(view.Hero, 0.25, true, w, out hl, out hr);
+                view.Extent(view.Booker, 0.22, false, w, out bl, out br);
+                TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                    "{0}: панель {1:0}, край шухляди {2:0} ({3:0} %); герой {4:0}–{5:0} (запас {6:0}); букер {7:0}–{8:0} — {9}",
+                    names[i], w, drawerLeft, 100.0 * (w - drawerLeft) / w, hl, hr, drawerLeft - hr, bl, br,
+                    br <= drawerLeft ? "вільний" : bl >= drawerLeft ? "під шухлядою" : "частково під шухлядою"));
+                if (hr > drawerLeft) bad.Add(string.Format(CultureInfo.InvariantCulture, "{0}: герой до {1:0}, а шухляда — від {2:0}", names[i], hr, drawerLeft));
+            }
+            Assert.IsEmpty(bad, "героя закриває шухляда тижня:\n" + string.Join("\n", bad));
         }
 
         /// <summary>

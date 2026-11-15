@@ -473,13 +473,14 @@ namespace Game.Gameplay.Ring.Models
         {
             string act = t.Get("week.action." + (int)r.Kind);
             if (!r.Ok) return act;
+            if (WeekSideJobInjured(r)) return act + " · " + t.Get("c.week.result.injury");
             return act + " · " + (WeekRollDecides(r) ? RingLabels.TierName(t, r.Tier) : t.Get("c.week.result.done"));
         }
 
         /// <summary>
         /// Кидок вирішує, чи дія вдалась (промо, закулісся): рівень кидка — слово результату. Кидок підробітку — лише перевірка травми
-        /// (2d6 ≤ 4, §6.1): заробіток є за будь-якого кидка, тож «Провал (до 6)» там збрехав би — результат «Зроблено», травма — дельтою,
-        /// а кидок — у підказці.
+        /// (2d6 ≤ 4, §6.1): заробіток є за будь-якого кидка, тож «Провал (до 6)» там збрехав би — вердикт за травмою
+        /// (<see cref="WeekSideJobInjured"/>), а рівень кидка — у підказці.
         /// </summary>
         public static bool WeekRollDecides(WeekActionResult r)
         {
@@ -487,12 +488,23 @@ namespace Game.Gameplay.Ring.Models
         }
 
         /// <summary>
+        /// Підробіток з травмою (АД 15.11.2026): його вирішальний кидок — перевірка травми, а травма гравцеві важливіша за гроші, тож
+        /// вердикт рядка 1 — «Травма», смуга — Signal; гроші й травма (першою, зоною) — у дельтах. Без травми — «Зроблено», Gold.
+        /// Травма — те, що записало ядро (<see cref="WeekActionResult.InjuredZone"/>), а не сам кидок ≤ 4.
+        /// </summary>
+        public static bool WeekSideJobInjured(WeekActionResult r)
+        {
+            return r != null && r.Ok && r.Kind == WeekActionKind.SideJob && r.InjuredZone >= 0;
+        }
+
+        /// <summary>
         /// Дія вдалась — золота смуга стрічки, ні — Signal (АД 15.11.2026: колір лише в смузі, зміст несе слово). Не вдалась — відмова
-        /// ядра чи провал кидка, що вирішує результат (<see cref="WeekRollDecides"/>); частковий успіх — вдалась.
+        /// ядра, провал кидка, що вирішує результат (<see cref="WeekRollDecides"/>), чи травма на підробітку (<see cref="WeekSideJobInjured"/>);
+        /// частковий успіх — вдалась («Частково» словом у рядку 1).
         /// </summary>
         public static bool WeekResultSucceeded(WeekActionResult r)
         {
-            return r != null && r.Ok && !(WeekRollDecides(r) && r.Tier == RollTier.Miss);
+            return r != null && r.Ok && !(WeekRollDecides(r) && r.Tier == RollTier.Miss) && !WeekSideJobInjured(r);
         }
 
         /// <summary>Арифметика кидка («кидок 6 + 0 = 6, Провал (до 6)») — лише в підказці при наведенні; без кидка — null.</summary>
