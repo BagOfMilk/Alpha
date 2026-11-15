@@ -1410,6 +1410,72 @@ namespace Game.Tests.EditMode
             Assert.IsEmpty(bad, "героя закриває шухляда тижня:\n" + string.Join("\n", bad));
         }
 
+        /// <summary>
+        /// Налаштування справжнім шрифтом (вкладка «Гра», АД 15.11.2026; ПМ 15.11.2026 — тексти «Помірно», «Кадри дії», «Швидкі
+        /// натискання» з QTE у підказці): підпис кожної вкладки — у її кнопці до скосу; шість вкладок і «LB · RB» — у найвужчій
+        /// панелі 5:4 (1125) з полем 16; назви рядків «Гри» — до поля значення; кожне значення — у рамці між ‹ ›; підказка рядка —
+        /// щонайбільше два рядки на ширину рядка налаштувань; усі літери є у шрифтах.
+        /// </summary>
+        [Test]
+        public void Settings_TabsAndGameRows_FitTheirPlaces()
+        {
+            var bad = new List<string>();
+            float slant = (float)Math.Tan(BrandTokens.SpaceSlantDeg * Math.PI / 180.0);
+            // MenuButton ставить розрядку від свого кегля (висота × 0,56, не більше TypeMenu) — SettingsPanel змінює лише кегль
+            float tabTrack = Math.Min(BrandTokens.TypeMenu, RingSettingsTabs.TabH * 0.56f) * 0.05f / RingSettingsTabs.TabText;
+            float x = RingSettingsTabs.Left;
+            foreach (RingSettingsTab t in Enum.GetValues(typeof(RingSettingsTab)))
+            {
+                string s = Caps(Ui(RingSettingsTabs.Key(t)));
+                float w = RingSettingsTabs.TabTextLeft + TitleFont.Width(s, RingSettingsTabs.TabText, tabTrack) + RenderSlack;
+                float room = RingSettingsTabs.Width(t) - RingSettingsTabs.TabH * slant;
+                if (w > room) bad.Add(string.Format(CultureInfo.InvariantCulture, "вкладка «{0}»: {1:0.0} > {2:0.0}", s, w, room));
+                if (TitleFont.Missing(s).Count > 0) bad.Add("вкладка «" + s + "»: немає літер у шрифті");
+                TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "вкладка «{0}»: {1:0.0} з {2:0.0}", s, w, room));
+                x += RingSettingsTabs.Width(t) + RingSettingsTabs.TabGap;
+            }
+            float note = 8f + Math.Max(LegendFont.Width("Q · E", BrandTokens.TypeLabel, 0.1f), LegendFont.Width("LB · RB", BrandTokens.TypeLabel, 0.1f)) + RenderSlack;
+            float right = x + note, panel = 900f * 1.25f;
+            TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "рядок вкладок до {0:0.0} з {1:0} (5:4)", right, panel));
+            if (right > panel - 16f) bad.Add(string.Format(CultureInfo.InvariantCulture, "рядок вкладок до {0:0.0} — ширший за панель 5:4 {1:0} з полем 16", right, panel));
+            // рядки «Гри»: назва — до поля значення (просвіт 12), значення — у рамці між стрілками до скосу рядка
+            float nameRoom = RingSettingsTabs.ValueX - RingSettingsTabs.NameLeft - 12f;
+            float valueRoom = RingSettingsTabs.RowW - (RingSettingsTabs.RowH * slant + 30f) - RingSettingsTabs.ValueX - 2f * RingSettingsTabs.ArrowW - 2f * RingSettingsTabs.KeycapPad - 4f;
+            foreach (var k in RingSettingsTabs.GameRows)
+            {
+                string s = Caps(Ui(k));
+                float w = TitleFont.Width(s, RingSettingsTabs.NameText, 0.05f) + RenderSlack;
+                if (w > nameRoom) bad.Add(string.Format(CultureInfo.InvariantCulture, "назва «{0}»: {1:0.0} > {2:0.0}", s, w, nameRoom));
+                if (TitleFont.Missing(s).Count > 0) bad.Add("назва «" + s + "»: немає літер у шрифті");
+                TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "назва «{0}»: {1:0.0} з {2:0.0}", s, w, nameRoom));
+            }
+            var values = new List<string> { Ui("m.val.on"), Ui("m.val.off") };
+            foreach (RingActionShots s in Enum.GetValues(typeof(RingActionShots))) values.Add(Ui(RingSettingsTabs.ActionShotsKey(s)));
+            foreach (var v in values)
+            {
+                string s = Caps(v);
+                float w = TitleFont.Width(s, RingSettingsTabs.ValueText, 0.06f) + RenderSlack;
+                if (w > valueRoom) bad.Add(string.Format(CultureInfo.InvariantCulture, "значення «{0}»: {1:0.0} > {2:0.0}", s, w, valueRoom));
+                if (TitleFont.Missing(s).Count > 0) bad.Add("значення «" + s + "»: немає літер у шрифті");
+            }
+            for (int i = 0; i < RingSettingsTabs.GameHints.Length; i++)
+            {
+                string h = Ui(RingSettingsTabs.GameHints[i]);
+                float widest;
+                int lines = TextFont.Lines(h, BrandTokens.TypeLabel, RingSettingsTabs.RowW - RenderSlack, 0f, out widest);
+                if (lines > 2) bad.Add("підказка «" + h + "»: " + lines + " рядки (не більше двох)");
+                if (TextFont.Missing(h).Count > 0) bad.Add("підказка «" + h + "»: немає літер у шрифті — " + new string(TextFont.Missing(h).ToArray()));
+                TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "підказка {0}: {1} ряд. ({2:0.0} — ширина в один рядок)", RingSettingsTabs.GameHints[i], lines,
+                    TextFont.Width(h, BrandTokens.TypeLabel)));
+            }
+            Assert.IsTrue(Ui(RingSettingsTabs.GameHints[0]).Contains("QTE"), "слово QTE — у підказці «Швидких натискань» (АД 15.11.2026)");
+            CollectionAssert.AreEqual(new[] { "Вимкнено", "Рідко", "Помірно", "Часто" },
+                new[] { Ui(RingSettingsTabs.ActionShotsKey(RingActionShots.Off)), Ui(RingSettingsTabs.ActionShotsKey(RingActionShots.Rare)),
+                    Ui(RingSettingsTabs.ActionShotsKey(RingActionShots.Normal)), Ui(RingSettingsTabs.ActionShotsKey(RingActionShots.Often)) },
+                "кадри дії: Вимкнено / Рідко / Помірно / Часто");
+            Assert.IsEmpty(bad, "налаштування не вміщаються:\n" + string.Join("\n", bad));
+        }
+
         private static readonly double[] WeekAspects = { 1.25, 4.0 / 3.0, 1.5, 1.6, 16.0 / 9.0, 2102.0 / 900.0 };
         private static readonly string[] WeekAspectNames = { "5:4", "4:3", "3:2", "16:10", "16:9", "21:9" };
 
