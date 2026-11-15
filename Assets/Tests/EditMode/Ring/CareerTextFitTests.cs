@@ -440,6 +440,13 @@ namespace Game.Tests.EditMode
                         TextFont.Width(h, Body) + RenderSlack, CareerTileLayout.WeekStripTextW));
                 }
             }
+            for (int z = 0; z < 3; z++)
+            {
+                string h = CareerScreenLines.WeekResultHead(TAll, new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = true, RecoveredZone = z, InjuryWeeksBefore = 2, InjuryWeeksAfter = 1 });
+                if (h.IndexOf('⟦') >= 0) bad.Add("відновлення: немає ключа в «" + h + "»");
+                if (!StripFits(h)) bad.Add(string.Format(CultureInfo.InvariantCulture, "відновлення: «{0}» — {1:0.0} > {2:0}", h,
+                    TextFont.Width(h, Body) + RenderSlack, CareerTileLayout.WeekStripTextW));
+            }
             int reasons = 0;
             foreach (var file in new[] { "ui_uk.json", "backstage_uk.json" })
                 foreach (var kv in MiniJson.ParseObject(CareerKit.Read(file)))
@@ -454,6 +461,76 @@ namespace Game.Tests.EditMode
                         TextFont.Width(line2[0], Body) + RenderSlack, CareerTileLayout.WeekStripTextW));
                 }
             Assert.GreaterOrEqual(reasons, 9, "причини ядра — week.reason.* в ui_uk.json і backstage_uk.json");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// «Відновлення» (доручення ПМ 15.11.2026: «Охоронці TTF на 360/340, як для решти»): для кожної зони, травми й ушкодження з
+        /// двозначними «було → стало» і «травма зажила», з лікарем і без, героєм і героїнею — рядок 1 і рядок 2 (дельта відновлення першою, гроші лікаря —
+        /// за нею) цілими в 360, без «ще N» і без обрізання; підказка (кидка немає, сховане — нічого чи все, крім першої) — не більше
+        /// двох рядків на 340; «Нема що лікувати» — одним рядком. Гліфи («→») — у шрифті тексту.
+        /// </summary>
+        [Test]
+        public void WeekStrip_Recovery_FitsTheMoneyColumn_AndTheHover()
+        {
+            var bad = new List<string>();
+            void Glyphs(string where, string s)
+            {
+                if (TextFont.Missing(s).Count > 0) bad.Add(where + ": у шрифті тексту немає «" + new string(TextFont.Missing(s).ToArray()) + "»");
+            }
+            var heroine = RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json"), CareerKit.Read("backstage_uk.json"));
+            HeroForms.Apply(heroine, true);
+            int cases = 0;
+            float widest1 = 0f, widest2 = 0f;
+            string w1 = null, w2 = null;
+            foreach (var t in new[] { TAll, heroine })
+                for (int z = 0; z < 3; z++)
+                    foreach (int mode in new[] { 0, 1, 2 })   // травма числами, травма зажила, ушкодження
+                        foreach (bool doctor in new[] { true, false })
+                        {
+                            cases++;
+                            var r = new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = true, RecoveredZone = z,
+                                InjuryWeeksBefore = mode == 2 ? 0 : 99, InjuryWeeksAfter = mode == 0 ? 97 : 0, ZoneDamageBefore = 99, ZoneDamageAfter = 97,
+                                MoneyDelta = doctor ? -9999 : 0 };
+                            string head = CareerScreenLines.WeekResultHead(t, r);
+                            var deltas = CareerScreenLines.WeekResultDeltas(t, r, null, false);
+                            string first = CareerScreenLines.RecoveryLine(t, r);
+                            if (first == null || deltas.Count == 0 || deltas[0] != first) { bad.Add("відновлення без своєї дельти першою: «" + string.Join(" · ", deltas) + "»"); continue; }
+                            if (!StripFits(head)) bad.Add(string.Format(CultureInfo.InvariantCulture, "рядок 1: «{0}» — {1:0.0} > {2:0}", head,
+                                TextFont.Width(head, Body) + RenderSlack, CareerTileLayout.WeekStripTextW));
+                            Glyphs("рядок 1", head);
+                            string line;
+                            bool clipped;
+                            int k = CareerScreenLines.StripParts(t, deltas, StripFits, out line, out clipped);
+                            if (k != deltas.Count || clipped || !StripFits(line))
+                                bad.Add(string.Format(CultureInfo.InvariantCulture, "рядок 2: «{0}» — {1:0.0} > {2:0} (показано {3} з {4})", line,
+                                    TextFont.Width(line, Body) + RenderSlack, CareerTileLayout.WeekStripTextW, k, deltas.Count));
+                            Glyphs("рядок 2", line);
+                            float hw = TextFont.Width(head, Body) + RenderSlack, lw = TextFont.Width(line, Body) + RenderSlack;
+                            if (hw > widest1) { widest1 = hw; w1 = head; }
+                            if (lw > widest2) { widest2 = lw; w2 = line; }
+                            // підказка будується лише з того, що влазить (FitParts), тож міряється повнота: сховане цілим, без «ще N»
+                            Assert.IsNull(CareerScreenLines.WeekResultRoll(t, r), "кидка у відновлення немає");
+                            string hover = CareerScreenLines.WeekResultHover(t, null, deltas.GetRange(1, deltas.Count - 1), HoverFits);
+                            if (deltas.Count > 1 && (hover == null || hover.IndexOf(deltas[1], StringComparison.Ordinal) < 0))
+                                bad.Add("підказка без схованих грошей лікаря цілими: «" + hover + "»");
+                            string all = CareerScreenLines.WeekResultHover(t, null, deltas, HoverFits);
+                            foreach (var d in deltas)
+                                if (all == null || all.IndexOf(d, StringComparison.Ordinal) < 0) bad.Add("підказка з усім — не ціла на " + WeekHintNarrowest + ": «" + all + "»");
+                        }
+            Assert.AreEqual(36, cases);
+            TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "відновлення: найширший рядок 1 «{0}» — {1:0.0}, рядок 2 «{2}» — {3:0.0} з {4:0}",
+                w1, widest1, w2, widest2, CareerTileLayout.WeekStripTextW));
+            foreach (var t in new[] { TAll, heroine })
+                for (int z = 0; z < 3; z++)
+                {
+                    var nothing = new WeekActionResult { Kind = WeekActionKind.Recovery, Ok = false, Reason = "nothing", NothingToHeal = true, RecoveredZone = z };
+                    var n2 = CareerScreenLines.WeekResultDeltas(t, nothing, null, false);
+                    string shown, nh = CareerScreenLines.WeekResultHead(t, nothing);
+                    if (n2.Count != 1 || CareerScreenLines.FitParts(t, n2, StripFits, out shown) != 1) bad.Add("«нема що лікувати» — не один рядок: «" + string.Join(" · ", n2) + "»");
+                    if (!StripFits(nh)) bad.Add("«нема що лікувати», рядок 1: «" + nh + "»");
+                    Glyphs("нема що лікувати", n2[0]);
+                }
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
 
@@ -1184,17 +1261,26 @@ namespace Game.Tests.EditMode
 
             /// <summary>
             /// Голови букерок набору (Assets/Art/Characters/Kit/body_*.fbx, вершини сітки, 15.11.2026), метри: маківка голови без зачіски,
-            /// підборіддя (де профіль обличчя відступає до шиї), півширина голови, зачіска над маківкою. Звірено з кадром s34b_m4x3/048
-            /// (Ліна, 4:3): маківка 333 на кадрі — 337 у проєкції; підборіддя ≈ 387 на кадрі — 400 у проєкції (із запасом униз).
-            /// Пояс (лінія ременя) — 0,57 маківки: Ліна ≈ 530 на тому ж кадрі.
+            /// підборіддя (де профіль обличчя відступає до шиї), півширина голови, зачіска над маківкою, верх брів (сітка eyebrow001 і очей
+            /// набору). Звірено з кадром s34b_m4x3/048 (Ліна, 4:3): маківка 333 на кадрі — 337 у проєкції; підборіддя ≈ 387 на кадрі — 400
+            /// у проєкції (із запасом униз). Пояс (лінія ременя) — 0,57 маківки: Ліна ≈ 530 на тому ж кадрі. Обличчя для АД — брови →
+            /// підборіддя (АД 15.11.2026: «маківку й лоб у кадрі можна зрізати…, очі й рот — ні»).
             /// </summary>
             public static readonly Dictionary<string, double[]> Faces = new Dictionary<string, double[]>
             {
-                { "body_f_mediterranean", new[] { 1.602, 1.395, 0.081, 0.03 } },
-                { "body_f_nordic", new[] { 1.605, 1.397, 0.081, 0.02 } },
-                { "body_m_west_african", new[] { 1.813, 1.575, 0.098, 0.015 } },
-                { "body_f_east_asian", new[] { 1.497, 1.305, 0.078, 0.02 } },
+                { "body_f_mediterranean", new[] { 1.602, 1.395, 0.081, 0.03, 1.512 } },
+                { "body_f_nordic", new[] { 1.605, 1.397, 0.081, 0.02, 1.514 } },
+                { "body_m_west_african", new[] { 1.813, 1.575, 0.098, 0.015, 1.716 } },
+                { "body_f_east_asian", new[] { 1.497, 1.305, 0.078, 0.02, 1.411 } },
             };
+
+            /// <summary>
+            /// Низ афіші тижня (одиниці панелі, відлік згори) — з кадрів слоту 34 (s34b_m4x3/048, s34b_m1610/048): лише план — ≈ 307, кожен
+            /// рядок умов матчу — ще ≈ 24, наліпка форми суперника — <see cref="CareerTileLayout.PosterStickerHang"/>. Висоту афіші рахує
+            /// розкладка UI Toolkit, тож тут — лише для логу на вузьких екранах; наживо — кадри У2.
+            /// </summary>
+            public const double PosterPlanBottom = 307.0, PosterConditionLine = 24.0;
+            public const int PosterMaxConditionLines = 3;
 
             /// <summary>Пояс — частка маківки (кадр s34b_m4x3/048).</summary>
             public const double WaistOfCrown = 0.57;
@@ -1398,8 +1484,11 @@ namespace Game.Tests.EditMode
         /// від голови до пояса — та сама умова, що я ставив для 4:3»). Знизу: пояс кожної букерки над шапкою ряду дій («ДІЇ ТИЖНЯ»,
         /// вкладки) — і над одним, і над двома рядами, з ростом плиток, як у WeekScreenView.Fit: висота плитки — найвища потрібна
         /// найдовшим текстам плиток тижня на цій ширині (не більше межі росту), над двома рядами ріст піднімає шапку двічі; канати —
-        /// лінія на рівні пояса (так на прийнятому кадрі 4:3, s34b_m4x3/048). Згори: афіша праворуч, її висота — від умов матчу; де голова під афішею по горизонталі, охоронець пише в лог,
-        /// не нижче якого краю афіша лишає маківку вільною (на рішення АД: найкоротша афіша на кадрах — низ ≈ 307).
+        /// лінія на рівні пояса (так на прийнятому кадрі 4:3, s34b_m4x3/048). Згори (АД 15.11.2026, уточнено: «охороняється обличчя (брови →
+        /// підборіддя), а не маківка»): на 16:10 і ширше обличчя кожної букерки лівіше за афішу — вільне за будь-якої її висоти (умова); на
+        /// 5:4–3:2 голова під афішею по горизонталі — лог: до якого низу афіші брови вільні, скільки рядків умов це дає, і найгірший
+        /// випадок — Девід із трьома рядками умов (М1 — варіант (3): дивитись на кадрах У2; ціль камери для «Изучение» — обличчя лівіше за
+        /// x 870).
         /// </summary>
         [Test]
         public void WeekScene_ClosedDrawer_ShowsTheBookerDownToTheWaist()
@@ -1424,7 +1513,13 @@ namespace Game.Tests.EditMode
             {
                 double[] f;
                 if (!BackstageView.Faces.TryGetValue(p.Body, out f)) { bad.Add(p.Speaker + ": голови «" + p.Body + "» немає в BackstageView.Faces"); continue; }
-                double crown = view.ScreenY(view.BookerHead(f[0] + f[3])), waist = view.ScreenY(view.BookerHead(BackstageView.WaistOfCrown * f[0]));
+                if (f.Length < 5) { bad.Add(p.Speaker + ": у мірці голови «" + p.Body + "» немає брів — виміряй верх eyebrow001 з FBX набору"); continue; }
+                double crown = view.ScreenY(view.BookerHead(f[0] + f[3])), brow = view.ScreenY(view.BookerHead(f[4])), chin = view.ScreenY(view.BookerHead(f[1]));
+                double waist = view.ScreenY(view.BookerHead(BackstageView.WaistOfCrown * f[0]));
+                if (!(crown < brow && brow < chin)) bad.Add(string.Format(CultureInfo.InvariantCulture, "{0}: мірка голови не по порядку (маківка {1:0}, брови {2:0}, підборіддя {3:0})", p.Speaker, crown, brow, chin));
+                // скільки рядків умов афіші лишають брови вільними (план без умов — 0); −1 — навіть план закриває брови
+                int lines = -1;
+                while (lines < BackstageView.PosterMaxConditionLines && BackstageView.PosterPlanBottom + (lines + 1) * BackstageView.PosterConditionLine <= brow) lines++;
                 var row = new List<string>();
                 for (int i = 0; i < WeekAspects.Length; i++)
                 {
@@ -1432,14 +1527,28 @@ namespace Game.Tests.EditMode
                     if (waist > header[i])
                         bad.Add(string.Format(CultureInfo.InvariantCulture, "{0}, {1}: пояс {2:0} нижче за верх шапки ряду дій {3:0}", p.Speaker, WeekAspectNames[i], waist, header[i]));
                     double posterLeft = w - CareerTileLayout.Edge - CareerTileLayout.StripW, hl, hr;
-                    view.HeadX(f[2] + f[3], w, out hl, out hr);
-                    row.Add(hr > posterLeft
-                        ? string.Format(CultureInfo.InvariantCulture, "{0}: голова {1:0}–{2:0} під афішею (від {3:0}) — маківка вільна, якщо низ афіші ≤ {4:0}", WeekAspectNames[i], hl, hr, posterLeft, crown)
-                        : string.Format(CultureInfo.InvariantCulture, "{0}: голова лівіше за афішу", WeekAspectNames[i]));
+                    view.HeadX(f[2], w, out hl, out hr);   // обличчя — у межах голови без зачіски
+                    bool under = hr > posterLeft;
+                    if (under && WeekAspects[i] >= 1.6)
+                        bad.Add(string.Format(CultureInfo.InvariantCulture, "{0}, {1}: обличчя {2:0}–{3:0} заходить під афішу (від {4:0}) — на 16:10 і ширше воно вільне за будь-якої афіші (АД 15.11.2026)",
+                            p.Speaker, WeekAspectNames[i], hl, hr, posterLeft));
+                    row.Add(under
+                        ? string.Format(CultureInfo.InvariantCulture, "{0}: обличчя {1:0}–{2:0} під афішею (від {3:0}) — брови вільні, якщо низ афіші ≤ {4:0} ({5})",
+                            WeekAspectNames[i], hl, hr, posterLeft, brow, lines < 0 ? "закриває навіть план" : lines + " рядк. умов")
+                        : string.Format(CultureInfo.InvariantCulture, "{0}: обличчя лівіше за афішу", WeekAspectNames[i]));
                 }
-                TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "{0}: маківка {1:0}, пояс {2:0}; {3}", p.Speaker, crown, waist, string.Join("; ", row)));
+                TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "{0} ({1}): маківка {2:0}, брови {3:0}, підборіддя {4:0}, пояс {5:0}; {6}",
+                    p.Speaker, p.Body, crown, brow, chin, waist, string.Join("; ", row)));
+                if (p.Body == "body_m_west_african")
+                {
+                    double worst = BackstageView.PosterPlanBottom + BackstageView.PosterMaxConditionLines * BackstageView.PosterConditionLine;
+                    TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                        "найгірший випадок (АД): Девід ({0}), {1} рядки умов — низ афіші ≈ {2:0}: на 5:4–3:2 закрито {3:0} з {4:0} обличчя (брови {5:0} → підборіддя {6:0}), з наліпкою — до {7:0}",
+                        p.Body, BackstageView.PosterMaxConditionLines, worst, Math.Max(0.0, Math.Min(worst, chin) - brow), chin - brow, brow, chin,
+                        worst + CareerTileLayout.PosterStickerHang));
+                }
             }
-            Assert.IsEmpty(bad, "букерку при закритій шухляді не видно до пояса:\n" + string.Join("\n", bad));
+            Assert.IsEmpty(bad, "букерку при закритій шухляді не видно від обличчя до пояса:\n" + string.Join("\n", bad));
         }
 
         /// <summary>
