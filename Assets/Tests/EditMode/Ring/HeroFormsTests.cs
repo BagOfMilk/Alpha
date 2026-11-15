@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Game.Core.Ring;
+using Game.Core.Ring.Career;
+using Game.Core.Ring.Match;
 using Game.Gameplay.Ring;
 using Game.Gameplay.Ring.Models;
 using NUnit.Framework;
@@ -75,6 +78,7 @@ namespace Game.Tests.EditMode
         {
             "c.card.rematch", "c.card.rival_strong", "c.delta.rival",
             "c.card.vs", "c.card.rival_place", "c.card.rival_form",   // та сама картка тижня (CareerScreens: рядок суперника й сили)
+            "c.delta.opponent",   // Б6 «Меню»: підсумок сцени, що переписала картку (OpponentChanged) — суперник уже той, що в картці
         };
 
         /// <summary>Ключі про суперника в чоловічому роді, яким «.rf» не потрібна, — з причиною.</summary>
@@ -297,6 +301,77 @@ namespace Game.Tests.EditMode
             Assert.IsEmpty(RivalMasc.Matches(all["rumor.next_opponent"]).Cast<Match>().Select(m => m.Value).ToList(), "чутка — нейтрально (суперник може змінитися)");
             Assert.IsFalse(all.ContainsKey("rumor.next_opponent.rf"));
             Assert.IsFalse(all.ContainsKey("bs.booker_talk.p2.rf"));
+        }
+
+        /// <summary>
+        /// Рядок підсумку тижня «c.delta.opponent» (Б6 «Меню», ПМ 14.11.2026) — про суперника, якого сцена щойно поставила в
+        /// картку: <c>WeekActionResult.OpponentChanged</c> стає true лише тоді, коли картку переписано тим самим кроком
+        /// (BackstageVeteranTests.Betrayal_FightOrBooker_PutsStalevyiOnThisWeeksCard_LetLeavesTheCard; на великому шоу розплата
+        /// чекає, і рядка немає). На екрані один суперник — той, що в картці, тож «.rf» цього ключа — у білому переліку.
+        /// </summary>
+        [Test]
+        public void RivalWhitelist_AdmitsTheOpponentLineOfTheWeekSummary()
+        {
+            CollectionAssert.Contains(RivalWhitelist, "c.delta.opponent");
+            Assert.IsTrue(RivalPrefixes.Any(p => "c.delta.opponent".StartsWith(p, StringComparison.Ordinal)), "ключ — у полі зору охоронця роду суперника");
+            Assert.AreEqual(RivalWhitelist.Length, RivalWhitelist.Distinct().Count(), "без повторів");
+        }
+
+        /// <summary>
+        /// Баг М1 14.11.2026 («Відео огляд», кадри 028 і 041): після створення героя табло матчу й екран виходу показували
+        /// «Новачок», хоча хаб, картка й підсумок — повне ім'я. Ім'я гравця в матчі — ключ <see cref="HeroForms.PlayerNameKey"/>
+        /// (ключ WrestlerStats гравця в ядрі), і <see cref="HeroForms.ApplyName"/> кладе в нього ім'я кар'єри; форми героїні його
+        /// не чіпають; нова кар'єра повертає текст за замовчуванням.
+        /// </summary>
+        [Test]
+        public void HeroName_AfterCreateHero_IsTheMatchName_AndANewCareerStartsFromTheDefault()
+        {
+            var text = AllText();
+            string key = HeroForms.PlayerNameKey;
+            string def = text.Get(key);
+            Assert.IsFalse(string.IsNullOrEmpty(def), "ім'я за замовчуванням — у strings_uk.json");
+            var s = CareerKit.NewAtCreate(31);
+            HeroForms.ApplyName(text, s.State.RingName);
+            Assert.AreEqual(def, text.Get(key), "створення: імені ще немає — за замовчуванням");
+
+            const string name = "Максиміліан Шершеньковий";
+            s.CreateHero(CareerKit.Draft(Gimmick.Monster, CareerRole.Hero, CareerKit.FreeFor(s.Content, Gimmick.Monster, RingAttr.Strength), name));
+            HeroForms.ApplyName(text, s.State.RingName);
+            HeroForms.Apply(text, true, true);
+            Assert.AreEqual(name, text.Get(key), "ім'я кар'єри — у ключі імені; форми героїні його не чіпають");
+            s.EndWeek();
+            var e = s.StartShow();
+            Assert.AreEqual(key, e.State.Get(MatchSide.Player).Stats.NameKey, "табло й екран виходу беруть ім'я гравця з цього ключа");
+            Assert.AreEqual(name, text.Get(e.State.Get(MatchSide.Player).Stats.NameKey));
+
+            HeroForms.ApplyName(text, CareerKit.NewAtCreate(32).State.RingName);
+            Assert.AreEqual(def, text.Get(key), "нова кар'єра (Restart) — без імені попередньої");
+        }
+
+        /// <summary>
+        /// Хост ставить ім'я там, де будується кожен екран (MakeView → ApplyHeroForms → ApplyName), а не лише в Rebind: після
+        /// CreateHero Rebind не кличуть (баг 14.11.2026). І ніхто в Gameplay не пише ключ імені напряму, повз ApplyName.
+        /// </summary>
+        [Test]
+        public void Host_PutsTheHeroNameOnEveryNewScreen_NotOnlyInRebind()
+        {
+            string dir = Path.Combine(Path.GetDirectoryName(UnityEngine.Application.dataPath), "Assets", "_Project", "Scripts", "Gameplay", "Ring");
+            string src = File.ReadAllText(Path.Combine(dir, "RingGameBootstrap.Career.cs"));
+            StringAssert.Contains("ApplyHeroForms();", Body(src, "private RingScreenView MakeView()"), "MakeView оновлює форми й ім'я");
+            StringAssert.Contains("HeroForms.ApplyName(_text, _career.State.RingName)", Body(src, "private void ApplyHeroForms()"), "ApplyHeroForms ставить ім'я");
+            var direct = Directory.GetFiles(dir, "*.cs", SearchOption.AllDirectories)
+                .Where(f => Regex.IsMatch(File.ReadAllText(f), @"\.Add\(\s*(""w\.player\.name""|HeroForms\.PlayerNameKey)")).Select(Path.GetFileName).ToList();
+            Assert.IsEmpty(direct, "ключ імені пишуть лише через HeroForms.ApplyName");
+        }
+
+        /// <summary>Тіло методу від підпису до закривної дужки на відступі методу (8 пробілів).</summary>
+        private static string Body(string src, string signature)
+        {
+            int i = src.IndexOf(signature, StringComparison.Ordinal);
+            Assert.GreaterOrEqual(i, 0, "не знайдено: " + signature);
+            var m = Regex.Match(src.Substring(i), @"\r?\n        \}\r?\n");
+            Assert.IsTrue(m.Success, "кінець методу: " + signature);
+            return src.Substring(i, m.Index);
         }
 
         [Test]

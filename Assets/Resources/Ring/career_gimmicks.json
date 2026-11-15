@@ -23,7 +23,7 @@
    "name": "gimmick.flyer",
    "finisher": "agility",
    "attr": {
-    "strength": 0,
+    "strength": 1,
     "agility": 3,
     "technique": 0,
     "stamina": -1,
@@ -62,7 +62,7 @@
     "strength": -1,
     "agility": 0,
     "technique": 0,
-    "stamina": 0,
+    "stamina": 1,
     "charisma": 3
    },
    "moves": [
@@ -88,8 +88,7 @@
     "crossface"
    ],
    "signature": "old_school",
-   "finisherMove": "last_lesson",
-   "onCreationScreen": false
+   "finisherMove": "last_lesson"
   },
   {
    "id": "hardcore",
@@ -99,7 +98,7 @@
     "strength": 1,
     "agility": 0,
     "technique": 0,
-    "stamina": 2,
+    "stamina": 1,
     "charisma": 0
    },
    "moves": [
@@ -107,8 +106,7 @@
     "clubbing_blow"
    ],
    "signature": "floor_slam",
-   "finisherMove": "scar_maker",
-   "onCreationScreen": false
+   "finisherMove": "scar_maker"
   },
   {
    "id": "rookie",
@@ -127,7 +125,6 @@
    ],
    "signature": "upstart",
    "finisherMove": "first_break",
-   "onCreationScreen": false,
    "freePoints": 2,
    "startMoves": 0
   },
@@ -147,8 +144,7 @@
     "bear_hug"
    ],
    "signature": "anvil",
-   "finisherMove": "titan_press",
-   "onCreationScreen": false
+   "finisherMove": "titan_press"
   }
  ]
 }

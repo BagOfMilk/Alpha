@@ -45,6 +45,18 @@ namespace Game.Gameplay.Ring.Models
         public static bool SeasonSummaryShown(CareerSession c) { return c.SeasonSummaryFinal; }
 
         /// <summary>
+        /// Рядок шкал підсумку («Популярність N, довіра букера N, гроші N»): на 4:3 — ні на якому кроці, він дублює плиту ресурсів
+        /// ліворуч угорі того самого екрана (АД 15.11.2026).
+        /// </summary>
+        public static bool SeasonScalesLineShown(bool column) { return !column; }
+
+        /// <summary>
+        /// Підсумок згорнутий до назви, федерації й рекорду: на 4:3 на кроках контракту й пізньої ролі — решту гравець бачив на першому
+        /// кроці, а повний не вміщається під вкладками (АД 15.11.2026). На кроках «підсумок» і «пропозиція» і на 16:9 — повний.
+        /// </summary>
+        public static bool SeasonSummaryCollapsed(bool column, bool contractShown, bool lateRoleShown) { return column && (contractShown || lateRoleShown); }
+
+        /// <summary>
         /// «Радимо зараз»: поради ядра (<see cref="DevelopmentAdvice.For"/> — від ролі, ґіміка й минулого матчу; очок багато — на
         /// одну більше). Пояснення — ключ поради (<see cref="DevAdvice.WhyKey"/>), а без нього — як раніше: опис перка,
         /// «новий прийом для дії…», навіщо атрибут.
@@ -187,7 +199,9 @@ namespace Game.Gameplay.Ring.Models
         /// <summary>Підказка тренера: скільки тренувань на +1 — крок цього тренера (<see cref="CareerSession.CoachStepFor"/>).</summary>
         public static string CoachHint(RingText t, CareerSession c, int coach)
         {
-            return t.Format("c.shop.coach.desc", RingLabels.AttrName(t, CareerRules.Coaches[coach]), c.CoachStepFor(coach));
+            int step = c.CoachStepFor(coach);   // з сезону 7 у тренера витривалості — 5: «За 5 тренувань», не «тренування»
+            string hint = t.Format(PluralMany(step) ? "c.shop.coach.desc.many" : "c.shop.coach.desc", RingLabels.AttrName(t, CareerRules.Coaches[coach]), step);
+            return CareerRules.Coaches[coach] == RingAttr.Stamina ? WithReason(hint, AgeingTail(t, c.State.Season, true)) : hint;   // Б5
         }
 
         /// <summary>
@@ -201,8 +215,49 @@ namespace Game.Gameplay.Ring.Models
         {
             string why = t.Get("c.dev.attr.why." + (int)a);
             if (AttrAtMax(c, a)) return WithReason(why, t.Get("dev.reason.max"));
-            return WithReason(t.Format("dev.attr.buy", c.AttrCost(a)) + " — " + why,
-                string.IsNullOrEmpty(reason) ? null : t.Get("dev.reason." + reason));
+            string hint = t.Format("dev.attr.buy", c.AttrCost(a)) + " — " + why;
+            string no = string.IsNullOrEmpty(reason) ? null : t.Get("dev.reason." + reason);
+            string age = a == RingAttr.Stamina ? AgeingTail(t, c.State.Season, false) : null;   // Б5: чому дорожча
+            if (age == null) return WithReason(hint, no);
+            hint = WithReason(hint, age);
+            return no == null ? hint : hint + " · " + no;   // «оч.» — скорочення: крапку перед причиною не зрізати (WithReason зрізав би)
+        }
+
+        /// <summary>
+        /// Б5 (§5.5, власник 13.11.2026: «Так, усі 7»): хвіст підказки витривалості й тренера витривалості з сезону 4 — «тіло старіє:
+        /// +1 оч.» / «тіло старіє: +1 тренування» (надбавка <see cref="Ageing.StaminaSurcharge"/>); до сезону 4 — null, М1 без змін.
+        /// </summary>
+        public static string AgeingTail(RingText t, int season, bool coach)
+        {
+            int s = Ageing.StaminaSurcharge(season);
+            return s <= 0 ? null : t.Format(coach ? "c.age.coach" : "c.age.attr", s);
+        }
+
+        /// <summary>
+        /// Б5: рядок кінця сезону — лише на останньому кроці («Новий сезон») і лише коли надбавка наступного сезону росте (кінець
+        /// сезонів 3 і 6): «Тіло старіє: витривалість — 3 оч., тренер — 4 тренування.» Ціни — з сесії (<see cref="CareerSession.AttrCost"/>,
+        /// <see cref="CareerSession.CoachStepFor"/>) плюс приріст надбавки (<see cref="Ageing.StaminaSurcharge"/>). Текст — один рядок
+        /// (ПМ 14.11.2026: першого тексту У0 було два рядки, і з контрактом та пізньою роллю папір кінця сезону сягав канатів на
+        /// 16 одиниць); на екран — після У0 арт-директора (власник може переграти).
+        /// </summary>
+        public static string AgeingNextLine(RingText t, CareerSession c, List<SeasonEndAction> actions)
+        {
+            if (c == null || actions == null || actions.Count != 1 || actions[0] != SeasonEndAction.NextSeason) return null;
+            int grow = Ageing.StaminaSurcharge(c.State.Season + 1) - Ageing.StaminaSurcharge(c.State.Season);
+            if (grow <= 0) return null;
+            int coach = c.CoachStepFor(Array.IndexOf(CareerRules.Coaches, RingAttr.Stamina)) + grow;   // кінець сезону 6: 5 — «5 тренувань»
+            return t.Format(PluralMany(coach) ? "c.age.next.many" : "c.age.next", c.AttrCost(RingAttr.Stamina) + grow, coach);
+        }
+
+        /// <summary>
+        /// Число вимагає родового множини («5 тренувань»), а не «тренування» (1, 2–4, 21–24): 0, 5–20, 25–30, 11–14 у кожній сотні.
+        /// Ключі з «.many» — той самий текст у цій формі.
+        /// </summary>
+        public static bool PluralMany(int n)
+        {
+            n = Math.Abs(n);
+            int d = n % 10, h = n % 100;
+            return d == 0 || d >= 5 || (h >= 11 && h <= 14);
         }
 
         /// <summary>Атрибут уже на стелі (<see cref="WrestlerStats.MaxAttr"/>): +1 не буде — плитка й підказка без «→ +4» і без ціни.</summary>
@@ -234,10 +289,32 @@ namespace Game.Gameplay.Ring.Models
             var parts = new List<string>();
             foreach (var i in injuries)
             {
-                if (i.WeeksLeft > 0) parts.Add(t.Format("c.injury.weeks", t.Get("bodyzone." + (int)i.Zone), i.WeeksLeft));
-                else if (i.ZoneDamage > 0) parts.Add(t.Format("c.injury.dmg", t.Get("bodyzone." + (int)i.Zone), i.ZoneDamage, i.Threshold));
+                string zone = t.Get("bodyzone." + (int)i.Zone);
+                if (i.WeeksLeft > 0) parts.Add(ScarTail(t, t.Format("c.injury.weeks", zone, i.WeeksLeft), i.ScarWeeks));
+                else if (i.ZoneDamage > 0) parts.Add(ScarTail(t, t.Format("c.injury.dmg", zone, i.ZoneDamage, i.Threshold), i.ScarWeeks));
+                else if (i.ScarWeeks > 0) parts.Add(t.Format("c.injury.scar_only", zone, i.ScarWeeks));   // Б5: здорова зона зі слідом
             }
             return parts.Count == 0 ? t.Get("c.injury.none") : string.Join(" · ", parts);
+        }
+
+        /// <summary>
+        /// Б5 (§5.5): слід травми — з сезону 4 (<see cref="InjuryView.ScarWeeks"/>; до того 0, М1 без змін). Травмована зона — «Ноги:
+        /// травма, ще 3 тиж. (слід: +1)»: поточна травма довша на стільки; ушкоджена — той самий хвіст: нова травма буде довшою.
+        /// </summary>
+        public static string ScarTail(RingText t, string line, int scarWeeks)
+        {
+            return scarWeeks > 0 ? line + " " + t.Format("c.injury.scar", scarWeeks) : line;
+        }
+
+        /// <summary>
+        /// Б6 (власник 13.11.2026, «Так, усі 7», варіант А): сцена закулісся вписала суперника найближчого шоу
+        /// (<see cref="WeekActionResult.OpponentChanged"/>) — частина рядка результату «суперник на шоу — {0}» з ім'ям із картки, вже
+        /// переписаної ядром. «На шоу — …», а не «змінився»: прапорець стоїть і тоді, коли обіцяний суперник уже був у картці.
+        /// Відкладену розплату (велике шоу, титул) у М1 не показуємо. Немає прапорця чи імені — null.
+        /// </summary>
+        public static string OpponentLine(RingText t, WeekActionResult r, string opponentName)
+        {
+            return r != null && r.OpponentChanged && !string.IsNullOrEmpty(opponentName) ? t.Format("c.delta.opponent", opponentName) : null;
         }
 
         /// <summary>Смужка зони тіла на стрічці героя: сегментів — поріг травми зони, заповнено — ушкодження (травма — уся), тижні травми.</summary>
@@ -370,6 +447,192 @@ namespace Game.Gameplay.Ring.Models
             return r.ManagerCut > 0 ? s + " · " + t.Format("c.result.manager", r.ManagerCut) : s;
         }
 
+        // ---------------- стрічка дії тижня (АД 15.11.2026, варіант (А)) ----------------
+
+        /// <summary>Дельта стрічки дії тижня — місце в таблиці важливості <see cref="WeekDeltaOrder"/>.</summary>
+        public enum WeekDelta { Injury, Turn, Money, DevPoints, Trust, Popularity, Feud, Hype, Rival, Opponent, Plan, Locker, Actions, Coach, PromoChoice }
+
+        /// <summary>
+        /// Порядок дельт у стрічці дії тижня — однаковий для всіх дій (АД 15.11.2026): що важливіше, те лівіше, а «· ще N» ховає
+        /// найменш важливі. Спершу тіло й роль, далі шкали, які гравець веде щотижня (гроші, очки, довіра, популярність), потім
+        /// найближче шоу (ворожнеча, ажіотаж, імпульс суперника, суперник, план), наостанок дрібне й те, що вже видно деінде (вибір
+        /// нагороди промо стоїть і в шапці ряду).
+        /// </summary>
+        public static readonly WeekDelta[] WeekDeltaOrder =
+        {
+            WeekDelta.Injury, WeekDelta.Turn, WeekDelta.Money, WeekDelta.DevPoints, WeekDelta.Trust, WeekDelta.Popularity,
+            WeekDelta.Feud, WeekDelta.Hype, WeekDelta.Rival, WeekDelta.Opponent, WeekDelta.Plan, WeekDelta.Locker, WeekDelta.Actions,
+            WeekDelta.Coach, WeekDelta.PromoChoice,
+        };
+
+        /// <summary>
+        /// Рядок 1 стрічки: «Дія · Результат» словом — назва рівня кидка з порогом («Провал (до 6)») чи «Зроблено» без кидка. Колір
+        /// стрічки лише в смузі, зміст несе слово (АД 15.11.2026). Відмова — лише назва дії, причина — рядком 2.
+        /// </summary>
+        public static string WeekResultHead(RingText t, WeekActionResult r)
+        {
+            string act = t.Get("week.action." + (int)r.Kind);
+            if (!r.Ok) return act;
+            if (WeekSideJobInjured(r)) return act + " · " + t.Get("c.week.result.injury");
+            return act + " · " + (WeekRollDecides(r) ? RingLabels.TierName(t, r.Tier) : t.Get("c.week.result.done"));
+        }
+
+        /// <summary>
+        /// Кидок вирішує, чи дія вдалась (промо, закулісся): рівень кидка — слово результату. Кидок підробітку — лише перевірка травми
+        /// (2d6 ≤ 4, §6.1): заробіток є за будь-якого кидка, тож «Провал (до 6)» там збрехав би — вердикт за травмою
+        /// (<see cref="WeekSideJobInjured"/>), а рівень кидка — у підказці.
+        /// </summary>
+        public static bool WeekRollDecides(WeekActionResult r)
+        {
+            return r != null && r.HasRoll && r.Kind != WeekActionKind.SideJob;
+        }
+
+        /// <summary>
+        /// Підробіток з травмою (АД 15.11.2026): його вирішальний кидок — перевірка травми, а травма гравцеві важливіша за гроші, тож
+        /// вердикт рядка 1 — «Травма», смуга — Signal; гроші й травма (першою, зоною) — у дельтах. Без травми — «Зроблено», Gold.
+        /// Травма — те, що записало ядро (<see cref="WeekActionResult.InjuredZone"/>), а не сам кидок ≤ 4.
+        /// </summary>
+        public static bool WeekSideJobInjured(WeekActionResult r)
+        {
+            return r != null && r.Ok && r.Kind == WeekActionKind.SideJob && r.InjuredZone >= 0;
+        }
+
+        /// <summary>
+        /// Дія вдалась — золота смуга стрічки, ні — Signal (АД 15.11.2026: колір лише в смузі, зміст несе слово). Не вдалась — відмова
+        /// ядра, провал кидка, що вирішує результат (<see cref="WeekRollDecides"/>), чи травма на підробітку (<see cref="WeekSideJobInjured"/>);
+        /// частковий успіх — вдалась («Частково» словом у рядку 1).
+        /// </summary>
+        public static bool WeekResultSucceeded(WeekActionResult r)
+        {
+            return r != null && r.Ok && !(WeekRollDecides(r) && r.Tier == RollTier.Miss) && !WeekSideJobInjured(r);
+        }
+
+        /// <summary>Арифметика кидка («кидок 6 + 0 = 6, Провал (до 6)») — лише в підказці при наведенні; без кидка — null.</summary>
+        public static string WeekResultRoll(RingText t, WeekActionResult r)
+        {
+            return r != null && r.Ok && r.HasRoll ? t.Format("c.roll", r.Roll, RingChances.Term(r.Modifier), r.Total, RingLabels.TierName(t, r.Tier)) : null;
+        }
+
+        /// <summary>
+        /// Рядок 2 стрічки — дельти в порядку <see cref="WeekDeltaOrder"/>; відмова — одна причина ядра (week.reason.*).
+        /// <paramref name="opponentName"/> — суперник найближчого шоу (Б6), <paramref name="female"/> — героїня (№11, рід ролі в повороті).
+        /// </summary>
+        public static List<string> WeekResultDeltas(RingText t, WeekActionResult r, string opponentName, bool female)
+        {
+            var res = new List<string>();
+            if (r == null) return res;
+            if (!r.Ok) { res.Add(t.Get("week.reason." + r.Reason)); return res; }
+            foreach (var d in WeekDeltaOrder)
+            {
+                string s = WeekDeltaText(t, r, d, opponentName, female);
+                if (s != null) res.Add(s);
+            }
+            return res;
+        }
+
+        /// <summary>Текст однієї дельти; null — цієї дельти в результаті немає.</summary>
+        public static string WeekDeltaText(RingText t, WeekActionResult r, WeekDelta d, string opponentName, bool female)
+        {
+            switch (d)
+            {
+                case WeekDelta.Injury: return r.InjuredZone >= 0 ? t.Format("c.delta.injury", t.Get("bodyzone." + r.InjuredZone)) : null;
+                case WeekDelta.Turn: return TurnLine(t, r, female);   // №11: сцена повернула роль
+                case WeekDelta.Money: return r.MoneyDelta != 0 ? t.Format("c.delta.money", RingChances.Signed(r.MoneyDelta)) : null;
+                case WeekDelta.DevPoints: return r.DevPointsDelta != 0 ? t.Format("c.delta.dev", RingChances.Signed(r.DevPointsDelta)) : null;
+                case WeekDelta.Trust: return r.TrustDelta != 0 ? t.Format("c.delta.trust", RingChances.Signed(r.TrustDelta)) : null;
+                case WeekDelta.Popularity: return r.PopularityDelta != 0 ? t.Format("c.delta.pop", RingChances.Signed(r.PopularityDelta)) : null;
+                case WeekDelta.Feud: return r.FeudDelta != 0 ? t.Format("c.delta.feud", RingChances.Signed(r.FeudDelta)) : null;
+                case WeekDelta.Hype: return r.HypeBonusDelta != 0 ? t.Format("c.delta.hype", RingChances.Signed(r.HypeBonusDelta)) : null;
+                case WeekDelta.Rival: return r.RivalBoosted ? t.Get("c.delta.rival") : null;
+                case WeekDelta.Opponent: return OpponentLine(t, r, opponentName);   // Б6: сцена вписала суперника
+                case WeekDelta.Plan: return r.PlanChanged ? t.Get("c.delta.plan") : null;
+                case WeekDelta.Locker: return r.LockerDelta != 0 ? t.Format("c.delta.locker", RingChances.Signed(r.LockerDelta)) : null;
+                case WeekDelta.Actions: return r.ActionsDelta != 0 ? t.Format("c.delta.actions", RingChances.Signed(r.ActionsDelta)) : null;
+                case WeekDelta.Coach: return r.CoachRaised ? t.Get("c.delta.coach") : null;
+                case WeekDelta.PromoChoice: return r.NeedsChoice ? t.Get("c.week.promo_choice") : null;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Скільки перших частин (за важливістю) влазить разом із хвостом «· ще N» за решту — <paramref name="fits"/> міряє рядок (стрічка —
+        /// один рядок, підказка — два). Хвіст ховає найменш важливі, а не останні за складанням. Не влазить жодна — «ще N».
+        /// </summary>
+        public static int FitParts(RingText t, IList<string> parts, Func<string, bool> fits, out string line)
+        {
+            for (int k = parts.Count; k > 0; k--)
+            {
+                line = JoinParts(t, parts, k);
+                if (fits(line)) return k;
+            }
+            line = JoinParts(t, parts, 0);
+            return 0;
+        }
+
+        /// <summary>
+        /// Рядок 2 стрічки дії: як <see cref="FitParts"/>, але найважливіша дельта за «ще N» не ховається ніколи. Не влазить і з хвостом —
+        /// це лише рядок суперника Б6 з довгим ім'ям ростера (текст «суперник на шоу — {0}» затвердив власник 13.11.2026): тоді її кінець
+        /// обрізано «…», хвіст «ще N» за решту лишається, а підказка показує її цілою разом з рештою (<paramref name="clipped"/>; повертає 0 —
+        /// цілими не показано жодної, сховане — усе).
+        /// </summary>
+        public static int StripParts(RingText t, IList<string> parts, Func<string, bool> fits, out string line, out bool clipped)
+        {
+            int k = FitParts(t, parts, fits, out line);
+            clipped = k == 0 && parts.Count > 0;
+            if (!clipped) return k;
+            var cut = new List<string>(parts);
+            string head = parts[0];
+            for (int n = head.Length - 1; n > 0; n--)
+            {
+                cut[0] = head.Substring(0, n).TrimEnd(' ', '«', '—', '–', '·', ',', ':') + "…";
+                line = JoinParts(t, cut, 1);
+                if (fits(line)) return 0;
+            }
+            cut[0] = "…";
+            line = JoinParts(t, cut, 1);
+            return 0;
+        }
+
+        /// <summary>Перші <paramref name="shown"/> частин через « · » і хвіст «ще N» за решту.</summary>
+        public static string JoinParts(RingText t, IList<string> parts, int shown)
+        {
+            var head = new List<string>();
+            for (int i = 0; i < shown && i < parts.Count; i++) head.Add(parts[i]);
+            if (shown < parts.Count) head.Add(t.Format("c.week.more", parts.Count - shown));
+            return string.Join(" · ", head);
+        }
+
+        /// <summary>
+        /// Підказка при наведенні на стрічку (АД 15.11.2026): лише сховане — спершу арифметика кидка, далі сховані «ще N» дельти в тому
+        /// самому порядку важливості; не влазить у два рядки — те саме «ще N». Нічого не сховано й кидка немає — null.
+        /// </summary>
+        public static string WeekResultHover(RingText t, string roll, IList<string> hidden, Func<string, bool> fits)
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrEmpty(roll)) parts.Add(roll);
+            if (hidden != null) parts.AddRange(hidden);
+            if (parts.Count == 0) return null;
+            string line;
+            FitParts(t, parts, fits, out line);
+            return line;
+        }
+
+        /// <summary>Чутка після дії — «Чутка: …» (голос зали, не букера; АД 15.11.2026); немає — null.</summary>
+        public static string WeekRumor(RingText t, WeekActionResult r)
+        {
+            return r != null && r.Ok && !string.IsNullOrEmpty(r.RumorKey) ? t.Format("c.week.rumor", t.Get(r.RumorKey)) : null;
+        }
+
+        /// <summary>
+        /// Рядок-підказка шапки тижня за замовчуванням: вибір нагороди промо й перевтома — як і раніше (інструкція й попередження); інакше
+        /// чутка останньої дії до наступної (АД 15.11.2026); нічого — порожньо.
+        /// </summary>
+        public static string WeekHintDefault(string promo, string strained, string rumor)
+        {
+            if (promo != null && strained != null) return promo + " " + strained;
+            return promo ?? strained ?? rumor ?? "";
+        }
+
         /// <summary>№11: поворот ролі після сцени закулісся (§5.3) у рядку відгуку дії: «поворот ролі: Лиходійка». null — не було.</summary>
         public static string TurnLine(RingText t, WeekActionResult r, bool female)
         {
@@ -420,6 +683,161 @@ namespace Game.Gameplay.Ring.Models
 
         /// <summary>Чернетка героя перед створенням: дивізіон (P2-6) — зі статі тіла (body_f_* — жіночий), суперники своєї статі.</summary>
         public static void SetDivision(CharacterDraft d, string body) { d.Female = CareerLooks.IsFemaleBody(body); }
+
+        /// <summary>
+        /// Скільки вільних балів заготовки стоїть в атрибуті <paramref name="a"/>: перший — у <see cref="CharacterDraft.FreePoint"/>,
+        /// другий (лише коли балів два, Самородок) — у <see cref="CharacterDraft.FreePoint2"/>, а без нього — туди ж, що й перший
+        /// (так само рахує ядро, <c>CareerSession.AttrsWithFreePoints</c>).
+        /// </summary>
+        public static int FreePointsIn(CharacterDraft d, int freePoints, RingAttr a)
+        {
+            if (d == null || freePoints <= 0) return 0;
+            int n = d.FreePoint == a ? 1 : 0;
+            if (freePoints >= 2 && (d.FreePoint2 ?? d.FreePoint) == a) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// Клік по рядку характеристики афіші (Б4, власник 13.11.2026: «Так, усі 7»). Один вільний бал — переходить сюди. Два
+        /// (Самородок) — бал ставиться сюди, а найдавніший із двох переходить: <see cref="CharacterDraft.FreePoint"/> — давніший,
+        /// <see cref="CharacterDraft.FreePoint2"/> — новіший; двічі по тому самому атрибуту — обидва там (+2). Вище стелі
+        /// <paramref name="max"/> бал не ставиться — заготовка не змінюється, false.
+        /// </summary>
+        public static bool PlaceFreePoint(CharacterDraft d, int freePoints, int baseValue, int max, RingAttr a)
+        {
+            if (d == null || freePoints <= 0) return false;
+            if (freePoints < 2)
+            {
+                if (baseValue + 1 > max) return false;
+                d.FreePoint = a;
+                d.FreePoint2 = null;
+                return true;
+            }
+            RingAttr newer = d.FreePoint2 ?? d.FreePoint;
+            int here = (newer == a ? 1 : 0) + 1;
+            if (baseValue + here > max) return false;
+            d.FreePoint = newer;
+            d.FreePoint2 = a;
+            return true;
+        }
+
+        /// <summary>Те саме, що <see cref="NormalizeFreePoints(CharacterDraft, int, int[], int, out RingAttr, out RingAttr)"/>, без «звідки й куди».</summary>
+        public static bool NormalizeFreePoints(CharacterDraft d, int freePoints, int[] baseAttr, int max)
+        {
+            RingAttr from, to;
+            return NormalizeFreePoints(d, freePoints, baseAttr, max, out from, out to);
+        }
+
+        /// <summary>
+        /// Зміна ґіміка (ПМ 14.11.2026: Монстр, вільний бал у Силу — 3, потім Силач — Сила 4 за стелею, і «Почати кар'єру» гасла з
+        /// attr_max): бал, що з основою <paramref name="baseAttr"/> нового ґіміка вийшов би вище <paramref name="max"/>, переходить у
+        /// перший за порядком рядків афіші атрибут, де ще є місце; у ґіміка з двома балами — кожен окремо, давніший першим. Ядро бал не
+        /// знімає (<see cref="CharacterDraft.FreePoint"/> завжди десь стоїть), тож переставляємо. true — переставлено:
+        /// <paramref name="from"/> → <paramref name="to"/> — перший переставлений бал (рядок афіші <see cref="FreeMovedLine"/>);
+        /// false — за стелю не вийшло нічого (заготовка та сама) або місця немає ніде.
+        /// </summary>
+        public static bool NormalizeFreePoints(CharacterDraft d, int freePoints, int[] baseAttr, int max, out RingAttr from, out RingAttr to)
+        {
+            from = to = RingAttr.Strength;
+            if (d == null || baseAttr == null || freePoints <= 0) return false;
+            bool two = freePoints >= 2;
+            var want = two ? new[] { d.FreePoint, d.FreePoint2 ?? d.FreePoint } : new[] { d.FreePoint };
+            var add = new int[baseAttr.Length];
+            bool moved = false;
+            for (int k = 0; k < want.Length; k++)
+            {
+                int a = (int)want[k];
+                if (a < 0 || a >= baseAttr.Length || baseAttr[a] + add[a] + 1 > max)
+                {
+                    int was = a;
+                    a = -1;
+                    for (int i = 0; i < baseAttr.Length && a < 0; i++) if (baseAttr[i] + add[i] + 1 <= max) a = i;
+                    if (a < 0) return false;
+                    if (!moved) { from = was >= 0 && was < baseAttr.Length ? (RingAttr)was : (RingAttr)a; to = (RingAttr)a; }
+                    want[k] = (RingAttr)a;
+                    moved = true;
+                }
+                add[a]++;
+            }
+            if (!moved) return false;
+            d.FreePoint = want[0];
+            d.FreePoint2 = two && want[1] != want[0] ? want[1] : (RingAttr?)null;
+            return true;
+        }
+
+        /// <summary>
+        /// Рядок афіші після перестановки (АД 14.11.2026, варіант (1)): «Вільний бал перейшов у {куди} — у {звідки} уже максимум»;
+        /// назви атрибутів — відмінками з ключів <c>attr.*.acc</c> (знахідний) і <c>attr.*.loc</c> (місцевий).
+        /// </summary>
+        public static string FreeMovedLine(RingText t, RingAttr from, RingAttr to)
+        {
+            if (t == null) return "";
+            return t.Format("create.note.free_moved", t.Get("attr." + FeudVars.AttrName(to) + ".acc"), t.Get("attr." + FeudVars.AttrName(from) + ".loc"));
+        }
+
+        /// <summary>
+        /// Рядок підказки над рядом створення без наведення. На 4:3 (одна колонка: опису ролі й рядків паперу там немає — АД 15.11.2026,
+        /// Б1) за пріоритетом «бал перейшов» &gt; С-1 (два вільні бали) &gt; опис ґіміка — той самий порядок, що на папері 16:9; на
+        /// широкій — опис ґіміка (рядок і С-1 там на папері).
+        /// </summary>
+        public static string CreateRowHint(RingText t, bool column, bool freeMoved, RingAttr from, RingAttr to, bool twoFree, string gimmickNameKey)
+        {
+            if (t == null) return "";
+            if (column && freeMoved) return FreeMovedLine(t, from, to);
+            if (column && twoFree) return t.Get("c.create.freepoints.hint");
+            return t.Get(gimmickNameKey + ".desc");
+        }
+
+        /// <summary>
+        /// Частини ефекту плитки ґіміка на створенні: бонуси основи (<see cref="RingLabels.AttrBonusParts"/>) у порядку
+        /// <see cref="CareerTileLayout.CreateEffectOrder"/> (Ш-1: найдовша — остання, підписна — перша) і, у ґіміка з двома вільними
+        /// балами, рядок «+2 вільні бали» (арт-директор 14.11.2026: у Самородка всі основи 0 — плитка була порожня; той самий кегль і
+        /// колір, що в бонусів, без золота).
+        /// </summary>
+        public static List<string> CreateTileParts(RingText t, int[] attrs, int freePoints)
+        {
+            var parts = attrs != null ? RingLabels.AttrBonusParts(t, attrs) : new string[0];
+            var values = new List<int>();
+            if (attrs != null) foreach (int v in attrs) if (v != 0) values.Add(v);   // той самий порядок, що в AttrBonusParts
+            var res = CareerTileLayout.CreateEffectOrder(parts, values);
+            if (freePoints >= 2) res.Add(t.Get("c.create.tile.freepoints"));
+            return res;
+        }
+
+        // ---------------- огляд слоту 33 (ПМ 13.11.2026): порожнє значення — без мітки-тавтології ----------------
+
+        /// <summary>
+        /// Рядок плану букера: «План букера: Виграй чисто»; без плану — «Плану букера немає» (було «План букера: Плану немає»,
+        /// кадри g_heroine_feud_4x3 016, k_champdecl_1080 022, m4x3 050).
+        /// </summary>
+        public static string PlanLine(RingText t, BookerPlan p)
+        {
+            return p == BookerPlan.None ? t.Get("c.card.plan.none") : t.Get("c.card.plan") + ": " + RingLabels.PlanName(t, p);
+        }
+
+        /// <summary>
+        /// Рядок умов матчу з міткою: «Умови: Без дискваліфікації»; без умов — лише «Умов немає» (було «Умови: Умов немає», «Умови
+        /// матчу: Умов немає» — кадри картки шоу й огляду ворожнечі). <paramref name="parts"/> — назви умов; порожньо чи лише
+        /// «stip.none» — умов немає.
+        /// </summary>
+        public static string StipLine(RingText t, string label, IList<string> parts)
+        {
+            string none = t.Get("stip.none");
+            if (parts == null || parts.Count == 0 || (parts.Count == 1 && parts[0] == none)) return none;
+            return label + ": " + string.Join(", ", parts);
+        }
+
+        /// <summary>
+        /// Ім'я на рингу в полі створення за статтю тіла (ПМ 13.11.2026, п. 6): героїні — «Новачка», героєві — «Новачок». Лише поки в
+        /// полі ім'я за замовчуванням (будь-якої статі); своє ім'я гравця не чіпаємо. «.fem», а не «.f»: рід за тілом на екрані
+        /// створення, а не глобальна заміна HeroForms (виняток «c.create.default_name» у HeroFormsTests лишається).
+        /// </summary>
+        public static string FollowDefaultName(RingText t, string current, bool female)
+        {
+            string male = t.Get("c.create.default_name"), fem = t.Get("c.create.default_name.fem");
+            if (current != null && current != male && current != fem) return current;
+            return female ? fem : male;
+        }
     }
 
     /// <summary>Дія нижнього ряду кінця сезону (<see cref="CareerScreenLines.SeasonEndActions"/>).</summary>

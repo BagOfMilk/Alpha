@@ -97,6 +97,15 @@ namespace Game.Gameplay.Ring
         /// <summary>Сейв переписано: підсумок для «Продовжити» перечитати при наступному показі титулу.</summary>
         private void InvalidateSaveSummary() { _saveSummary = null; }
 
+        /// <summary>
+        /// -ring-hero-name підміняє ім'я за замовчуванням (ключ «c.create.default_name», Rebind) — і героїні теж: екран створення бере
+        /// «c.create.default_name.fem» («Новачка», ПМ 13.11.2026), і без цього огляд героїні підставив би «Новачка» замість імені огляду.
+        /// </summary>
+        private void MirrorShotHeroName()
+        {
+            if (_text != null && _shotHeroName != null) _text.Add("c.create.default_name.fem", _shotHeroName);
+        }
+
         public void SettingsApplied()
         {
             _menuInput.SetBindings(_settings.Model.Applied.Keys);
@@ -183,6 +192,7 @@ namespace Game.Gameplay.Ring
             }
             _onTitle = true;
             Rebind();
+            MirrorShotHeroName();
             _bootDone = true;
             if (stage != null && !RingStageHub.DemoRequested && _menuShotsDir == null)
             {
@@ -199,6 +209,7 @@ namespace Game.Gameplay.Ring
             RingMenuServices.Music(MenuMusic.Loading);
             yield return null;
             if (continueSave) ContinueGame(); else NewGame();
+            MirrorShotHeroName();
             if (_onTitle) { _viewKey = null; Debug.LogWarning("[Ринг] вхід не вдався — титул заново"); }
             StepLoading();
             yield return null;
@@ -256,6 +267,18 @@ namespace Game.Gameplay.Ring
         /// <summary>Поки йде завантаження чи розріз, екран під ними не приймає клавіш (і бот огляду кар'єри чекає).</summary>
         private bool MenuOverlayBusy { get { return _loading != null || (_wipe != null && _wipe.Busy) || !_bootDone; } }
 
+        /// <summary>Кадр, у якому ввід меню (<see cref="PollMenuInput"/>) забрав клавіші: екрани кар'єри того кадру клавіш не беруть.</summary>
+        private int _keysTakenFrame = -1;
+
+        /// <summary>ICareerHost: ворота клавіш, що їх екран читає сам (створення: «0», Б4), — ті самі, що в HandleKeys для 1–9.</summary>
+        public bool KeysFree { get { return !MenuOverlayBusy && !Paused && _keysTakenFrame != Time.frameCount; } }
+
+        private bool Took(bool took)
+        {
+            if (took) _keysTakenFrame = Time.frameCount;
+            return took;
+        }
+
         private void TickMenuOverlays()
         {
             float dt = Time.unscaledDeltaTime;
@@ -289,9 +312,9 @@ namespace Game.Gameplay.Ring
             {
                 case CareerInputRoute.Menu:
                     _menuInput.Poll(nav, Time.unscaledDeltaTime);
-                    return true;
-                case CareerInputRoute.Typing: return PollTyping();
-                case CareerInputRoute.Pad: return PollCareerPad();
+                    return Took(true);
+                case CareerInputRoute.Typing: return Took(PollTyping());
+                case CareerInputRoute.Pad: return Took(PollCareerPad());
                 default: return false;
             }
         }

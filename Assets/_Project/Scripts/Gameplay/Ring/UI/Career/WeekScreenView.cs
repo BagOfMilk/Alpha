@@ -28,12 +28,25 @@ namespace Game.Gameplay.Ring.UI
         private readonly List<int> _tileKeys = new List<int>();   // ключ плитки (цифра) поруч із _tiles — для огляду меню
         private Label _hint;
         private VisualElement _row, _gold, _weekPlate, _last, _ropes, _header, _drawer, _poster;
+        // шухляда над афішею (ПМ 13.11.2026): шапка й підвал шухляди — для найменшої прокрутки; рядки умов афіші згортаються, коли під
+        // ПОВНОЮ афішею не влазить навіть мінімум шухляди (CareerTileLayout.DrawerOverPoster); висота схованих рядків — з останньої
+        // розкладки розгорнутої афіші
+        private VisualElement _drawerHead, _drawerFoot, _posterDetails;
+        private bool _posterFolded;
+        private float _detailsH;
         /// <summary>На афіші є наліпка форми суперника, що звисає з її низу (межа шухляди — від наліпки).</summary>
         private bool _posterSticker;
         private string _hintDefault = "";
         private bool _hintWarn;
         private ScrollView _drawerScroll;
         private Vector2 _drawerOffset;
+        // стрічка дії (АД 15.11.2026): рядок дельт міряється раз на результат — перебудова екрана (шухляда, покупка) бере готовий рядок і
+        // не програє появу вдруге (стрічка не блимає)
+        private readonly MenuAnimator _anim = new MenuAnimator();
+        private VisualElement _animBox;
+        private WeekActionResult _stripFor;
+        private string _stripDeltas;
+        private List<string> _stripHidden;
 
         public WeekScreenView(RingUiContext ctx) : base(ctx)
         {
@@ -62,7 +75,11 @@ namespace Game.Gameplay.Ring.UI
             if (!_accordionSet)
             {
                 _accordionSet = true;
-                _dev = w.DevPoints > 0;
+                // межа самовідкриття — два ряди плиток, тобто ширина панелі в її одиницях: до розкладки — з кадру (екрани кар'єри
+                // завжди в еталоні висоти 900, «Розмір інтерфейсу» їх не масштабує), а не в пікселях
+                float pw = Root.layout.width;
+                if ((float.IsNaN(pw) || pw <= 0f) && Screen.height > 0) pw = Screen.width * CareerTileLayout.PanelH / Screen.height;
+                _dev = CareerTileLayout.WeekDrawerAutoOpen(pw, w.DevPoints);
                 _shop = ExpandForShots && !_dev;
             }
             Root.Add(ShowKit.PlayerStrip(C, T, v));
@@ -71,6 +88,8 @@ namespace Game.Gameplay.Ring.UI
             Root.Add(_weekPlate);
             Root.Add(ShowKit.RivalStrip(C, T, w.Card.Opponent, w.Card.OpponentFeudLevel, true));
             _posterSticker = false;
+            _posterFolded = false;
+            _detailsH = 0f;
             _poster = Poster(w.Card, w.IsBigShowWeek);
             _poster.RegisterCallback<GeometryChangedEvent>(e => Fit());   // висота афіші відома лише після розкладки (межа шухляди)
             Root.Add(_poster);
@@ -171,20 +190,32 @@ namespace Game.Gameplay.Ring.UI
             }
             if (_ropes != null) _ropes.style.bottom = ArenaKit.RopesBottom + lift;
             if (_header != null) _header.style.bottom = ArenaKit.HeaderBottom + lift;
+            // стрічка дії — у лівому низу на базовій лінії шухляди, над канатами й «ДІЇ ТИЖНЯ» (АД 15.11.2026)
+            if (_last != null) _last.style.bottom = CareerTileLayout.DrawerBottom + lift;
             if (_drawer != null)
             {
+                _drawer.style.width = CareerTileLayout.WeekDrawerWidth(width, Root.layout.height);
                 _drawer.style.bottom = CareerTileLayout.DrawerBottom + lift;
-                // шухляда не закриває афішу (гонорар, план, суперник), доки під нею лишається >= DrawerMinRoom — далі список
-                // прокручується; менше — лише до стрічки суперника (рев'ю 08.11.2026; поріг 260 при 4:3 клав шухляду на план букера
-                // і суперника — кадри слоту 27, 09.11.2026)
+                // верх шухляди не вище за низ афіші з просвітом, решта — прокруткою (огляд слоту 33, ПМ 13.11.2026). Колишній відкат
+                // «менше 150 під афішею — до стрічки суперника» клав «Розвиток» на картку з трьома рядками умов (4:3, s33 p11 006–011).
+                // Не влазить і мінімум шухляди — афіша згортає рядки умов, доки шухляда відкрита.
                 float height = Root.layout.height;
                 float bottomY = height - (CareerTileLayout.DrawerBottom + lift);
                 bool posterReady = _poster != null && !float.IsNaN(_poster.layout.height) && _poster.layout.height > 0f;
                 if (posterReady && !float.IsNaN(height))
                 {
-                    float room = CareerTileLayout.DrawerRoomUnderPoster(bottomY, _poster.layout.y + _poster.layout.height, _posterSticker);
-                    if (room < ArenaKit.DrawerMinRoom) room = bottomY - (ArenaKit.Top + ArenaKit.StripH + 12f);
-                    if (room > 120f) _drawer.style.maxHeight = room;
+                    // рішення — за повною висотою афіші (з рядками, навіть сховані): однакове в обох станах, тож не коливається й
+                    // розгортає картку, щойно проміжний прохід розкладки минув (кадр слоту 34, a_s1 4:3)
+                    if (!_posterFolded && _posterDetails != null && !float.IsNaN(_posterDetails.layout.height)) _detailsH = _posterDetails.layout.height;
+                    bool fold;
+                    // над одним рядом плиток — ще й під обличчям букерки (АД 15.11.2026, рішення (а))
+                    float max = CareerTileLayout.WeekDrawerMaxHeight(bottomY, height, twoRows, _poster.layout.y + _poster.layout.height, _posterFolded,
+                        _detailsH, _posterSticker, _dev, out fold);
+                    if (fold != _posterFolded) FoldPoster(fold);
+                    _drawer.style.maxHeight = max;
+                    if (_drawerScroll != null)
+                        _drawerScroll.style.minHeight = CareerTileLayout.DrawerScrollMin(max, _drawerHead != null ? _drawerHead.layout.height : float.NaN,
+                            _drawerFoot != null ? _drawerFoot.layout.height : 0f);
                 }
             }
             if (_weekPlate != null)
@@ -192,7 +223,13 @@ namespace Game.Gameplay.Ring.UI
                 if (narrow) { _weekPlate.style.left = ArenaKit.Edge; _weekPlate.style.marginLeft = 0f; _weekPlate.style.top = ArenaKit.SecondY + 104f + 14f; }
                 else { _weekPlate.style.left = Length.Percent(50f); _weekPlate.style.marginLeft = -175f; _weekPlate.style.top = ArenaKit.Top; }
             }
-            if (_last != null) _last.style.top = narrow ? ArenaKit.SecondY + 104f + 14f + 70f + 14f : 288f;
+        }
+
+        /// <summary>Рядки умов афіші (пункти під планом) — сховати, доки шухляда відкрита й під афішею їй не вистачає місця.</summary>
+        private void FoldPoster(bool fold)
+        {
+            _posterFolded = fold;
+            if (_posterDetails != null) _posterDetails.style.display = fold ? DisplayStyle.None : DisplayStyle.Flex;
         }
 
         private ActionTile AddTile(int key, string title, string effect, string risk, bool enabled, string reason, Action act, string desc)
@@ -295,19 +332,25 @@ namespace Game.Gameplay.Ring.UI
             var line = new VisualElement();
             line.style.height = 2f; line.style.backgroundColor = RingTheme.Bg; line.style.marginTop = 6f; line.style.marginBottom = 8f;
             col.Add(line);
-            string plan = (c.IsFeud ? "" : T.Get("c.card.plan") + ": " + PlanText(c.Plan) + " · ") + StipText(c.Stipulations);
+            // без плану й умов — саме значення, без мітки («Плану букера немає · Умов немає», ПМ 13.11.2026)
+            string plan = (c.IsFeud ? "" : CareerScreenLines.PlanLine(T, c.Plan) + " · ") + StipText(c.Stipulations);
             col.Add(MenuKit.Body(plan, BrandTokens.TypeMinInfo, RingTheme.Bg, true));
-            if (c.PromoHypeBonus != 0) col.Add(Bullet(T.Format("c.card.promo_bonus", Signed(c.PromoHypeBonus))));
-            if (c.IsRematch) col.Add(Bullet(T.Get("c.hub.rematch")));
+            // рядки умов — окремим блоком: шухляда, якій під афішею не вистачає місця, згортає саме їх (FoldPoster)
+            var details = new VisualElement();
+            details.pickingMode = PickingMode.Ignore;
+            _posterDetails = details;
+            if (c.PromoHypeBonus != 0) details.Add(Bullet(T.Format("c.card.promo_bonus", Signed(c.PromoHypeBonus))));
+            if (c.IsRematch) details.Add(Bullet(T.Get("c.hub.rematch")));
             string outgrown = CareerScreenLines.OutgrownLine(T, c);   // №7: переріс щабель — букер ставить легший матч
-            if (outgrown != null) col.Add(Bullet(outgrown));
+            if (outgrown != null) details.Add(Bullet(outgrown));
             // P2-4 (8c3f16b): до росту гравця — нейтральний рядок «за місцем у картці», без червоної наліпки
-            if (c.Opponent != null && c.RivalSteps > 0 && !ShowKit.RivalInForm(C)) col.Add(Bullet(ShowKit.RivalStepsText(T, c)));
+            if (c.Opponent != null && c.RivalSteps > 0 && !ShowKit.RivalInForm(C)) details.Add(Bullet(ShowKit.RivalStepsText(T, c)));
             // №8 і №11: що тримає цей тиждень — пастка контракту (гонорар урізаний, без виїзних і підробітку) і пізня роль
             string exclusive = new SeasonOfferModel(C, T).ExclusiveText;
-            if (exclusive != null) col.Add(Bullet(exclusive));
+            if (exclusive != null) details.Add(Bullet(exclusive));
             string late = new LateRoleModel(C, T).CurrentText;
-            if (late != null) col.Add(Bullet(late));
+            if (late != null) details.Add(Bullet(late));
+            col.Add(details);
             box.Add(col);
             if (c.Opponent != null && c.RivalSteps > 0 && ShowKit.RivalInForm(C))
             {
@@ -337,22 +380,90 @@ namespace Game.Gameplay.Ring.UI
             return r;
         }
 
+        /// <summary>
+        /// Стрічка дії тижня (АД 15.11.2026, варіант (А)): лівий низ на базовій лінії шухляди (bottom ставить Fit), ширина за вмістом до
+        /// колонки грошей, стилем панелі грошей. Рівно два рядки: «Дія · Результат» словом і дельти за важливістю з «· ще N»; колір —
+        /// лише смуга (Gold — вдалося, Signal — ні), текст завжди Text. Наведення, фокус геймпада й дотик показують сховане в рядку-підказці.
+        /// </summary>
         private VisualElement LastResult(WeekActionResult r)
         {
-            var box = ArenaKit.Abs(ArenaKit.Edge, 288f, null, null, ArenaKit.StripW, null);
+            bool fresh = !ReferenceEquals(r, _stripFor);
+            if (fresh) { _stripFor = r; _stripDeltas = null; _stripHidden = null; }
+            var box = new WeekResultStrip(() => { string h = StripHover(); if (!string.IsNullOrEmpty(h)) SetHint(h); }, () => SetHint(_hintDefault));
+            ArenaKit.Place(box, ArenaKit.Edge, null, null, CareerTileLayout.DrawerBottom);
+            box.style.maxWidth = ArenaKit.StripW;
             box.style.overflow = Overflow.Visible;
-            box.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Bg, BrandTokens.AlphaUnderlay), Stripe = r.Ok ? RingTheme.Gold : RingTheme.Signal, StripeW = 5f, Shadow = false });
-            var l = MenuKit.Body(ResultText(r), BrandTokens.TypeMinInfo, r.Ok ? RingTheme.Text : RingTheme.Signal);
-            l.style.paddingLeft = 20f; l.style.paddingRight = 26f; l.style.paddingTop = 7f; l.style.paddingBottom = 8f;
-            box.Add(l);
+            box.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaPanel), Stripe = CareerScreenLines.WeekResultSucceeded(r) ? RingTheme.Gold : RingTheme.Signal });
+            var head = MenuKit.Body(CareerScreenLines.WeekResultHead(T, r), BrandTokens.TypeMinInfo, RingTheme.Text);
+            head.style.paddingLeft = CareerTileLayout.WeekStripPadL; head.style.paddingRight = CareerTileLayout.WeekStripPadR; head.style.paddingTop = 7f;
+            box.Add(head);
+            var line2 = MenuKit.Body(_stripDeltas ?? "", BrandTokens.TypeMinInfo, RingTheme.Text);
+            line2.style.paddingLeft = CareerTileLayout.WeekStripPadL; line2.style.paddingRight = CareerTileLayout.WeekStripPadR; line2.style.paddingBottom = 8f;
+            line2.style.whiteSpace = WhiteSpace.NoWrap; line2.style.overflow = Overflow.Hidden; line2.style.textOverflow = TextOverflow.Ellipsis;   // рівно один рядок
+            box.Add(line2);
+            var deltas = CareerScreenLines.WeekResultDeltas(T, r, OpponentName(), HeroForms.ShowsHeroine(T));
+            if (deltas.Count == 0) { _stripDeltas = ""; _stripHidden = new List<string>(); }
+            line2.style.display = deltas.Count == 0 ? DisplayStyle.None : DisplayStyle.Flex;
+            // дельт немає (відновлення без лікаря: ядро не пише зону в результат) — нижнє поле бере рядок 1
+            head.style.paddingBottom = deltas.Count == 0 ? 8f : 0f;
+            if (_stripDeltas != null) { if (fresh) Appear(box); return box; }
+            // рядок дельт міряється шрифтом стрічки після першої розкладки; до того стрічку не видно (жодного кадру з неурізаним рядком)
+            box.style.opacity = 0f;
+            var probe = MenuKit.Body("", BrandTokens.TypeMinInfo, RingTheme.Text);
+            probe.style.position = Position.Absolute; probe.style.left = 0f; probe.style.top = 0f;
+            probe.style.visibility = Visibility.Hidden;
+            box.Add(probe);
+            Func<string, bool> fits = s => probe.MeasureTextSize(TextBreak.GlueDashes(s), 0f, VisualElement.MeasureMode.Undefined, 0f, VisualElement.MeasureMode.Undefined).x
+                <= CareerTileLayout.WeekStripTextW;
+            EventCallback<GeometryChangedEvent> fit = null;
+            fit = e =>
+            {
+                if (_stripDeltas != null || !ReferenceEquals(r, _stripFor)) return;
+                float em = probe.MeasureTextSize("Ш", 0f, VisualElement.MeasureMode.Undefined, 0f, VisualElement.MeasureMode.Undefined).x;
+                if (float.IsNaN(em) || em <= 0f) return;   // шрифт ще не розкладено
+                string line;
+                bool clipped;   // найважливіша не влазить і з хвостом (довге ім'я суперника Б6) — кінець «…», ціла — у підказці
+                int k = CareerScreenLines.StripParts(T, deltas, fits, out line, out clipped);
+                _stripDeltas = line;
+                _stripHidden = deltas.GetRange(k, deltas.Count - k);
+                line2.text = TextBreak.GlueDashes(line);
+                box.UnregisterCallback(fit);
+                Appear(box);
+            };
+            box.RegisterCallback(fit);
             return box;
+        }
+
+        /// <summary>Поява стрічки — токенами руху плит меню (поява й зсув зліва), лише раз на результат; «Менше руху» — одразу.</summary>
+        private void Appear(VisualElement box)
+        {
+            if (_animBox != null) _anim.Forget(_animBox);
+            _animBox = box;
+            if (MenuAnimator.Reduced) { box.style.opacity = 1f; return; }
+            _anim.FromTo(box, MenuProp.Opacity, 0f, 1f, BrandTokens.MotionMenuPlateInMs, Ease.OutCubic);
+            _anim.FromTo(box, MenuProp.X, -40f, 0f, BrandTokens.MotionMenuPlateInMs, Ease.OutCubic);
+        }
+
+        /// <summary>Підказка стрічки: лише сховане — кидок і «ще N» дельти, не довше двох рядків найвужчої шапки.</summary>
+        private string StripHover()
+        {
+            var r = _stripFor;
+            if (r == null || _hint == null || _stripHidden == null) return null;
+            Func<string, bool> fits = s => _hint.MeasureTextSize(TextBreak.GlueDashes(s), CareerTileLayout.WeekHintNarrowest, VisualElement.MeasureMode.Exactly,
+                0f, VisualElement.MeasureMode.Undefined).y <= CareerTileLayout.HintMaxHeight - CareerTileLayout.HintPadV + 0.5f;
+            return CareerScreenLines.WeekResultHover(T, CareerScreenLines.WeekResultRoll(T, r), _stripHidden, fits);
+        }
+
+        public override void Tick(float unscaledDeltaTime)
+        {
+            _anim.Tick(unscaledDeltaTime * 1000f);
         }
 
         // ---------------- низ: шапка ряду, шухляда, плитки ----------------
 
         private VisualElement RowHeader(WeekView w)
         {
-            var row = ArenaKit.Abs(ArenaKit.Edge, null, ArenaKit.Edge, ArenaKit.HeaderBottom, null, 42f);
+            var row = ArenaKit.Abs(ArenaKit.Edge, null, ArenaKit.Edge, ArenaKit.HeaderBottom, null, CareerTileLayout.WeekHeaderH);
             row.style.flexDirection = FlexDirection.Row;
             row.style.alignItems = Align.Center;
             row.pickingMode = PickingMode.Ignore;
@@ -380,7 +491,8 @@ namespace Game.Gameplay.Ring.UI
             // лише для попередження, опис плитки при наведенні — звичайним (рев'ю 08.11.2026)
             string promo = w.PromoChoicePending ? T.Get("c.week.promo_choice") : null;
             string strained = w.Strained ? T.Get("week.strained") : null;
-            _hintDefault = promo != null && strained != null ? promo + " " + strained : promo ?? strained ?? "";
+            // чутка останньої дії стоїть тут до наступної (АД 15.11.2026: гравець не має її шукати)
+            _hintDefault = CareerScreenLines.WeekHintDefault(promo, strained, CareerScreenLines.WeekRumor(T, Host.LastWeekResult));
             _hintWarn = strained != null;
             _hint = MenuKit.Body(_hintDefault, BrandTokens.TypeMinInfo, RingTheme.Text);
             _hint.style.marginLeft = 22f;
@@ -406,8 +518,9 @@ namespace Game.Gameplay.Ring.UI
         /// <summary>Шухляда «Розвиток»/«Витрати» (B03 §3): виростає вгору над шапкою ряду, ряд дій не рухається; закривають вкладка й Esc (<see cref="OnBack"/>).</summary>
         private VisualElement Drawer()
         {
-            var box = ArenaKit.Abs(null, null, ArenaKit.Edge, CareerTileLayout.DrawerBottom, 560f, null);   // над канатами (огляд слоту 30)
-            box.style.maxHeight = 430f;   // уточнює Fit: не вище афіші, якщо під нею є місце
+            // над канатами (огляд слоту 30); ширину на 4:3 (472) ставить Fit
+            var box = ArenaKit.Abs(null, null, ArenaKit.Edge, CareerTileLayout.DrawerBottom, CareerTileLayout.WeekDrawerW, null);
+            box.style.maxHeight = CareerTileLayout.DrawerMaxH;   // уточнює Fit: не вище за низ афіші з просвітом
             box.style.overflow = Overflow.Visible;
             box.style.flexDirection = FlexDirection.Column;
             box.pickingMode = PickingMode.Position;
@@ -431,6 +544,8 @@ namespace Game.Gameplay.Ring.UI
             hint.style.unityTextAlign = TextAnchor.MiddleLeft;
             top.Add(hint);
             box.Add(top);
+            _drawerHead = top;
+            top.RegisterCallback<GeometryChangedEvent>(e => Fit());   // дворядкова підказка — менша прокрутка, підвал не на канатах
             var scroll = new ScrollView(ScrollViewMode.Vertical);
             ArenaKit.ThinScroller(scroll);
             scroll.style.flexShrink = 1f; scroll.style.minHeight = CareerTileLayout.DevScrollMinH;
@@ -446,6 +561,7 @@ namespace Game.Gameplay.Ring.UI
             scroll.Add(content);
             box.Add(scroll);
             if (foot != null) box.Add(foot);
+            _drawerFoot = foot;
             _drawerScroll = scroll;
             // щойно розгорнутий «Усе» — до початку повного списку, інакше — той самий зсув, що до перебудови; обидва — на межу рядка
             // (ПМ 13.11.2026, п. 2 і 5: зріз поради над «АТРИБУТИ» на с4, «ПЕРКИ» під краєм на 4:3), і в «Витратах» теж
@@ -541,7 +657,8 @@ namespace Game.Gameplay.Ring.UI
             var z = WorstZone(w);
             foreach (var i in w.Injuries)
                 if (i.Zone == z && i.WeeksLeft > 0)
-                    return T.Format("c.injury.tile", T.Get("bodyzone." + (int)i.Zone), C.State.InjuryPenaltyFor(i.Zone), i.WeeksLeft);
+                    return CareerScreenLines.ScarTail(T, T.Format("c.injury.tile", T.Get("bodyzone." + (int)i.Zone), C.State.InjuryPenaltyFor(i.Zone), i.WeeksLeft),
+                        i.ScarWeeks);   // Б5: слід — з сезону 4
             return null;
         }
 
@@ -565,30 +682,18 @@ namespace Game.Gameplay.Ring.UI
             Refresh();
         }
 
-        private string ResultText(WeekActionResult r)
+        /// <summary>Ім'я суперника найближчого шоу з картки тижня (як «Суперник: …» на картці вечора); немає картки — null.</summary>
+        /// <summary>
+        /// Огляд меню (<c>RingMenuShots</c>): ім'я в рядку суперника Б6 стрічки дії замість суперника картки — кадр найгіршого випадку
+        /// (найширше ім'я ростера); null — суперник картки. Гра його не ставить.
+        /// </summary>
+        internal static string OpponentNameForShots;
+
+        private string OpponentName()
         {
-            if (!r.Ok) return T.Get("week.reason." + r.Reason);
-            var parts = new List<string> { T.Get("week.action." + (int)r.Kind) };
-            // «кидок 6 + 0 = 6», а не «кидок 6 0 = 6» (плейтест 08.11.2026, P3, 8c3f16b)
-            if (r.HasRoll) parts.Add(T.Format("c.roll", r.Roll, RingChances.Term(r.Modifier), r.Total, RingLabels.TierName(T, r.Tier)));
-            if (r.MoneyDelta != 0) parts.Add(T.Format("c.delta.money", Signed(r.MoneyDelta)));
-            if (r.DevPointsDelta != 0) parts.Add(T.Format("c.delta.dev", Signed(r.DevPointsDelta)));
-            if (r.TrustDelta != 0) parts.Add(T.Format("c.delta.trust", Signed(r.TrustDelta)));
-            if (r.FeudDelta != 0) parts.Add(T.Format("c.delta.feud", Signed(r.FeudDelta)));
-            if (r.HypeBonusDelta != 0) parts.Add(T.Format("c.delta.hype", Signed(r.HypeBonusDelta)));
-            if (r.RivalBoosted) parts.Add(T.Get("c.delta.rival"));
-            if (r.InjuredZone >= 0) parts.Add(T.Format("c.delta.injury", T.Get("bodyzone." + r.InjuredZone)));
-            if (r.PopularityDelta != 0) parts.Add(T.Format("c.delta.pop", Signed(r.PopularityDelta)));
-            if (r.LockerDelta != 0) parts.Add(T.Format("c.delta.locker", Signed(r.LockerDelta)));
-            if (r.ActionsDelta != 0) parts.Add(T.Format("c.delta.actions", Signed(r.ActionsDelta)));
-            if (r.PlanChanged) parts.Add(T.Get("c.delta.plan"));
-            if (r.CoachRaised) parts.Add(T.Get("c.delta.coach"));
-            string turn = CareerScreenLines.TurnLine(T, r, HeroForms.ShowsHeroine(T));   // №11: сцена повернула роль
-            if (turn != null) parts.Add(turn);
-            if (r.NeedsChoice) parts.Add(T.Get("c.week.promo_choice"));
-            string s = string.Join(" · ", parts);
-            if (!string.IsNullOrEmpty(r.RumorKey)) s += "\n" + T.Get(r.RumorKey);
-            return s;
+            if (OpponentNameForShots != null) return OpponentNameForShots;
+            var w = C.GetWeekView();
+            return w != null && w.Card != null && w.Card.Opponent != null ? T.Get(w.Card.Opponent.NameKey) : null;
         }
 
         public override void OnDigit(int n)
@@ -620,5 +725,44 @@ namespace Game.Gameplay.Ring.UI
             C.EndWeek();
             Host.Save();
         }
+    }
+
+    /// <summary>
+    /// Стрічка дії тижня як ціль фокусу (АД 15.11.2026): нічого не натискає, але фокус геймпада, наведення миші й дотик показують те, що
+    /// в ній сховано (кидок і «ще N»), у рядку-підказці шапки — тією самою дорогою, що описи плиток.
+    /// </summary>
+    internal sealed class WeekResultStrip : VisualElement, IPadTarget
+    {
+        private readonly Action _show, _hide;
+        private VisualElement _frame;
+
+        public WeekResultStrip(Action show, Action hide)
+        {
+            _show = show; _hide = hide;
+            pickingMode = PickingMode.Position;
+            PadFocus.Hover(this, _show, _hide);
+            // дотик: торкнулися стрічки — показали (наведення пальцем немає)
+            RegisterCallback<PointerDownEvent>(e => { if (e.pointerType == PointerType.touch && _show != null) _show(); });
+        }
+
+        bool IPadTarget.PadEnabled { get { return false; } }
+        string IPadTarget.PadKey { get { return "week:last"; } }
+        int IPadTarget.PadRank { get { return 5; } }
+        // фокус геймпада видно рамкою (як PadMark), навіть коли схованого немає й рядок-підказка не змінюється
+        void IPadTarget.PadHot(bool on)
+        {
+            if (on)
+            {
+                if (_frame == null) { _frame = PadFocus.Frame(); Add(_frame); }
+                if (_show != null) _show();
+            }
+            else
+            {
+                if (_frame != null) { _frame.RemoveFromHierarchy(); _frame = null; }
+                if (_hide != null) _hide();
+            }
+        }
+        void IPadTarget.PadActivate() { }
+        bool IPadTarget.PadStep(int delta) { return false; }
     }
 }

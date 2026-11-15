@@ -51,7 +51,7 @@
 | **Изучение игры Ring** — `local_4d3baef2…` | Сцена, камера, вихід: `Gameplay/Ring/Stage/Unity/**` (крім `RingMatchDirector`, `RingSound`, `RingMenuAudio`, `RingMenuAssets`, `RingContactWatch`), `Stage/RingStageContract.cs`, `Stage/EntranceProfile.cs`, `Stage/EntranceScreen.cs`, `Core/Ring/RopeSim.cs`, `RingGameBootstrap.cs` (каркас), Editor: `RingSceneBuilder` (сцена), `RingStageSceneSetup`, `RingInEditor`, `RingEntranceScreenImport`; Blender: арени, натовп, реквізит, cast, закулісся (`tools/blender/ring_venues*`, `ring_gym`, `ring_show`, `ring_crowd`, `ring_props`, `ring_hero`, `ring_cast/**`); `docs/ring/ENTRANCE_PROFILE.md`, `Assets/Art/Ring/Cast/CAST_ANIM.md`; `Stage/RingVenue.cs` (зали, бік «за рингом»; новий, 08.11.2026); тести `Entrance*`, `RingVenue*` |
 | **Кар'єра** — `local_23e55a54…`, гілка `claude/trusting-stonebraker-8d5570` (створено 11.11.2026) | `Core/Ring/Career/**`, `Core/Ring/Feud/**`, `Core/Ring/Promo/**`, `Core/Ring/Progression/**`, `Core/Ring/Json/**`, `Core/Ring/RingCampaign.cs`, `Models/DevelopmentScreenModel.cs`, `FeudScreenModel.cs`, `PromoScreenModel.cs`, `SeasonOfferModel.cs` (1b95f3b), `LateRoleModel.cs` (a102ac2, пізні ролі), `HeroForms.cs` (57cfcdf, жіночі форми «ключ.f»), у `RingLabels.cs` (зона Бою) — лише нове перевантаження `PathName` за статтю борця (дозвіл ПМ 12.11.2026, наявні методи не міняти), у блоці матчу `ui_uk.json` — лише `unavail.15.f` (той самий дозвіл), нові моделі екранів кар'єри, `CareerLooks.cs`, `RingFeudBootstrap.cs`, `RingGameBootstrap.Career.cs`, `RingSaveFile.cs` (після злиття «Скилів»); ресурси `career_backstage.json`, `career_gimmicks.json`, `career_roster.json`, `feud_hammer.json`, `backstage_uk.json`; тести `Career*` (з `CareerTransitionTests.cs` — у ньому ж клас `CareerTempoTests`; крім `CareerScreenLinesTests`, `CareerTextFitTests`, `CareerPadFeatureTests` — це «Меню»), `Feud*`, `Promo*`, `Gimmick*`, `Economy*`, `Progression*`, `Backstage*`, `HeroForms*`, `Contract*` (21ea3cf), `WeekActions*`, `RingCampaign*`, `MiniJson*`; у спільному `tools/Game.Tests.Headless/Game.Tests.EditMode.csproj` — рядок `Compile CareerLooks.cs` |
 | **Меню** — `local_d8c816ac…` (+ форк звуку `local_bc183877…`) | `Gameplay/Ring/UI/Menus/**`, вигляд екранів кар'єри (`UI/Career/**` B03 v2, `UI/CareerScreens.cs` — під цією назвою до ітерації 2, `FeudScreenView`, `PromoScreenView`, `EndingScreenView`), помічники вигляду `Models/CareerScreenLines.cs` (d8b4243), `Models/CareerTileLayout.cs` (93b2c8b), `Models/CareerPadFeature.cs` (172a9d7) і їхні тести `CareerScreenLinesTests`, `CareerTextFitTests`, `CareerPadFeatureTests` — дані беруть лише з моделей «Кар'єри», `UI/RingUi.cs`, `Models/RingText.cs`, `MenuMotion.cs`, `RingSettings.cs`, `RingPause.cs`, `RingAudioMix.cs`, `RingSoundApproval.cs`, `RingGameBootstrap.Menus.cs`, `RingMenuShots.cs`, `RingSoundGate.cs`, `Stage/Unity/RingSound.cs`, `RingMenuAudio.cs`, `RingMenuAssets.cs`, Editor `RingMenuAudioImport`; `sound_approvals.json`, `tools/ring_audio/**`, переклади всіх `*_<мова>` (крім `uk`: `ui_`, `ring_strings_`, `strings_`, `backstage_`) і охоронець «кожен ключ перекладено»; тести `RingMenuModel*`, `RingSoundApproval*`, `MonoBehaviourFileName*`; журнал `docs/menus-progress.md` |
-| **Кліпи-1** — `local_815630bf…` (+ wwe `local_383c333e…`) | `tools/blender/ring_anims*`, `tools/blender/ring_review.py` (огляд кліпів; створено лінією анімацій, 8861986), `docs/ring/ANIM_REVIEW_*.md`, `Assets/Art/Animations/RING_Moves*.fbx`, `ring_anims_*.txt`, `docs/ring/ANIM_BRIEF_COMBAT_CENTER.md`, `docs/ring/ANIM_PLAN_ITER2.md`, `docs/research/RING_ANIM_REFERENCES.md`; лише Кліпи-1 правлять реєстр `ring_anims.py` (ланцюг `exec`, `CLIP_EVENTS`, `polish`), робить повні прогони й комітить FBX, маніфести, events (план ПМ 14.11.2026) |
+| **Кліпи-1** — `local_815630bf…` (+ wwe `local_383c333e…`) | `tools/blender/ring_anims*`, `tools/blender/ring_review.py` (огляд кліпів; створено лінією анімацій, 8861986), `docs/ring/ANIM_REVIEW_*.md`, `Assets/Art/Animations/RING_Moves*.fbx`, `ring_anims_*.txt`, `docs/ring/ANIM_BRIEF_COMBAT_CENTER.md`, `docs/ring/ANIM_PLAN_ITER2.md`, `docs/research/RING_ANIM_REFERENCES.md`; лише Кліпи-1 правлять реєстр `ring_anims.py` (ланцюг `exec`, `CLIP_EVENTS`, `polish`), робить повні прогони й комітить FBX, маніфести, events (план ПМ 14.11.2026); `tools/blender/ring_moves_lab.py` (Lockup_*, Chain_*; власника не було — ПМ 14.11.2026, аудит директора) |
 | **Кліпи-2** — нова сесія (14.11.2026) | «За рингом»: `tools/blender/ring_anims_outside.py`, карти `tools/blender/moves/outside_*.yaml`; dev-прогони лише `--only … --anim-out` у свою теку |
 | **Кліпи-3** — нова сесія (14.11.2026) | Каталог, прийоми й підписні ґіміків 5–8 (фінішери 5–8 — арт-директор): `tools/blender/ring_anims_catalog.py`, карти `tools/blender/moves/catalog_*.yaml`; dev-прогони лише `--only … --anim-out` у свою теку |
 | **Кліпи-4** — нова сесія (14.11.2026) | Больові crossface і bear_hug: `tools/blender/ring_anims_holds.py`, карти `tools/blender/moves/holds_*.yaml`; dev-прогони лише `--only … --anim-out` у свою теку |
@@ -61,7 +61,7 @@
 фінішерів усіх 8 ґіміків (власник 14.11.2026: «А фінішери це шось кінематографічне») — `Stage/Unity/RingFinisherCine.cs` і
 чиста модель розкадровки `Stage/RingFinisherCinePlan.cs` з тестами; точка виклику в `RingMatchDirector` — ПМ; аудит
 плавності всіх кліпів (власник: «Взагалі виправ усі проблеми та не плавність і нереалістичність анімацій…») — список вад ПМ,
-фікси в зонах власників | `docs/ring/DESIGN_SYSTEM.md`, `docs/ring/design/**`, `tools/ring_design/**`, `Models/BrandTokens.cs`, `UI/RingTheme.cs`, `UI/RingFonts.cs`, `RingFontSet.cs`, `RingFontSpike.cs`, Editor `RingFontAssets`, шрифти, тести `RingDesignGuard*`, `TitantronAssetsGuard*` |
+фікси в зонах власників | `docs/ring/DESIGN_SYSTEM.md`, `docs/ring/design/**`, `tools/ring_design/**`, `Models/BrandTokens.cs`, `UI/RingTheme.cs`, `UI/RingFonts.cs`, `RingFontSet.cs`, `RingFontSpike.cs`, Editor `RingFontAssets`, шрифти, тести `RingDesignGuard*`, `TitantronAssetsGuard*`; живе очікування: `Stage/RingIdleLifePlan.cs` (чиста частина), `Stage/Unity/RingIdleLife.cs`, тести `RingIdleLifePlanTests`, кліпи `tools/blender/ring_anims_idle.py` (у реєстрі `ring_anims.py` вмикають Кліпи-1 лише після листа АД); ПМ 14.11.2026: виклик із `RingStage3D` — «Изучение», вікно/дозвіл/темп у `RingMatchDirector` — ПМ, фаза петель `Stage/RingIdlePhase.cs` — ПМ |
 
 **Разовий розподіл на Етапі 0** (робить «Изучение» як власник файлів) — **зроблено 08.11.2026, 7f19686**:
 - `RingGameBootstrap.cs` («Изучение», каркас): запуск, UI, кадр, шоу 3D, виходи, `SyncStage`, клавіші, огляд, лукбук;
@@ -127,6 +127,17 @@
 **Черга Unity / Blender** (веде ПМ; оновлюється тут). Поріг для Unity — **≥ 3,5 ГБ доступної пам'яті** (free + standby) і
 жодного Ring.exe; з 20:34 08.11.2026 замість 4 ГБ — відкриті сесії Claude та інші програми тримають стільки, що 4 ГБ не
 буває навіть без Blender (о 20:34 — 3,6 ГБ). Blender — один процес за раз (чоловічий і жіночий набори по черзі); на час Unity ПМ просить «Кліпи» про паузу.
+**Кредити API консолі ($100 власника; нагадав 15.11.2026: «нагадую шо 100 є ще кредити у консолі») — передогляд кадрів.**
+З 15.11.2026 ПМ дозволяє всім сесіям «Рингу» `tools/ring_qa/frame_prescreen.py` (Opus 5.5, ~$0,03 за кадр; Haiku — лише сито)
+перед переглядом великих наборів кадрів (аркуші кліпів, У2 екранів, фаз-тест). Мета — щоб сесії не вантажили в контекст
+сотні кадрів наосліп і берегли тижневий ліміт плану. Правила: перевірка очима лишається — сесія дивиться сама всі позначені
+кадри, кожен контакт зблизька і щонайменше кожен п'ятий непозначений; вхід лише профілем `ant auth login` (ANTHROPIC_API_KEY
+не ставити, файл облікових даних не читати й не копіювати); `--label "<сесія: що>"` обов'язково — витрата пишеться в
+`%USERPROFILE%\AppData\LocalLow\RingShots\api_spend.csv`; стеля — $5 на сесію за добу і $40 разом до 19.11.2026, далі — лише з
+дозволу ПМ. ПМ стежить за сумою файлу.
+**З 15.11.2026 02:1x (ПМ):** dev-прогін Blender лише з `--only` (кілька кліпів, вивід у свою теку, без Unity й Ring.exe) стартує
+на двох замірах **≥ 2,5 ГБ** доступної пам'яті — як `--only` під час Unity-слоту; повний прогін набору й Unity — як і раніше
+≥ 3,5 ГБ двічі. Причина: сесії Claude тримають ~3,7 ГБ, і dev-прогони Кліпів-1 (критичний шлях) стояли з 00:52 на 1,8–3,0 ГБ.
 **20:42–20:49:** без Blender, Unity й Ring.exe доступно лише 0,3–0,9 ГБ — пам'ять тримають інші програми власника, тож
 слот 27 «Меню» чекає їх закриття. Unity в такий час однаково не влізе, а Blender влізе (запас виділення ~7,5 ГБ), тому
 ПМ дав «Кліпам» «Blender — можна» на **один** повний прогін P1-1 (чоловічий), з низьким пріоритетом процесу; перед
@@ -190,6 +201,15 @@ h1080/h4x3 040) → **(2) слот 32 «Меню»** (пакет №4–№8, �
 - тести `GimmickRulesTests.cs`, `CareerAgeingTests.cs`.
 
 Рядки `RingClipTable` для 16 прийомів ґіміків 5–8 і храповики підстановок — Бій (ПМ 12.11.2026); запит кліпів — `CLIP_NEEDS.md` §11.
+
+**14.11.2026, вечір** — кінчик бою 686b5ba8 (запушено). Unity — у «Изучение» (слот «сцена + бій» з 2fb56436). О 20:05 доступно
+лише 2,7 ГБ: вісім відкритих сесій Claude з їхніми серверами інструментів (~9 ГБ) і Ring.exe «Изучение» (1,6 ГБ). Через це
+Blender кліпів не стартує. **Рішення ПМ:** одразу після «вільно» від «Изучение» Unity переходить до Кліпів-1 на повні прогони
+(«Unity вільна»). Мій Unity-слот (рефері `KneelApproach`, фаза петель очікування, повні матчі 8 ґіміків для аудиту директора)
+переноситься на час після першого FBX — разом із перевіркою нових кліпів. **Граблі LFS** (знахідка Кліпів-3): у нових
+worktree `Assets/Art/Characters/Kit/kit_*.fbx` можуть бути вказівниками LFS (132–133 байти), і Blender падає з «ASCII FBX files
+are not supported». Лікується без мережі: `git lfs checkout <файли>` у своєму worktree. На 20:20 вказівники були в Кліпів-4
+і в директора, обом розіслано.
 
 **Сесія «Кар'єра»** — власник 08.11.2026 на бриф ПМ: «Так, створю» (створює сам; Remote Control не показує карток).
 Перша задача в брифі — прапорці бота `-ring-shot-load` / `-ring-shot-ending` для задачі 2 «Скилів»; решту прапорців

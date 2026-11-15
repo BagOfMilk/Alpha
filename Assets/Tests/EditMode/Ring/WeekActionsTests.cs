@@ -123,6 +123,69 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(s.GetWeekView().CanRecover);
         }
 
+        /// <summary>
+        /// Результат «Відновлення» несе зону й «було → стало» (АД через «Меню», 15.11.2026: стрічка тижня показувала лише
+        /// «Відновлення · Зроблено»). «Стало» — справжній стан після дії; без травми й ушкодження — явна ознака «нічого лікувати».
+        /// </summary>
+        [Test]
+        public void Recovery_Result_CarriesTheZone_AndBeforeAfter_NothingToHealIsExplicit()
+        {
+            var s = CareerKit.NewHero(3);
+            s.State.Money = 100;
+            int head = (int)BodyZone.Head, body = (int)BodyZone.Body, legs = (int)BodyZone.Legs;
+
+            // нічого лікувати: зона є, «було» = «стало» = 0, явна ознака, дію не витрачено
+            var none = s.Recover(BodyZone.Head, false);
+            Assert.IsFalse(none.Ok);
+            Assert.IsTrue(none.NothingToHeal);
+            Assert.AreEqual("nothing", none.Reason);
+            Assert.AreEqual(head, none.RecoveredZone);
+            Assert.AreEqual(0, none.InjuryWeeksBefore); Assert.AreEqual(0, none.InjuryWeeksAfter);
+            Assert.AreEqual(0, none.ZoneDamageBefore); Assert.AreEqual(0, none.ZoneDamageAfter);
+            Assert.AreEqual(CareerRules.ActionsPerWeek, s.State.ActionsLeft);
+
+            // травма й ушкодження: обидва «було → стало»
+            s.State.Injury[head] = 3; s.State.ZoneDamage[head] = 2;
+            var r = s.Recover(BodyZone.Head, false);
+            Assert.IsTrue(r.Ok);
+            Assert.IsFalse(r.NothingToHeal);
+            Assert.AreEqual(head, r.RecoveredZone);
+            Assert.AreEqual(3, r.InjuryWeeksBefore); Assert.AreEqual(2, r.InjuryWeeksAfter, "травма −1 тиждень");
+            Assert.AreEqual(2, r.ZoneDamageBefore); Assert.AreEqual(2 - CareerRules.RecoverZoneHeal, r.ZoneDamageAfter);
+            Assert.AreEqual(s.State.Injury[head], r.InjuryWeeksAfter, "«стало» — справжній стан після дії");
+            Assert.AreEqual(s.State.ZoneDamage[head], r.ZoneDamageAfter);
+
+            // лише ушкодження: тижні травми не змінюються
+            s.State.ZoneDamage[legs] = 1;
+            var d = s.Recover(BodyZone.Legs, false);
+            Assert.IsTrue(d.Ok);
+            Assert.AreEqual(legs, d.RecoveredZone);
+            Assert.AreEqual(0, d.InjuryWeeksBefore); Assert.AreEqual(0, d.InjuryWeeksAfter);
+            Assert.AreEqual(1, d.ZoneDamageBefore); Assert.AreEqual(0, d.ZoneDamageAfter);
+
+            // з лікарем — травма −2
+            s.State.Injury[body] = 3;
+            var doc = s.Recover(BodyZone.Body, true);
+            Assert.IsTrue(doc.Ok);
+            Assert.AreEqual(body, doc.RecoveredZone);
+            Assert.AreEqual(3, doc.InjuryWeeksBefore); Assert.AreEqual(1, doc.InjuryWeeksAfter);
+            Assert.AreEqual(-CareerRules.DoctorCost, doc.MoneyDelta);
+
+            // інша дія зони не несе
+            Assert.AreEqual(-1, s.Train(false).RecoveredZone);
+
+            // відмова через гроші: зона є, «було» = «стало», але це не «нічого лікувати»
+            var poor = CareerKit.NewHero(4);
+            poor.State.Injury[head] = 2;
+            poor.State.Money = CareerRules.DoctorCost - 1;
+            var m = poor.Recover(BodyZone.Head, true);
+            Assert.IsFalse(m.Ok);
+            Assert.AreEqual("money", m.Reason);
+            Assert.IsFalse(m.NothingToHeal);
+            Assert.AreEqual(head, m.RecoveredZone);
+            Assert.AreEqual(2, m.InjuryWeeksBefore); Assert.AreEqual(2, m.InjuryWeeksAfter);
+        }
+
         [Test]
         public void Promo_Strong_RaisesFeud_AndGivesHypeBonus()
         {

@@ -12,10 +12,11 @@ namespace Game.Tests.EditMode
     /// <summary>Створення борця (TRPG_DESIGN §5.1–§5.4): ґімік, роль, вільний бал, набір прийомів і прийоми як обгортки дій рушія.</summary>
     public class GimmickTests
     {
+        // Летун і Шоумен — вирівнювання V8 (власник 13.11.2026: «Так, усі 7»): Летуну Сила 0 → 1, Шоумену Витривалість 0 → 1.
         [TestCase(Gimmick.Monster, 2, -1, 0, 2, 0)]
-        [TestCase(Gimmick.Flyer, 0, 3, 0, -1, 0)]
+        [TestCase(Gimmick.Flyer, 1, 3, 0, -1, 0)]
         [TestCase(Gimmick.Technician, 0, 0, 3, 0, 0)]
-        [TestCase(Gimmick.Showman, -1, 0, 0, 0, 3)]
+        [TestCase(Gimmick.Showman, -1, 0, 0, 1, 3)]
         public void GimmickBase_IsInTheData(Gimmick g, int str, int agi, int tech, int sta, int cha)
         {
             var d = CareerKit.Content().GimmickOf(g);
@@ -90,12 +91,14 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void CreationView_ListsFourGimmicks_WithBaseAttrsAndTenStartMoves()
+        public void CreationView_ListsEightGimmicks_WithBaseAttrsAndStartMoves()
         {
+            // Б4, крок 3 (власник 13.11.2026, «Так, усі 7», п. 5): на екрані створення — усі вісім ґіміків
             var v = CareerKit.NewAtCreate(1).GetCreationView();
-            Assert.AreEqual(4, v.Gimmicks.Count);
+            Assert.AreEqual(CareerKit.GimmickCount, v.Gimmicks.Count);
             Assert.AreEqual(1, v.FreePoints);
-            foreach (var g in v.Gimmicks) Assert.AreEqual(10, g.StartMoves.Count);
+            // 6 базових + 2 ґімік-прийоми + коронний + фінішер; Самородок ґімік-прийоми вчить з нуля — 8
+            foreach (var g in v.Gimmicks) Assert.AreEqual(g.Def.Id == Gimmick.Rookie ? 8 : 10, g.StartMoves.Count, g.Def.Key);
         }
 
         [Test]

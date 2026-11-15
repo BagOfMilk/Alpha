@@ -95,27 +95,47 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Клин тла титулу: на 16:9 — без змін (0,46), на 4:3 підпис «МІСЦЕВА ФЕДЕРАЦІЯ · …» лежить на клині з запасом
-        /// (кадр m4x3\053 слоту 30: виходив за край). Підпис — Display700 18 з розрядкою 0,14, великими; лівий край 95, верх 240.
+        /// Клин тла титулу: на 16:9 — без змін (0,46); підпис «МІСЦЕВА ФЕДЕРАЦІЯ · …» на кожній панелі кінчається на ТЕМНІЙ СМУЗІ
+        /// клина з запасом, а не на напівтоні й світлому карміні, крізь який видно ринг (огляд слоту 33, ПМ 13.11.2026, кадри m4x3
+        /// 004–010; раніше — m4x3\053 слоту 30, коли підпис виходив за клин). На вузькій панелі підпис — двома рядками
+        /// (CareerTileLayout.TitleTagLines), і клин не тягнеться на пів екрана. Підпис — Display700 18 з розрядкою 0,14, великими;
+        /// лівий край 95, верх 240.
         /// </summary>
         [Test]
-        public void TitleWedge_CoversTheTagline_OnEveryPanel()
+        public void TitleWedge_TaglineEndsOnTheDarkBand_OnEveryPanel()
         {
             string sub = Caps(Ui("m.title.sub"));
             // Ширина підпису між двома межами моделі: без розрядки (401) і з повною розрядкою 0,14 × кегль (525); у кадрі 16:9 слоту 30 —
             // 427 (рушій ставить розрядку вужчою). Гра міряє сам підпис (layout.xMax), тож тут — обидві межі.
-            float bottom = 240f + LegendFont.LineHeight(18f);
-            float low = 95f + LegendFont.Width(sub, 18f, 0f), right = 95f + LegendFont.Width(sub, 18f, 0.14f) + RenderSlack;
+            float line = LegendFont.LineHeight(18f);
+            float bottom = 240f + line;
+            float low = 95f + LegendFont.Width(sub, 18f, 0f);
             Assert.AreEqual(CareerTileLayout.TitleWedge, CareerTileLayout.FitTitleWedge(1600f, 900f, low, bottom), 1e-4f, "16:9 — без змін");
             Assert.AreEqual(CareerTileLayout.TitleWedge, CareerTileLayout.FitTitleWedge(1600f, 900f, 95f + 427f, bottom), 1e-4f, "16:9, ширина з кадру — без змін");
             foreach (var p in Panels)
             {
-                float w = CareerTileLayout.FitTitleWedge(p.Value, 900f, right, bottom);
+                string[] lines = CareerTileLayout.TitleTagLines(sub, p.Value).Split('\n');
+                Assert.AreEqual(CareerTileLayout.Narrow(p.Value) ? 2 : 1, lines.Length, p.Key + ": рядків підпису");
+                float right = 0f;
+                foreach (var l in lines) right = Math.Max(right, 95f + LegendFont.Width(l, 18f, 0.14f) + RenderSlack);
+                float b = 240f + line * lines.Length;
+                float w = CareerTileLayout.FitTitleWedge(p.Value, 900f, right, b);
                 Assert.That(w, Is.InRange(CareerTileLayout.TitleWedge, CareerTileLayout.TitleWedgeMax), p.Key);
-                Assert.GreaterOrEqual(CareerTileLayout.WedgeEdge(p.Value, 900f, w, bottom) + 0.01f, right + CareerTileLayout.TitleTagClear,
-                    p.Key + ": кінець підпису з запасом на клині (" + right.ToString("0", CultureInfo.InvariantCulture) + ")");
+                Assert.GreaterOrEqual(CareerTileLayout.WedgeInnerEdge(p.Value, 900f, w, b) + 0.01f, right + CareerTileLayout.TitleTagClear,
+                    p.Key + ": кінець підпису з запасом на темній смузі (" + right.ToString("0", CultureInfo.InvariantCulture) + ")");
+                Assert.Less(CareerTileLayout.WedgeInnerEdge(p.Value, 900f, w, b), CareerTileLayout.WedgeEdge(p.Value, 900f, w, b) - 4f * Math.Max(10f, 900f / 64f) + 0.01f,
+                    p.Key + ": темна смуга кінчається до напівтону (MenuBackdrop: крапки від краю клина − 4 кроки)");
             }
-            Assert.Greater(CareerTileLayout.FitTitleWedge(1200f, 900f, 95f + 427f, bottom), CareerTileLayout.TitleWedge, "4:3, ширина з кадру — клин ширший (вада кадру m4x3\\053)");
+            // кадр s33_m4x3 005 (1024×768, ×1,172): підпис одним рядком 94–508 од., низ ~260 — клин 0,51 клав кінець на напівтон
+            float wOld = 0.513f;
+            Assert.Less(CareerTileLayout.WedgeInnerEdge(1200f, 900f, wOld, 260f), 508f, "вада кадру: кінець підпису за темною смугою");
+            float wFit = CareerTileLayout.FitTitleWedge(1200f, 900f, 508f, 260f);   // той самий підпис одним рядком — клин розширюється до смуги
+            Assert.Greater(wFit, wOld, "4:3 одним рядком: клин ширший, ніж був");
+            Assert.GreaterOrEqual(CareerTileLayout.WedgeInnerEdge(1200f, 900f, wFit, 260f) + 0.01f, 508f + CareerTileLayout.TitleTagClear, "4:3 одним рядком: кінець на смузі");
+            Assert.AreEqual("МІСЦЕВА ФЕДЕРАЦІЯ\nОДИН БОРЕЦЬ · СЕЗОН ЗА СЕЗОНОМ", CareerTileLayout.TitleTagLines(sub, 1200f), "розрив — де довший рядок найкоротший");
+            Assert.AreEqual(sub, CareerTileLayout.TitleTagLines(sub, 1600f), "широка панель — одним рядком");
+            Assert.AreEqual("БЕЗ РОЗДІЛЬНИКА", CareerTileLayout.TitleTagLines("БЕЗ РОЗДІЛЬНИКА", 1200f));
+            Assert.AreEqual("А\nБ · В", CareerTileLayout.TitleTagLines("А · Б · В", 1200f), "порівну — перший роздільник");
         }
 
         /// <summary>
@@ -159,7 +179,12 @@ namespace Game.Tests.EditMode
             all.Add(new TileText(Ui("c.week.train_coach"),
                 new[] { Ui("c.week.pay.coach", CareerRules.TrainingPoints + CareerRules.TrainerExtraPoints, CareerRules.TrainerCost) }, train));
             var injuries = new List<string>(spent);
-            for (int z = 0; z < 3; z++) injuries.Add(Ui("c.injury.tile", Ui("bodyzone." + z), 9, 99));
+            for (int z = 0; z < 3; z++)
+            {
+                injuries.Add(Ui("c.injury.tile", Ui("bodyzone." + z), 9, 99));
+                // Б5: з сезону 4 — слід травми (WeekScreenView.InjuryWarn, CareerScreenLines.ScarTail)
+                injuries.Add(Ui("c.injury.tile", Ui("bodyzone." + z), 9, 99) + " " + Ui("c.injury.scar", Ageing.ScarExtraWeeks));
+            }
             all.Add(new TileText(Ui("week.action.1"), new[] { Ui("c.week.pay.recover", CareerRules.RecoverZoneHeal), Ui("c.week.pay.healthy") }, injuries.ToArray()));
             all.Add(new TileText(Ui("week.action.2"), new[] { Ui("c.week.pay.promo") }, spent) { Chances = true });
             all.Add(new TileText(Ui("week.action.3"), new[] { Ui("c.week.pay.backstage") }, spent) { Chances = true });
@@ -282,18 +307,21 @@ namespace Game.Tests.EditMode
         public void Create_NarrowRow_FourTilesFit_AfterPixelRounding()
         {
             var bad = new List<string>();
+            // Б4-1 (вісім ґіміків) — по чотири в ряд і на широких панелях: 16:9, 21:9
             var screens = new[] { new[] { 800, 600 }, new[] { 1024, 768 }, new[] { 1280, 960 }, new[] { 1600, 1200 },
-                new[] { 1280, 800 }, new[] { 1440, 900 }, new[] { 1680, 1050 }, new[] { 1920, 1200 } };
-            int tiles = CreateTiles().Count;
+                new[] { 1280, 800 }, new[] { 1440, 900 }, new[] { 1680, 1050 }, new[] { 1920, 1200 },
+                new[] { 1280, 720 }, new[] { 1366, 768 }, new[] { 1920, 1080 }, new[] { 2560, 1440 }, new[] { 2560, 1080 }, new[] { 3440, 1440 } };
+            int onScreen = CreateGimmicks(false).Count, eight = CreateGimmicks(true).Count;
             foreach (var s in screens)
+            foreach (int gimmicks in new[] { onScreen, eight })
             {
                 float scale = s[1] / 900f, panel = s[0] / scale;
-                if (!CareerTileLayout.Narrow(panel)) continue;
-                float row = CareerTileLayout.CreateRowWidth(panel), tileW = CareerTileLayout.CreateTileWidth(panel, tiles);
+                if (!CareerTileLayout.Narrow(panel) && !CareerTileLayout.CreateEight(gimmicks)) continue;
+                float row = CareerTileLayout.CreateRowWidth(panel), tileW = CareerTileLayout.CreateTileWidth(panel, gimmicks);
                 int rowPx = (int)Math.Floor(row * scale);
                 int stepPx = (int)Math.Ceiling(tileW * scale - 0.001f) + (int)Math.Ceiling(CareerTileLayout.TileGap * scale - 0.001f);
                 if (stepPx * CareerTileLayout.CreatePerRowNarrow > rowPx)
-                    bad.Add(string.Format("{0}×{1}: {2} плитки по {3} px > ряд {4} px", s[0], s[1], CareerTileLayout.CreatePerRowNarrow, stepPx, rowPx));
+                    bad.Add(string.Format("{0}×{1}, ґіміків {5}: {2} плитки по {3} px > ряд {4} px", s[0], s[1], CareerTileLayout.CreatePerRowNarrow, stepPx, rowPx, gimmicks));
             }
             Assert.IsEmpty(bad, string.Join("\n", bad));
         }
@@ -322,7 +350,9 @@ namespace Game.Tests.EditMode
         /// ТИЖНЯ», крапки дій, «лишилось», дві вкладки); беремо з запасом. Підказка створення — 665,6 на 16:9 (ряд ґіміків мінус
         /// «ҐІМІК»), теж із запасом. Обидва числа — не з моделі (шапку збирає екран), тож це оцінка, а не точна межа.
         /// </summary>
-        private const float WeekHintNarrowest = 340f, CreateHintNarrowest = 650f;
+        private const float WeekHintNarrowest = CareerTileLayout.WeekHintNarrowest, CreateHintNarrowest = 650f;
+        /// <summary>Найвужча підказка шапки тижня, виміряна аудитом 11.11.2026 (4:3, очки розвитку двоцифрові).</summary>
+        private const float WeekHintMeasured = 355.7f;
         /// <summary>
         /// Шапка тижня, коли треба обрати нагороду за промо: крапок дій і «лишилось» немає — аудит виміряв 515,9 на 4:3; саме тоді
         /// підказка може бути двома текстами разом («промо наполовину» + «грошей на життя не було»), як у WeekScreenView.
@@ -333,6 +363,9 @@ namespace Game.Tests.EditMode
         public void Hints_TwoFullLinesAtMost_OnTheNarrowestHeader()
         {
             var bad = new List<string>();
+            // межа міри — не ширша за виміряну шапку: інакше всі охоронці підказки (і підказка стрічки дії в рушії) міряють вільніше,
+            // ніж гравець бачить на 4:3 (мутація 340 → 400 проходила, 15.11.2026)
+            Assert.LessOrEqual(CareerTileLayout.WeekHintNarrowest, WeekHintMeasured, "найвужча підказка шапки тижня — не ширша за виміряну аудитом");
             float box = CareerTileLayout.HintMaxLines * TextFont.LineHeight(Body) + CareerTileLayout.HintPadV;
             if (box > CareerTileLayout.HintMaxHeight + 0.5f)
                 bad.Add(string.Format("підказка: {0} рядки = {1:0.0} > HintMaxHeight {2:0}", CareerTileLayout.HintMaxLines, box, CareerTileLayout.HintMaxHeight));
@@ -342,6 +375,12 @@ namespace Game.Tests.EditMode
                 Ui("week.action.3.desc"), Ui("week.action.4.desc"), Ui("week.promo.reward.0"), Ui("week.promo.reward.1"),
                 Ui("c.week.promo_choice"), Ui("week.strained"),
             };
+            // чутка з міткою стоїть тут до наступної дії (АД 15.11.2026: найдовша — не більше двох рядків на 340)
+            if (_ui == null) Ui("c.week.rumor");
+            int rumors = 0;
+            foreach (var kv in _ui)
+                if (kv.Key.StartsWith("rumor.", StringComparison.Ordinal) && kv.Value is string) { week.Add(Ui("c.week.rumor", (string)kv.Value)); rumors++; }
+            Assert.GreaterOrEqual(rumors, 6, "чутки ядра — rumor.* у ui_uk.json");
             foreach (var h in week) CheckLines(bad, "тиждень, підказка", h, WeekHintNarrowest, CareerTileLayout.HintMaxLines);
             CheckLines(bad, "тиждень, вибір нагороди й перевтома разом", Ui("c.week.promo_choice") + " " + Ui("week.strained"),
                 WeekHintPromoNarrowest, CareerTileLayout.HintMaxLines);
@@ -349,6 +388,172 @@ namespace Game.Tests.EditMode
             foreach (var g in CareerKit.Content().Gimmicks) create.Add(Ui(g.NameKey + ".desc"));
             foreach (var h in create) CheckLines(bad, "створення, підказка", h, CreateHintNarrowest, CareerTileLayout.HintMaxLines);
             Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        // ---------------- стрічка дії тижня (АД 15.11.2026, варіант (А)) ----------------
+
+        /// <summary>Тексти гри разом зі сценами закулісся (причина «спершу закінчіть сцену» — у backstage_uk.json).</summary>
+        private static RingText TAll { get { return _tAll ?? (_tAll = RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json"), CareerKit.Read("backstage_uk.json"))); } }
+        private static RingText _tAll;
+
+        /// <summary>
+        /// Рядок стрічки влазить у <see cref="CareerTileLayout.WeekStripTextW"/> (один рядок; поля 24 і 26 — поза ним). Міряється рядок без
+        /// тегів <c>&lt;nobr&gt;</c>: в одному рядку переносу немає, а теги ширини не мають.
+        /// </summary>
+        private static bool StripFits(string s)
+        {
+            return TextFont.Width(s, Body) + RenderSlack <= CareerTileLayout.WeekStripTextW;
+        }
+
+        /// <summary>Підказка влазить у два рядки найвужчої шапки тижня.</summary>
+        private static bool HoverFits(string s)
+        {
+            float widest;
+            return TextFont.Lines(TextBreak.GlueDashes(s), Body, WeekHintNarrowest, 0f, out widest) <= CareerTileLayout.HintMaxLines && widest <= WeekHintNarrowest;
+        }
+
+        /// <summary>
+        /// Стрічка дії — рівно два рядки в колонці грошей (АД 15.11.2026): рядок 1 «Дія · Результат» — один рядок для кожної дії й кожного
+        /// рівня кидка, і «Зроблено» без кидка; причина відмови (рядок 2 відмови) — теж один рядок; стрічка разом із полями — не ширша за
+        /// колонку грошей.
+        /// </summary>
+        [Test]
+        public void WeekStrip_Head_AndEveryRefusal_OneLineInTheMoneyColumn()
+        {
+            var bad = new List<string>();
+            Assert.AreEqual(CareerTileLayout.StripW, CareerTileLayout.WeekStripPadL + CareerTileLayout.WeekStripTextW + CareerTileLayout.WeekStripPadR, 0.01f,
+                "стрічка з полями — ширина колонки грошей");
+            Assert.AreEqual(24f, CareerTileLayout.WeekStripPadL, "поле зліва — 24, як у панелі грошей (АД 15.11.2026)");
+            Assert.AreEqual(26f, CareerTileLayout.WeekStripPadR, "поле справа — 26 (АД 15.11.2026)");
+            foreach (WeekActionKind kind in Enum.GetValues(typeof(WeekActionKind)))
+            {
+                var heads = new List<string>();
+                foreach (RollTier tier in Enum.GetValues(typeof(RollTier)))
+                    heads.Add(CareerScreenLines.WeekResultHead(TAll, new WeekActionResult { Kind = kind, Ok = true, HasRoll = true, Tier = tier }));
+                heads.Add(CareerScreenLines.WeekResultHead(TAll, new WeekActionResult { Kind = kind, Ok = true }));
+                heads.Add(CareerScreenLines.WeekResultHead(TAll, new WeekActionResult { Kind = kind, Ok = true, HasRoll = true, Tier = RollTier.Miss, InjuredZone = 1 }));
+                heads.Add(CareerScreenLines.WeekResultHead(TAll, new WeekActionResult { Kind = kind, Ok = false, Reason = "money" }));
+                foreach (var h in heads)
+                {
+                    if (h.IndexOf('⟦') >= 0) bad.Add(kind + ": немає ключа в «" + h + "»");
+                    if (!StripFits(h)) bad.Add(string.Format(CultureInfo.InvariantCulture, "{0}: «{1}» — {2:0.0} > {3:0}", kind, h,
+                        TextFont.Width(h, Body) + RenderSlack, CareerTileLayout.WeekStripTextW));
+                }
+            }
+            int reasons = 0;
+            foreach (var file in new[] { "ui_uk.json", "backstage_uk.json" })
+                foreach (var kv in MiniJson.ParseObject(CareerKit.Read(file)))
+                {
+                    if (!kv.Key.StartsWith("week.reason.", StringComparison.Ordinal) || !(kv.Value is string)) continue;
+                    reasons++;
+                    var r = new WeekActionResult { Kind = WeekActionKind.SideJob, Ok = false, Reason = kv.Key.Substring("week.reason.".Length) };
+                    var line2 = CareerScreenLines.WeekResultDeltas(TAll, r, null, false);
+                    string shown;
+                    int k = CareerScreenLines.FitParts(TAll, line2, StripFits, out shown);
+                    if (k != 1) bad.Add(string.Format(CultureInfo.InvariantCulture, "причина «{0}» — {1:0.0} > {2:0}", line2[0],
+                        TextFont.Width(line2[0], Body) + RenderSlack, CareerTileLayout.WeekStripTextW));
+                }
+            Assert.GreaterOrEqual(reasons, 9, "причини ядра — week.reason.* в ui_uk.json і backstage_uk.json");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Рядок 2 — дельти за важливістю з «· ще N» (АД 15.11.2026): на синтетичному найгіршому результаті (усі дельти разом, найширші
+        /// числа, найдовше ім'я ростера, героїня й герой) кожна дельта, що стоїть першою (важливіших у результаті немає), влазить у рядок
+        /// разом із хвостом «ще N» за всі менш важливі — найважливіша видна завжди; урізаний рядок — не ширший за колонку. Підказка (кидок і
+        /// сховане) — не більше двох рядків на 340, і кидок у ній видно завжди.
+        /// </summary>
+        [Test]
+        public void WeekStrip_Deltas_AndTheHover_FitOnTheSyntheticWorst()
+        {
+            var bad = new List<string>();
+            var heroine = RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json"), CareerKit.Read("backstage_uk.json"));
+            HeroForms.Apply(heroine, true);
+            string longName = "";
+            foreach (var npc in CareerKit.Content().Roster)
+            {
+                string n = TAll.Get(npc.NameKey);
+                if (TextFont.Width(n, Body) > TextFont.Width(longName, Body)) longName = n;
+            }
+            Assert.IsNotEmpty(longName, "ростер з іменами");
+            foreach (var t in new[] { TAll, heroine })
+                foreach (bool female in new[] { false, true })
+                {
+                    var r = CareerScreenLinesTests.WeekStripWorst();
+                    var deltas = CareerScreenLines.WeekResultDeltas(t, r, longName, female);
+                    Assert.AreEqual(CareerScreenLines.WeekDeltaOrder.Length, deltas.Count, "синтетичний результат — з усіма дельтами");
+                    int opponentAt = Array.IndexOf(CareerScreenLines.WeekDeltaOrder, CareerScreenLines.WeekDelta.Opponent);
+                    for (int i = 0; i < deltas.Count; i++)
+                    {
+                        if (i == opponentAt) continue;   // ім'я — дані ростера: міряється нижче, кожним іменем
+                        var first = deltas.GetRange(i, deltas.Count - i);   // важливіших за i-ту в результаті немає
+                        string one = CareerScreenLines.JoinParts(t, first, 1);
+                        if (!StripFits(one)) bad.Add(string.Format(CultureInfo.InvariantCulture, "«{0}» — {1:0.0} > {2:0}", one,
+                            TextFont.Width(one, Body) + RenderSlack, CareerTileLayout.WeekStripTextW));
+                        if (deltas[i].IndexOf('⟦') >= 0) bad.Add("немає ключа в «" + deltas[i] + "»");
+                    }
+                    string line;
+                    bool clipped;
+                    int k = CareerScreenLines.StripParts(t, deltas, StripFits, out line, out clipped);
+                    if (k < 1 || clipped || !StripFits(line)) bad.Add("урізаний рядок 2: «" + line + "»");
+                    var hidden = deltas.GetRange(k, deltas.Count - k);
+                    string roll = CareerScreenLines.WeekResultRoll(t, r);
+                    string hover = CareerScreenLines.WeekResultHover(t, roll, hidden, HoverFits);
+                    if (!HoverFits(hover)) bad.Add("підказка: «" + hover + "» — більше двох рядків на " + WeekHintNarrowest);
+                    if (!hover.StartsWith(roll, StringComparison.Ordinal)) bad.Add("підказка без кидка першим: «" + hover + "»");
+                    // найгірше для підказки: сховано все, крім першої дельти
+                    string worst = CareerScreenLines.WeekResultHover(t, roll, deltas.GetRange(1, deltas.Count - 1), HoverFits);
+                    if (!HoverFits(worst) || !worst.StartsWith(roll, StringComparison.Ordinal)) bad.Add("підказка, сховано 14: «" + worst + "»");
+                }
+            // рядок суперника Б6 першим, кожним іменем ростера: влазить з хвостом — добре; ні — стоїть сам з «…», а в підказці (кидок і все
+            // сховане) він цілий і підказка — не більше двох рядків
+            int clippedNames = 0, names = 0;
+            foreach (var npc in CareerKit.Content().Roster)
+                foreach (bool female in new[] { false, true })
+                {
+                    names++;
+                    var r = new WeekActionResult { Kind = WeekActionKind.Backstage, Ok = true, HasRoll = true, Roll = 12, Modifier = -9, Total = 3, Tier = RollTier.Miss,
+                        OpponentChanged = true, PlanChanged = true, LockerDelta = -99, ActionsDelta = -9, CoachRaised = true, NeedsChoice = true };
+                    var t = female ? heroine : TAll;
+                    var deltas = CareerScreenLines.WeekResultDeltas(t, r, t.Get(npc.NameKey), female);
+                    string line;
+                    bool clipped;
+                    int k = CareerScreenLines.StripParts(t, deltas, StripFits, out line, out clipped);
+                    if (!clipped) { if (k < 1 || !StripFits(line)) bad.Add("суперник: «" + line + "»"); continue; }
+                    clippedNames++;
+                    string tail = " · " + string.Format(CultureInfo.InvariantCulture, Ui("c.week.more"), deltas.Count - 1);
+                    if (!StripFits(line) || !line.EndsWith("…" + tail, StringComparison.Ordinal) || TextFont.Missing(line).Count > 0)
+                        bad.Add("суперник обрізаний не так: «" + line + "»");
+                    else if (!deltas[0].StartsWith(line.Substring(0, line.Length - tail.Length - 1), StringComparison.Ordinal))
+                        bad.Add("обрізано не кінець: «" + line + "»");
+                    string hover = CareerScreenLines.WeekResultHover(t, CareerScreenLines.WeekResultRoll(t, r), deltas.GetRange(k, deltas.Count - k), HoverFits);
+                    if (!HoverFits(hover) || hover.IndexOf(deltas[0], StringComparison.Ordinal) < 0) bad.Add("суперник обрізаний, а в підказці не цілий: «" + hover + "»");
+                }
+            TestContext.WriteLine("рядок суперника Б6 першим, за ним ще 5: кінець «…» для " + clippedNames + " з " + names + " (ім'я × рід)");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Шухляда тижня на 4:3 (АД 15.11.2026): 472 — та сама межа, що скрізь (<see cref="CareerTileLayout.CreateSingleColumn"/>), разом із
+        /// краєм не ширше за 46 % кадру; ширша панель — 560 (16:9 — 40 %). Сама шухляда відкривається лише над одним рядом плиток (АД
+        /// 15.11.2026: межа — «два ряди плиток»): на 4:3 сцена й букерка першими, число очок — на вкладці.
+        /// </summary>
+        [Test]
+        public void WeekDrawer_FourThree_IsTheSeasonColumnWidth_AndDoesNotOpenItself()
+        {
+            Assert.AreEqual(CareerTileLayout.SeasonColumnW, CareerTileLayout.WeekDrawerWidth(1200f, 900f), 0.01f);
+            Assert.LessOrEqual((CareerTileLayout.Edge + CareerTileLayout.WeekDrawerWidth(1200f, 900f)) / 1200f, CareerTileLayout.ColumnMaxFrac + 0.0001f, "4:3 — не ширше 46 %");
+            Assert.AreEqual(CareerTileLayout.WeekDrawerW, CareerTileLayout.WeekDrawerWidth(1600f, 900f), 0.01f);
+            Assert.AreEqual(0.4f, (CareerTileLayout.Edge + CareerTileLayout.WeekDrawerW) / 1600f, 0.0001f, "16:9 — як було, 40 %");
+            foreach (var wh in new[] { new[] { 1200f, 900f }, new[] { 1125f, 900f }, new[] { 1350f, 900f }, new[] { 1440f, 900f }, new[] { 1600f, 900f }, new[] { 2100f, 900f } })
+            {
+                bool single = CareerTileLayout.CreateSingleColumn(wh[0], wh[1]);
+                Assert.AreEqual(single ? CareerTileLayout.SeasonColumnW : CareerTileLayout.WeekDrawerW, CareerTileLayout.WeekDrawerWidth(wh[0], wh[1]), 0.01f, wh[0] + "×" + wh[1]);
+                Assert.AreEqual(!CareerTileLayout.WeekTwoRows(wh[0], CareerTileLayout.WeekActionTiles), CareerTileLayout.WeekDrawerAutoOpen(wh[0], 3),
+                    wh[0] + "×" + wh[1] + ": сама відкривається лише над одним рядом");
+                if (single) Assert.IsFalse(CareerTileLayout.WeekDrawerAutoOpen(wh[0], 3), wh[0] + "×" + wh[1] + ": 4:3 і 5:4 — ніколи сама");
+                Assert.IsFalse(CareerTileLayout.WeekDrawerAutoOpen(wh[0], 0), "очок немає — не відкривається");
+            }
         }
 
         private static void CheckLines(List<string> bad, string where, string s, float width, int maxLines)
@@ -365,42 +570,64 @@ namespace Game.Tests.EditMode
         /// <summary>
         /// Плитки створення (як у CreateScreenView): ґіміки екрана створення — той самий вид, що бере екран (<c>GetCreationView</c>: ґіміки
         /// 5–8 з <c>onCreationScreen = false</c> до У0 власника не показуються, злиття «Кар'єри» a3fd3fd5), з бонусами характеристик тією
-        /// самою функцією, що й гра, і дві ролі. Розкладка восьми — окремий пункт (Б4) після У0.
+        /// самою функцією, що й гра (CareerScreenLines.CreateTileParts: Ш-1, «+2 вільні бали»), і дві ролі. <paramref name="eight"/> —
+        /// усі вісім ґіміків (Б4-1, після вмикання «Кар'єрою»): ролі тоді — низькі плити в колонці золотої плити, їх міряє
+        /// <see cref="Create_Eight_RoleChips_TitleClearsTheCheck_AndTheZoneHoldsTheReason"/>.
         /// </summary>
-        private static List<TileText> CreateTiles(bool female = false)
+        private static List<TileText> CreateTiles(bool female = false, bool eight = false)
         {
             var all = new List<TileText>();
-            foreach (var gv in CareerKit.NewAtCreate(1).GetCreationView().Gimmicks)
+            foreach (var g in CreateGimmicks(eight))
             {
-                var g = gv.Def;
                 // назва — за тілом на екрані (ПМ 13.11.2026, RingLabels.GimmickName): «ТЕХНІКИНЯ», «ШОУВУМЕН» довші за чоловічі
-                all.Add(new TileText(RingLabels.GimmickName(T, g.Key, female), new[] { "" }, new string[0]) { Parts = RingLabels.AttrBonusParts(T, g.Attr) });
+                all.Add(new TileText(RingLabels.GimmickName(T, g.Key, female), new[] { "" }, new string[0])
+                    { Parts = CareerScreenLines.CreateTileParts(T, g.Attr, g.FreePoints).ToArray() });
             }
+            if (eight) return all;
             // ролі героїні — «.f» (HeroForms підставляє їх на екрані створення за тілом)
             all.Add(new TileText(Ui(female ? "role.hero.f" : "role.hero"), new[] { "" }, new string[0]));
             all.Add(new TileText(Ui(female ? "role.villain.f" : "role.villain"), new[] { "" }, new string[0]));
             return all;
         }
 
+        /// <summary>Ґіміки екрана створення: ті, що на екрані зараз (GetCreationView), або всі вісім (Б4-1).</summary>
+        private static List<GimmickDef> CreateGimmicks(bool eight)
+        {
+            var s = CareerKit.NewAtCreate(1);
+            var list = new List<GimmickDef>();
+            if (eight) list.AddRange(s.Content.Gimmicks);
+            else foreach (var gv in s.GetCreationView().Gimmicks) list.Add(gv.Def);
+            return list;
+        }
+
         /// <summary>Плитки створення обох родів (герой і героїня): кількість та сама, назви — свого роду.</summary>
-        private static IEnumerable<List<TileText>> CreateTilesBothSexes() { yield return CreateTiles(false); yield return CreateTiles(true); }
+        private static IEnumerable<List<TileText>> CreateTilesBothSexes(bool eight = false) { yield return CreateTiles(false, eight); yield return CreateTiles(true, eight); }
 
         [Test]
         public void Create_Tiles_TitleOneLine_BodyTwoLines_FitFixedHeight_OnEveryPanel()
         {
             var bad = new List<string>();
-            foreach (var tiles in CreateTilesBothSexes())
-            foreach (var p in Panels)
+            Assert.AreEqual(CareerKit.GimmickCount, CreateGimmicks(true).Count, "Б4-1: міряються всі вісім ґіміків");
+            foreach (bool eight in new[] { false, true })
             {
-                float tileW = CareerTileLayout.CreateTileWidth(p.Value, tiles.Count);
-                foreach (var t in tiles)
+                int gimmicks = CreateGimmicks(eight).Count;
+                foreach (var tiles in CreateTilesBothSexes(eight))
+                foreach (var p in Panels)
                 {
-                    CheckTitle(bad, "створення " + p.Key, t.Title, tileW, true);
-                    CheckBody(bad, "створення " + p.Key, t, tileW);
-                    float h = NeededHeight(t, tileW);   // ряд створення не росте: плитка — рівно TileH
-                    if (h > CareerTileLayout.TileH)
-                        bad.Add(string.Format("створення {0}: «{1}» потребує {2:0} > {3:0}", p.Key, t.Title, h, CareerTileLayout.TileH));
+                    string where = (eight ? "створення Б4-1 " : "створення ") + p.Key;
+                    float tileW = CareerTileLayout.CreateTileWidth(p.Value, gimmicks);
+                    foreach (var t in tiles)
+                    {
+                        CheckTitle(bad, where, t.Title, tileW, true);
+                        CheckBody(bad, where, t, tileW);
+                        float h = NeededHeight(t, tileW);   // ряд створення не росте: плитка — рівно TileH
+                        if (h > CareerTileLayout.TileH)
+                            bad.Add(string.Format("{0}: «{1}» потребує {2:0} > {3:0}", where, t.Title, h, CareerTileLayout.TileH));
+                    }
                 }
+            }
+            foreach (var tiles in CreateTilesBothSexes(true))
+            {
                 foreach (var t in tiles)
                     if (t.Parts != null)
                         foreach (var e in t.Parts)
@@ -420,9 +647,15 @@ namespace Game.Tests.EditMode
             var bad = new List<string>();
             var tiles = CreateTiles();
             tiles.AddRange(CreateTiles(true));   // назви героїні — та сама ширина плитки (кількість плиток рахує екран, не цей список)
-            int onScreen = CreateTiles().Count;
+            tiles.AddRange(CreateTiles(false, true));   // Б4-1: усі вісім ґіміків обох родів
+            tiles.AddRange(CreateTiles(true, true));
+            int onScreen = CreateGimmicks(false).Count, eight = CreateGimmicks(true).Count;
             var widths = new List<KeyValuePair<string, float>>();
-            foreach (var p in Panels) widths.Add(new KeyValuePair<string, float>(p.Key, CareerTileLayout.CreateTileWidth(p.Value, onScreen)));
+            foreach (var p in Panels)
+            {
+                widths.Add(new KeyValuePair<string, float>(p.Key, CareerTileLayout.CreateTileWidth(p.Value, onScreen)));
+                widths.Add(new KeyValuePair<string, float>(p.Key + " Б4-1", CareerTileLayout.CreateTileWidth(p.Value, eight)));
+            }
             // обидва стани розкладки, навіть якщо жодна панель зі списку не дає компактної плитки
             widths.Add(new KeyValuePair<string, float>("компактна", CareerTileLayout.CompactTileW - 1f));
             widths.Add(new KeyValuePair<string, float>("некомпактна", CareerTileLayout.CompactTileW));
@@ -449,7 +682,9 @@ namespace Game.Tests.EditMode
                     bad.Add(string.Format("{0} (плитка {1:0}): галочка {2:0}–{3:0} × {4:0}–{5:0} ближче {6:0} до ключа {7:0}–{8:0} × {9:0}–{10:0}",
                         p.Key, w, checkL, checkR, checkT, checkB, CheckClear, keyL, keyR, keyT, keyB));
                 float left = compact ? CareerTileLayout.CompactBodyLeft : CareerTileLayout.BodyLeft;
-                float baseSize = CareerTileLayout.TitleBaseSize(w), avail = CareerTileLayout.TitleWidth(w, true);
+                // назва плитки створення — до галочки (ActionTile.ReserveCheck), а не до ключа
+                float baseSize = CareerTileLayout.TitleBaseSize(w);
+                float avail = Math.Min(CareerTileLayout.TitleWidth(w, true), CareerTileLayout.TitleWidthBeforeCheck(w, left, CareerTileLayout.CheckRight(compact)));
                 foreach (var t in tiles)
                 {
                     string title = Caps(t.Title);
@@ -466,18 +701,18 @@ namespace Game.Tests.EditMode
         /// Назва ґіміка обох родів (ПМ 13.11.2026, RingLabels.GimmickName) на афіші створення: велика назва (display Black 52, розрядка
         /// 0,01) і плашка ролі (display Black 26, розрядка 0,04, поля 24 і 22) в одному рядку колонки афіші (стрічка 410 без полів 26
         /// і 22), з проміжком 8. Жіночі назви на 52 не влазили (ТЕХНІКИНЯ + ЛИХОДІЙКА) — кегль назви меншає тією самою функцією, що й
-        /// на екрані (CareerTileLayout.FitPosterName, не нижче токена TypeTitle 28): на ньому назва мусить влізти. Усі вісім ґіміків —
-        /// і ті, що з'являться на екрані після Б4. Чоловічі назви ґіміків, що вже на екрані, лишаються на 52 (вигляд не змінився).
+        /// на екрані (CareerTileLayout.FitPosterName, не нижче токена TypeTitle 28): на ньому назва мусить влізти. Усі вісім ґіміків.
+        /// Правило одне для всіх ґіміків і обох родів (ПМ 14.11.2026, варіант «а», Б4: на екрані всі вісім; назви — таблиця §5.2):
+        /// назва, що влазить, — повним кеглем 52; що не влазить — стискається рівно до вміщення, не більше, і не нижче токена display
+        /// 28. Так ХАРДКОРНИК + ГЕРОЙ — 42, + ЛИХОДІЙ — 37; САМОРОДОК — 45 і 40; ХАРДКОРНИЦЯ + ЛИХОДІЙКА — 29. Вигляд стиснутих назв
+        /// — на У2 арт-директора; якщо на кадрах афіша стиснута — варіант (роль під назвою) власнику.
         /// </summary>
         [Test]
         public void Create_PosterHead_GimmickNameAndRolePlate_FitOneLine_BothSexes()
         {
             var bad = new List<string>();
             float row = CareerTileLayout.StripW - CareerTileLayout.CreatePosterPadLeft - CareerTileLayout.CreatePosterPadRight;
-            var onScreen = new HashSet<string>();
-            foreach (var g in CareerKit.NewAtCreate(1).GetCreationView().Gimmicks) onScreen.Add(g.Def.Key);
-            Assert.That(onScreen.Count, Is.GreaterThanOrEqualTo(4), "екран створення без ґіміків — охоронець нічого не міряє");
-            int shrunk = 0;
+            int shrunk = 0, full = 0;
             foreach (var g in CareerKit.Content().Gimmicks)
                 foreach (bool female in new[] { false, true })
                     foreach (var path in new[] { RingPath.Face, RingPath.Heel })
@@ -492,13 +727,22 @@ namespace Game.Tests.EditMode
                         float fitted = natural * size / CareerTileLayout.PosterNameSize;
                         if (fitted > avail)
                             bad.Add(string.Format("афіша: «{0}» + «{1}» — {2:0} > {3:0} навіть на {4:0}", name, role, fitted, avail, size));
-                        if (size < CareerTileLayout.PosterNameSize) shrunk++;
-                        // чоловічі назви ґіміків, що вже є на екрані, — тим самим кеглем 52, що й до родових назв (вигляд не змінився)
-                        if (!female && onScreen.Contains(g.Key) && size < CareerTileLayout.PosterNameSize)
-                            bad.Add(string.Format("афіша: «{0}» + «{1}» стиснуто до {2:0} — чоловіча назва мала влазити на 52", name, role, size));
+                        if (size < CareerTileLayout.PosterNameSize) shrunk++; else full++;
+                        if (size < CareerTileLayout.PosterNameMinSize)
+                            bad.Add(string.Format("афіша: «{0}» + «{1}» — кегль {2:0} нижче токена display {3:0}", name, role, size, CareerTileLayout.PosterNameMinSize));
+                        // що влазить — повним кеглем (і назви М1 лишаються на 52: вигляд не змінився)
+                        if (natural <= avail && size != CareerTileLayout.PosterNameSize)
+                            bad.Add(string.Format("афіша: «{0}» + «{1}» влазить на 52, а стиснуто до {2:0}", name, role, size));
+                        // що не влазить — рівно до вміщення: кеглем на одиницю більшим уже не влазить (не стискати зайве)
+                        if (size < CareerTileLayout.PosterNameSize && size > CareerTileLayout.PosterNameMinSize
+                            && natural * (size + 1f) / CareerTileLayout.PosterNameSize <= avail)
+                            bad.Add(string.Format("афіша: «{0}» + «{1}» стиснуто до {2:0}, а влазить і на {3:0}", name, role, size, size + 1f));
                         if (WordFont.Missing(name).Count > 0) bad.Add("афіша: у шрифті немає гліфів «" + name + "»");
                     }
             Assert.That(shrunk, Is.GreaterThan(0), "жодна назва не стискається — міра афіші, певно, не та (ТЕХНІКИНЯ + ЛИХОДІЙКА на 52 не влазить)");
+            Assert.That(full, Is.GreaterThan(0), "жодна назва не йде на 52 — міра афіші, певно, не та (МОНСТР + ГЕРОЙ влазить)");
+            // базова лінія меншої назви (CareerTileLayout.PosterNameTopShift) рахується від висхідної шрифту назви — звірити з TTF
+            Assert.AreEqual(WordFont.AscentEm, CareerTileLayout.PosterNameAscent, 0.001f, "висхідна display Black — як у моделі");
             // екран рахує тією самою функцією, а не своєю: інакше охоронець міряв би не те, що на афіші
             string create = System.IO.File.ReadAllText(System.IO.Path.Combine(UnityEngine.Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI", "Career", "CreateScreenView.cs"));
             if (!create.Contains("FitPosterName(head, gname, plate);") || !create.Contains("CareerTileLayout.FitPosterName(w * CareerTileLayout.PosterNameSize / cur,"))
@@ -537,6 +781,170 @@ namespace Game.Tests.EditMode
 
         /// <summary>Найменший просвіт галочки до ключа й до назви — число тесту, не моделі.</summary>
         private const float CheckClear = 4f;
+
+        /// <summary>
+        /// Два рядки імені на стрічці — чорнилом, а не рамкою кегля (АД 14.11.2026: «у Д, Ц, Щ хвости нижче лінії, у Й, Ї знаки над
+        /// великими»): на кожному кеглі двох рядків (15…<see cref="CareerTileLayout.StripNameTwoLineMax"/>) найвищий знак першого рядка
+        /// не виходить за верх плити, між найглибшим хвостом першого і найвищим знаком другого — щонайменше 2 px (менше — злипнеться
+        /// згладжуванням; АД 14.11.2026 — тому крок 1,25), хвіст другого — щонайменше на 2 над рядками зон. Перебрано найгірше з усієї
+        /// великої абетки (і апостроф); базова лінія першого рядка — висхідна від верху імені, другого — на крок
+        /// <see cref="CareerTileLayout.StripNameLine2Offset"/> нижче. Числа моделі (висхідна, хвіст) — з TTF. Окремо — «ЦЕЗАР ЇЖАКЕВИЧ» на
+        /// 15 і найбільшому кеглі двох рядків (кадри У2).
+        /// </summary>
+        [Test]
+        public void StripName_TwoLines_InkClearsThePlateAndTheZones()
+        {
+            const string caps = "АБВГҐДЕЄЖЗИІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯ'’";
+            float top, bottom;
+            Assert.IsTrue(WordFont.Ink(caps, out top, out bottom), "у display є glyf");
+            Assert.Greater(top, WordFont.AscentEm - 0.05f, "передумова: знаки над великими сягають висхідної");
+            Assert.Less(bottom, -0.1f, "передумова: хвости нижче базової лінії");
+            Assert.AreEqual(WordFont.AscentEm, CareerTileLayout.DisplayAscentEm, 0.0005f, "висхідна моделі — з TTF");
+            Assert.AreEqual(-bottom, CareerTileLayout.DisplayCapsTailEm, 0.0005f, "хвіст великих моделі — з TTF");
+            var bad = new List<string>();
+            var log = new List<string>();
+            for (float s = CareerTileLayout.StripNameMinSize; s <= CareerTileLayout.StripNameTwoLineMax; s++)
+                foreach (var pair in new[] { new[] { caps, caps }, new[] { "ЦЕЗАР", "ЇЖАКЕВИЧ" } })
+                {
+                    float t1, b1, t2, b2;
+                    WordFont.Ink(pair[0], out t1, out b1);
+                    WordFont.Ink(pair[1], out t2, out b2);
+                    float base1 = CareerTileLayout.StripNameTop + WordFont.AscentEm * s, base2 = base1 + CareerTileLayout.StripNameLine2Offset(s);
+                    float inkTop1 = base1 - t1 * s, inkBottom1 = base1 - b1 * s, inkTop2 = base2 - t2 * s, inkBottom2 = base2 - b2 * s;
+                    string what = pair[0] == caps ? "уся абетка" : pair[0] + " / " + pair[1];
+                    if (inkTop1 < 0f) bad.Add(string.Format("{0} на {1}: знак першого рядка на {2:0.0} — вище плити", what, s, inkTop1));
+                    if (inkTop2 - inkBottom1 < 2f) bad.Add(string.Format("{0} на {1}: хвіст першого ({2:0.0}) і знак другого ({3:0.0}) — ближче 2", what, s, inkBottom1, inkTop2));
+                    if (inkBottom2 > CareerTileLayout.StripZonesTop - CareerTileLayout.StripNameInkClear)
+                        bad.Add(string.Format("{0} на {1}: хвіст другого до {2:0.0}, зони з {3} — ближче {4}", what, s, inkBottom2, CareerTileLayout.StripZonesTop, CareerTileLayout.StripNameInkClear));
+                    if (pair[0] != caps && (s == CareerTileLayout.StripNameMinSize || s == CareerTileLayout.StripNameTwoLineMax))
+                        log.Add(string.Format("{0} на {1}: знак першого {2:0.0}, проміжок хвіст→знак {3:0.00}, хвіст другого {4:0.0}", what, s, inkTop1, inkTop2 - inkBottom1, inkBottom2));
+                }
+            TestContext.WriteLine(string.Join("\n", log));
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Найдовше допустиме ім'я героя (ПМ 14.11.2026: «Максиміліан Шершеньковий» — рівно межа <c>CareerSession.MaxNameLength</c>)
+        /// на стрічці героя: кожен ґімік обох родів, кожен шлях, із поясом і без. Правило <see cref="CareerTileLayout.FitStripName"/>
+        /// з шириною TTF (display Black 40, розрядка 0,01, запас рендера) і кроками мітки, як на стрічці (АД 14.11.2026): ґімік, далі
+        /// пояс «· ЧЕМПІОН(КА) ФЕДЕРАЦІЇ» коротшає до «· ЧЕМПІОН(КА)», тоді ховається, і лише тоді «…». Кегль ≥ 15, кожен рядок — у місці
+        /// свого кроку (до мітки ролі й до ляльки), два рядки — над рядками зон; «Максиміліан Шершеньковий» — завжди цілим, у героїні-
+        /// чемпіонки — двома рядками на 19 з коротким поясом (кадр У2 директора). Висота рядка display — як у моделі.
+        /// </summary>
+        [Test]
+        public void LongestHeroName_FitsTheHeroStrip()
+        {
+            const string longest = "Максиміліан Шершеньковий";
+            Assert.LessOrEqual(longest.Length, CareerSession.MaxNameLength, "приклад ПМ — у межі довжини");
+            Assert.AreEqual(WordFont.LineHeight(1f), CareerTileLayout.DisplayLineEm, 0.001f, "висота рядка display — як у моделі");
+            int max = CareerSession.MaxNameLength, half = (max - 1) / 2;
+            string widest = new string('Ю', half) + " " + new string('Ю', max - 1 - half);
+            var bad = new List<string>();
+            float tagSize = BrandTokens.TypeLabel, track = 0.12f;
+            Func<string, float> w40 = s => WordFont.Width(s, CareerTileLayout.StripNameSize, CareerTileLayout.StripNameTrack) + RenderSlack;
+            float nameX = CareerTileLayout.StripNameLeft, tagRight = CareerTileLayout.StripW - CareerTileLayout.StripTagRight;
+            float dollX = CareerTileLayout.StripW - CareerTileLayout.StripDollRight - CareerTileLayout.StripDollW;
+            int whole = 0, twoLines = 0, shortBelt = 0;
+            foreach (var g in CareerKit.Content().Gimmicks)
+                foreach (bool female in new[] { false, true })
+                    foreach (var path in new[] { RingPath.Face, RingPath.Heel, RingPath.Rebel })
+                        foreach (bool champ in new[] { false, true })
+                        {
+                            string gn = Caps(RingLabels.GimmickName(T, g.Key, female)), pn = Caps(RingLabels.PathName(T, path, female));
+                            // пояс — тими самими ключами, що й стрічка (HeroForms підставляє героїні «….f»)
+                            string belt = champ ? " · " + Caps(Ui(female ? HeroForms.FemaleKey("c.champion") : "c.champion")) : "";
+                            string beltCut = champ ? " · " + Caps(Ui(female ? HeroForms.FemaleKey("c.champion.short") : "c.champion.short")) : "";
+                            float gw = LegendFont.Width(gn + " ·", tagSize, track);
+                            float role = LegendFont.Width(" " + pn, tagSize, track) + RenderSlack;
+                            Func<float, float> at = tagW => Math.Min(tagRight - tagW, dollX) - CareerTileLayout.StripNameGap - nameX;
+                            float full = champ ? LegendFont.Width(belt, tagSize, track) : 0f, cut = champ ? LegendFont.Width(beltCut, tagSize, track) : 0f;
+                            var avail = new List<float> { at(gw + role + full), at(role + full) };
+                            if (champ) { avail.Add(at(role + cut)); avail.Add(at(role)); }
+                            foreach (var who in new[] { Caps(longest), widest })
+                            {
+                                var f = CareerTileLayout.FitStripName(who, w40, avail);
+                                string where = string.Format("«{0}» + «{1} · {2}{3}»", who, gn, pn, belt);
+                                if (f.Ellipsis && who != widest) bad.Add(where + ": «…» — ім'я не вмістилось цілим і без поясу (" + avail[avail.Count - 1].ToString("0") + ")");
+                                if (f.Ellipsis && f.Drop != avail.Count - 1) bad.Add(where + ": «…» раніше, ніж віддано все");
+                                if (!f.Ellipsis) { whole++; if (f.TwoLines && who != widest) twoLines++; }
+                                if (champ && female && who != widest)
+                                {
+                                    if (f.Drop == 2) shortBelt++;
+                                    if (f.Drop != 2 || !f.TwoLines || f.Size != CareerTileLayout.StripNameTwoLineMax)
+                                        bad.Add(string.Format("{0}: героїня-чемпіонка — крок {1}, {2} рядки, кегль {3}; чекали короткий пояс, 2 рядки на {4} (кадр АД)",
+                                            where, f.Drop, f.TwoLines ? 2 : 1, f.Size, CareerTileLayout.StripNameTwoLineMax));
+                                }
+                                if (f.Size < CareerTileLayout.StripNameMinSize) bad.Add(where + ": кегль " + f.Size);
+                                float room = avail[f.Drop];
+                                foreach (var line in f.Text.Split('\n'))
+                                {
+                                    float lw = WordFont.Width(line, f.Size, CareerTileLayout.StripNameTrack);
+                                    if (lw > room + 0.01f) bad.Add(string.Format("{0}: рядок «{1}» на {2:0} — {3:0.0} у {4:0.0}", where, line, f.Size, lw, room));
+                                }
+                                float bottom = CareerTileLayout.StripNameTop + (f.TwoLines ? CareerTileLayout.StripNameLine2Offset(f.Size) : 0f) + WordFont.LineHeight(f.Size);
+                                if (f.TwoLines && bottom > CareerTileLayout.StripZonesTop + 0.01f) bad.Add(string.Format("{0}: два рядки на {1:0} — до {2:0.0}, зони з {3}", where, f.Size, bottom, CareerTileLayout.StripZonesTop));
+                                if (WordFont.Missing(f.Text.Replace("\n", "")).Count > 0) bad.Add(where + ": у шрифті немає гліфів «" + f.Text + "»");
+                            }
+                        }
+            Assert.Greater(whole, 0);
+            Assert.Greater(twoLines, 0, "з поясом героя ім'я стає у два рядки — гілка справді міряється");
+            Assert.Greater(shortBelt, 0, "і короткий пояс героїні справді трапляється — гілка міряється");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Прізвиська суперників (ростер) на дзеркальній стрічці за тим самим правилом: ніде «…» (ім'я праворуч до 24 від краю, мітка
+        /// «РОЛЬ · ҐІМІК» від 40). Перевірка, що нове вміщення не урізало вже наявних імен.
+        /// </summary>
+        [Test]
+        public void RivalNicks_FitTheRivalStrip()
+        {
+            var c = CareerKit.Content();
+            var bad = new List<string>();
+            float tagSize = BrandTokens.TypeLabel, track = 0.12f;
+            Func<string, float> w40 = s => WordFont.Width(s, CareerTileLayout.StripNameSize, CareerTileLayout.StripNameTrack) + RenderSlack;
+            float nameRight = CareerTileLayout.StripW - CareerTileLayout.StripNameLeft, tagLeft = 40f;
+            int n = 0;
+            foreach (var npc in c.Roster)
+            {
+                string full = T.Get(npc.NameKey), nick = full;
+                int a = full.IndexOf('«'), b = a >= 0 ? full.IndexOf('»', a + 1) : -1;
+                if (a >= 0 && b > a) nick = full.Substring(a + 1, b - a - 1).Trim();
+                nick = Caps(nick);
+                float pw = LegendFont.Width(Caps(RingLabels.PathName(T, npc.Path, npc.Female)), tagSize, track) + RenderSlack;
+                float gw = LegendFont.Width(" · " + Caps(RingLabels.GimmickName(T, c.GimmickOf(npc.Gimmick).Key, npc.Female)), tagSize, track);
+                var f = CareerTileLayout.FitStripName(nick, w40, nameRight - (tagLeft + pw + gw) - CareerTileLayout.StripNameGap,
+                    nameRight - (tagLeft + pw) - CareerTileLayout.StripNameGap);
+                n++;
+                if (f.Ellipsis) bad.Add(npc.Id + ": «" + nick + "» — «…»");
+            }
+            Assert.Greater(n, 0);
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Поле «Ім'я на рингу» (ПМ 14.11.2026: «видно кінець того, що набираєш, і є межа довжини»): найдовше справжнє ім'я — малими,
+        /// як набирають, і великими — і найширше ім'я з великої на всю межу довжини (Щ + щ…) влазить цілим за
+        /// <see cref="CareerTileLayout.FitNameField"/> (Fixel напівжирний, кегль 30 → не нижче 15). Поле обмежене тією самою межею.
+        /// </summary>
+        [Test]
+        public void LongestHeroName_FitsTheNameField()
+        {
+            int max = CareerSession.MaxNameLength;
+            var bad = new List<string>();
+            float room = CareerTileLayout.NameFieldTextWidth;
+            foreach (var n in new[] { "Максиміліан Шершеньковий", "МАКСИМІЛІАН ШЕРШЕНЬКОВИЙ", "Щ" + new string('щ', max - 1), "Щщщщщщщщщщщ Щщщщщщщщщщщщ".Substring(0, Math.Min(24, max)) })
+            {
+                Assert.LessOrEqual(n.Length, max);
+                float s = CareerTileLayout.FitNameField(SemiFont.Width(n, CareerTileLayout.NameFieldSize) + RenderSlack);
+                float w = SemiFont.Width(n, s) + RenderSlack;
+                if (s < BrandTokens.TypeMinInfo) bad.Add("«" + n + "»: кегль " + s);
+                if (w > room + 0.01f) bad.Add(string.Format("«{0}» на {1:0} — {2:0.0} у {3:0.0}: кінця не видно", n, s, w, room));
+                if (SemiFont.Missing(n.Replace(" ", "")).Count > 0) bad.Add("«" + n + "»: у шрифті немає гліфів");
+            }
+            Assert.AreEqual(max, CareerKit.NewAtCreate(7).GetCreationView().MaxNameLength, "поле обмежене межею ядра (CreationView)");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
 
         // ---------------- папір кінця сезону ----------------
 
@@ -593,6 +1001,17 @@ namespace Game.Tests.EditMode
             h += BulletH(Longest(string.Format(Ui("c.season.feud"), hammer, 4, 4), string.Format(Ui("c.season.feud_done"), hammer)), col);
             h += BulletH(Longest(Ui("c.season.belt_yes"), Ui("c.season.belt_no"), Ui("season.title_shot"), Ui("season.defense"),
                 string.Format(Ui("c.season.goal"), 4, 4)), col);
+            int statusLines;
+            h += OfferBlockH(col, fed, out statusLines);
+            h += PaperPadB;
+            Assert.LessOrEqual(top + h, ropesY - PaperClear,
+                string.Format("папір кінця сезону: {0:0} + {1:0} = {2:0} > канати {3:0} − {4:0} (рядок стану — {5} рядки)", top, h, top + h, ropesY, PaperClear, statusLines));
+        }
+
+        /// <summary>Блок пропозиції кроку «пропозиція»: заголовок, обидва ключі з «чого бракує» і найдовший рядок стану разом.</summary>
+        private static float OfferBlockH(float col, string fed, out int statusLines)
+        {
+            float h = 0f;
             // блок пропозиції
             h += 18f;
             h += Para(Longest(string.Format(Ui("c.offer.title"), fed), string.Format(Ui("c.offer.progress"), fed), string.Format(Ui("c.offer.top"), fed)),
@@ -604,15 +1023,430 @@ namespace Game.Tests.EditMode
             string status = Longest(Ui("c.offer.ready"), Ui("c.offer.farewell"), Ui("c.offer.declined"), Ui("c.offer.offended"),
                 string.Format(Ui("c.offer.moved"), fed), string.Format(Ui("c.offer.farewell.ok"), fed), string.Format(Ui("c.offer.farewell.bad"), fed, fed),
                 string.Format(Ui("c.season.demoted"), fed, fed));
-            int statusLines;
             h += 8f + Para(status, BrandTokens.TypeMinInfo, col, out statusLines);
-            h += PaperPadB;
-            Assert.LessOrEqual(top + h, ropesY - PaperClear,
-                string.Format("папір кінця сезону: {0:0} + {1:0} = {2:0} > канати {3:0} − {4:0} (рядок стану — {5} рядки)", top, h, top + h, ropesY, PaperClear, statusLines));
+            return h;
         }
 
-        /// <summary>Підсумок сезону на папері (без блоку пропозиції й нижнього відступу) — найдовшими рядками, як у тесті вище.</summary>
-        private static float SeasonPaperSummaryH(float col, out string fed)
+        /// <summary>Блок кроку контракту (№8): ключі виконано, рядок стану, аванс, пункт пастки, менеджерка, штраф — усе разом.</summary>
+        private static float ContractBlockH(float col, string fed)
+        {
+            float h = 0f;
+            h += OfferKeysH(col, fed, 0);
+            h += 8f + Para(Longest(Ui("c.offer.ready"), Ui("c.offer.farewell"), Ui("c.offer.farewell.f")), BrandTokens.TypeMinInfo, col);
+            h += BulletH(Longest(Ui("c.offer.advance", 99999), Ui("c.offer.advance.manager", 99999, 25)), col);
+            float line = col - CareerTileLayout.BulletIndent;
+            h += 4f + Para(Longest(Ui("c.offer.fine.unread"), Ui("c.offer.fine.missed"), Ui("c.offer.fine.hint"), Ui("c.offer.fine.clean_hint"),
+                Ui("c.offer.fine.clean"), Ui("c.offer.fine.exclusive", 50, 2, 9999)), BrandTokens.TypeMinInfo, line);
+            h += 4f + Para(Ui("c.offer.fine.manager"), BrandTokens.TypeMinInfo, line);
+            h += 4f + Para(Longest(Ui("c.offer.locked", 9999, 99999), Ui("c.offer.penalty", 9999)), BrandTokens.TypeMinInfo, line);
+            return h;
+        }
+
+        /// <summary>Блок кроку пізньої ролі (№11): найвищий зі станів пропозиції, «Пізня роль» з кнопками й рядком під ними, Б5.</summary>
+        private static float LateBlockH(float col, string fed, out int rows, out int ageLines)
+        {
+            float h = 0f;
+            // блок пропозиції на цьому кроці — найвищий зі станів, що бувають (SeasonOfferModel.StatusText): пропозиції ще немає —
+            // ключі з двома «чого бракує» без рядка стану; відмова — ключі (довіра після образи могла впасти — одна підказка) і рядок
+            // відмови; перехід — ключів нової федерації не видно, лише рядок стану. Звільнений — блоку немає (рядок звільнення вище).
+            float none = OfferKeysH(col, fed, 2);
+            float declined = OfferKeysH(col, fed, 1) + 8f + Para(Longest(Ui("c.offer.declined"), Ui("c.offer.declined.f"), Ui("c.offer.offended")),
+                BrandTokens.TypeMinInfo, col);
+            float moved = 18f + 8f + Para(Longest(string.Format(Ui("c.offer.moved"), fed), string.Format(Ui("c.offer.farewell.ok"), fed),
+                string.Format(Ui("c.offer.farewell.ok.f"), fed), string.Format(Ui("c.offer.farewell.bad"), fed, fed)), BrandTokens.TypeMinInfo, col);
+            h += Math.Max(none, Math.Max(declined, moved));
+            // блок пізньої ролі
+            // заголовок — чинна роль (043f2706: «Пізня роль: Зірка поза рингом» найдовша), без ролі — «Пізня роль»
+            h += 18f + Para(Longest(Ui("c.late.title"), Ui("c.late.current", Ui("c.late.icon")), Ui("c.late.current", Ui("c.late.legend")),
+                Ui("c.late.current", Ui("c.late.star"))), BrandTokens.TypeBody, col);
+            var names = new[] { Ui("c.late.icon"), Ui("c.late.legend"), Ui("c.late.star"), Ui("c.late.none") };
+            rows = 1;
+            float x = 0f;
+            foreach (var n in names)
+            {
+                float w = TextFont.Width(n, 13f) + 8f + 8f + 4f + 1f + 4f;
+                if (x > 0f && x + w > col) { rows++; x = 0f; }
+                x += w;
+            }
+            h += 6f + rows * RecButtonH;
+            // рядок під кнопками (CareerScreenLines.LateRoleNote): «З наступного сезону: роль. Що дає.», та сама — що дає, без ролі — правило
+            string note = Longest(Ui("c.late.hint"),
+                Ui("c.late.next", Ui("c.late.icon")) + ". " + Ui("c.late.icon.desc", 9) + ".",
+                Ui("c.late.next", Ui("c.late.legend")) + ". " + Ui("c.late.legend.desc") + ".",
+                Ui("c.late.next", Ui("c.late.star")) + ". " + Ui("c.late.star.desc", 999, 999) + ".",
+                Ui("c.late.next", Ui("c.late.none")) + ".");
+            h += 2f + Para(note, BrandTokens.TypeMinInfo, col);
+            // Б5: на останньому кроці кінців сезонів 3 і 6 — «Тіло старіє: …» одним рядком (ПМ 14.11.2026; на екран — після У0
+            // арт-директора; мітка TypeMinInfo, напівжирна, відступ 8 — як інші рядки паперу)
+            h += 8f + Para(Longest(Ui("c.age.next", 4, 4), Ui("c.age.next.many", 4, 5)), BrandTokens.TypeMinInfo, col, out ageLines);
+            return h;
+        }
+
+        /// <summary>
+        /// Кінець сезону 4:3 (АД 15.11.2026, варіант А): права колонка <see cref="CareerTileLayout.SeasonColumnW"/> з вкладками
+        /// «Кінець сезону · Розвиток N». Під вкладками (<see cref="CareerTileLayout.SeasonColumnRoom"/>, 565) уміщаються папір кожного
+        /// кроку — рядка шкал у колонці немає, на кроках контракту й пізньої ролі підсумок згорнутий до назви, федерації й рекорду — і
+        /// плита розвитку з трьома порадами цілком, без прокрутки (і з розгорнутим «Усе»). Згортання справді потрібне: повний підсумок на
+        /// цих кроках не вміщається (інакше — до АД, чи повертати його).
+        /// </summary>
+        [Test]
+        public void SeasonEnd_Column_EveryStepAndTheDevTab_FitUnderTheTabs()
+        {
+            float room = CareerTileLayout.SeasonColumnRoom(CareerTileLayout.PanelH);
+            Assert.AreEqual(565f, room, 0.05f, "місце під вкладками кінця сезону змінилось — АД рахував 565 (15.11.2026)");
+            Assert.AreEqual(room, CareerTileLayout.SeasonColumnRoom(float.NaN), 0.01f, "до першої розкладки — еталонна панель");
+            float col = CareerTileLayout.SeasonColumnW - PaperPadL - PaperPadR;
+            string fed;
+            float full = SeasonPaperSummaryH(col, out fed, false, false), folded = SeasonPaperSummaryH(col, out fed, false, true);
+            int statusLines, rows, ageLines;
+            float summary = full + PaperPadB;
+            float offer = full + OfferBlockH(col, fed, out statusLines) + PaperPadB;
+            float contractBlock = ContractBlockH(col, fed), lateBlock = LateBlockH(col, fed, out rows, out ageLines);
+            float contract = folded + contractBlock + PaperPadB, late = folded + lateBlock + PaperPadB;
+            float dev = SeasonDevPlateH(CareerTileLayout.SeasonColumnW, false), devAll = SeasonDevPlateH(CareerTileLayout.SeasonColumnW, true);
+            TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                "4:3, під вкладками {0:0.0}: підсумок {1:0.0}; пропозиція {2:0.0}; контракт {3:0.0} (повний — {4:0.0}); пізня роль {5:0.0} (повний — {6:0.0}); розвиток {7:0.0}, з «Усе» {8:0.0}",
+                room, summary, offer, contract, full + contractBlock + PaperPadB, late, full + lateBlock + PaperPadB, dev, devAll));
+            Assert.LessOrEqual(summary, room, "крок «підсумок»");
+            Assert.LessOrEqual(offer, room, "крок «пропозиція» (повний підсумок)");
+            Assert.LessOrEqual(contract, room, "крок контракту (згорнутий підсумок)");
+            Assert.LessOrEqual(late, room, "крок пізньої ролі (згорнутий підсумок)");
+            Assert.LessOrEqual(rows, 2, "кнопки пізньої ролі — щонайбільше два рядки");
+            Assert.LessOrEqual(dev, room, "вкладка «Розвиток»: три поради цілком");
+            Assert.LessOrEqual(devAll, room, "вкладка «Розвиток» з розгорнутим «Усе»");
+            Assert.Greater(full + contractBlock + PaperPadB, room, "повний підсумок на кроці контракту вже влазить — спитати АД, чи не згортати");
+            Assert.Greater(full + lateBlock + PaperPadB, room, "повний підсумок на кроці пізньої ролі вже влазить — спитати АД, чи не згортати");
+        }
+
+        /// <summary>
+        /// Колонка кінця сезону 4:3: разом із краєм — не ширша за 46 % кадру, ліворуч від неї герою вільно не менше за плечі (16 %);
+        /// вкладки «КІНЕЦЬ СЕЗОНУ» і «РОЗВИТОК» з числом очок (найширше — «99»; ті самі компактні TabPlate, що на створенні: відступи 14 / 18,
+        /// проміжок 10, перша впритул) — не ширші за колонку в кожній мові, де ключі є.
+        /// </summary>
+        [Test]
+        public void SeasonEnd_Column_Edge_Hero_AndTabs()
+        {
+            Assert.AreEqual(CareerTileLayout.ColumnMaxFrac * 1200f - CareerTileLayout.Edge, CareerTileLayout.SeasonColumnW, 0.01f, "колонка — 46 % кадру 1200 без краю");
+            Assert.IsTrue(CareerTileLayout.CreateSingleColumn(1200f, 900f), "4:3 — колонка");
+            Assert.GreaterOrEqual(1200f - CareerTileLayout.Edge - CareerTileLayout.SeasonColumnW, CareerTileLayout.SeasonHeroShouldersW,
+                "ліворуч від колонки вужче за плечі героя");
+            const float size = 19f, track = 0.06f;
+            float num = WordFont.Width("99", 21f, 0f);
+            int langs = 0;
+            foreach (var path in System.IO.Directory.GetFiles(RingCampaignDriver.Dir(), "ui_*.json"))
+            {
+                var ui = MiniJson.ParseObject(System.IO.File.ReadAllText(path));
+                object a, b;
+                if (!ui.TryGetValue("c.season.tab", out a) || !ui.TryGetValue("dev.title", out b)) continue;
+                langs++;
+                float total = CareerTileLayout.ColumnTabPadLeft + TitleFont.Width(Caps((string)a), size, track) + CareerTileLayout.ColumnTabPadRight
+                    + CareerTileLayout.ColumnTabGap
+                    + CareerTileLayout.ColumnTabPadLeft + TitleFont.Width(Caps((string)b), size, track) + 14f + num + CareerTileLayout.ColumnTabPadRight;
+                string where = System.IO.Path.GetFileName(path) + ": «" + Caps((string)a) + " / " + Caps((string)b) + " 99» — "
+                    + total.ToString("0.0", CultureInfo.InvariantCulture) + " з " + CareerTileLayout.SeasonColumnW;
+                TestContext.WriteLine(where);
+                Assert.LessOrEqual(total + RenderSlack, CareerTileLayout.SeasonColumnW, where + " — ширше за колонку");
+            }
+            Assert.Greater(langs, 0, "жодної мови з ключами вкладок кінця сезону");
+        }
+
+        /// <summary>
+        /// Виняток 5:4, АД 15.11.2026: мета (герой вільний) виконана, % — ні. Колонка кінця сезону на 5:4 — 49 % кадру з краєм, тож тут
+        /// міряється мета правила ≤ 46 %, а не відсотки: лівий край колонки не лівіше за середину кадру, героєві вільно не менше за
+        /// подвійні плечі. Загальне правило для інших екранів і для 4:3 не послаблюється. Якщо на кадрі У2 5:4 тісно — до АД, варіант (б).
+        /// </summary>
+        [Test]
+        public void SeasonEnd_Column_FiveFour_Exception_KeepsTheHeroFree()
+        {
+            // плечі — 21 % кадру 4:3 (замір «Изучение»), більші з двох замірів
+            float w54 = CareerTileLayout.CreateNarrowestAspect * 900f;
+            Assert.IsTrue(CareerTileLayout.CreateSingleColumn(w54, 900f), "5:4 — колонка");
+            Assert.Greater((CareerTileLayout.Edge + CareerTileLayout.SeasonColumnW) / w54, CareerTileLayout.ColumnMaxFrac,
+                "на 5:4 колонка вже в межах 46 % — виняток АД 15.11.2026 більше не потрібен, прибрати його з коментарів і охоронця");
+            Assert.GreaterOrEqual(CareerTileLayout.SeasonColumnLeft(w54), w54 / 2f, "5:4: колонка кінця сезону заходить на ліву половину кадру");
+            Assert.GreaterOrEqual(CareerTileLayout.SeasonColumnLeft(w54), 2f * CareerTileLayout.HeroShouldersW, "5:4: героєві ліворуч від колонки вільно менше за подвійні плечі");
+            Assert.AreEqual(CareerTileLayout.SeasonColumnLeft(1200f) / 1200f, 1f - CareerTileLayout.ColumnMaxFrac, 0.0001f, "4:3: правило 46 % не послаблене");
+        }
+
+        // ---------------- шухляда тижня: мета замість відсотка (АД 15.11.2026) ----------------
+
+        /// <summary>
+        /// Сцена закулісся на екрані (панель висотою 900): камера, місця героя й букера і поворот героя — з джерела
+        /// <c>RingShow.ShowBackstage</c>, тож охоронець іде за камерою, коли її змінять (поворот на 0° — сесія «Изучение»).
+        /// Проєкція — як у Unity: LookRotation зі світовим «вгору», вертикальне поле зору; кадр зсуву не має (показ — <c>aim = look</c>).
+        /// Звірено з кадром слоту 34 (s34b_m1080, week_drawer_open, 16:9): букер 967–1075 на кадрі — 953–1070 тут (плечі ±0,22 м);
+        /// кисті героя 725 — 752 тут (досяг 0,55 м уперед — із запасом).
+        /// </summary>
+        private sealed class BackstageView
+        {
+            public double[] Cam, Look, Hero, Booker;
+            public double Fov, HeroYaw, BookerYaw;
+
+            /// <summary>
+            /// Голови букерок набору (Assets/Art/Characters/Kit/body_*.fbx, вершини сітки, 15.11.2026), метри: маківка голови без зачіски,
+            /// підборіддя (де профіль обличчя відступає до шиї), півширина голови, зачіска над маківкою. Звірено з кадром s34b_m4x3/048
+            /// (Ліна, 4:3): маківка 333 на кадрі — 337 у проєкції; підборіддя ≈ 387 на кадрі — 400 у проєкції (із запасом униз).
+            /// Пояс (лінія ременя) — 0,57 маківки: Ліна ≈ 530 на тому ж кадрі.
+            /// </summary>
+            public static readonly Dictionary<string, double[]> Faces = new Dictionary<string, double[]>
+            {
+                { "body_f_mediterranean", new[] { 1.602, 1.395, 0.081, 0.03 } },
+                { "body_f_nordic", new[] { 1.605, 1.397, 0.081, 0.02 } },
+                { "body_m_west_african", new[] { 1.813, 1.575, 0.098, 0.015 } },
+                { "body_f_east_asian", new[] { 1.497, 1.305, 0.078, 0.02 } },
+            };
+
+            /// <summary>Пояс — частка маківки (кадр s34b_m4x3/048).</summary>
+            public const double WaistOfCrown = 0.57;
+
+            /// <summary>Центр голови букерки — на 5,5 см уперед від місця за її поворотом (обличчя попереду осі тіла).</summary>
+            public double[] BookerHead(double height)
+            {
+                double a = BookerYaw * Math.PI / 180.0;
+                return new[] { Booker[0] + 0.055 * Math.Sin(a), height, Booker[2] + 0.055 * Math.Cos(a) };
+            }
+
+            public static BackstageView FromSource()
+            {
+                string path = System.IO.Path.Combine(UnityEngine.Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "Stage", "Unity", "RingShow.cs");
+                string src = System.IO.File.ReadAllText(path);
+                int at = src.IndexOf("public void ShowBackstage()", StringComparison.Ordinal);
+                Assert.GreaterOrEqual(at, 0, "RingShow.ShowBackstage не знайдено — охоронець мети шухляди тижня не бачить камеру закулісся");
+                int end = src.IndexOf("\n        }", at, StringComparison.Ordinal);
+                string body = src.Substring(at, end - at);
+                var look = System.Text.RegularExpressions.Regex.Match(body,
+                    @"Look\(o \+ new Vector3\(([^)]*)\), o \+ new Vector3\(([^)]*)\), ([-0-9.]+)f, true\)");
+                var yaw = System.Text.RegularExpressions.Regex.Match(body, @"Place\(hero, o \+ HeroSpot, ([-0-9.]+)f");
+                var byaw = System.Text.RegularExpressions.Regex.Match(body, @"Place\(_booker, o \+ BookerSpot, ([-0-9.]+)f");
+                var hero = System.Text.RegularExpressions.Regex.Match(src, @"Vector3 HeroSpot = new Vector3\(([^)]*)\);");
+                var booker = System.Text.RegularExpressions.Regex.Match(src, @"Vector3 BookerSpot = new Vector3\(([^)]*)\);");
+                Assert.IsTrue(look.Success && yaw.Success && byaw.Success && hero.Success && booker.Success,
+                    "камера чи місця закулісся записані інакше — онови розбір охоронця мети шухляди тижня (CareerTextFitTests.BackstageView)");
+                return new BackstageView
+                {
+                    Cam = V3(look.Groups[1].Value), Look = V3(look.Groups[2].Value), Fov = F(look.Groups[3].Value),
+                    Hero = V3(hero.Groups[1].Value), Booker = V3(booker.Groups[1].Value), HeroYaw = F(yaw.Groups[1].Value),
+                    BookerYaw = F(byaw.Groups[1].Value),
+                };
+            }
+
+            private static double F(string s) { return double.Parse(s.Trim().TrimEnd('f'), CultureInfo.InvariantCulture); }
+
+            private static double[] V3(string s)
+            {
+                var p = s.Split(',');
+                return new[] { F(p[0]), F(p[1]), F(p[2]) };
+            }
+
+            /// <summary>X точки світу на панелі шириною <paramref name="panelW"/> і висотою 900.</summary>
+            public double ScreenX(double[] world, double panelW)
+            {
+                double[] f = Norm(Sub(Look, Cam)), r = Norm(Cross(new[] { 0d, 1d, 0d }, f));
+                double[] d = Sub(world, Cam);
+                double tan = Math.Tan(Fov * 0.5 * Math.PI / 180.0), aspect = panelW / 900.0;
+                return panelW * (0.5 + Dot(d, r) / Dot(d, f) / (tan * aspect) * 0.5);
+            }
+
+            /// <summary>Y точки світу на панелі висотою 900 (відлік згори; камера показу — вертикальне поле зору, кадр без зсуву).</summary>
+            public double ScreenY(double[] world)
+            {
+                double[] f = Norm(Sub(Look, Cam)), r = Norm(Cross(new[] { 0d, 1d, 0d }, f)), u = Cross(f, r);
+                double[] d = Sub(world, Cam);
+                double tan = Math.Tan(Fov * 0.5 * Math.PI / 180.0);
+                return 900.0 * (0.5 - Dot(d, u) / Dot(d, f) / tan * 0.5);
+            }
+
+            /// <summary>Голова букерки на панелі шириною <paramref name="panelW"/>: центр ± півширина (з зачіскою) по обох осях підлоги.</summary>
+            public void HeadX(double half, double panelW, out double left, out double right)
+            {
+                left = double.MaxValue; right = double.MinValue;
+                double[] c = BookerHead(1.45);
+                foreach (var d in new[] { new[] { half, 0d }, new[] { -half, 0d }, new[] { 0d, half }, new[] { 0d, -half } })
+                {
+                    double x = ScreenX(new[] { c[0] + d[0], c[1], c[2] + d[1] }, panelW);
+                    left = Math.Min(left, x); right = Math.Max(right, x);
+                }
+            }
+
+            /// <summary>Тіло на висоті грудей (1,3 м), плечі ±<paramref name="half"/> м; для героя — ще й кисті на 0,55 м уперед за поворотом.</summary>
+            public void Extent(double[] spot, double half, bool hands, double panelW, out double left, out double right)
+            {
+                left = double.MaxValue; right = double.MinValue;
+                var pts = new List<double[]>
+                {
+                    new[] { spot[0] - half, 1.3, spot[2] }, new[] { spot[0] + half, 1.3, spot[2] },
+                    new[] { spot[0], 1.3, spot[2] - half }, new[] { spot[0], 1.3, spot[2] + half },
+                };
+                if (hands)
+                {
+                    double a = HeroYaw * Math.PI / 180.0;
+                    pts.Add(new[] { spot[0] + 0.55 * Math.Sin(a), 1.2, spot[2] + 0.55 * Math.Cos(a) });
+                }
+                foreach (var p in pts)
+                {
+                    double x = ScreenX(p, panelW);
+                    left = Math.Min(left, x); right = Math.Max(right, x);
+                }
+            }
+
+            private static double[] Sub(double[] a, double[] b) { return new[] { a[0] - b[0], a[1] - b[1], a[2] - b[2] }; }
+            private static double Dot(double[] a, double[] b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+            private static double[] Cross(double[] a, double[] b) { return new[] { a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0] }; }
+            private static double[] Norm(double[] a) { double l = Math.Sqrt(Dot(a, a)); return new[] { a[0] / l, a[1] / l, a[2] / l }; }
+        }
+
+        /// <summary>
+        /// Мета шухляди тижня (АД 15.11.2026: «охоронець міряє мету, а не відсоток»; 3:2 — шухляда 560 = 47 %): герой не під шухлядою на
+        /// жодному співвідношенні, де шухляда буває, — від найвужчого обіцяного 5:4 до 21:9; на 4:3 і 5:4 — 472, ширше — 560. Герой —
+        /// тіло й кисті (він тримає руки перед собою); шухляда — від лівого краю (панель − край − ширина) донизу, тож уся смуга праворуч
+        /// від краю. Букерка — окремі охоронці нижче (обличчя над одним рядом, «до пояса» при закритій шухляді); тут тіло — лише в лог.
+        /// </summary>
+        [Test]
+        public void WeekDrawer_LeavesTheHeroFree_OnEveryAspect()
+        {
+            var view = BackstageView.FromSource();
+            var bad = new List<string>();
+            var aspects = new[] { 1.25, 4.0 / 3.0, 1.5, 1.6, 16.0 / 9.0, 2102.0 / 900.0 };
+            var names = new[] { "5:4", "4:3", "3:2", "16:10", "16:9", "21:9" };
+            for (int i = 0; i < aspects.Length; i++)
+            {
+                double w = 900.0 * aspects[i];
+                double drawerLeft = w - CareerTileLayout.Edge - CareerTileLayout.WeekDrawerWidth((float)w, 900f);
+                double hl, hr, bl, br;
+                view.Extent(view.Hero, 0.25, true, w, out hl, out hr);
+                view.Extent(view.Booker, 0.22, false, w, out bl, out br);
+                TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                    "{0}: панель {1:0}, край шухляди {2:0} ({3:0} %); герой {4:0}–{5:0} (запас {6:0}); букер {7:0}–{8:0} — {9}",
+                    names[i], w, drawerLeft, 100.0 * (w - drawerLeft) / w, hl, hr, drawerLeft - hr, bl, br,
+                    br <= drawerLeft ? "вільний" : bl >= drawerLeft ? "під шухлядою" : "частково під шухлядою"));
+                if (hr > drawerLeft) bad.Add(string.Format(CultureInfo.InvariantCulture, "{0}: герой до {1:0}, а шухляда — від {2:0}", names[i], hr, drawerLeft));
+            }
+            Assert.IsEmpty(bad, "героя закриває шухляда тижня:\n" + string.Join("\n", bad));
+        }
+
+        private static readonly double[] WeekAspects = { 1.25, 4.0 / 3.0, 1.5, 1.6, 16.0 / 9.0, 2102.0 / 900.0 };
+        private static readonly string[] WeekAspectNames = { "5:4", "4:3", "3:2", "16:10", "16:9", "21:9" };
+
+        /// <summary>
+        /// Мета шухляди тижня над одним рядом плиток (АД 15.11.2026, рішення (а): «обличчя букерки (маківка → підборіддя) не під шухлядою…
+        /// Букерка більше не пишеться лише в лог, а стає умовою»). Обличчя кожної з чотирьох букерок — від маківки зі зачіскою до
+        /// підборіддя; камера, місце й поворот букерки — з RingShow.ShowBackstage, голови — з <see cref="BackstageView.Faces"/>. Над одним
+        /// рядом (16:9, 21:9) верх шухляди не вищий за <see cref="CareerTileLayout.WeekBookerFaceClearY"/>, і ця лінія не вища за найнижче
+        /// підборіддя + 10 — за будь-якого місця шухляди по горизонталі. Мінімум «Розвитку» вміщається під лінією навіть із найвищим рядом.
+        /// Над двома рядами (5:4, 4:3, 3:2, 16:10) шухляда сама не відкривається («Межа самовідкриття — «два ряди плиток»»). Поверне
+        /// «Изучение» камеру — охоронець перерахує лінію і скаже, куди її посунути, чи що обличчя вже лівіше за край шухляди.
+        /// </summary>
+        [Test]
+        public void WeekDrawer_LeavesTheBookerFaceFree_OverOneRow()
+        {
+            var view = BackstageView.FromSource();
+            var bad = new List<string>();
+            float gap = CareerTileLayout.BookerFaceGap;   // змінна, а не стала в умові — без попередження «недосяжний код»
+            if (gap < 10f) bad.Add("просвіт під підборіддям " + gap + " < 10 (АД 15.11.2026: «підборіддя + 10»)");
+            double line = CareerTileLayout.WeekBookerFaceClearY, need = double.MinValue, needUnder = double.MinValue;
+            foreach (var p in Game.Gameplay.Ring.Stage.BackstageCast.AllBookers)
+            {
+                double[] f;
+                if (!BackstageView.Faces.TryGetValue(p.Body, out f))
+                {
+                    bad.Add(p.Speaker + ": голови «" + p.Body + "» немає в BackstageView.Faces — виміряй маківку й підборіддя з FBX набору");
+                    continue;
+                }
+                double crown = view.ScreenY(view.BookerHead(f[0] + f[3])), chin = view.ScreenY(view.BookerHead(f[1]));
+                double clear = chin + CareerTileLayout.BookerFaceGap;
+                need = Math.Max(need, clear);
+                var row = new List<string>();
+                for (int i = 0; i < WeekAspects.Length; i++)
+                {
+                    double w = 900.0 * WeekAspects[i];
+                    if (CareerTileLayout.WeekTwoRows((float)w, CareerTileLayout.WeekActionTiles)) continue;
+                    double drawerLeft = w - CareerTileLayout.Edge - CareerTileLayout.WeekDrawerWidth((float)w, 900f), hl, hr;
+                    view.HeadX(f[2] + f[3], w, out hl, out hr);
+                    bool under = hr > drawerLeft;
+                    if (under) needUnder = Math.Max(needUnder, clear);
+                    row.Add(string.Format(CultureInfo.InvariantCulture, "{0} голова {1:0}–{2:0}, край шухляди {3:0} — {4}", WeekAspectNames[i], hl, hr, drawerLeft,
+                        under ? "над шухлядою" : "лівіше"));
+                }
+                TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "{0} ({1}): маківка {2:0}, підборіддя {3:0} → лінія не вище {4:0}; {5}",
+                    p.Speaker, p.Body, crown, chin, clear, string.Join("; ", row)));
+                if (line < clear)
+                    bad.Add(string.Format(CultureInfo.InvariantCulture, "{0}: підборіддя {1:0} + {2:0} = {3:0}, а верх шухляди може піднятися до {4:0} — опусти WeekBookerFaceClearY",
+                        p.Speaker, chin, CareerTileLayout.BookerFaceGap, clear, line));
+            }
+            if (needUnder == double.MinValue) TestContext.WriteLine("обличчя жодної букерки не над шухлядою на 16:9 і 21:9 — обмеження висоти можна зняти (рішення АД)");
+            else if (line - needUnder > 5.0) TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "лінію можна підняти до {0:0} (зараз {1:0})", Math.Ceiling(needUnder), line));
+            // мінімум «Розвитку» — під лінією навіть із найвищим рядом (плитки виросли на TileGrowMax)
+            double grownBottom = CareerTileLayout.PanelH - (CareerTileLayout.DrawerBottom + CareerTileLayout.TileGrowMax);
+            if (grownBottom - line < CareerTileLayout.DrawerNeed(true))
+                bad.Add(string.Format(CultureInfo.InvariantCulture, "найвищий ряд: під обличчям {0:0} < мінімуму «Розвитку» {1:0}", grownBottom - line, CareerTileLayout.DrawerNeed(true)));
+            TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "16:9: висота шухляди до {0:0} (ряд TileH), {1:0} (найвищий ряд); мінімум {2:0}",
+                CareerTileLayout.PanelH - CareerTileLayout.DrawerBottom - line, grownBottom - line, CareerTileLayout.DrawerNeed(true)));
+            // самовідкриття — лише над одним рядом
+            for (int i = 0; i < WeekAspects.Length; i++)
+            {
+                float w = (float)(900.0 * WeekAspects[i]);
+                bool two = CareerTileLayout.WeekTwoRows(w, CareerTileLayout.WeekActionTiles);
+                if (two != (WeekAspects[i] < 1.7)) bad.Add(WeekAspectNames[i] + ": " + (two ? "два ряди" : "один ряд") + " плиток — не так, як у рішенні АД (5:4…16:10 — два)");
+                if (CareerTileLayout.WeekDrawerAutoOpen(w, 3) == two) bad.Add(WeekAspectNames[i] + ": шухляда " + (two ? "сама відкривається над двома рядами" : "сама не відкривається над одним рядом"));
+                if (CareerTileLayout.WeekDrawerAutoOpen(w, 0)) bad.Add(WeekAspectNames[i] + ": очок немає, а шухляда відкривається");
+            }
+            Assert.IsEmpty(bad, "обличчя букерки під шухлядою тижня:\n" + string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Шухляда закрита — букерку видно від голови до пояса (АД 15.11.2026: «Коли шухляда закрита, на всіх співвідношеннях букерку видно
+        /// від голови до пояса — та сама умова, що я ставив для 4:3»). Знизу: пояс кожної букерки над шапкою ряду дій («ДІЇ ТИЖНЯ»,
+        /// вкладки) — і над одним, і над двома рядами, з ростом плиток, як у WeekScreenView.Fit: висота плитки — найвища потрібна
+        /// найдовшим текстам плиток тижня на цій ширині (не більше межі росту), над двома рядами ріст піднімає шапку двічі; канати —
+        /// лінія на рівні пояса (так на прийнятому кадрі 4:3, s34b_m4x3/048). Згори: афіша праворуч, її висота — від умов матчу; де голова під афішею по горизонталі, охоронець пише в лог,
+        /// не нижче якого краю афіша лишає маківку вільною (на рішення АД: найкоротша афіша на кадрах — низ ≈ 307).
+        /// </summary>
+        [Test]
+        public void WeekScene_ClosedDrawer_ShowsTheBookerDownToTheWaist()
+        {
+            var view = BackstageView.FromSource();
+            var bad = new List<string>();
+            // шапка ряду дій на кожному співвідношенні — з ростом плиток, як у WeekScreenView.Fit
+            var header = new double[WeekAspects.Length];
+            for (int i = 0; i < WeekAspects.Length; i++)
+            {
+                float w = (float)(900.0 * WeekAspects[i]);
+                bool two = CareerTileLayout.WeekTwoRows(w, CareerTileLayout.WeekActionTiles);
+                float tileW = CareerTileLayout.WeekTileWidth(w, CareerTileLayout.WeekActionTiles), need = CareerTileLayout.TileH;
+                foreach (var t in WeekTiles()) need = Math.Max(need, NeededHeight(t, tileW));
+                double tileH = Math.Min(CareerTileLayout.TileH + CareerTileLayout.TileGrowMax, Math.Ceiling(need));
+                double lift = tileH - CareerTileLayout.TileH + (two ? tileH + 12.0 : 0.0);
+                header[i] = CareerTileLayout.PanelH - CareerTileLayout.HeaderBottom - lift - CareerTileLayout.WeekHeaderH;
+                TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "{0}: {1} ряд(и), плитка {2:0} (потрібно {3:0}), верх шапки ряду дій {4:0}",
+                    WeekAspectNames[i], two ? 2 : 1, tileH, need, header[i]));
+            }
+            foreach (var p in Game.Gameplay.Ring.Stage.BackstageCast.AllBookers)
+            {
+                double[] f;
+                if (!BackstageView.Faces.TryGetValue(p.Body, out f)) { bad.Add(p.Speaker + ": голови «" + p.Body + "» немає в BackstageView.Faces"); continue; }
+                double crown = view.ScreenY(view.BookerHead(f[0] + f[3])), waist = view.ScreenY(view.BookerHead(BackstageView.WaistOfCrown * f[0]));
+                var row = new List<string>();
+                for (int i = 0; i < WeekAspects.Length; i++)
+                {
+                    double w = 900.0 * WeekAspects[i];
+                    if (waist > header[i])
+                        bad.Add(string.Format(CultureInfo.InvariantCulture, "{0}, {1}: пояс {2:0} нижче за верх шапки ряду дій {3:0}", p.Speaker, WeekAspectNames[i], waist, header[i]));
+                    double posterLeft = w - CareerTileLayout.Edge - CareerTileLayout.StripW, hl, hr;
+                    view.HeadX(f[2] + f[3], w, out hl, out hr);
+                    row.Add(hr > posterLeft
+                        ? string.Format(CultureInfo.InvariantCulture, "{0}: голова {1:0}–{2:0} під афішею (від {3:0}) — маківка вільна, якщо низ афіші ≤ {4:0}", WeekAspectNames[i], hl, hr, posterLeft, crown)
+                        : string.Format(CultureInfo.InvariantCulture, "{0}: голова лівіше за афішу", WeekAspectNames[i]));
+                }
+                TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "{0}: маківка {1:0}, пояс {2:0}; {3}", p.Speaker, crown, waist, string.Join("; ", row)));
+            }
+            Assert.IsEmpty(bad, "букерку при закритій шухляді не видно до пояса:\n" + string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Підсумок сезону на папері (без блоку пропозиції й нижнього відступу) — найдовшими рядками, як у тесті вище; <paramref name="scales"/> —
+        /// з рядком шкал (на 4:3 його немає), <paramref name="folded"/> — згорнутий до назви, федерації й рекорду (4:3, контракт і пізня роль).
+        /// </summary>
+        private static float SeasonPaperSummaryH(float col, out string fed, bool scales = true, bool folded = false)
         {
             var content = CareerKit.Content();
             fed = "";
@@ -623,8 +1457,9 @@ namespace Game.Tests.EditMode
             h += 2f + Para(string.Format(Ui("c.fed.line"), fed, 4, 4), BrandTokens.TypeMinInfo, col);
             h += 18f;
             h += Para(string.Format(Ui("c.season.record"), 99, 99, 99), 19f, col);
+            if (folded) return h;   // 4:3, контракт і пізня роль: лише назва, федерація й рекорд
             h += BulletH(string.Format(Ui("c.season.pop"), 10, 10), col);
-            h += 6f + Para(string.Format(Ui("c.season.line"), 10, 5, 99999), BrandTokens.TypeMinInfo, col);
+            if (scales) h += 6f + Para(string.Format(Ui("c.season.line"), 10, 5, 99999), BrandTokens.TypeMinInfo, col);
             h += BulletH(Longest(string.Format(Ui("c.season.feud"), hammer, 4, 4), string.Format(Ui("c.season.feud_done"), hammer)), col);
             h += BulletH(Longest(Ui("c.season.belt_yes"), Ui("c.season.belt_no"), Ui("season.title_shot"), Ui("season.defense"),
                 string.Format(Ui("c.season.goal"), 4, 4)), col);
@@ -656,14 +1491,7 @@ namespace Game.Tests.EditMode
             float col = PaperW - PaperPadL - PaperPadR;
             string fed;
             float h = SeasonPaperSummaryH(col, out fed);
-            h += OfferKeysH(col, fed, 0);
-            h += 8f + Para(Longest(Ui("c.offer.ready"), Ui("c.offer.farewell"), Ui("c.offer.farewell.f")), BrandTokens.TypeMinInfo, col);
-            h += BulletH(Longest(Ui("c.offer.advance", 99999), Ui("c.offer.advance.manager", 99999, 25)), col);
-            float line = col - CareerTileLayout.BulletIndent;
-            h += 4f + Para(Longest(Ui("c.offer.fine.unread"), Ui("c.offer.fine.missed"), Ui("c.offer.fine.hint"), Ui("c.offer.fine.clean_hint"),
-                Ui("c.offer.fine.clean"), Ui("c.offer.fine.exclusive", 50, 2, 9999)), BrandTokens.TypeMinInfo, line);
-            h += 4f + Para(Ui("c.offer.fine.manager"), BrandTokens.TypeMinInfo, line);
-            h += 4f + Para(Longest(Ui("c.offer.locked", 9999, 99999), Ui("c.offer.penalty", 9999)), BrandTokens.TypeMinInfo, line);
+            h += ContractBlockH(col, fed);
             h += PaperPadB;
             Assert.LessOrEqual(top + h, ropesY - PaperClear,
                 string.Format("папір кінця сезону з контрактом: {0:0} + {1:0} = {2:0} > канати {3:0} − {4:0}", top, h, top + h, ropesY, PaperClear));
@@ -681,36 +1509,9 @@ namespace Game.Tests.EditMode
             float col = PaperW - PaperPadL - PaperPadR;
             string fed;
             float h = SeasonPaperSummaryH(col, out fed);
-            // блок пропозиції на цьому кроці — найвищий зі станів, що бувають (SeasonOfferModel.StatusText): пропозиції ще немає —
-            // ключі з двома «чого бракує» без рядка стану; відмова — ключі (довіра після образи могла впасти — одна підказка) і рядок
-            // відмови; перехід — ключів нової федерації не видно, лише рядок стану. Звільнений — блоку немає (рядок звільнення вище).
-            float none = OfferKeysH(col, fed, 2);
-            float declined = OfferKeysH(col, fed, 1) + 8f + Para(Longest(Ui("c.offer.declined"), Ui("c.offer.declined.f"), Ui("c.offer.offended")),
-                BrandTokens.TypeMinInfo, col);
-            float moved = 18f + 8f + Para(Longest(string.Format(Ui("c.offer.moved"), fed), string.Format(Ui("c.offer.farewell.ok"), fed),
-                string.Format(Ui("c.offer.farewell.ok.f"), fed), string.Format(Ui("c.offer.farewell.bad"), fed, fed)), BrandTokens.TypeMinInfo, col);
-            h += Math.Max(none, Math.Max(declined, moved));
-            // блок пізньої ролі
-            // заголовок — чинна роль (043f2706: «Пізня роль: Зірка поза рингом» найдовша), без ролі — «Пізня роль»
-            h += 18f + Para(Longest(Ui("c.late.title"), Ui("c.late.current", Ui("c.late.icon")), Ui("c.late.current", Ui("c.late.legend")),
-                Ui("c.late.current", Ui("c.late.star"))), BrandTokens.TypeBody, col);
-            var names = new[] { Ui("c.late.icon"), Ui("c.late.legend"), Ui("c.late.star"), Ui("c.late.none") };
-            int rows = 1;
-            float x = 0f;
-            foreach (var n in names)
-            {
-                float w = TextFont.Width(n, 13f) + 8f + 8f + 4f + 1f + 4f;
-                if (x > 0f && x + w > col) { rows++; x = 0f; }
-                x += w;
-            }
-            h += 6f + rows * RecButtonH;
-            // рядок під кнопками (CareerScreenLines.LateRoleNote): «З наступного сезону: роль. Що дає.», та сама — що дає, без ролі — правило
-            string note = Longest(Ui("c.late.hint"),
-                Ui("c.late.next", Ui("c.late.icon")) + ". " + Ui("c.late.icon.desc", 9) + ".",
-                Ui("c.late.next", Ui("c.late.legend")) + ". " + Ui("c.late.legend.desc") + ".",
-                Ui("c.late.next", Ui("c.late.star")) + ". " + Ui("c.late.star.desc", 999, 999) + ".",
-                Ui("c.late.next", Ui("c.late.none")) + ".");
-            h += 2f + Para(note, BrandTokens.TypeMinInfo, col);
+            int rows, ageLines;
+            h += LateBlockH(col, fed, out rows, out ageLines);
+            Assert.AreEqual(1, ageLines, "рядок «Тіло старіє…» — один рядок паперу");
             h += PaperPadB;
             Assert.LessOrEqual(rows, 2, "кнопки ролей — щонайбільше два рядки");
             Assert.LessOrEqual(top + h, ropesY - PaperClear,
@@ -742,13 +1543,25 @@ namespace Game.Tests.EditMode
         /// Ширина пояснення поради на плиті кінця сезону: плита 410 − прокрутка 20 і 14 − картка (рамка 4 і 1, поля 10 і 10) − відступ мітки 6 −
         /// поля мітки Unity 2 і 2 − запас на рендер.
         /// </summary>
-        private static float SeasonDevWhyW
+        private static float SeasonDevWhyW { get { return SeasonDevWhyWFor(CareerTileLayout.StripW); } }
+
+        /// <summary>Те саме для плити ширини <paramref name="plateW"/> (4:3 — вкладка «Розвиток» на ширину колонки).</summary>
+        private static float SeasonDevWhyWFor(float plateW)
         {
-            get
-            {
-                return CareerTileLayout.StripW - CareerTileLayout.DevPadLeft - CareerTileLayout.DevPadRight - 4f - 1f - 2f * 10f - 6f - 4f
-                    - RenderSlack;
-            }
+            return plateW - CareerTileLayout.DevPadLeft - CareerTileLayout.DevPadRight - 4f - 1f - 2f * 10f - 6f - 4f - RenderSlack;
+        }
+
+        /// <summary>
+        /// Плита розвитку кінця сезону ширини <paramref name="plateW"/> з трьома найгіршими порадами цілком (як у тесті нижче): шапка,
+        /// картка, прокрутка й підвал (<paramref name="expanded"/> — з рядком-підказкою розгорнутого «Усе»).
+        /// </summary>
+        private static float SeasonDevPlateH(float plateW, bool expanded)
+        {
+            string which;
+            int lines = WorstThreeWhyLines(SeasonDevWhyWFor(plateW), out which);
+            float line15 = TextFont.LineHeight(BrandTokens.TypeMinInfo), line12 = TextFont.LineHeight(12f);
+            float card = 1f + 8f + line12 + 1f + 3 * (RecButtonH + RecGap) + lines * line15 + 8f + 1f;
+            return SeasonDevHead + card + CareerTileLayout.DevScrollPadBottom + DevFoot(expanded, CareerTileLayout.DevFootPadBottom);
         }
 
         /// <summary>
@@ -839,7 +1652,11 @@ namespace Game.Tests.EditMode
                 }
             var all = new List<string>();
             for (int i = 0; i < 5; i++)
-                all.Add(string.Format(UiForms("dev.attr.buy"), 99) + " — " + UiForms("c.dev.attr.why." + i) + " · " + reason);
+            {
+                // Б5: з сезону 4 у витривалості — «тіло старіє: +N оч.» перед причиною (CareerScreenLines.AttrBuyHint)
+                string age = (RingAttr)i == RingAttr.Stamina ? " · " + Ui("c.age.attr", Ageing.MaxStaminaSurcharge) : "";
+                all.Add(string.Format(UiForms("dev.attr.buy"), 99) + " — " + UiForms("c.dev.attr.why." + i) + age + " · " + reason);
+            }
             foreach (var kv in _ui)
             {
                 string k = kv.Key;
@@ -1194,9 +2011,340 @@ namespace Game.Tests.EditMode
                 "_check.style.right = CareerTileLayout.CheckRight(on);",
                 "_keyBox.style.top = CareerTileLayout.CompactKeyTop; _keyBox.style.right = CareerTileLayout.CompactKeyRight;",
                 "style.width = CareerTileLayout.CheckW; style.height = CareerTileLayout.CheckH;",
+                // шапка ряду дій — за моделлю: за нею охоронець «букерку видно до пояса» (WeekScene_ClosedDrawer_ShowsTheBookerDownToTheWaist)
+                "public const float RowBottom = 45f, HeaderBottom = CareerTileLayout.HeaderBottom, RopesBottom = CareerTileLayout.RopesBottom;",
             };
             foreach (var n in need) if (!CodeLine(src, n)) bad.Add("ArenaKit.cs: немає «" + n + "»");
             Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+        // ---------------- створення 4:3: одна колонка з вкладками ----------------
+
+        /// <summary>
+        /// Створення 4:3 (АД 14–15.11.2026): одна колонка — на 5:4 і 4:3; рівно 3:2, 16:10, 16:9 і 21:9 — дві. На кожному
+        /// співвідношенні колонка не далі 46 % кадру від свого краю, одна колонка не заходить на праву половину, а смуга, вільна від
+        /// колонок, не вужча за плечі героя (21 % кадру 4:3 1024×768, замір «Изучение»).
+        /// </summary>
+        [Test]
+        public void CreateColumn_HeroZone_AndTheColumnEdge_OnEveryAspect()
+        {
+            float[] widths = { CareerTileLayout.CreateNarrowestAspect * 900f, 1200f, 1350f, 1440f, 1600f, 2100f };
+            bool[] single = { true, true, false, false, false, false };
+            string[] names = { "5:4", "4:3", "3:2", "16:10", "16:9", "21:9" };
+            const float h = 900f;
+            float col = CareerTileLayout.Edge + CareerTileLayout.StripW;
+            for (int i = 0; i < widths.Length; i++)
+            {
+                float w = widths[i];
+                bool s = CareerTileLayout.CreateSingleColumn(w, h);
+                Assert.AreEqual(single[i], s, names[i] + ": " + (single[i] ? "одна колонка" : "дві колонки"));
+                float free = CareerTileLayout.CreateHeroFreeWidth(w, s);
+                TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "{0}: {1}, колонка до {2:0.0} %, вільно {3:0} ({4:0.0} %)",
+                    names[i], s ? "одна колонка" : "дві колонки", 100f * col / w, free, 100f * free / w));
+                Assert.GreaterOrEqual(free, CareerTileLayout.HeroShouldersW, names[i] + ": вільно " + free + " — вужче за плечі героя");
+                Assert.LessOrEqual(col / w, CareerTileLayout.ColumnMaxFrac, names[i] + ": колонка далі 46 % кадру");
+                if (s) Assert.LessOrEqual(col, w / 2f, names[i] + ": колонка заходить на праву половину — героя");
+            }
+            Assert.AreEqual(1125f, CareerTileLayout.CreateNarrowestAspect * h, 0.01f, "найвужча панель колонки — 5:4");
+            Assert.AreEqual(1200f - 2f * CareerTileLayout.Edge - CareerTileLayout.StripW, CareerTileLayout.CreateHeroFreeWidth(1200f, true), 0.01f,
+                "колонка: вільно до правого безпечного краю");
+            Assert.AreEqual(1350f - 2f * (CareerTileLayout.Edge + CareerTileLayout.StripW), CareerTileLayout.CreateHeroFreeWidth(1350f, false), 0.01f,
+                "дві колонки: вільно між ними");
+            Assert.IsTrue(CareerTileLayout.CreateSingleColumn(1340f, h), "помітно вужче за 3:2 — колонка");
+            Assert.IsFalse(CareerTileLayout.CreateSingleColumn(1350f, h), "рівно 3:2 — дві колонки");
+            Assert.IsFalse(CareerTileLayout.CreateSingleColumn(1349.9f, h), "3:2 з похибкою float — дві колонки");
+            // справжні екрани: панель кар'єри — 900 заввишки, ширина — екран на масштаб Screen.height / 900 (RingGameBootstrap.ApplyScale)
+            int[][] screens = { new[] { 2256, 1504 }, new[] { 2160, 1440 }, new[] { 1500, 1000 }, new[] { 1620, 1080 }, new[] { 1440, 960 }, new[] { 3000, 2000 },
+                new[] { 1680, 1050 }, new[] { 1920, 1080 }, new[] { 1024, 768 }, new[] { 1600, 1200 }, new[] { 2048, 1536 }, new[] { 1280, 1024 } };
+            for (int i = 0; i < screens.Length; i++)
+            {
+                float s = screens[i][1] / 900f;
+                float pw = screens[i][0] / s, ph = screens[i][1] / s;
+                bool want = (float)screens[i][0] / screens[i][1] < 1.4f;   // 4:3 і 5:4 — колонка; 3:2, 16:10, 16:9 — дві
+                Assert.AreEqual(want, CareerTileLayout.CreateSingleColumn(pw, ph), screens[i][0] + "×" + screens[i][1] + " (панель " + pw + "×" + ph + ")");
+            }
+            Assert.IsFalse(CareerTileLayout.CreateSingleColumn(0f, h), "панель не розкладена — як було");
+            Assert.IsFalse(CareerTileLayout.CreateSingleColumn(float.NaN, h));
+            Assert.IsFalse(CareerTileLayout.CreateSingleColumn(1200f, 0f));
+        }
+
+        /// <summary>
+        /// Вкладки колонки (АД 15.11.2026, 2А): «ТВІЙ БОРЕЦЬ» чи «ТВОЯ БОРЧИНЯ» (найширша), «ВИГЛЯД», «ПРИЙОМИ» без числа — display
+        /// ExtraBold 19 з розрядкою 0,06, відступи 14 / 18, проміжок 10, перша впритул — не ширше за колонку в кожній мові, де ключі є;
+        /// правий відступ — за зрізом 12° на висоті вкладки: плита ширша за текст і в активної.
+        /// </summary>
+        [Test]
+        public void CreateColumn_Tabs_FitTheColumn_InEveryLanguage()
+        {
+            const float size = 19f, track = 0.06f;
+            Assert.Greater(CareerTileLayout.ColumnTabPadRight, CareerTileLayout.SlantK * CareerTileLayout.TabPlateH + RenderSlack,
+                "правий відступ вкладки не за зрізом 12° — текст заходить на скіс");
+            Assert.Greater(CareerTileLayout.ColumnTabPadLeft, 2f + RenderSlack, "лівий відступ вкладки — менший за обводку відкритої");
+            string[][] sets = { new[] { "c.hub.create.poster", "c.hub.create.poster.f" }, new[] { "c.create.look" }, new[] { "c.hub.create.moves" } };
+            int langs = 0;
+            foreach (var path in System.IO.Directory.GetFiles(RingCampaignDriver.Dir(), "ui_*.json"))
+            {
+                var ui = MiniJson.ParseObject(System.IO.File.ReadAllText(path));
+                float total = 0f;
+                var parts = new List<string>();
+                bool has = true;
+                for (int i = 0; i < sets.Length; i++)
+                {
+                    float widest = -1f;
+                    string which = null;
+                    foreach (var key in sets[i])
+                    {
+                        object v;
+                        if (!ui.TryGetValue(key, out v)) continue;
+                        float w = TitleFont.Width(Caps((string)v), size, track);
+                        if (w > widest) { widest = w; which = Caps((string)v); }
+                    }
+                    if (widest < 0f) { has = false; break; }
+                    total += (i > 0 ? CareerTileLayout.ColumnTabGap : 0f) + CareerTileLayout.ColumnTabPadLeft + widest + CareerTileLayout.ColumnTabPadRight;
+                    parts.Add(which);
+                }
+                if (!has) continue;
+                langs++;
+                string where = System.IO.Path.GetFileName(path) + ": «" + string.Join(" / ", parts) + "» — " + total.ToString("0.0", CultureInfo.InvariantCulture);
+                TestContext.WriteLine(where + " з " + CareerTileLayout.StripW);
+                Assert.LessOrEqual(total + RenderSlack, CareerTileLayout.StripW, where + " ширше за колонку");
+            }
+            Assert.Greater(langs, 0, "жодної мови з ключами вкладок");
+        }
+
+        /// <summary>
+        /// Плити вкладок 4:3 — під вкладками до піднятих канатів (АД 15.11.2026, Б1: «314 з 326 — так»): афіша без заголовка й опису
+        /// ролі (рядок назви — display Black 52, «Вільний бал · Обери» — Bold 15, п'ять рядків по 34), «Вигляд», прийоми кожного
+        /// ґіміка екрана (Fixel 15 у картці 410 − 20 − 26). Повна афіша з описом ролі на 4:3 не влазить — тому Б1.
+        /// </summary>
+        [Test]
+        public void CreateColumn_Plates_FitUnderTheTabs()
+        {
+            float room = CareerTileLayout.CreateColumnRoom(900f, CareerTileLayout.CreateLift);
+            float poster = CareerTileLayout.CreateColumnPosterHeight(WordFont.LineHeight(CareerTileLayout.PosterNameSize), LegendFont.LineHeight(BrandTokens.TypeLabel));
+            float paperW = CareerTileLayout.StripW - CareerTileLayout.CreatePosterPadLeft - CareerTileLayout.CreatePosterPadRight - RenderSlack;
+            float widest;
+            float desc = 0f;
+            foreach (var key in new[] { "role.hero.desc", "role.villain.desc" })
+                desc = Math.Max(desc, CareerTileLayout.CreatePosterRuleTop + TextFont.Lines(TextBreak.GlueDashes(Ui(key)), BrandTokens.TypeBody, paperW, 0f, out widest) * TextFont.LineHeight(BrandTokens.TypeBody));
+            TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "4:3: місце {0:0.0}; афіша колонки {1:0.0} (з описом ролі було б {2:0.0}); «Вигляд» {3:0}",
+                room, poster, poster + desc, CareerTileLayout.CreateLookH));
+            Assert.LessOrEqual(poster + RenderSlack, room, "афіша колонки вища за місце до канатів");
+            // АД прийняв саме ці числа («Запас 314 з 326 — так», 15.11.2026): інша вертикаль колонки — знову до АД, з кадрами
+            Assert.AreEqual(326f, room, 0.05f, "4:3: місце від низу вкладок до канатів змінилось");
+            Assert.AreEqual(314.4f, poster, 0.15f, "4:3: висота афіші колонки змінилась");
+            Assert.Greater(poster + desc, room, "повна афіша вже влазить — опис ролі можна повернути на папір (спитати АД)");
+            Assert.LessOrEqual(CareerTileLayout.CreateLookH, room, "«Вигляд» вищий за місце до канатів");
+            var rt = RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json"));
+            var view = CareerKit.NewAtCreate(1).GetCreationView();
+            Assert.Greater(view.Gimmicks.Count, 0);
+            float cardW = CareerTileLayout.StripW - 20f - 26f - RenderSlack;
+            foreach (var g in view.Gimmicks)
+            {
+                var names = new List<string>();
+                foreach (var m in g.StartMoves) names.Add(rt.Get(m.NameKey));
+                string line = string.Join(" · ", names);
+                int n = TextFont.Lines(TextBreak.GlueDashes(line), Body, cardW, 0f, out widest);
+                float card = 8f + n * TextFont.LineHeight(Body) + 10f;
+                Assert.LessOrEqual(widest, cardW, g.Def.Key + ": слово прийомів ширше за картку");
+                Assert.LessOrEqual(card, room, g.Def.Key + ": картка прийомів " + card + " вища за місце " + room);
+            }
+        }
+
+        /// <summary>
+        /// Рядок підказки над рядом на 4:3 (АД 15.11.2026, Б1): «бал перейшов» кожною парою атрибутів, С-1 і опис ролі (підказка
+        /// плитки ролі) — повним текстом, не більше двох рядків на ширині саме цього рядка (ряд 4:3 без слова «ҐІМІК», відступу й полів
+        /// підкладки). Ширина — не менша за текст афіші 362, на якому рядок міряли для паперу 16:9.
+        /// </summary>
+        [Test]
+        public void CreateRowHint_FourThree_TwoLinesOnTheHintWidth()
+        {
+            float word = WordFont.Width(Caps(Ui("c.create.gimmick")), 27f, 0.02f);
+            // найвужча панель колонки (5:4) — ряд найвужчий (на 4:3 ширший на 75)
+            float width = CareerTileLayout.CreateRowHintWidth(CareerTileLayout.CreateNarrowestAspect * 900f, word) - RenderSlack;
+            float paper = CareerTileLayout.StripW - CareerTileLayout.CreatePosterPadLeft - CareerTileLayout.CreatePosterPadRight;
+            TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "рядок підказки 5:4: {0:0.0}, 4:3: {1:0.0} (папір {2:0})", width,
+                CareerTileLayout.CreateRowHintWidth(1200f, word) - RenderSlack, paper));
+            Assert.GreaterOrEqual(width, paper, "рядок підказки 4:3 вужчий за текст афіші — сказати АД до коміту");
+            var t = RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json"));
+            var lines = new List<string> { Ui("c.create.freepoints.hint"), Ui("role.hero.desc"), Ui("role.villain.desc") };
+            for (int a = 0; a < 5; a++)
+                for (int b = 0; b < 5; b++)
+                    if (a != b) lines.Add(CareerScreenLines.FreeMovedLine(t, (RingAttr)a, (RingAttr)b));
+            var bad = new List<string>();
+            foreach (var s in lines)
+            {
+                float widest;
+                int n = TextFont.Lines(TextBreak.GlueDashes(s), Body, width, 0f, out widest);
+                if (n > CareerTileLayout.HintMaxLines) bad.Add(string.Format("«{0}» — {1} рядки у {2:0}", s, n, width));
+                if (widest > width) bad.Add(string.Format("«{0}»: слово {1:0.0} ширше за рядок", s, widest));
+            }
+            Assert.AreEqual(23, lines.Count);
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Рядок «вільний бал перейшов» (ПМ і АД 14.11.2026, варіант (1)): на папері афіші на місці опису ролі чи С-1 — Fixel 15, ширина
+        /// тексту афіші (<see cref="CareerTileLayout.StripW"/> без полів паперу); кожна пара різних атрибутів — не більше двох рядків,
+        /// жодного розриву посеред слова, гліфи — у шрифті, відмінки — з ключів.
+        /// </summary>
+        [Test]
+        public void FreeMovedLine_EveryAttributePair_TwoLinesOnThePoster()
+        {
+            var bad = new List<string>();
+            float width = CareerTileLayout.StripW - CareerTileLayout.CreatePosterPadLeft - CareerTileLayout.CreatePosterPadRight - RenderSlack;
+            var t = RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json"));
+            int pairs = 0;
+            for (int a = 0; a < 5; a++)
+                for (int b = 0; b < 5; b++)
+                {
+                    if (a == b) continue;
+                    string line = CareerScreenLines.FreeMovedLine(t, (RingAttr)a, (RingAttr)b);
+                    pairs++;
+                    if (line.Contains("⟦") || line.Contains("{")) { bad.Add("ключа чи підстави немає: «" + line + "»"); continue; }
+                    float widest;
+                    int n = TextFont.Lines(TextBreak.GlueDashes(line), Body, width, 0f, out widest);
+                    if (n > 2) bad.Add(string.Format("«{0}» — {1} рядки у {2:0}", line, n, width));
+                    if (widest > width) bad.Add(string.Format("«{0}»: слово {1:0.0} ширше за рядок {2:0}", line, widest, width));
+                    if (TextFont.Missing(line).Count > 0) bad.Add("«" + line + "»: немає гліфів " + string.Join("", TextFont.Missing(line)));
+                }
+            Assert.AreEqual(20, pairs);
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Б4-1 (ПМ і арт-директор 14.11.2026): з п'ятим ґіміком ролі — дві низькі плити над «Почати кар'єру». Колонка (золота плита,
+        /// просвіт, дві плити) рівно заввишки два ряди ґіміків; просвіт не менший за 12 (кобальт не торкається золота) і вміщає рядок
+        /// причини (кожна з create.reason.* — не більше двох рядків у ширину золотої плити); проміжок плит більший за підйом у фокусі
+        /// (7). Назва ролі обох родів на компактному кеглі не сягає галочки вибору ліворуч від ключа.
+        /// </summary>
+        [Test]
+        public void Create_Eight_RoleChips_TitleClearsTheCheck_AndTheZoneHoldsTheReason()
+        {
+            var bad = new List<string>();
+            Assert.AreEqual(2f * CareerTileLayout.TileH + CareerTileLayout.CreateRowsGap,
+                CareerTileLayout.TileH + CareerTileLayout.CreateRoleZone + CareerTileLayout.CreateRoleColumnH, 0.01f, "колонка — висота двох рядів");
+            Assert.GreaterOrEqual(CareerTileLayout.CreateRoleZone, CareerTileLayout.CreateRoleGoldClear, "просвіт до золота ≥ 12");
+            Assert.Greater(CareerTileLayout.CreateRoleChipGap, 7f, "нижня плита у фокусі (−7) не лягає на верхню");
+            Assert.AreEqual(CareerTileLayout.TileH + CareerTileLayout.CreateRowsGap, CareerTileLayout.CreateLift, 0.01f);
+            float lh = SemiFont.LineHeight(Body);   // причина — MenuKit.Body(…, bold: true)
+            if (CareerTileLayout.CreateRoleReasonH < 2f * lh)
+                bad.Add(string.Format("просвіт під причину {0:0.0} < два рядки {1:0.0}", CareerTileLayout.CreateRoleReasonH, 2f * lh));
+            if (_ui == null) Ui("c.create.role");
+            var reasons = new List<string>();
+            foreach (var kv in _ui) if (kv.Key.StartsWith("create.reason.", StringComparison.Ordinal) && kv.Value is string) reasons.Add((string)kv.Value);
+            Assert.Greater(reasons.Count, 4, "причин create.reason.* — кілька");
+            foreach (var p in Panels)
+            {
+                float gw = CareerTileLayout.GoldWidth(p.Value);
+                foreach (var r in reasons)
+                {
+                    float widest;
+                    int n = SemiFont.Lines(TextBreak.GlueDashes(r), Body, gw - RenderSlack, 0f, out widest);
+                    if (n > 2) bad.Add(string.Format("{0}: причина «{1}» — {2} рядки у {3:0}", p.Key, r, n, gw));
+                }
+                float checkL = gw - CareerTileLayout.LowCheckRight - CareerTileLayout.CheckW;
+                float keyL = gw - CareerTileLayout.CompactBodyRight - CareerTileLayout.CompactKeyBox;
+                if (checkL + CareerTileLayout.CheckW + CheckClear > keyL) bad.Add(p.Key + ": галочка плити ролі на ключі");
+                if (CareerTileLayout.LowCheckTop < 0f || CareerTileLayout.LowCheckTop + CareerTileLayout.CheckH > CareerTileLayout.CreateRoleChipH)
+                    bad.Add("галочка плити ролі виходить за плиту");
+                foreach (var key in new[] { "role.hero", "role.hero.f", "role.villain", "role.villain.f" })
+                {
+                    string title = Caps(Ui(key));
+                    float right = CareerTileLayout.CompactBodyLeft + TitleFont.Width(title, CareerTileLayout.CompactTitleSize, CareerTileLayout.TitleTrack) + RenderSlack;
+                    if (right > checkL - CheckClear)
+                        bad.Add(string.Format("{0}: «{1}» на {2:0} сягає {3:0}, галочка — від {4:0}", p.Key, title, CareerTileLayout.CompactTitleSize, right, checkL));
+                    if (TitleFont.LineHeight(CareerTileLayout.CompactTitleSize) > CareerTileLayout.CreateRoleChipH - 2f * CareerTileLayout.LowBodyTop + 6f)
+                        bad.Add("назва ролі вища за плиту");
+                }
+            }
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+        /// <summary>
+        /// Рядок-підказка шапки шухляди «Розвиток» / «Витрати» (WeekScreenView.Drawer: шухляда 560, поля 18 і 24, заголовок display 25
+        /// ВЕЛИКИМИ, підказка праворуч із відступом 16, текст 12 — RingUi.HintLine). Саме тут при наведенні стоять підказки атрибутів
+        /// (CareerScreenLines.AttrBuyHint, з причиною «чому не можна») і тренерів (CoachHint) — справжні рядки з сесій сезонів 1, 4 і 7
+        /// (Б5: хвіст «тіло старіє»), обидві форми (героїня — «.f»; зараз у цих ключів «.f» немає — прогін стереже ту, що з'явиться;
+        /// причини — усі dev.reason.*, і недосяжні для атрибута: так межа лише суворіша). Без хвоста — до двох рядків (шапка 56, кадри
+        /// слоту 30); хвіст
+        /// старіння витривалості дає третій (виміряно 14.11.2026: шапка росте, прокрутка стискається) — більше трьох не можна.
+        /// </summary>
+        [Test]
+        public void DrawerHead_Hint_AttrAndCoachLines_WithTheAgeingTail_FitTheirLines()
+        {
+            const float padL = 18f, padR = 24f, gap = 16f, hintSize = 12f;
+            var bad = new List<string>();
+            int checkedTail = 0;
+            // шухляда 560 (16:9) і 472 (4:3, АД 15.11.2026: CareerTileLayout.WeekDrawerWidth). На 472 до трьох рядків росте й підказка без
+            // хвоста (виміряно 15.11.2026: атрибут «Витривалість», тренери) — та сама поведінка шапки, що з хвостом на 16:9; більше трьох — ніде
+            foreach (float drawerW in new[] { CareerTileLayout.WeekDrawerW, CareerTileLayout.WeekDrawerWidth(1200f, 900f) })
+            {
+            int plain = drawerW < CareerTileLayout.WeekDrawerW ? 3 : 2;
+            // атрибути — у шухляді «Розвиток», тренери — у «Витратах» (WeekScreenView.Drawer: заголовок за _dev)
+            float devW = drawerW - padL - padR - gap - WordFont.Width(Caps(Ui("dev.title")), 25f, 0.02f) - RenderSlack;
+            float shopW = drawerW - padL - padR - gap - WordFont.Width(Caps(Ui("c.hub.shop")), 25f, 0.02f) - RenderSlack;
+            var reasons = new List<string> { null };
+            if (_ui == null) Ui("dev.title");
+            foreach (var kv in _ui) if (kv.Key.StartsWith("dev.reason.", StringComparison.Ordinal) && kv.Value is string) reasons.Add(kv.Key.Substring("dev.reason.".Length));
+            var heroine = RingText.FromJson(CareerKit.Read("ui_uk.json"));
+            HeroForms.Apply(heroine, true);
+            var s1 = CareerKit.NewHero(9);
+            for (int i = 0; i < 5; i++) s1.Player.Set((RingAttr)i, 0);   // на стелі ціни немає (п. 6) — тут міряється рядок із ціною
+            foreach (int season in new[] { 1, 4, 7 })
+            {
+                var s = SessionInSeason(s1, season);
+                foreach (var t in new[] { T, heroine })
+                {
+                    for (int i = 0; i < 5; i++)
+                    {
+                        var a = (RingAttr)i;
+                        foreach (var r in reasons)
+                        {
+                            string h = CareerScreenLines.AttrBuyHint(t, s, a, r);
+                            bool tail = h.Contains(Ui("c.age.attr", 1).Substring(0, 12));
+                            if (tail) checkedTail++;
+                            DrawerHint(bad, "Розвиток " + drawerW + ", сезон " + season + ", " + a, h, hintSize, devW, tail ? 3 : plain);
+                        }
+                    }
+                    for (int k = 0; k < CareerRules.Coaches.Length; k++)
+                    {
+                        string h = CareerScreenLines.CoachHint(t, s, k);
+                        bool tail = h.Contains(Ui("c.age.coach", 1).Substring(0, 12));
+                        if (tail) checkedTail++;
+                        DrawerHint(bad, "Витрати " + drawerW + ", сезон " + season + ", тренер " + CareerRules.Coaches[k], h, hintSize, shopW, tail ? 3 : plain);
+                    }
+                }
+            }
+            }
+            // висота шапки з найгіршою підказкою (3 рядки): поле 8 + більше з заголовка й підказки (поля мітки Unity 2 + 2; підказка —
+            // не нижче 30). Найменша шухляда (CareerTileLayout.DrawerNeed) мусить умістити шапку, рядок прокрутки (DrawerScrollMinTight)
+            // і підвал «Усе» — підвал не зрізається й не сходить на канати (вимога директора 14.11.2026)
+            float head3 = 8f + Math.Max(WordFont.LineHeight(25f) + 4f, Math.Max(30f, 3 * TextFont.LineHeight(hintSize)) + 4f);
+            Assert.LessOrEqual(head3 + CareerTileLayout.DrawerScrollMinTight + CareerTileLayout.DrawerFootH, CareerTileLayout.DrawerNeed(true) + 0.01f,
+                "«Розвиток»: шапка з трьома рядками + рядок прокрутки + «Усе» у найменшій шухляді");
+            Assert.LessOrEqual(head3 + CareerTileLayout.DrawerScrollMinTight, CareerTileLayout.DrawerNeed(false) + 0.01f,
+                "«Витрати»: шапка з трьома рядками + рядок прокрутки у найменшій шухляді");
+            Assert.AreEqual(CareerTileLayout.DrawerNeed(true) - head3 - CareerTileLayout.DrawerFootH,
+                CareerTileLayout.DrawerScrollMin(CareerTileLayout.DrawerNeed(true), head3, CareerTileLayout.DrawerFootH), 0.01f,
+                "прокрутка поступається шапці, а не виштовхує підвал");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        private static void DrawerHint(List<string> bad, string where, string s, float size, float width, int maxLines)
+        {
+            float widest;
+            if (s.IndexOf('⟦') >= 0) bad.Add(where + ": немає тексту ключа в «" + s + "»");
+            int lines = TextFont.Lines(TextBreak.GlueDashes(s), size, width, 0f, out widest);
+            if (lines > maxLines) bad.Add(string.Format("{0}: «{1}» — {2} рядки у {3:0} (можна {4})", where, s, lines, width, maxLines));
+        }
+
+        /// <summary>Та сама кар'єра в сезоні <paramref name="season"/> (через зліпок, як сейв гравця: надбавку ставить Sync відновлення).</summary>
+        private static CareerSession SessionInSeason(CareerSession s, int season)
+        {
+            string blob = s.CaptureState(), from = "|season=" + s.State.Season + "|";
+            var t = CareerKit.Fresh(s.State.Seed, s.Content);
+            t.RestoreState(blob.Replace(from, "|season=" + season + "|"));
+            Assert.AreEqual(season, t.State.Season, "сезон відновлено");
+            return t;
         }
     }
 }

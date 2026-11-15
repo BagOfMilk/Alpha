@@ -66,7 +66,7 @@ namespace Game.Tests.EditMode
         // ---------------- дані ----------------
 
         [Test]
-        public void TheFourNewGimmicks_FollowTheDesignTable_AndWaitForTheOwnersU0BeforeTheCreationScreen()
+        public void TheFourNewGimmicks_FollowTheDesignTable_AndAreOnTheCreationScreen()
         {
             var c = CareerKit.Content();
             Assert.AreEqual(CareerKit.GimmickCount, c.Gimmicks.Count);
@@ -74,7 +74,8 @@ namespace Game.Tests.EditMode
             CollectionAssert.AreEqual(new[] { 4, 5, 6, 7 }, New.Select(g => (int)g).ToArray(), "номери 4–7 — у сейвах, не міняти");
             Func<Gimmick, int[]> a = g => c.GimmickOf(g).Attr;
             CollectionAssert.AreEqual(new[] { 0, 0, 2, 0, 1 }, a(Gimmick.Veteran), "Ветеран: Техніка +2, Харизма +1");
-            CollectionAssert.AreEqual(new[] { 1, 0, 0, 2, 0 }, a(Gimmick.Hardcore), "Хардкорник: Витривалість +2, Сила +1");
+            // V8 (власник 13.11.2026: «Так, усі 7»): Витривалість 2 → 1 — з +1 до зсуву порогів Хардкорник вибивався над смугою
+            CollectionAssert.AreEqual(new[] { 1, 0, 0, 1, 0 }, a(Gimmick.Hardcore), "Хардкорник: Витривалість +1, Сила +1 (V8)");
             CollectionAssert.AreEqual(new[] { 0, 0, 0, 0, 0 }, a(Gimmick.Rookie), "Новачок: рівно");
             CollectionAssert.AreEqual(new[] { 3, -1, 0, 0, 0 }, a(Gimmick.Strongman), "Силач: Сила +3, повільний — спритність −1");
             Assert.AreEqual(RingAttr.Technique, c.GimmickOf(Gimmick.Veteran).FinisherAttr);
@@ -82,26 +83,30 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(0, c.GimmickOf(Gimmick.Rookie).StartGimmickMoves, "мало прийомів");
             foreach (var g in c.Gimmicks)
             {
-                bool mvp = !New.Contains(g.Id);
-                Assert.AreEqual(mvp, g.OnCreationScreen, g.Key + ": на екрані створення — лише MVP, решта після У0");
+                Assert.IsTrue(g.OnCreationScreen, g.Key + ": на екрані створення (Б4, власник 13.11.2026 «Так, усі 7», п. 5)");
                 if (g.Id != Gimmick.Rookie) { Assert.AreEqual(1, g.FreePoints, g.Key); Assert.AreEqual(-1, g.StartGimmickMoves, g.Key); }
                 Assert.IsTrue(c.Roster.Any(n => n.Gimmick == g.Id), "у ростері є борець ґіміка " + g.Key);
             }
             foreach (var g in New)
                 Assert.IsTrue(c.Roster.Where(n => n.Gimmick == g).All(n => n.Tier >= 2), g + ": NPC — у федераціях 2–4, М1 федерації 1 той самий");
-            var v = CareerKit.NewAtCreate(1).GetCreationView();
-            CollectionAssert.AreEqual(new[] { Gimmick.Monster, Gimmick.Flyer, Gimmick.Technician, Gimmick.Showman }, v.Gimmicks.Select(x => x.Def.Id).ToArray());
-
-            // після У0 власник (через ПМ) перемикає прапор у даних — і ґімік з'являється з усім своїм
-            var open = Load(Gimmicks().Replace("\"onCreationScreen\": false", "\"onCreationScreen\": true"));
-            var s = CareerSession.New(open, new Game.Gameplay.Combat.SeededDiceRoller(1), 1);
-            s.StartNewGame();
-            var all = s.GetCreationView();
-            Assert.AreEqual(CareerKit.GimmickCount, all.Gimmicks.Count);
+            // екран створення — усі вісім у порядку переліку (Б4: ряд MVP, під ним 5–8), кожен з усім своїм
+            var all = CareerKit.NewAtCreate(1).GetCreationView();
+            CollectionAssert.AreEqual(Enum.GetValues(typeof(Gimmick)).Cast<Gimmick>().ToArray(), all.Gimmicks.Select(x => x.Def.Id).ToArray());
             var rookie = all.Gimmicks.Single(x => x.Def.Id == Gimmick.Rookie);
             Assert.AreEqual(2, rookie.FreePoints);
             Assert.AreEqual(8, rookie.StartMoves.Count, "6 базових + коронний + фінішер");
             Assert.AreEqual(1, all.Gimmicks.Single(x => x.Def.Id == Gimmick.Veteran).FreePoints);
+            foreach (var g in New) CollectionAssert.AreEqual(c.GimmickOf(g).Attr, all.Gimmicks.Single(x => x.Def.Id == g).BaseAttr, g + ": основа на плитці — з даних");
+
+            // прапор «onCreationScreen» лишається механізмом даних для майбутніх ґіміків: false ховає ґімік з екрана, решта на місці
+            string json = Gimmicks();
+            const string rookieId = "\"id\": \"rookie\",";
+            Assert.AreEqual(1, json.Split(new[] { rookieId }, StringSplitOptions.None).Length - 1);
+            var hidden = Load(json.Replace(rookieId, rookieId + " \"onCreationScreen\": false,"));
+            var h = CareerSession.New(hidden, new Game.Gameplay.Combat.SeededDiceRoller(1), 1);
+            h.StartNewGame();
+            CollectionAssert.AreEqual(Enum.GetValues(typeof(Gimmick)).Cast<Gimmick>().Where(g => g != Gimmick.Rookie).ToArray(),
+                h.GetCreationView().Gimmicks.Select(x => x.Def.Id).ToArray(), "onCreationScreen: false — ґіміка на екрані немає");
         }
 
         [Test]
@@ -423,6 +428,65 @@ namespace Game.Tests.EditMode
                 Assert.AreEqual(hasPerk, GimmickRules.IsBuiltInPerk(g, PerkCatalog.Veteran), g.ToString());
                 Assert.IsFalse(GimmickRules.IsBuiltInPerk(g, PerkCatalog.SecondWind), g.ToString());
             }
+        }
+
+        [Test]
+        public void Veteran_PlusOneToTheReverseRoll_InApplyToAndForRival_TheOtherSevenNothing()
+        {
+            // власник 14.11.2026: «так бувалий» — Бувалий +1 до кидка реверсу (MatchModifiers.ReverseBonus, рушій — MatchEngine.ReverseMod)
+            Assert.AreEqual(1, GimmickRules.VeteranReverseBonus);
+            foreach (Gimmick g in Enum.GetValues(typeof(Gimmick)))
+            {
+                int want = g == Gimmick.Veteran ? GimmickRules.VeteranReverseBonus : 0;
+                var m = new MatchModifiers();
+                GimmickRules.ApplyTo(m, g);
+                Assert.AreEqual(want, m.ReverseBonus, "ApplyTo " + g);
+                Assert.AreEqual(want, GimmickRules.ForRival(g).ReverseBonus, "ForRival " + g);
+            }
+            var stacked = new MatchModifiers { ReverseBonus = 2 };
+            GimmickRules.ApplyTo(stacked, Gimmick.Veteran);
+            Assert.AreEqual(2 + GimmickRules.VeteranReverseBonus, stacked.ReverseBonus, "додається до того, що вже є, а не перезаписує");
+        }
+
+        [Test]
+        public void Veteran_ReverseBonus_ReachesEveryMatch_WeeklyShowBothSides_FeudMatch_AndTheHammer()
+        {
+            // тиждень: гравець-Бувалий і суперник-Бувалий
+            var s = Hero(6, Gimmick.Technician);
+            s.EndWeek();
+            string opp = s.State.Opponent;
+            string blob = s.CaptureState();
+            var plain = AsGimmick(s, 6, Gimmick.Technician).StartShow();
+            Assert.AreEqual(0, plain.Setup.PlayerMods.ReverseBonus);
+            Assert.AreEqual(0, plain.Setup.RivalMods.ReverseBonus, "суперник тижня — не Бувалий");
+            Assert.AreEqual(GimmickRules.VeteranReverseBonus, AsGimmick(s, 6, Gimmick.Veteran).StartShow().Setup.PlayerMods.ReverseBonus, "гравець, тиждень");
+            var c = CareerKit.Content();
+            c.FindNpc(opp).Gimmick = Gimmick.Veteran;
+            var t = CareerKit.Fresh(6, c);
+            t.RestoreState(blob);
+            var ev = t.StartShow();
+            Assert.AreEqual(GimmickRules.VeteranReverseBonus, ev.Setup.RivalMods.ReverseBonus, "суперник тижня — моди NPC");
+            Assert.AreEqual(0, ev.Setup.PlayerMods.ReverseBonus, "лише своїй стороні");
+
+            // матч ворожнечі: гравець — через BuildMatchSetup, Молот — через ручне злиття в StartFeudMatch
+            var f = AtFeudMatch(80, Gimmick.Technician);
+            string fblob = f.CaptureState();
+            var fplain = AsGimmick(f, 80, Gimmick.Technician).StartFeudMatch();
+            Assert.AreEqual(0, fplain.Setup.PlayerMods.ReverseBonus);
+            Assert.AreEqual(0, fplain.Setup.RivalMods.ReverseBonus, "Молот — не Бувалий");
+            Assert.AreEqual(GimmickRules.VeteranReverseBonus, AsGimmick(f, 80, Gimmick.Veteran).StartFeudMatch().Setup.PlayerMods.ReverseBonus, "гравець, ворожнеча");
+            var c2 = CareerKit.Content();
+            c2.FindNpc(CareerContent.HammerId).Gimmick = Gimmick.Veteran;
+            var u = CareerKit.Fresh(80, c2);
+            u.RestoreState(fblob);
+            var hv = u.StartFeudMatch();
+            Assert.AreEqual(GimmickRules.VeteranReverseBonus, hv.Setup.RivalMods.ReverseBonus, "Молот-Бувалий: бонус не губиться в ручному злитті");
+            Assert.AreEqual(0, hv.Setup.PlayerMods.ReverseBonus);
+
+            // окрема ворожнеча (без кар'єри): з ґіміком — так, без — ні
+            var camp = RingCampaign.New(c.Feud, new Game.Gameplay.Combat.SeededDiceRoller(3));
+            Assert.AreEqual(0, camp.State.BuildMatchSetup(c.Feud).PlayerMods.ReverseBonus);
+            Assert.AreEqual(GimmickRules.VeteranReverseBonus, camp.State.BuildMatchSetup(c.Feud, LateRole.None, Gimmick.Veteran).PlayerMods.ReverseBonus);
         }
 
         // ---------------- матч ворожнечі ----------------

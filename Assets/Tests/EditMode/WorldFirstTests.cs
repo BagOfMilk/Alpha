@@ -566,7 +566,8 @@ namespace Game.Tests.EditMode
                 Assert.IsTrue(files.ContainsKey(b.OwnerFile), b.Key + ": файлу-власника «" + b.OwnerFile + "» немає");
                 // Без коментарів і цілим словом: «KeyCode.F1» не рахується за «KeyCode.F10», «E» — за «Escape» (огляд 06.10.2026).
                 string src = Regex.Replace(File.ReadAllText(files[b.OwnerFile]), @"//[^\n]*", string.Empty);
-                string key = Regex.IsMatch(b.Key, @"^Alpha\d$") ? "Alpha1" : b.Key;
+                // Цифри 1–9 читаються циклом від KeyCode.Alpha1; «0» поза циклом (створення борця «Рингу», Б4) — буквально.
+                string key = Regex.IsMatch(b.Key, @"^Alpha[1-9]$") ? "Alpha1" : b.Key;
                 if (!Regex.IsMatch(src, @"KeyCode\." + key + @"\b")) unhandled.Add(b.Key + "@" + b.OwnerFile);
             }
             CollectionAssert.AreEqual(ExpectedUnhandledKeys, unhandled.ToList(), "клавіші без обробника");
