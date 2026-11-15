@@ -315,6 +315,27 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Чи знає таблиця цей прийом (охоронець: усі прийоми каталогу мають кліпи).</summary>
         public static bool KnowsMove(string key) { return key != null && Moves.ContainsKey(key); }
 
+        /// <summary>
+        /// Індекс ґіміка «Кар'єри» (0 Монстр, 1 Летун, 2 Технік, 3 Шоумен, 4 Бувалий, 5 Хардкорник, 6 Самородок, 7 Силач) за
+        /// ключем фінішера події; невідомий ключ — −1. Для кіно фінішера: план наслідку залежить від ґіміка
+        /// (docs/ring/FINISHER_CINE.md). Охоронець звіряє з каталогом ґіміків — <c>FinisherShowTests</c>.
+        /// </summary>
+        public static int FinisherGimmick(string moveKey)
+        {
+            switch (moveKey)
+            {
+                case "crusher": return 0;
+                case "meteor": return 1;
+                case "iron_clamp": return 2;
+                case "grand_finale": return 3;
+                case "last_lesson": return 4;
+                case "scar_maker": return 5;
+                case "first_break": return 6;
+                case "titan_press": return 7;
+                default: return -1;
+            }
+        }
+
         /// <summary>Підписний прийом за таблицею (охоронець звіряє з kind каталогу).</summary>
         public static bool IsSignature(string key)
         {

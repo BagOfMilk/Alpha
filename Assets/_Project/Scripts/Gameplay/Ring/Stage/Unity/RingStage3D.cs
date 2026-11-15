@@ -146,6 +146,8 @@ namespace Game.Gameplay.Ring.Stage
         /// </summary>
         public void TimeWarp(float mul, float realSeconds)
         {
+            // Поки йде кіно фінішера, темп веде воно; обірване (пропущене) кіно тримає сповільнення вимкненим до кінця кліпа.
+            if (FinisherCine != null && (FinisherCine.Active || FinisherCine.SlowSuppressed)) return;
             if (UI.Menus.RingAccessibility.ReduceMotion) return;   // «Зменшити рух»: без стоп-кадрів і сповільнень
             if (_timeCo != null) StopCoroutine(_timeCo);
             _timeCo = StartCoroutine(TimeWarpCo(mul, realSeconds));
@@ -236,6 +238,8 @@ namespace Game.Gameplay.Ring.Stage
             BuildCamera();
             BuildLights();
             BuildActors();
+            // Кіно фінішера (docs/ring/FINISHER_CINE.md §5): до режисера й ShowIdle — той одразу кличе EndMatch, а з ним End кіно.
+            FinisherCine = new RingFinisherCine(this);
             BuildDress();
             _director = gameObject.AddComponent<RingMatchDirector>();
             _director.Init(this);
@@ -255,6 +259,7 @@ namespace Game.Gameplay.Ring.Stage
 
         private void OnDestroy()
         {
+            if (FinisherCine != null) FinisherCine.End();   // темп кіно фінішера теж не переживає сцену
             if (_timeCo != null) SetWarp(1f);   // сповільнення не переживає сцену
             if (RingStageHub.Current == (IRingStage)this) RingStageHub.Current = null;
             if (_player != null) _player.Destroy();
@@ -733,6 +738,12 @@ namespace Game.Gameplay.Ring.Stage
         public RingActor Referee { get { return _ref; } }
 
         /// <summary>
+        /// Кіно фінішера (власник 14.11.2026: «А фінішери це шось кінематографічне»): живе зі сценою, запускає його режисер у
+        /// кадрі старту кліпа фінішера. null — сцена не зібралась.
+        /// </summary>
+        public RingFinisherCine FinisherCine { get; private set; }
+
+        /// <summary>
         /// Місце борця пари (світ, слот на підлозі під ним). На рингу — центр, навпроти суперника: (±0,85; мат; 0), гравець —
         /// на заході. За рингом — пара РАЗОМ на підлозі з одного боку, між фартухом і першим рядом (огорожею): точка
         /// <see cref="OutsideAnchor"/>, розлука ±0,85 уздовж боку (<see cref="OutsideAlong"/>: гравець — у мінус); висота —
@@ -1056,6 +1067,7 @@ namespace Game.Gameplay.Ring.Stage
 
         public void EndMatch()
         {
+            if (FinisherCine != null) FinisherCine.End();
             LogCamShare();
             if (_mode == RingStageMode.Match) ShowIdle();
         }
@@ -1480,6 +1492,9 @@ namespace Game.Gameplay.Ring.Stage
             if (_player != null) _player.Tick(Time.deltaTime);
             if (_rival != null) _rival.Tick(Time.deltaTime);
             if (_ref != null) _ref.Tick(Time.deltaTime);
+            // Кіно фінішера — після тіків постатей і до камери: склейка плану в тому самому кадрі, що й рух. Кличеться щокадру й
+            // коли кіно не йде (він сам знімає SlowSuppressed, щойно кліп фінішера догравав).
+            if (FinisherCine != null) FinisherCine.Tick();
             if (_show != null) _show.PinWalker();
             if (_mode == RingStageMode.Match)
             {

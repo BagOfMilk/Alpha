@@ -17,6 +17,18 @@ namespace Game.Tests.EditMode
     public sealed class FinisherShowTests
     {
         [Test]
+        public void FinisherGimmick_MapsEveryFinisherKeyToItsGimmick()
+        {
+            // Кіно фінішера бере ґімік нападника з ключа фінішера події: індекс має збігатися з каталогом ґіміків.
+            var c = CareerKit.Content();
+            Assert.AreEqual(8, c.Gimmicks.Count);
+            foreach (var g in c.Gimmicks)
+                Assert.AreEqual((int)g.Id, RingClipTable.FinisherGimmick(g.FinisherMove), "ґімік " + g.Key + ": індекс для кіно фінішера");
+            Assert.AreEqual(-1, RingClipTable.FinisherGimmick(null));
+            Assert.AreEqual(-1, RingClipTable.FinisherGimmick("forearm"));
+        }
+
+        [Test]
         public void EveryGimmick_FinisherShow_IsItsCatalogMove_WithItsOwnClip()
         {
             var c = CareerKit.Content();
