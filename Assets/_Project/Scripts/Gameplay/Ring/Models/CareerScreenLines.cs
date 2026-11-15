@@ -447,6 +447,180 @@ namespace Game.Gameplay.Ring.Models
             return r.ManagerCut > 0 ? s + " · " + t.Format("c.result.manager", r.ManagerCut) : s;
         }
 
+        // ---------------- стрічка дії тижня (АД 15.11.2026, варіант (А)) ----------------
+
+        /// <summary>Дельта стрічки дії тижня — місце в таблиці важливості <see cref="WeekDeltaOrder"/>.</summary>
+        public enum WeekDelta { Injury, Turn, Money, DevPoints, Trust, Popularity, Feud, Hype, Rival, Opponent, Plan, Locker, Actions, Coach, PromoChoice }
+
+        /// <summary>
+        /// Порядок дельт у стрічці дії тижня — однаковий для всіх дій (АД 15.11.2026): що важливіше, те лівіше, а «· ще N» ховає
+        /// найменш важливі. Спершу тіло й роль, далі шкали, які гравець веде щотижня (гроші, очки, довіра, популярність), потім
+        /// найближче шоу (ворожнеча, ажіотаж, імпульс суперника, суперник, план), наостанок дрібне й те, що вже видно деінде (вибір
+        /// нагороди промо стоїть і в шапці ряду).
+        /// </summary>
+        public static readonly WeekDelta[] WeekDeltaOrder =
+        {
+            WeekDelta.Injury, WeekDelta.Turn, WeekDelta.Money, WeekDelta.DevPoints, WeekDelta.Trust, WeekDelta.Popularity,
+            WeekDelta.Feud, WeekDelta.Hype, WeekDelta.Rival, WeekDelta.Opponent, WeekDelta.Plan, WeekDelta.Locker, WeekDelta.Actions,
+            WeekDelta.Coach, WeekDelta.PromoChoice,
+        };
+
+        /// <summary>
+        /// Рядок 1 стрічки: «Дія · Результат» словом — назва рівня кидка з порогом («Провал (до 6)») чи «Зроблено» без кидка. Колір
+        /// стрічки лише в смузі, зміст несе слово (АД 15.11.2026). Відмова — лише назва дії, причина — рядком 2.
+        /// </summary>
+        public static string WeekResultHead(RingText t, WeekActionResult r)
+        {
+            string act = t.Get("week.action." + (int)r.Kind);
+            if (!r.Ok) return act;
+            return act + " · " + (WeekRollDecides(r) ? RingLabels.TierName(t, r.Tier) : t.Get("c.week.result.done"));
+        }
+
+        /// <summary>
+        /// Кидок вирішує, чи дія вдалась (промо, закулісся): рівень кидка — слово результату. Кидок підробітку — лише перевірка травми
+        /// (2d6 ≤ 4, §6.1): заробіток є за будь-якого кидка, тож «Провал (до 6)» там збрехав би — результат «Зроблено», травма — дельтою,
+        /// а кидок — у підказці.
+        /// </summary>
+        public static bool WeekRollDecides(WeekActionResult r)
+        {
+            return r != null && r.HasRoll && r.Kind != WeekActionKind.SideJob;
+        }
+
+        /// <summary>
+        /// Дія вдалась — золота смуга стрічки, ні — Signal (АД 15.11.2026: колір лише в смузі, зміст несе слово). Не вдалась — відмова
+        /// ядра чи провал кидка, що вирішує результат (<see cref="WeekRollDecides"/>); частковий успіх — вдалась.
+        /// </summary>
+        public static bool WeekResultSucceeded(WeekActionResult r)
+        {
+            return r != null && r.Ok && !(WeekRollDecides(r) && r.Tier == RollTier.Miss);
+        }
+
+        /// <summary>Арифметика кидка («кидок 6 + 0 = 6, Провал (до 6)») — лише в підказці при наведенні; без кидка — null.</summary>
+        public static string WeekResultRoll(RingText t, WeekActionResult r)
+        {
+            return r != null && r.Ok && r.HasRoll ? t.Format("c.roll", r.Roll, RingChances.Term(r.Modifier), r.Total, RingLabels.TierName(t, r.Tier)) : null;
+        }
+
+        /// <summary>
+        /// Рядок 2 стрічки — дельти в порядку <see cref="WeekDeltaOrder"/>; відмова — одна причина ядра (week.reason.*).
+        /// <paramref name="opponentName"/> — суперник найближчого шоу (Б6), <paramref name="female"/> — героїня (№11, рід ролі в повороті).
+        /// </summary>
+        public static List<string> WeekResultDeltas(RingText t, WeekActionResult r, string opponentName, bool female)
+        {
+            var res = new List<string>();
+            if (r == null) return res;
+            if (!r.Ok) { res.Add(t.Get("week.reason." + r.Reason)); return res; }
+            foreach (var d in WeekDeltaOrder)
+            {
+                string s = WeekDeltaText(t, r, d, opponentName, female);
+                if (s != null) res.Add(s);
+            }
+            return res;
+        }
+
+        /// <summary>Текст однієї дельти; null — цієї дельти в результаті немає.</summary>
+        public static string WeekDeltaText(RingText t, WeekActionResult r, WeekDelta d, string opponentName, bool female)
+        {
+            switch (d)
+            {
+                case WeekDelta.Injury: return r.InjuredZone >= 0 ? t.Format("c.delta.injury", t.Get("bodyzone." + r.InjuredZone)) : null;
+                case WeekDelta.Turn: return TurnLine(t, r, female);   // №11: сцена повернула роль
+                case WeekDelta.Money: return r.MoneyDelta != 0 ? t.Format("c.delta.money", RingChances.Signed(r.MoneyDelta)) : null;
+                case WeekDelta.DevPoints: return r.DevPointsDelta != 0 ? t.Format("c.delta.dev", RingChances.Signed(r.DevPointsDelta)) : null;
+                case WeekDelta.Trust: return r.TrustDelta != 0 ? t.Format("c.delta.trust", RingChances.Signed(r.TrustDelta)) : null;
+                case WeekDelta.Popularity: return r.PopularityDelta != 0 ? t.Format("c.delta.pop", RingChances.Signed(r.PopularityDelta)) : null;
+                case WeekDelta.Feud: return r.FeudDelta != 0 ? t.Format("c.delta.feud", RingChances.Signed(r.FeudDelta)) : null;
+                case WeekDelta.Hype: return r.HypeBonusDelta != 0 ? t.Format("c.delta.hype", RingChances.Signed(r.HypeBonusDelta)) : null;
+                case WeekDelta.Rival: return r.RivalBoosted ? t.Get("c.delta.rival") : null;
+                case WeekDelta.Opponent: return OpponentLine(t, r, opponentName);   // Б6: сцена вписала суперника
+                case WeekDelta.Plan: return r.PlanChanged ? t.Get("c.delta.plan") : null;
+                case WeekDelta.Locker: return r.LockerDelta != 0 ? t.Format("c.delta.locker", RingChances.Signed(r.LockerDelta)) : null;
+                case WeekDelta.Actions: return r.ActionsDelta != 0 ? t.Format("c.delta.actions", RingChances.Signed(r.ActionsDelta)) : null;
+                case WeekDelta.Coach: return r.CoachRaised ? t.Get("c.delta.coach") : null;
+                case WeekDelta.PromoChoice: return r.NeedsChoice ? t.Get("c.week.promo_choice") : null;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Скільки перших частин (за важливістю) влазить разом із хвостом «· ще N» за решту — <paramref name="fits"/> міряє рядок (стрічка —
+        /// один рядок, підказка — два). Хвіст ховає найменш важливі, а не останні за складанням. Не влазить жодна — «ще N».
+        /// </summary>
+        public static int FitParts(RingText t, IList<string> parts, Func<string, bool> fits, out string line)
+        {
+            for (int k = parts.Count; k > 0; k--)
+            {
+                line = JoinParts(t, parts, k);
+                if (fits(line)) return k;
+            }
+            line = JoinParts(t, parts, 0);
+            return 0;
+        }
+
+        /// <summary>
+        /// Рядок 2 стрічки дії: як <see cref="FitParts"/>, але найважливіша дельта за «ще N» не ховається ніколи. Не влазить і з хвостом —
+        /// це лише рядок суперника Б6 з довгим ім'ям ростера (текст «суперник на шоу — {0}» затвердив власник 13.11.2026): тоді її кінець
+        /// обрізано «…», хвіст «ще N» за решту лишається, а підказка показує її цілою разом з рештою (<paramref name="clipped"/>; повертає 0 —
+        /// цілими не показано жодної, сховане — усе).
+        /// </summary>
+        public static int StripParts(RingText t, IList<string> parts, Func<string, bool> fits, out string line, out bool clipped)
+        {
+            int k = FitParts(t, parts, fits, out line);
+            clipped = k == 0 && parts.Count > 0;
+            if (!clipped) return k;
+            var cut = new List<string>(parts);
+            string head = parts[0];
+            for (int n = head.Length - 1; n > 0; n--)
+            {
+                cut[0] = head.Substring(0, n).TrimEnd(' ', '«', '—', '–', '·', ',', ':') + "…";
+                line = JoinParts(t, cut, 1);
+                if (fits(line)) return 0;
+            }
+            cut[0] = "…";
+            line = JoinParts(t, cut, 1);
+            return 0;
+        }
+
+        /// <summary>Перші <paramref name="shown"/> частин через « · » і хвіст «ще N» за решту.</summary>
+        public static string JoinParts(RingText t, IList<string> parts, int shown)
+        {
+            var head = new List<string>();
+            for (int i = 0; i < shown && i < parts.Count; i++) head.Add(parts[i]);
+            if (shown < parts.Count) head.Add(t.Format("c.week.more", parts.Count - shown));
+            return string.Join(" · ", head);
+        }
+
+        /// <summary>
+        /// Підказка при наведенні на стрічку (АД 15.11.2026): лише сховане — спершу арифметика кидка, далі сховані «ще N» дельти в тому
+        /// самому порядку важливості; не влазить у два рядки — те саме «ще N». Нічого не сховано й кидка немає — null.
+        /// </summary>
+        public static string WeekResultHover(RingText t, string roll, IList<string> hidden, Func<string, bool> fits)
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrEmpty(roll)) parts.Add(roll);
+            if (hidden != null) parts.AddRange(hidden);
+            if (parts.Count == 0) return null;
+            string line;
+            FitParts(t, parts, fits, out line);
+            return line;
+        }
+
+        /// <summary>Чутка після дії — «Чутка: …» (голос зали, не букера; АД 15.11.2026); немає — null.</summary>
+        public static string WeekRumor(RingText t, WeekActionResult r)
+        {
+            return r != null && r.Ok && !string.IsNullOrEmpty(r.RumorKey) ? t.Format("c.week.rumor", t.Get(r.RumorKey)) : null;
+        }
+
+        /// <summary>
+        /// Рядок-підказка шапки тижня за замовчуванням: вибір нагороди промо й перевтома — як і раніше (інструкція й попередження); інакше
+        /// чутка останньої дії до наступної (АД 15.11.2026); нічого — порожньо.
+        /// </summary>
+        public static string WeekHintDefault(string promo, string strained, string rumor)
+        {
+            if (promo != null && strained != null) return promo + " " + strained;
+            return promo ?? strained ?? rumor ?? "";
+        }
+
         /// <summary>№11: поворот ролі після сцени закулісся (§5.3) у рядку відгуку дії: «поворот ролі: Лиходійка». null — не було.</summary>
         public static string TurnLine(RingText t, WeekActionResult r, bool female)
         {

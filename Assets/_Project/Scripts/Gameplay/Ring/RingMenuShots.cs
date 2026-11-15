@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using Game.Core.Ring;
 using Game.Core.Ring.Career;
 using Game.Gameplay.Ring.Models;
 using Game.Gameplay.Ring.UI.Menus;
@@ -183,6 +184,7 @@ namespace Game.Gameplay.Ring
             var week = h.CurrentView as UI.WeekScreenView;
             if (week == null) { Debug.LogError("[Ринг] сцена week: після «Продовжити» не тиждень, а " + Name(h)); yield break; }
             yield return Snap(h, "week");
+            yield return WeekStrips(h, week);
             // розвиток (з -ring-shot-dev-all — «Усе» розгорнуто): фокус на кожному атрибуті — підказка з ціною, яку спише покупка
             for (int i = 0; i < 5; i++)
             {
@@ -220,6 +222,60 @@ namespace Game.Gameplay.Ring
             while (h.CurrentView is UI.WeekScreenView && guard < 5f) { guard += Time.unscaledDeltaTime; yield return null; }
             yield return Wait(1.0f);
             yield return Snap(h, "after_week_" + Name(h));
+        }
+
+        /// <summary>
+        /// Стрічка дії тижня (АД 15.11.2026, крок 10 пакета 4:3): дія вдалась — золота смуга й чутка в рядку-підказці; провал кидка —
+        /// Signal; відмова ядра — причина рядком 2; найгірший випадок — усі дельти з «ще N» і найширше ім'я ростера в рядку суперника Б6
+        /// (кінець «…»), а з фокусом на стрічці — сховане в рядку-підказці (кидок першим). Результати синтетичні й лише на кадр: стан
+        /// кар'єри не змінюється, наостанок повертається справжній останній результат.
+        /// </summary>
+        private static IEnumerator WeekStrips(RingGameBootstrap h, UI.WeekScreenView week)
+        {
+            var was = h.LastWeekResult;
+            // найширше ім'я ростера шрифтом стрічки — виміряв CareerTextFitTests.WeekStrip_Deltas_AndTheHover_FitOnTheSyntheticWorst
+            var widest = h.CareerForShots != null ? h.CareerForShots.Content.FindNpc("kharakternyk") : null;
+            if (widest == null) Debug.LogError("[Ринг] огляд меню: немає борця kharakternyk — кадр найгіршої стрічки з іменем картки");
+            var names = new[] { "week_strip_ok", "week_strip_miss", "week_strip_refusal", "week_strip_worst" };
+            var results = new[]
+            {
+                new WeekActionResult { Kind = WeekActionKind.Promo, Ok = true, HasRoll = true, Roll = 9, Modifier = 2, Total = 11, Tier = RollTier.Strong,
+                    PopularityDelta = 3, HypeBonusDelta = 1, RumorKey = "rumor.next_opponent" },
+                new WeekActionResult { Kind = WeekActionKind.Promo, Ok = true, HasRoll = true, Roll = 3, Modifier = 1, Total = 4, Tier = RollTier.Miss,
+                    PopularityDelta = -2, TrustDelta = -1 },
+                new WeekActionResult { Kind = WeekActionKind.SideJob, Ok = false, Reason = "exclusive" },
+                new WeekActionResult { Kind = WeekActionKind.Backstage, Ok = true, HasRoll = true, Roll = 4, Modifier = -1, Total = 3, Tier = RollTier.Miss,
+                    OpponentChanged = true, PlanChanged = true, LockerDelta = -2, ActionsDelta = -1, CoachRaised = true, NeedsChoice = true },   // суперник першим, за ним ще 5 (Б6, 36 з 50)
+            };
+            try
+            {
+                for (int i = 0; i < results.Length; i++)
+                {
+                    bool worst = i == results.Length - 1;
+                    UI.WeekScreenView.OpponentNameForShots = worst && widest != null ? h.TextForShots.Get(widest.NameKey) : null;
+                    h.LastWeekResult = results[i];
+                    h.CurrentView.Refresh();
+                    yield return Wait(0.7f);                  // рядок 2 міряється після розкладки, далі поява 180 мс
+                    yield return Snap(h, names[i]);
+                }
+                // фокус на стрічці (той самий PadHot, що геймпад; миша й дотик кличуть той самий показ): рамка й сховане в рядку-підказці
+                var strip = week.PadForShots(key => key == "week:last");
+                if (strip == null) Debug.LogError("[Ринг] огляд меню: на тижні немає стрічки дії (week:last)");
+                else
+                {
+                    strip.PadHot(true);
+                    yield return Wait(0.3f);
+                    yield return Snap(h, "week_strip_focus");
+                    strip.PadHot(false);
+                }
+            }
+            finally
+            {
+                UI.WeekScreenView.OpponentNameForShots = null;
+                h.LastWeekResult = was;
+                if (h.CurrentView != null) h.CurrentView.Refresh();
+            }
+            yield return Wait(0.3f);
         }
 
         private static string Name(RingGameBootstrap h) { return h.CurrentView == null ? "null" : h.CurrentView.GetType().Name; }
@@ -428,6 +484,7 @@ namespace Game.Gameplay.Ring
                 yield return Wait(0.3f);
             }
             else Debug.LogError("[Ринг] огляд меню: на тижні немає плитки «Промо» (ключ 4) — кадр підказки шапки не знято");
+            if (week != null) yield return WeekStrips(h, week);
             // ---- геймпад без миші на тижні: фокус на плитці, хрестовиною до вкладки шухляди, A відкриває, B закриває (не пауза) ----
             if (pad)
             {
