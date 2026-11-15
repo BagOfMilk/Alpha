@@ -17,8 +17,8 @@ namespace Game.Gameplay.Ring.Stage
     /// самому кадрі. Сцена кличе <see cref="Tick"/> щокадру у своєму <c>LateUpdate</c> після <c>RingActor.Tick</c> і до
     /// розрахунку камери.</para>
     /// <para><b>Хто веде час.</b> Поки кіно йде, темп гри (<see cref="RingTime.Warp"/>) щокадру ставить воно; сповільнення
-    /// режисера на цей час вимикається (<c>RingStage3D.TimeWarp</c> не кликати, поки <see cref="Active"/>). Кінець кіно
-    /// повертає темп 1.</para>
+    /// режисера на цей час вимикається (<c>RingStage3D.TimeWarp</c> не кликати, поки <see cref="Active"/> або
+    /// <see cref="SlowSuppressed"/>). Кінець кіно повертає темп 1.</para>
     /// <para><b>Хто веде камеру.</b> Після кіно влучання камера лишається на плані наслідку, доки режисер не поставить план
     /// наступного кроку — так само, як після його власного кадру фінішера. Промах, пропуск гравцем і кліп, що так і не
     /// почався, повертають камеру одразу (<see cref="Request.CutToWide"/> або загальний план сцени).</para>
@@ -60,15 +60,11 @@ namespace Game.Gameplay.Ring.Stage
             /// <summary>Режисер ставить рефері в точку поза кадром (null — рефері не чіпати; камера обійде його курсом).</summary>
             public Action<Vector3> PlaceReferee;
             /// <summary>
-            /// Режисер повертає свою камеру склейкою: кіно промаху скінчилось, гравець пропустив кіно або кліп так і не почався.
+            /// Режисер повертає свою камеру склейкою: кіно промаху скінчилось, гравець пропустив кіно або кліп так і не почався
+            /// за <see cref="MaxWaitFrames"/> кадрів. У цьому виклику режисер ставить той план, який вважає чинним саме зараз.
             /// null — загальний план сцени (<see cref="StageCam.Overview"/>).
             /// </summary>
             public Action CutToWide;
-            /// <summary>
-            /// Режисер ставить свій кадр фінішера, як до кіно: розкадровка є, але жоден план не став (пара біля канатів).
-            /// null — камера лишається, як є.
-            /// </summary>
-            public Action Fallback;
         }
 
         /// <summary>Журнал планів у консоль (огляд і тури).</summary>
@@ -87,7 +83,7 @@ namespace Game.Gameplay.Ring.Stage
         private int _side = 1, _beat = -1, _wait;
         private Vector3 _pos, _look;
         private float _fov, _dolly, _dollied, _freezeLeft, _lastT;
-        private bool _axisSet, _seen, _shotOk, _everCut, _fellBack, _froze, _warped;
+        private bool _axisSet, _seen, _shotOk, _everCut, _froze, _warped;
 
         public RingFinisherCine(RingStage3D stage)
         {
@@ -97,7 +93,15 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Кіно йде: звичайна камера, живе очікування й сповільнення режисера не втручаються.</summary>
         public bool Active { get; private set; }
 
-        /// <summary>Розкадровка поточного (чи останнього) фінішера; null — кіно ще не було.</summary>
+        /// <summary>
+        /// Кіно цього фінішера обірвано (пропуск гравцем, кліп так і не почався), але сам фінішер ще грає: сповільнення
+        /// режисера на ньому теж не вмикати — гравець щойно попросив звичайний темп. Знімається само, щойно нападник
+        /// догравав чи змінив кліп, і з наступним <see cref="Begin"/> / <see cref="End"/>. Умова в сцені:
+        /// <c>Active || SlowSuppressed</c>.
+        /// </summary>
+        public bool SlowSuppressed { get; private set; }
+
+        /// <summary>Розкадровка фінішера, кіно якого справді почалось (поточного чи останнього); null — такого ще не було.</summary>
         public FinisherCineTimeline Timeline { get { return _tl; } }
 
         /// <summary>Індекс плану, що йде зараз (у <see cref="FinisherCineTimeline.Beats"/>), або −1.</summary>
@@ -114,6 +118,7 @@ namespace Game.Gameplay.Ring.Stage
         public bool Begin(Request r)
         {
             End();
+            _tl = null;                                               // розкадровка — лише та, що справді пішла
             if (_s == null || Gone(r.Attacker) || Gone(r.Victim) || r.Clip == null) return false;
             var marks = CineMarks.Read(_s.Events, r.MarkClip ?? r.Clip.name, r.Contact, r.Clip.length);
             var o = new CineOptions
@@ -126,12 +131,17 @@ namespace Game.Gameplay.Ring.Stage
             };
             var tl = RingFinisherCinePlan.Build(marks, o);
             if (tl.Empty) return false;
-            _r = r; _tl = tl;
+            _r = r;
             _beat = -1; _wait = 0;
             _froze = false; _freezeLeft = 0f;
-            _shotOk = false; _everCut = false; _fellBack = false;
-            _seen = r.Attacker.CurrentClip == r.Clip;
-            float t0 = _seen ? r.Attacker.ClipTime : Math.Max(0f, r.StartTime);
+            _shotOk = false; _everCut = false;
+            // Кліп «уже грає» — лише якщо режисер щойно його почав (Begin після PlayAtTime): той самий кліп, не догравав, час
+            // рівно на старті. Нападник міг лишитися на тому самому кліпі з минулого разу (той самий фінішер удруге, кліп
+            // догравав чи стоїть посередині): тоді це ще не старт, місця — із запиту, а час — StartTime.
+            float start = Math.Max(0f, r.StartTime);
+            _seen = r.Attacker.CurrentClip == r.Clip && !r.Attacker.Finished && Math.Abs(r.Attacker.ClipTime - start) <= 0.1f;
+            float t0 = _seen ? r.Attacker.ClipTime : start;
+            if (t0 >= tl.End) return false;                           // показувати вже нічого
             _lastT = t0;
 
             // Вісь дії й бік камер — раз на все кіно, за місцями старту кліпа (правило 1 розкадровки).
@@ -142,15 +152,21 @@ namespace Game.Gameplay.Ring.Stage
             _side = RingFinisherCinePlan.Side(sc);
             if (r.PlaceReferee != null && !Gone(r.Referee)) r.PlaceReferee(V(RingFinisherCinePlan.RefereeSpot(sc, _side)));
 
-            // Перший план — у цьому ж кадрі, склейкою: до старту кліпа камера вже стоїть.
+            // Перший план — у цьому ж кадрі, склейкою: до старту кліпа камера вже стоїть. Якщо мить першого плану ще попереду
+            // (повтор без заклику, мітка заклику не з нуля), він стає одразу й просто триває довше — інакше початок
+            // фінішера йшов би на плані, що лишився від попереднього кроку (режисер свого кадру вже не ставить).
             int k = RingFinisherCinePlan.BeatAt(tl, t0);
-            if (k >= 0)
+            if (k < 0) k = 0;
+            _beat = k;
+            _tl = tl;
+            Active = true;                                            // до склейки: подія Cut уже бачить розкадровку й план
+            CutTo(tl.Beats[k]);
+            if (!_shotOk)
             {
-                _beat = k;
-                CutTo(tl.Beats[k]);
-                if (!_shotOk) { _beat = -1; return false; }           // камері ніде стати: кадр фінішера ставить режисер
+                // Камері ніде стати (пара біля канатів): кіно не буде зовсім, кадр фінішера ставить режисер.
+                Active = false; _tl = null; _beat = -1;
+                return false;
             }
-            Active = true;
             if (Trace)
                 Debug.Log("[Ринг] кіно фінішера: " + r.Clip.name + ", планів " + tl.Beats.Count + ", удар " + tl.Contact.ToString("0.00")
                     + " с, кінець " + tl.End.ToString("0.00") + " с, додає " + RingFinisherCinePlan.ExtraRealSeconds(tl, RingStage3D.PlaySpeed).ToString("0.00") + " с");
@@ -160,15 +176,32 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Кадр кіно; кликати після <c>RingActor.Tick</c> і до розрахунку камери сцени.</summary>
         public void Tick()
         {
-            if (!Active) return;
+            if (!Active)
+            {
+                // Обірване кіно тримає сповільнення режисера вимкненим, лише поки грає той самий кліп фінішера.
+                if (SlowSuppressed && (Gone(_r.Attacker) || _r.Attacker.CurrentClip != _r.Clip || _r.Attacker.Finished))
+                    SlowSuppressed = false;
+                return;
+            }
             var a = _r.Attacker;
             if (Gone(a) || Gone(_r.Victim)) { End(); return; }              // сцену знесено
             if (!_seen)
             {
-                if (a.CurrentClip == _r.Clip) _seen = true;
+                // Режисер почав кліп: нападник грає саме його, і кліп не догравав (старт скидає Finished). Скільки кліп уже
+                // встиг пройти, не важить: на повільному кадрі чи швидкому темпі огляду перший Tick бачить його вже
+                // далеко від старту. Кліп, що догравав з минулого разу й так і не почався заново, — не він.
+                if (a.CurrentClip == _r.Clip && !a.Finished)
+                {
+                    _seen = true;
+                    _lastT = Math.Min(_lastT, a.ClipTime);
+                }
                 else
                 {
-                    if (++_wait > MaxWaitFrames) Abort();                   // режисер так і не почав кліп
+                    if (++_wait > MaxWaitFrames)                            // режисер так і не почав кліп
+                    {
+                        Abort();
+                        _tl = null;                                         // це кіно не відбулось
+                    }
                     return;
                 }
             }
@@ -185,19 +218,12 @@ namespace Game.Gameplay.Ring.Stage
                 return;
             }
             int k = RingFinisherCinePlan.BeatAt(_tl, t);
-            if (k >= 0 && k != _beat)
+            if (k > _beat)                                                 // плани йдуть лише вперед (перший міг стати раніше своєї миті)
             {
                 _beat = k;
-                CutTo(_tl.Beats[k]);
-                if (!_shotOk && !_everCut && !_fellBack)
-                {
-                    // Жодного плану кіно ще не було, і цей не став: кадр фінішера ставить режисер (раз).
-                    _fellBack = true;
-                    var f = _r.Fallback;
-                    if (f != null) f();
-                }
+                CutTo(_tl.Beats[k]);                                       // не став — лишається попередній план кіно
             }
-            else if (k >= 0 && _shotOk && _dolly > 0f && !RingTime.Paused && _dollied < MaxDolly)
+            else if (_beat >= 0 && _shotOk && _dolly > 0f && !RingTime.Paused && _dollied < MaxDolly)
             {
                 // Наїзд по мату до точки погляду; висота камери не міняється.
                 float dx = _look.x - _pos.x, dz = _look.z - _pos.z;
@@ -244,16 +270,22 @@ namespace Game.Gameplay.Ring.Stage
                 _warped = false;
             }
             Active = false;
+            SlowSuppressed = false;
             _beat = -1;
         }
 
-        /// <summary>Кіно обірвано до свого кінця: темп звичайний, і якщо камера вже стояла на плані кіно — назад режисерові.</summary>
+        /// <summary>
+        /// Кіно обірвано до свого кінця: темп звичайний (і сповільнення режисера на цьому фінішері теж не вмикається —
+        /// <see cref="SlowSuppressed"/>), а якщо камера вже стояла на плані кіно — назад режисерові.
+        /// </summary>
         private void Abort()
         {
             bool had = _everCut;
             End();
+            SlowSuppressed = true;
             if (had) Release();
         }
+
 
         private void Release()
         {
