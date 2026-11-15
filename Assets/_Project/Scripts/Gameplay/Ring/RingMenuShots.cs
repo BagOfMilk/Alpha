@@ -141,7 +141,8 @@ namespace Game.Gameplay.Ring
                         string shot = "poster_" + (female ? "f" : "m") + "_" + g + "_" + r;
                         yield return Snap(h, shot);
                         float size = create.PosterNameSizeForShots;
-                        if (float.IsNaN(size) || size >= PosterBelowUnder) continue;
+                        // «роль під назвою» — варіант для широкої афіші: на 4:3 у колонці під нею ще рядок, і папір ліг би на канати
+                        if (float.IsNaN(size) || size >= PosterBelowUnder || create.SingleColumnForShots) continue;
                         Debug.Log("[Ринг] афіша " + shot + ": назва " + size + " < " + PosterBelowUnder + " — ще й «роль під назвою»");
                         UI.CreateScreenView.PosterRoleBelowForShots = true;
                         try
@@ -153,6 +154,26 @@ namespace Game.Gameplay.Ring
                         finally { UI.CreateScreenView.PosterRoleBelowForShots = false; }   // і після винятку — не лишається в грі (рев'ю)
                         create.SetForShots(g, r);
                     }
+            }
+            // «бал перейшов» (на 16:9 — на папері, на 4:3 — рядком над рядом) і вкладки колонки 4:3 «Вигляд» і «Прийоми» (АД 15.11.2026);
+            // чоловік і героїня — назви вкладок за статтю («Твоя борчиня»)
+            Debug.Log("[Ринг] сцена create: " + (create.SingleColumnForShots ? "одна колонка з вкладками" : "дві колонки"));
+            foreach (bool female in new[] { false, true })
+            {
+                h.HeroBody = female ? femaleBody : 0;
+                string sx = female ? "f" : "m";
+                string pair = create.FreeMovedForShots(CareerRole.Hero);
+                yield return Wait(0.4f);
+                if (pair == null) Debug.LogWarning("[Ринг] сцена create: на екрані немає пари ґіміків, де вільний бал переходить");
+                else { Debug.Log("[Ринг] огляд: вільний бал перейшов — " + pair); yield return Snap(h, "create_free_moved_" + sx); }
+                if (!create.SingleColumnForShots) continue;
+                foreach (int tab in new[] { UI.CreateScreenView.TabLook, UI.CreateScreenView.TabMoves })
+                {
+                    create.SetTabForShots(tab);
+                    yield return Wait(0.4f);
+                    yield return Snap(h, "create_tab" + tab + "_" + sx);
+                }
+                create.SetTabForShots(UI.CreateScreenView.TabPoster);
             }
         }
 

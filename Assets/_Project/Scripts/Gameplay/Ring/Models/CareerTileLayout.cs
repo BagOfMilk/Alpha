@@ -432,6 +432,97 @@ namespace Game.Gameplay.Ring.Models
         /// <summary>Підйом канатів, шапки й вкладки «Прийоми», коли плитки створення стоять двома рядами (вузька панель чи Б4-1).</summary>
         public const float CreateLift = TileH + CreateRowsGap;
 
+        // ---------------- створення 4:3: одна ліва колонка з вкладками (АД 14–15.11.2026) ----------------
+
+        /// <summary>
+        /// Співвідношення панелі, нижче якого створення — одна ліва колонка з вкладками «Твій борець / Вигляд / Прийоми», а права
+        /// половина кадру — герою (АД 14.11.2026: права колонка зливається з «Виглядом» в одну ліву колонку з вкладками). 4:3 і 5:4 —
+        /// одна колонка; рівно 3:2 (1,5), 16:10 і ширше — дві, як було (межа — у кадрах У2, АД 15.11.2026, п. 3).
+        /// </summary>
+        public const float CreateColumnAspect = 1.5f;
+
+        /// <summary>
+        /// Допуск межі: ширина панелі — екран на сталий масштаб (Screen.height / 900), і рівно 3:2 у float буває 1349,9999 — без
+        /// допуску такий екран ставав колонкою (рев'ю 15.11.2026). Між 4:3 (1,33) і 3:2 справжніх екранів немає.
+        /// </summary>
+        public const float CreateColumnAspectSlack = 0.01f;
+
+        /// <summary>
+        /// Найвужча панель, для якої колонка тримає правила (не далі <see cref="ColumnMaxFrac"/> кадру, плечі героя вільні) — 5:4.
+        /// Вужчі (вікно майже квадратне) — колонка 490 займає понад 46 % кадру; таких екранів гра не обіцяє.
+        /// </summary>
+        public const float CreateNarrowestAspect = 1.25f;
+
+        /// <summary>Створення в одну колонку: панель вужча за <see cref="CreateColumnAspect"/> (з допуском похибки).</summary>
+        public static bool CreateSingleColumn(float panelWidth, float panelHeight)
+        {
+            return panelWidth > 0f && panelHeight > 0f && panelWidth / panelHeight < CreateColumnAspect - CreateColumnAspectSlack;
+        }
+
+        /// <summary>Колонка на будь-якій панелі — не далі цієї частки кадру від свого краю (АД 14.11.2026, п. 3).</summary>
+        public const float ColumnMaxFrac = 0.46f;
+
+        /// <summary>
+        /// Плечі героя: 21 % ширини кадру 4:3 1024×768 (замір «Изучение», 14.11.2026), в одиницях панелі 1200 — 252. Висота панелі
+        /// стала (900), тож ширина плечей у панелі та сама на будь-якому співвідношенні; вільна зона героя — не вужча.
+        /// </summary>
+        public const float HeroShouldersW = 0.21f * 1200f;
+
+        /// <summary>Вільна від колонок смуга створення: одна колонка — від неї до правого безпечного краю; дві — між ними.</summary>
+        public static float CreateHeroFreeWidth(float panelWidth, bool single)
+        {
+            float col = Edge + StripW;
+            return single ? panelWidth - Edge - col : panelWidth - 2f * col;
+        }
+
+        /// <summary>Висота вкладки (TabPlate) — та сама на всіх екранах.</summary>
+        public const float TabPlateH = 40f;
+
+        /// <summary>
+        /// Вкладки колонки: TabPlate кеглем 19, відступи 14 / 18 замість 18 / 26, перша — впритул до краю колонки, «Прийоми» без
+        /// числа (АД 15.11.2026, 2А). Правий відступ більший за зріз 12° на висоті вкладки — плита ширша за текст і в активної.
+        /// </summary>
+        public const float ColumnTabPadLeft = 14f, ColumnTabPadRight = 18f, ColumnTabGap = 10f;
+
+        /// <summary>Між вкладками і плитою вкладки; від низу плити до піднятих канатів.</summary>
+        public const float ColumnPlateGap = 8f, ColumnRopeClear = 8f;
+
+        /// <summary>Висота під плиту вкладки на панелі висоти <paramref name="panelHeight"/>: до канатів, піднятих на <paramref name="lift"/>.</summary>
+        public static float CreateColumnRoom(float panelHeight, float lift)
+        {
+            return RopesTop(panelHeight) - lift - ColumnRopeClear - (SecondY + TabPlateH + ColumnPlateGap);
+        }
+
+        /// <summary>
+        /// Афіша створення згори вниз: відступ паперу, назва ґіміка з плитою ролі, лінія, «Вільний бал · Обери», п'ять рядків
+        /// характеристик. На 4:3 (колонка) — без заголовка (він — вкладка) і без опису ролі (Б1, АД 15.11.2026).
+        /// </summary>
+        public const float CreatePosterPadTop = 16f, CreatePosterHeadTop = 8f;
+        public const float CreatePosterRuleTop = 10f, CreatePosterRuleH = 2f, CreatePosterRuleBottom = 8f, CreatePosterPickGap = 4f;
+
+        /// <summary>Плита «Вигляд» (колір костюма, тіло, зачіска) — на 16:9 під стрічкою імені, на 4:3 — плита вкладки «Вигляд».</summary>
+        public const float CreateLookH = 252f;
+
+        /// <summary>
+        /// Висота афіші в колонці 4:3 (вузька: рядки по <see cref="CreateAttrRowNarrowH"/>): <paramref name="headLineH"/> — рядок назви
+        /// ґіміка (display на <see cref="PosterNameSize"/>), <paramref name="pickLineH"/> — рядок «Вільний бал · Обери».
+        /// </summary>
+        public static float CreateColumnPosterHeight(float headLineH, float pickLineH)
+        {
+            return CreatePosterPadTop + CreatePosterHeadTop + headLineH + CreatePosterRuleTop + CreatePosterRuleH + CreatePosterRuleBottom
+                + pickLineH + CreatePosterPickGap + 5f * CreateAttrRowNarrowH + CreatePaperPadBottomNarrow;
+        }
+
+        /// <summary>
+        /// Ширина тексту підказки над рядом створення (кегль 15): ряд мінус слово «Ґімік» (<paramref name="gimmickWordW"/>), відступ
+        /// <see cref="CreateHintGap"/> і поля підкладки. На вузькій панелі «Роль» у шапці прихована — підказка бере весь ряд.
+        /// </summary>
+        public const float CreateHintGap = 22f, UnderlayPadH = 10f;
+        public static float CreateRowHintWidth(float panelWidth, float gimmickWordW)
+        {
+            return RowWidth(panelWidth) - gimmickWordW - CreateHintGap - 2f * UnderlayPadH;
+        }
+
         /// <summary>
         /// Плита ролі в колонці золотої плити (Б4-1): низька — лише назва й ключ; між двома плитами — проміжок, більший за підйом
         /// плитки у фокусі (7), щоб нижня у фокусі не лягала на верхню.

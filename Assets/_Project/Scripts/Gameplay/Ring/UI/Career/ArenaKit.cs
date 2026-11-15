@@ -1073,14 +1073,20 @@ namespace Game.Gameplay.Ring.UI
         void IPadTarget.PadActivate() { if (_onClick != null) _onClick(); }
         bool IPadTarget.PadStep(int delta) { return false; }
 
-        public TabPlate(string text, int number, bool open, Action onClick, bool goldStripe)
+        public TabPlate(string text, int number, bool open, Action onClick, bool goldStripe) : this(text, number, open, onClick, goldStripe, false) { }
+
+        /// <summary>
+        /// <paramref name="compact"/> — вкладки колонки створення 4:3 (АД 15.11.2026, 2А): відступи <see cref="CareerTileLayout.ColumnTabPadLeft"/> /
+        /// <see cref="CareerTileLayout.ColumnTabPadRight"/>; кегль, висота, обводка відкритої й зона натискання — ті самі. Число &lt; 0 — без числа.
+        /// </summary>
+        public TabPlate(string text, int number, bool open, Action onClick, bool goldStripe, bool compact)
         {
             _onClick = onClick;
             _text = text ?? "";
             style.flexDirection = FlexDirection.Row;
             style.alignItems = Align.Center;
-            style.height = 40f;
-            style.paddingLeft = 18f; style.paddingRight = 26f;
+            style.height = CareerTileLayout.TabPlateH;
+            style.paddingLeft = compact ? CareerTileLayout.ColumnTabPadLeft : 18f; style.paddingRight = compact ? CareerTileLayout.ColumnTabPadRight : 26f;
             style.marginLeft = 10f;
             style.overflow = Overflow.Visible;
             var plate = new ArenaPlate { Fill = RingTheme.Panel, Stripe = goldStripe ? (Color?)RingTheme.Gold : null, StripeW = 5f, Outline = open ? (Color?)RingTheme.Text : null, OutlineW = 2f };
@@ -1088,9 +1094,12 @@ namespace Game.Gameplay.Ring.UI
             Add(plate);
             var l = MenuKit.Display(text, 19f, RingTheme.Text, RingFontRole.Display800, 0.06f);
             Add(l);
-            var n = MenuKit.Display(number.ToString(), 21f, goldStripe ? RingTheme.Gold : RingTheme.TextDim, RingFontRole.Display900, 0f);
-            n.style.marginLeft = 14f;
-            Add(n);
+            if (number >= 0)
+            {
+                var n = MenuKit.Display(number.ToString(), 21f, goldStripe ? RingTheme.Gold : RingTheme.TextDim, RingFontRole.Display900, 0f);
+                n.style.marginLeft = 14f;
+                Add(n);
+            }
             RegisterCallback<PointerDownEvent>(e => { if (e.button == 0 && onClick != null) onClick(); });
         }
     }

@@ -578,6 +578,19 @@ namespace Game.Gameplay.Ring.Models
         }
 
         /// <summary>
+        /// Рядок підказки над рядом створення без наведення. На 4:3 (одна колонка: опису ролі й рядків паперу там немає — АД 15.11.2026,
+        /// Б1) за пріоритетом «бал перейшов» &gt; С-1 (два вільні бали) &gt; опис ґіміка — той самий порядок, що на папері 16:9; на
+        /// широкій — опис ґіміка (рядок і С-1 там на папері).
+        /// </summary>
+        public static string CreateRowHint(RingText t, bool column, bool freeMoved, RingAttr from, RingAttr to, bool twoFree, string gimmickNameKey)
+        {
+            if (t == null) return "";
+            if (column && freeMoved) return FreeMovedLine(t, from, to);
+            if (column && twoFree) return t.Get("c.create.freepoints.hint");
+            return t.Get(gimmickNameKey + ".desc");
+        }
+
+        /// <summary>
         /// Частини ефекту плитки ґіміка на створенні: бонуси основи (<see cref="RingLabels.AttrBonusParts"/>) у порядку
         /// <see cref="CareerTileLayout.CreateEffectOrder"/> (Ш-1: найдовша — остання, підписна — перша) і, у ґіміка з двома вільними
         /// балами, рядок «+2 вільні бали» (арт-директор 14.11.2026: у Самородка всі основи 0 — плитка була порожня; той самий кегль і

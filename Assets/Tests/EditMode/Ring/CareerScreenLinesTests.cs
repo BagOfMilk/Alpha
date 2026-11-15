@@ -2049,6 +2049,105 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
+        /// Рядок підказки над рядом створення (АД 15.11.2026, Б1): на 4:3 (колонка) — «бал перейшов» &gt; С-1 &gt; опис ґіміка; на
+        /// широкій — завжди опис ґіміка (рядок і С-1 там на папері).
+        /// </summary>
+        [Test]
+        public void CreateRowHint_FourThree_FreeMoved_ThenC1_ThenGimmickDesc()
+        {
+            var t = RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json"));
+            string key = CareerKit.NewAtCreate(1).GetCreationView().Gimmicks[0].Def.NameKey;
+            string moved = CareerScreenLines.FreeMovedLine(t, RingAttr.Agility, RingAttr.Stamina), c1 = t.Get("c.create.freepoints.hint"), desc = t.Get(key + ".desc");
+            foreach (var s in new[] { moved, c1, desc }) Assert.IsFalse(s.Contains("⟦") || s.Contains("{"), "немає тексту: «" + s + "»");
+            Assert.AreNotEqual(moved, c1);
+            Assert.AreNotEqual(c1, desc);
+            Assert.AreEqual(moved, CareerScreenLines.CreateRowHint(t, true, true, RingAttr.Agility, RingAttr.Stamina, true, key), "4:3: «бал перейшов» — першим");
+            Assert.AreEqual(moved, CareerScreenLines.CreateRowHint(t, true, true, RingAttr.Agility, RingAttr.Stamina, false, key));
+            Assert.AreEqual(c1, CareerScreenLines.CreateRowHint(t, true, false, RingAttr.Agility, RingAttr.Stamina, true, key), "4:3: без перестановки — С-1");
+            Assert.AreEqual(desc, CareerScreenLines.CreateRowHint(t, true, false, RingAttr.Agility, RingAttr.Stamina, false, key), "4:3: інакше — опис ґіміка");
+            foreach (bool m in new[] { false, true })
+                foreach (bool two in new[] { false, true })
+                    Assert.AreEqual(desc, CareerScreenLines.CreateRowHint(t, false, m, RingAttr.Agility, RingAttr.Stamina, two, key), "широка: опис ґіміка");
+            Assert.AreEqual("", CareerScreenLines.CreateRowHint(null, true, true, RingAttr.Agility, RingAttr.Stamina, true, key));
+        }
+
+        /// <summary>
+        /// Проводка створення 4:3 (АД 14–15.11.2026): розкладка — за співвідношенням панелі (до розкладки — за екраном), перехід межі
+        /// 3:2 перебудовує раз; колонка — стрічка імені, три вкладки (ті самі TabPlate, компактні, «Прийоми» без числа, перша впритул,
+        /// відкрита з обводкою) і плита відкритої вкладки; афіша колонки — без заголовка й опису ролі (Б1), рядок підказки —
+        /// CreateRowHint; опис ролі — підказкою плитки ролі; Esc на «Прийомах» — назад на афішу; вертикаль афіші й «Вигляду» — з
+        /// констант моделі, які міряє охоронець CareerTextFitTests.
+        /// </summary>
+        [Test]
+        public void Sources_CreateColumn_AreWired()
+        {
+            string dir = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring");
+            string create = File.ReadAllText(Path.Combine(dir, "UI", "Career", "CreateScreenView.cs"));
+            string kit = File.ReadAllText(Path.Combine(dir, "UI", "Career", "ArenaKit.cs"));
+            string shots = File.ReadAllText(Path.Combine(dir, "RingMenuShots.cs"));
+            var bad = new List<string>();
+            foreach (var l in new[] {
+                "float pw = Root.layout.width, ph = Root.layout.height;",
+                "if (float.IsNaN(pw) || float.IsNaN(ph) || pw <= 0f || ph <= 0f) { pw = Screen.width; ph = Screen.height; }",
+                "_single = CareerTileLayout.CreateSingleColumn(pw, ph);",
+                "if (!float.IsNaN(height) && height > 0f && CareerTileLayout.CreateSingleColumn(width, height) != _single)",
+                "if (!_relayout) { _relayout = true; Root.schedule.Execute(Refresh); }",
+                "if (_single) Root.Add(TabColumn(path, roleColor));",
+                "var col = ArenaKit.Abs(ArenaKit.Edge, ArenaKit.SecondY, null, null, ArenaKit.StripW, null);",
+                "string[] words = { T.Get(\"c.hub.create.poster\"), T.Get(\"c.create.look\"), T.Get(\"c.hub.create.moves\") };",
+                "var tab = new TabPlate(words[i], -1, _tab == i, () => { if (_tab != k) { _tab = k; Refresh(); } }, false, true);",
+                "tab.style.flexShrink = 0f;",
+                "tab.style.marginLeft = i == 0 ? 0f : CareerTileLayout.ColumnTabGap;",
+                "else if (_tab == TabMoves) plate = MovesCard();",
+                "else plate = Poster(path, roleColor, true);",
+                "plate.style.marginTop = CareerTileLayout.ColumnPlateGap;",
+                "if (!column) col.Add(MenuKit.Display(T.Get(\"c.hub.create.poster\"), 24f, RingTheme.Bg, RingFontRole.Display800, 0.04f));",
+                "_hintDefault = CareerScreenLines.CreateRowHint(T, _single, FreeMovedNote, _freeMovedFrom, _freeMovedTo, Current.FreePoints >= 2, Current.Def.NameKey);",
+                "_hint.style.marginLeft = CareerTileLayout.CreateHintGap;",
+                "var tile = AddTile(r == CareerRole.Hero ? heroKey : villainKey, T.Get(key), \"\", () => { _d.Role = rr; Refresh(); }, T.Get(key + \".desc\"));",
+                "col.style.paddingTop = CareerTileLayout.CreatePosterPadTop; col.style.paddingBottom = CareerTileLayout.CreatePaperPadBottom;",
+                "head.style.marginTop = CareerTileLayout.CreatePosterHeadTop;",
+                "line.style.height = CareerTileLayout.CreatePosterRuleH; line.style.backgroundColor = RingTheme.Bg;",
+                "line.style.marginTop = CareerTileLayout.CreatePosterRuleTop; line.style.marginBottom = CareerTileLayout.CreatePosterRuleBottom;",
+                "hr.style.marginBottom = CareerTileLayout.CreatePosterPickGap;",
+                "var box = ArenaKit.Abs(ArenaKit.Edge, ArenaKit.SecondY, null, null, ArenaKit.StripW, CareerTileLayout.CreateLookH);",
+                "foreach (var r in _attrRows) r.style.height = tall ? CareerTileLayout.CreateAttrRowNarrowH : CareerTileLayout.CreateAttrRowH;",
+                "if (_tab != TabMoves) return false;",
+                "plate.style.position = Position.Relative;",
+                "plate.style.left = StyleKeyword.Auto; plate.style.top = StyleKeyword.Auto;",
+                "_movesBox = null; _rightCol = null; _desc = null; _paperMoves = null; _movesCard = null; _posterCol = null; _posterName = null;" })
+                if (!CodeLine(create, l)) bad.Add("CreateScreenView: немає «" + l + "»");
+            // Esc у колонці: лише з «Прийомів» — на афішу, і до гілки широкої розкладки
+            int back = create.IndexOf("public override bool OnBack()");
+            int movesOnly = back < 0 ? -1 : create.IndexOf("if (_tab != TabMoves) return false;", back);
+            int toPoster = back < 0 ? -1 : create.IndexOf("_tab = TabPoster;", back);
+            int wide = back < 0 ? -1 : create.IndexOf("if (!_moves) return false;", back);
+            if (movesOnly < 0 || toPoster < movesOnly || wide < toPoster) bad.Add("CreateScreenView: Esc на «Прийомах» колонки не повертає на афішу");
+            // колонка розрахована на панель 900: екрани кар'єри — у масштабі меню, «розмір інтерфейсу» їх не міняє (RingGameBootstrap)
+            string boot = File.ReadAllText(Path.Combine(dir, "RingGameBootstrap.cs"));
+            if (!CodeLine(boot, "bool menu = _view is IMenuNavigable || _view is UI.CareerScreenView"))
+                bad.Add("RingGameBootstrap: екрани кар'єри більше не в масштабі меню — колонку 4:3 міряли на панелі 900");
+            foreach (var l in new[] {
+                "public TabPlate(string text, int number, bool open, Action onClick, bool goldStripe) : this(text, number, open, onClick, goldStripe, false) { }",
+                "style.height = CareerTileLayout.TabPlateH;",
+                "style.paddingLeft = compact ? CareerTileLayout.ColumnTabPadLeft : 18f; style.paddingRight = compact ? CareerTileLayout.ColumnTabPadRight : 26f;",
+                "var plate = new ArenaPlate { Fill = RingTheme.Panel, Stripe = goldStripe ? (Color?)RingTheme.Gold : null, StripeW = 5f, Outline = open ? (Color?)RingTheme.Text : null, OutlineW = 2f };",
+                "if (number >= 0)" })
+                if (!CodeLine(kit, l)) bad.Add("ArenaKit: немає «" + l + "»");
+            foreach (var l in new[] {
+                "string pair = create.FreeMovedForShots(CareerRole.Hero);",
+                "foreach (int tab in new[] { UI.CreateScreenView.TabLook, UI.CreateScreenView.TabMoves })",
+                "if (float.IsNaN(size) || size >= PosterBelowUnder || create.SingleColumnForShots) continue;" })
+                if (!CodeLine(shots, l)) bad.Add("RingMenuShots: немає «" + l + "»");
+            // опис ролі на афіші колонки не будується: блок опису — під if (!column) у Poster
+            int poster = create.IndexOf("private VisualElement Poster(RingPath path, Color roleColor, bool column = false)");
+            int notCol = poster < 0 ? -1 : create.IndexOf("if (!column)", create.IndexOf("_paperMoves = null;", poster));
+            int descAt = poster < 0 ? -1 : create.IndexOf("var desc = FreeMovedNote ?", poster);
+            if (notCol < 0 || descAt < notCol) bad.Add("CreateScreenView: опис ролі на афіші колонки не під if (!column)");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
         /// Проводка зміни ґіміка на створенні (ПМ 14.11.2026): плитка, клавіша й огляд ідуть через PickGimmick (перестановка вільного
         /// балу), інших присвоєнь ґіміка заготовці немає; рядок — на папері на місці опису ролі чи С-1 (АД, варіант (1)), чорнилом
         /// паперу, і лише доки заготовка та сама.
