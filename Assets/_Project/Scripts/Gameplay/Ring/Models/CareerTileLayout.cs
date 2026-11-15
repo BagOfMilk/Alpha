@@ -121,6 +121,8 @@ namespace Game.Gameplay.Ring.Models
         /// <summary>Лінія канатів — відлік ЗНИЗУ (низ 210, висота 22): її верх на еталонній панелі — 668.</summary>
         public const float RopesBottom = 210f, RopeH = 22f;
         public static float RopesTop(float panelH) { return panelH - RopesBottom - RopeH; }
+        /// <summary>Шапка ряду дій («ДІЇ ТИЖНЯ», вкладки «РОЗВИТОК» і «ВИТРАТИ») — відлік ЗНИЗУ (низ 164, висота 42); ряд дій піднімає її на lift.</summary>
+        public const float HeaderBottom = 164f, WeekHeaderH = 42f;
         /// <summary>Кінець сезону: плита розвитку — під плитою ресурсів (висота 104) з просвітом 14.</summary>
         public const float SeasonDevTop = SecondY + 104f + 14f;
         /// <summary>Підсумок матчу на вузькій панелі: плита розвитку — під табличкою кінцівки (70) й ажіотажем (40).</summary>
@@ -569,13 +571,45 @@ namespace Game.Gameplay.Ring.Models
             return CreateSingleColumn(panelWidth, panelHeight) ? SeasonColumnW : WeekDrawerW;
         }
 
+        /// <summary>Плиток дій тижня шість (тренування, з тренером, відновлення, промо, закулісся, підробіток): на панелі, вужчій за
+        /// <see cref="NarrowWidth"/>, — два ряди по три (<see cref="WeekTwoRows"/>).</summary>
+        public const int WeekActionTiles = 6;
+
         /// <summary>
-        /// Шухляда відкривається сама (є очки розвитку) лише на широкій панелі; на 4:3 — лише гравцем, число очок і так на вкладці
-        /// «РОЗВИТОК N» (АД 15.11.2026: сцена й букерка — світ, шухляда — інструмент; на вузькому екрані світ першим).
+        /// Шухляда відкривається сама (є очки розвитку) лише над одним рядом плиток дій — 16:9 і ширше; над двома рядами (5:4, 4:3, 3:2,
+        /// 16:10) — лише гравцем, число очок і так на вкладці «РОЗВИТОК N». АД 15.11.2026: «Межа самовідкриття — «два ряди плиток», а не
+        /// CreateSingleColumn»; сцена й букерка — світ, шухляда — інструмент.
         /// </summary>
-        public static bool WeekDrawerAutoOpen(float panelWidth, float panelHeight, int devPoints)
+        public static bool WeekDrawerAutoOpen(float panelWidth, int devPoints)
         {
-            return devPoints > 0 && !CreateSingleColumn(panelWidth, panelHeight);
+            return devPoints > 0 && !WeekTwoRows(panelWidth, WeekActionTiles);
+        }
+
+        /// <summary>
+        /// Лінія під обличчям букерки на закулісся тижня (відлік згори, панель <see cref="PanelH"/>): підборіддя найнижчої з чотирьох
+        /// букерок (Хіроко) з просвітом <see cref="BookerFaceGap"/>. Над одним рядом плиток верх шухляди не вищий за неї, решта —
+        /// прокруткою (АД 15.11.2026, рішення (а): обличчя букерки, маківка → підборіддя, не під шухлядою). Число звіряє з камерою
+        /// RingShow.ShowBackstage охоронець CareerTextFitTests.WeekDrawer_LeavesTheBookerFaceFree_OverOneRow: зміниться камера — він
+        /// скаже, куди лінію посунути (чи що обмеження вже не потрібне).
+        /// </summary>
+        public const float WeekBookerFaceClearY = 435f;
+
+        /// <summary>Просвіт між підборіддям букерки й верхом шухляди (АД 15.11.2026: «підборіддя + 10»).</summary>
+        public const float BookerFaceGap = 10f;
+
+        /// <summary>
+        /// Висота шухляди тижня: під афішею (<see cref="DrawerOverPoster"/>), а над одним рядом плиток (<paramref name="twoRows"/> = false)
+        /// ще й під обличчям букерки — верх не вищий за <see cref="WeekBookerFaceClearY"/> (у частці висоти панели: камера бачить кадр
+        /// цілим за будь-якого розміру інтерфейсу). Мінімум шухляди (<see cref="DrawerNeed"/>) лишається: на еталонній панелі він
+        /// уміщається під обличчям і з найвищим рядом (охоронець). Над двома рядами шухляда сама не відкривається й не обмежена.
+        /// </summary>
+        public static float WeekDrawerMaxHeight(float drawerBottomY, float panelHeight, bool twoRows, float posterBottomNow, bool foldedNow,
+            float detailsH, bool sticker, bool dev, out bool fold)
+        {
+            float max = DrawerOverPoster(drawerBottomY, posterBottomNow, foldedNow, detailsH, sticker, dev, out fold);
+            if (twoRows || float.IsNaN(panelHeight) || panelHeight <= 0f) return max;
+            float face = drawerBottomY - WeekBookerFaceClearY * panelHeight / PanelH;
+            return Math.Min(max, Math.Max(face, DrawerNeed(dev)));
         }
 
         /// <summary>Між низом паперу кінця сезону й канатами — як в охоронцях паперу.</summary>

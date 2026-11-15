@@ -535,8 +535,8 @@ namespace Game.Tests.EditMode
 
         /// <summary>
         /// Шухляда тижня на 4:3 (АД 15.11.2026): 472 — та сама межа, що скрізь (<see cref="CareerTileLayout.CreateSingleColumn"/>), разом із
-        /// краєм не ширше за 46 % кадру; ширша панель — 560 (16:9 — 40 %). Сама шухляда відкривається лише на широкій панелі: на 4:3
-        /// сцена й букерка першими, число очок — на вкладці.
+        /// краєм не ширше за 46 % кадру; ширша панель — 560 (16:9 — 40 %). Сама шухляда відкривається лише над одним рядом плиток (АД
+        /// 15.11.2026: межа — «два ряди плиток»): на 4:3 сцена й букерка першими, число очок — на вкладці.
         /// </summary>
         [Test]
         public void WeekDrawer_FourThree_IsTheSeasonColumnWidth_AndDoesNotOpenItself()
@@ -549,8 +549,10 @@ namespace Game.Tests.EditMode
             {
                 bool single = CareerTileLayout.CreateSingleColumn(wh[0], wh[1]);
                 Assert.AreEqual(single ? CareerTileLayout.SeasonColumnW : CareerTileLayout.WeekDrawerW, CareerTileLayout.WeekDrawerWidth(wh[0], wh[1]), 0.01f, wh[0] + "×" + wh[1]);
-                Assert.AreEqual(!single, CareerTileLayout.WeekDrawerAutoOpen(wh[0], wh[1], 3), wh[0] + "×" + wh[1] + ": сама відкривається лише широка");
-                Assert.IsFalse(CareerTileLayout.WeekDrawerAutoOpen(wh[0], wh[1], 0), "очок немає — не відкривається");
+                Assert.AreEqual(!CareerTileLayout.WeekTwoRows(wh[0], CareerTileLayout.WeekActionTiles), CareerTileLayout.WeekDrawerAutoOpen(wh[0], 3),
+                    wh[0] + "×" + wh[1] + ": сама відкривається лише над одним рядом");
+                if (single) Assert.IsFalse(CareerTileLayout.WeekDrawerAutoOpen(wh[0], 3), wh[0] + "×" + wh[1] + ": 4:3 і 5:4 — ніколи сама");
+                Assert.IsFalse(CareerTileLayout.WeekDrawerAutoOpen(wh[0], 0), "очок немає — не відкривається");
             }
         }
 
@@ -1178,7 +1180,31 @@ namespace Game.Tests.EditMode
         private sealed class BackstageView
         {
             public double[] Cam, Look, Hero, Booker;
-            public double Fov, HeroYaw;
+            public double Fov, HeroYaw, BookerYaw;
+
+            /// <summary>
+            /// Голови букерок набору (Assets/Art/Characters/Kit/body_*.fbx, вершини сітки, 15.11.2026), метри: маківка голови без зачіски,
+            /// підборіддя (де профіль обличчя відступає до шиї), півширина голови, зачіска над маківкою. Звірено з кадром s34b_m4x3/048
+            /// (Ліна, 4:3): маківка 333 на кадрі — 337 у проєкції; підборіддя ≈ 387 на кадрі — 400 у проєкції (із запасом униз).
+            /// Пояс (лінія ременя) — 0,57 маківки: Ліна ≈ 530 на тому ж кадрі.
+            /// </summary>
+            public static readonly Dictionary<string, double[]> Faces = new Dictionary<string, double[]>
+            {
+                { "body_f_mediterranean", new[] { 1.602, 1.395, 0.081, 0.03 } },
+                { "body_f_nordic", new[] { 1.605, 1.397, 0.081, 0.02 } },
+                { "body_m_west_african", new[] { 1.813, 1.575, 0.098, 0.015 } },
+                { "body_f_east_asian", new[] { 1.497, 1.305, 0.078, 0.02 } },
+            };
+
+            /// <summary>Пояс — частка маківки (кадр s34b_m4x3/048).</summary>
+            public const double WaistOfCrown = 0.57;
+
+            /// <summary>Центр голови букерки — на 5,5 см уперед від місця за її поворотом (обличчя попереду осі тіла).</summary>
+            public double[] BookerHead(double height)
+            {
+                double a = BookerYaw * Math.PI / 180.0;
+                return new[] { Booker[0] + 0.055 * Math.Sin(a), height, Booker[2] + 0.055 * Math.Cos(a) };
+            }
 
             public static BackstageView FromSource()
             {
@@ -1191,14 +1217,16 @@ namespace Game.Tests.EditMode
                 var look = System.Text.RegularExpressions.Regex.Match(body,
                     @"Look\(o \+ new Vector3\(([^)]*)\), o \+ new Vector3\(([^)]*)\), ([-0-9.]+)f, true\)");
                 var yaw = System.Text.RegularExpressions.Regex.Match(body, @"Place\(hero, o \+ HeroSpot, ([-0-9.]+)f");
+                var byaw = System.Text.RegularExpressions.Regex.Match(body, @"Place\(_booker, o \+ BookerSpot, ([-0-9.]+)f");
                 var hero = System.Text.RegularExpressions.Regex.Match(src, @"Vector3 HeroSpot = new Vector3\(([^)]*)\);");
                 var booker = System.Text.RegularExpressions.Regex.Match(src, @"Vector3 BookerSpot = new Vector3\(([^)]*)\);");
-                Assert.IsTrue(look.Success && yaw.Success && hero.Success && booker.Success,
+                Assert.IsTrue(look.Success && yaw.Success && byaw.Success && hero.Success && booker.Success,
                     "камера чи місця закулісся записані інакше — онови розбір охоронця мети шухляди тижня (CareerTextFitTests.BackstageView)");
                 return new BackstageView
                 {
                     Cam = V3(look.Groups[1].Value), Look = V3(look.Groups[2].Value), Fov = F(look.Groups[3].Value),
                     Hero = V3(hero.Groups[1].Value), Booker = V3(booker.Groups[1].Value), HeroYaw = F(yaw.Groups[1].Value),
+                    BookerYaw = F(byaw.Groups[1].Value),
                 };
             }
 
@@ -1217,6 +1245,27 @@ namespace Game.Tests.EditMode
                 double[] d = Sub(world, Cam);
                 double tan = Math.Tan(Fov * 0.5 * Math.PI / 180.0), aspect = panelW / 900.0;
                 return panelW * (0.5 + Dot(d, r) / Dot(d, f) / (tan * aspect) * 0.5);
+            }
+
+            /// <summary>Y точки світу на панелі висотою 900 (відлік згори; камера показу — вертикальне поле зору, кадр без зсуву).</summary>
+            public double ScreenY(double[] world)
+            {
+                double[] f = Norm(Sub(Look, Cam)), r = Norm(Cross(new[] { 0d, 1d, 0d }, f)), u = Cross(f, r);
+                double[] d = Sub(world, Cam);
+                double tan = Math.Tan(Fov * 0.5 * Math.PI / 180.0);
+                return 900.0 * (0.5 - Dot(d, u) / Dot(d, f) / tan * 0.5);
+            }
+
+            /// <summary>Голова букерки на панелі шириною <paramref name="panelW"/>: центр ± півширина (з зачіскою) по обох осях підлоги.</summary>
+            public void HeadX(double half, double panelW, out double left, out double right)
+            {
+                left = double.MaxValue; right = double.MinValue;
+                double[] c = BookerHead(1.45);
+                foreach (var d in new[] { new[] { half, 0d }, new[] { -half, 0d }, new[] { 0d, half }, new[] { 0d, -half } })
+                {
+                    double x = ScreenX(new[] { c[0] + d[0], c[1], c[2] + d[1] }, panelW);
+                    left = Math.Min(left, x); right = Math.Max(right, x);
+                }
             }
 
             /// <summary>Тіло на висоті грудей (1,3 м), плечі ±<paramref name="half"/> м; для героя — ще й кисті на 0,55 м уперед за поворотом.</summary>
@@ -1250,7 +1299,7 @@ namespace Game.Tests.EditMode
         /// Мета шухляди тижня (АД 15.11.2026: «охоронець міряє мету, а не відсоток»; 3:2 — шухляда 560 = 47 %): герой не під шухлядою на
         /// жодному співвідношенні, де шухляда буває, — від найвужчого обіцяного 5:4 до 21:9; на 4:3 і 5:4 — 472, ширше — 560. Герой —
         /// тіло й кисті (він тримає руки перед собою); шухляда — від лівого краю (панель − край − ширина) донизу, тож уся смуга праворуч
-        /// від краю. Букер — лише вимір у лог: на кадрах 16:9 відкрита шухляда вже стоїть на його тілі (рішення — за АД).
+        /// від краю. Букерка — окремі охоронці нижче (обличчя над одним рядом, «до пояса» при закритій шухляді); тут тіло — лише в лог.
         /// </summary>
         [Test]
         public void WeekDrawer_LeavesTheHeroFree_OnEveryAspect()
@@ -1273,6 +1322,124 @@ namespace Game.Tests.EditMode
                 if (hr > drawerLeft) bad.Add(string.Format(CultureInfo.InvariantCulture, "{0}: герой до {1:0}, а шухляда — від {2:0}", names[i], hr, drawerLeft));
             }
             Assert.IsEmpty(bad, "героя закриває шухляда тижня:\n" + string.Join("\n", bad));
+        }
+
+        private static readonly double[] WeekAspects = { 1.25, 4.0 / 3.0, 1.5, 1.6, 16.0 / 9.0, 2102.0 / 900.0 };
+        private static readonly string[] WeekAspectNames = { "5:4", "4:3", "3:2", "16:10", "16:9", "21:9" };
+
+        /// <summary>
+        /// Мета шухляди тижня над одним рядом плиток (АД 15.11.2026, рішення (а): «обличчя букерки (маківка → підборіддя) не під шухлядою…
+        /// Букерка більше не пишеться лише в лог, а стає умовою»). Обличчя кожної з чотирьох букерок — від маківки зі зачіскою до
+        /// підборіддя; камера, місце й поворот букерки — з RingShow.ShowBackstage, голови — з <see cref="BackstageView.Faces"/>. Над одним
+        /// рядом (16:9, 21:9) верх шухляди не вищий за <see cref="CareerTileLayout.WeekBookerFaceClearY"/>, і ця лінія не вища за найнижче
+        /// підборіддя + 10 — за будь-якого місця шухляди по горизонталі. Мінімум «Розвитку» вміщається під лінією навіть із найвищим рядом.
+        /// Над двома рядами (5:4, 4:3, 3:2, 16:10) шухляда сама не відкривається («Межа самовідкриття — «два ряди плиток»»). Поверне
+        /// «Изучение» камеру — охоронець перерахує лінію і скаже, куди її посунути, чи що обличчя вже лівіше за край шухляди.
+        /// </summary>
+        [Test]
+        public void WeekDrawer_LeavesTheBookerFaceFree_OverOneRow()
+        {
+            var view = BackstageView.FromSource();
+            var bad = new List<string>();
+            float gap = CareerTileLayout.BookerFaceGap;   // змінна, а не стала в умові — без попередження «недосяжний код»
+            if (gap < 10f) bad.Add("просвіт під підборіддям " + gap + " < 10 (АД 15.11.2026: «підборіддя + 10»)");
+            double line = CareerTileLayout.WeekBookerFaceClearY, need = double.MinValue, needUnder = double.MinValue;
+            foreach (var p in Game.Gameplay.Ring.Stage.BackstageCast.AllBookers)
+            {
+                double[] f;
+                if (!BackstageView.Faces.TryGetValue(p.Body, out f))
+                {
+                    bad.Add(p.Speaker + ": голови «" + p.Body + "» немає в BackstageView.Faces — виміряй маківку й підборіддя з FBX набору");
+                    continue;
+                }
+                double crown = view.ScreenY(view.BookerHead(f[0] + f[3])), chin = view.ScreenY(view.BookerHead(f[1]));
+                double clear = chin + CareerTileLayout.BookerFaceGap;
+                need = Math.Max(need, clear);
+                var row = new List<string>();
+                for (int i = 0; i < WeekAspects.Length; i++)
+                {
+                    double w = 900.0 * WeekAspects[i];
+                    if (CareerTileLayout.WeekTwoRows((float)w, CareerTileLayout.WeekActionTiles)) continue;
+                    double drawerLeft = w - CareerTileLayout.Edge - CareerTileLayout.WeekDrawerWidth((float)w, 900f), hl, hr;
+                    view.HeadX(f[2] + f[3], w, out hl, out hr);
+                    bool under = hr > drawerLeft;
+                    if (under) needUnder = Math.Max(needUnder, clear);
+                    row.Add(string.Format(CultureInfo.InvariantCulture, "{0} голова {1:0}–{2:0}, край шухляди {3:0} — {4}", WeekAspectNames[i], hl, hr, drawerLeft,
+                        under ? "над шухлядою" : "лівіше"));
+                }
+                TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "{0} ({1}): маківка {2:0}, підборіддя {3:0} → лінія не вище {4:0}; {5}",
+                    p.Speaker, p.Body, crown, chin, clear, string.Join("; ", row)));
+                if (line < clear)
+                    bad.Add(string.Format(CultureInfo.InvariantCulture, "{0}: підборіддя {1:0} + {2:0} = {3:0}, а верх шухляди може піднятися до {4:0} — опусти WeekBookerFaceClearY",
+                        p.Speaker, chin, CareerTileLayout.BookerFaceGap, clear, line));
+            }
+            if (needUnder == double.MinValue) TestContext.WriteLine("обличчя жодної букерки не над шухлядою на 16:9 і 21:9 — обмеження висоти можна зняти (рішення АД)");
+            else if (line - needUnder > 5.0) TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "лінію можна підняти до {0:0} (зараз {1:0})", Math.Ceiling(needUnder), line));
+            // мінімум «Розвитку» — під лінією навіть із найвищим рядом (плитки виросли на TileGrowMax)
+            double grownBottom = CareerTileLayout.PanelH - (CareerTileLayout.DrawerBottom + CareerTileLayout.TileGrowMax);
+            if (grownBottom - line < CareerTileLayout.DrawerNeed(true))
+                bad.Add(string.Format(CultureInfo.InvariantCulture, "найвищий ряд: під обличчям {0:0} < мінімуму «Розвитку» {1:0}", grownBottom - line, CareerTileLayout.DrawerNeed(true)));
+            TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "16:9: висота шухляди до {0:0} (ряд TileH), {1:0} (найвищий ряд); мінімум {2:0}",
+                CareerTileLayout.PanelH - CareerTileLayout.DrawerBottom - line, grownBottom - line, CareerTileLayout.DrawerNeed(true)));
+            // самовідкриття — лише над одним рядом
+            for (int i = 0; i < WeekAspects.Length; i++)
+            {
+                float w = (float)(900.0 * WeekAspects[i]);
+                bool two = CareerTileLayout.WeekTwoRows(w, CareerTileLayout.WeekActionTiles);
+                if (two != (WeekAspects[i] < 1.7)) bad.Add(WeekAspectNames[i] + ": " + (two ? "два ряди" : "один ряд") + " плиток — не так, як у рішенні АД (5:4…16:10 — два)");
+                if (CareerTileLayout.WeekDrawerAutoOpen(w, 3) == two) bad.Add(WeekAspectNames[i] + ": шухляда " + (two ? "сама відкривається над двома рядами" : "сама не відкривається над одним рядом"));
+                if (CareerTileLayout.WeekDrawerAutoOpen(w, 0)) bad.Add(WeekAspectNames[i] + ": очок немає, а шухляда відкривається");
+            }
+            Assert.IsEmpty(bad, "обличчя букерки під шухлядою тижня:\n" + string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Шухляда закрита — букерку видно від голови до пояса (АД 15.11.2026: «Коли шухляда закрита, на всіх співвідношеннях букерку видно
+        /// від голови до пояса — та сама умова, що я ставив для 4:3»). Знизу: пояс кожної букерки над шапкою ряду дій («ДІЇ ТИЖНЯ»,
+        /// вкладки) — і над одним, і над двома рядами, з ростом плиток, як у WeekScreenView.Fit: висота плитки — найвища потрібна
+        /// найдовшим текстам плиток тижня на цій ширині (не більше межі росту), над двома рядами ріст піднімає шапку двічі; канати —
+        /// лінія на рівні пояса (так на прийнятому кадрі 4:3, s34b_m4x3/048). Згори: афіша праворуч, її висота — від умов матчу; де голова під афішею по горизонталі, охоронець пише в лог,
+        /// не нижче якого краю афіша лишає маківку вільною (на рішення АД: найкоротша афіша на кадрах — низ ≈ 307).
+        /// </summary>
+        [Test]
+        public void WeekScene_ClosedDrawer_ShowsTheBookerDownToTheWaist()
+        {
+            var view = BackstageView.FromSource();
+            var bad = new List<string>();
+            // шапка ряду дій на кожному співвідношенні — з ростом плиток, як у WeekScreenView.Fit
+            var header = new double[WeekAspects.Length];
+            for (int i = 0; i < WeekAspects.Length; i++)
+            {
+                float w = (float)(900.0 * WeekAspects[i]);
+                bool two = CareerTileLayout.WeekTwoRows(w, CareerTileLayout.WeekActionTiles);
+                float tileW = CareerTileLayout.WeekTileWidth(w, CareerTileLayout.WeekActionTiles), need = CareerTileLayout.TileH;
+                foreach (var t in WeekTiles()) need = Math.Max(need, NeededHeight(t, tileW));
+                double tileH = Math.Min(CareerTileLayout.TileH + CareerTileLayout.TileGrowMax, Math.Ceiling(need));
+                double lift = tileH - CareerTileLayout.TileH + (two ? tileH + 12.0 : 0.0);
+                header[i] = CareerTileLayout.PanelH - CareerTileLayout.HeaderBottom - lift - CareerTileLayout.WeekHeaderH;
+                TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "{0}: {1} ряд(и), плитка {2:0} (потрібно {3:0}), верх шапки ряду дій {4:0}",
+                    WeekAspectNames[i], two ? 2 : 1, tileH, need, header[i]));
+            }
+            foreach (var p in Game.Gameplay.Ring.Stage.BackstageCast.AllBookers)
+            {
+                double[] f;
+                if (!BackstageView.Faces.TryGetValue(p.Body, out f)) { bad.Add(p.Speaker + ": голови «" + p.Body + "» немає в BackstageView.Faces"); continue; }
+                double crown = view.ScreenY(view.BookerHead(f[0] + f[3])), waist = view.ScreenY(view.BookerHead(BackstageView.WaistOfCrown * f[0]));
+                var row = new List<string>();
+                for (int i = 0; i < WeekAspects.Length; i++)
+                {
+                    double w = 900.0 * WeekAspects[i];
+                    if (waist > header[i])
+                        bad.Add(string.Format(CultureInfo.InvariantCulture, "{0}, {1}: пояс {2:0} нижче за верх шапки ряду дій {3:0}", p.Speaker, WeekAspectNames[i], waist, header[i]));
+                    double posterLeft = w - CareerTileLayout.Edge - CareerTileLayout.StripW, hl, hr;
+                    view.HeadX(f[2] + f[3], w, out hl, out hr);
+                    row.Add(hr > posterLeft
+                        ? string.Format(CultureInfo.InvariantCulture, "{0}: голова {1:0}–{2:0} під афішею (від {3:0}) — маківка вільна, якщо низ афіші ≤ {4:0}", WeekAspectNames[i], hl, hr, posterLeft, crown)
+                        : string.Format(CultureInfo.InvariantCulture, "{0}: голова лівіше за афішу", WeekAspectNames[i]));
+                }
+                TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "{0}: маківка {1:0}, пояс {2:0}; {3}", p.Speaker, crown, waist, string.Join("; ", row)));
+            }
+            Assert.IsEmpty(bad, "букерку при закритій шухляді не видно до пояса:\n" + string.Join("\n", bad));
         }
 
         /// <summary>
@@ -1844,6 +2011,8 @@ namespace Game.Tests.EditMode
                 "_check.style.right = CareerTileLayout.CheckRight(on);",
                 "_keyBox.style.top = CareerTileLayout.CompactKeyTop; _keyBox.style.right = CareerTileLayout.CompactKeyRight;",
                 "style.width = CareerTileLayout.CheckW; style.height = CareerTileLayout.CheckH;",
+                // шапка ряду дій — за моделлю: за нею охоронець «букерку видно до пояса» (WeekScene_ClosedDrawer_ShowsTheBookerDownToTheWaist)
+                "public const float RowBottom = 45f, HeaderBottom = CareerTileLayout.HeaderBottom, RopesBottom = CareerTileLayout.RopesBottom;",
             };
             foreach (var n in need) if (!CodeLine(src, n)) bad.Add("ArenaKit.cs: немає «" + n + "»");
             Assert.IsEmpty(bad, string.Join("\n", bad));

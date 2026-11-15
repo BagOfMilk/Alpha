@@ -36,7 +36,7 @@ namespace Game.Gameplay.Ring.UI
         // не більш ніж на TileGrowMax (кадри слоту 27, 09.11.2026: назви рвались посеред слова, шанси лягали під смугу).
         public const float CompactTileW = CareerTileLayout.CompactTileW, TileGrowMax = CareerTileLayout.TileGrowMax;
         // Низ екрана — відлік ЗНИЗУ: при «Розмірі інтерфейсу» 90–120 % логічна висота панелі 750–1000, а не 900
-        public const float RowBottom = 45f, HeaderBottom = 164f, RopesBottom = CareerTileLayout.RopesBottom; // ширша панель — золота плита повна; вужча (4:3, великий масштаб) — вужча
+        public const float RowBottom = 45f, HeaderBottom = CareerTileLayout.HeaderBottom, RopesBottom = CareerTileLayout.RopesBottom; // ширша панель — золота плита повна; вужча (4:3, великий масштаб) — вужча
 
         /// <summary>Колір обводки й смужки за роллю (герой — кобальт, лиходій — кармін, бунтар — рожевий): мітка сторони, не оформлення.</summary>
         public static Color RoleColor(RingPath p)

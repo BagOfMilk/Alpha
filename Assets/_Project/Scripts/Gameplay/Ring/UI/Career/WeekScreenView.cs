@@ -75,9 +75,11 @@ namespace Game.Gameplay.Ring.UI
             if (!_accordionSet)
             {
                 _accordionSet = true;
-                float pw = Root.layout.width, ph = Root.layout.height;
-                if (float.IsNaN(pw) || float.IsNaN(ph) || pw <= 0f || ph <= 0f) { pw = Screen.width; ph = Screen.height; }
-                _dev = CareerTileLayout.WeekDrawerAutoOpen(pw, ph, w.DevPoints);
+                // межа самовідкриття — два ряди плиток, тобто ширина панелі в її одиницях: до розкладки — з кадру (екрани кар'єри
+                // завжди в еталоні висоти 900, «Розмір інтерфейсу» їх не масштабує), а не в пікселях
+                float pw = Root.layout.width;
+                if ((float.IsNaN(pw) || pw <= 0f) && Screen.height > 0) pw = Screen.width * CareerTileLayout.PanelH / Screen.height;
+                _dev = CareerTileLayout.WeekDrawerAutoOpen(pw, w.DevPoints);
                 _shop = ExpandForShots && !_dev;
             }
             Root.Add(ShowKit.PlayerStrip(C, T, v));
@@ -206,8 +208,9 @@ namespace Game.Gameplay.Ring.UI
                     // розгортає картку, щойно проміжний прохід розкладки минув (кадр слоту 34, a_s1 4:3)
                     if (!_posterFolded && _posterDetails != null && !float.IsNaN(_posterDetails.layout.height)) _detailsH = _posterDetails.layout.height;
                     bool fold;
-                    float max = CareerTileLayout.DrawerOverPoster(bottomY, _poster.layout.y + _poster.layout.height, _posterFolded, _detailsH,
-                        _posterSticker, _dev, out fold);
+                    // над одним рядом плиток — ще й під обличчям букерки (АД 15.11.2026, рішення (а))
+                    float max = CareerTileLayout.WeekDrawerMaxHeight(bottomY, height, twoRows, _poster.layout.y + _poster.layout.height, _posterFolded,
+                        _detailsH, _posterSticker, _dev, out fold);
                     if (fold != _posterFolded) FoldPoster(fold);
                     _drawer.style.maxHeight = max;
                     if (_drawerScroll != null)
@@ -460,7 +463,7 @@ namespace Game.Gameplay.Ring.UI
 
         private VisualElement RowHeader(WeekView w)
         {
-            var row = ArenaKit.Abs(ArenaKit.Edge, null, ArenaKit.Edge, ArenaKit.HeaderBottom, null, 42f);
+            var row = ArenaKit.Abs(ArenaKit.Edge, null, ArenaKit.Edge, ArenaKit.HeaderBottom, null, CareerTileLayout.WeekHeaderH);
             row.style.flexDirection = FlexDirection.Row;
             row.style.alignItems = Align.Center;
             row.pickingMode = PickingMode.Ignore;

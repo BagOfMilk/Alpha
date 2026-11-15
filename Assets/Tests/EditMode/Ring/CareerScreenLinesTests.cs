@@ -1917,6 +1917,48 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
+        /// АД 15.11.2026, рішення (а): над одним рядом плиток верх шухляди не вищий за лінію під обличчям букерки, решта — прокруткою;
+        /// над двома рядами — лише під афішею, як було. Мінімум шухляди лишається; лінія — у частці висоти панелі.
+        /// </summary>
+        [Test]
+        public void WeekDrawer_OverOneRow_StopsUnderTheBookerFace()
+        {
+            const float bottomY = 664f;   // один ряд плиток висоти TileH: 900 − DrawerBottom
+            float face = CareerTileLayout.WeekBookerFaceClearY;
+            bool f;
+            Assert.AreEqual(900f - CareerTileLayout.DrawerBottom, bottomY, 0.01f);
+            // коротка афіша (низ 307): під нею 337, під обличчям — менше
+            float h = CareerTileLayout.WeekDrawerMaxHeight(bottomY, 900f, false, 307f, false, 0f, false, true, out f);
+            Assert.AreEqual(bottomY - face, h, 0.01f, "один ряд — верх на лінії під обличчям");
+            Assert.IsFalse(f, "обличчя не згортає афішу");
+            // два ряди — без обмеження: як під афішею
+            float two = CareerTileLayout.WeekDrawerMaxHeight(540f, 900f, true, 307f, false, 0f, false, true, out f);
+            bool f2;
+            Assert.AreEqual(CareerTileLayout.DrawerOverPoster(540f, 307f, false, 0f, false, true, out f2), two, 0.01f, "два ряди — лише під афішею");
+            Assert.Greater(two, 540f - face, "два ряди — вище за лінію обличчя");
+            // висока афіша (низ 460) тісніша за обличчя — межа афіші
+            h = CareerTileLayout.WeekDrawerMaxHeight(bottomY, 900f, false, 460f, false, 0f, false, true, out f);
+            Assert.AreEqual(bottomY - 460f - CareerTileLayout.DrawerPosterGap, h, 0.01f, "афіша нижча за обличчя — межа афіші");
+            // афіша згортає рядки, як і без обличчя: рішення — за місцем під повною афішею
+            h = CareerTileLayout.WeekDrawerMaxHeight(bottomY, 900f, false, 540f, false, 40f, false, true, out f);
+            Assert.IsTrue(f, "під повною афішею не влазить мінімум — згортає");
+            // ряд виріс до межі — на еталоні мінімум «Розвитку» ще під обличчям
+            float grown = 900f - (CareerTileLayout.DrawerBottom + CareerTileLayout.TileGrowMax);
+            h = CareerTileLayout.WeekDrawerMaxHeight(grown, 900f, false, 307f, false, 0f, false, true, out f);
+            Assert.AreEqual(grown - face, h, 0.01f);
+            Assert.GreaterOrEqual(h, CareerTileLayout.DrawerNeed(true), "мінімум «Розвитку» вміщається під обличчям і з найвищим рядом");
+            // панель нижча (750): лінія — у частці висоти, 435 × 750 / 900
+            h = CareerTileLayout.WeekDrawerMaxHeight(514f, 750f, false, 300f, false, 0f, false, false, out f);
+            Assert.AreEqual(514f - face * 750f / 900f, h, 0.01f, "лінія обличчя — у частці висоти панелі");
+            // під обличчям тісніше за мінімум — мінімум лишається (шухляда працює)
+            h = CareerTileLayout.WeekDrawerMaxHeight(500f, 900f, false, 200f, false, 0f, false, true, out f);
+            Assert.AreEqual(CareerTileLayout.DrawerNeed(true), h, 0.01f, "під обличчям 65 < 132 — мінімум");
+            // висота панелі невідома — лише межа афіші
+            Assert.AreEqual(CareerTileLayout.DrawerOverPoster(bottomY, 307f, false, 0f, false, true, out f2),
+                CareerTileLayout.WeekDrawerMaxHeight(bottomY, float.NaN, false, 307f, false, 0f, false, true, out f), 0.01f);
+        }
+
+        /// <summary>
         /// П. 1, кадр слоту 34 (a_s1 4:3): картка згортала рядок умов на проміжному проході розкладки (ряд дій ще не на місці) і так
         /// лишалась, хоч під повною карткою було ~198 од. Рішення — за повною висотою афіші, тож воно оборотне й не коливається.
         /// </summary>
@@ -2080,7 +2122,7 @@ namespace Game.Tests.EditMode
             string shapes = File.ReadAllText(Path.Combine(ui, "Menus", "MenuShapes.cs"));
             var bad = new List<string>();
             if (week.Contains("ArenaKit.StripH + 12f") || week.Contains("DrawerMinRoom") || week.Contains("if (room > 120f)")) bad.Add("WeekScreenView: шухляда знову відкочується до стрічки");
-            if (!week.Contains("float max = CareerTileLayout.DrawerOverPoster(bottomY, _poster.layout.y + _poster.layout.height, _posterFolded, _detailsH,")
+            if (!week.Contains("float max = CareerTileLayout.WeekDrawerMaxHeight(bottomY, height, twoRows, _poster.layout.y + _poster.layout.height, _posterFolded,")
                 || !CodeLine(week, "_drawer.style.maxHeight = max;")) bad.Add("WeekScreenView: висота шухляди не з моделі");
             if (!CodeLine(week, "if (fold != _posterFolded) FoldPoster(fold);")) bad.Add("WeekScreenView: картка не згортає (чи не розгортає) рядки умов");
             if (!CodeLine(week, "if (!_posterFolded && _posterDetails != null && !float.IsNaN(_posterDetails.layout.height)) _detailsH = _posterDetails.layout.height;"))
@@ -2749,7 +2791,11 @@ namespace Game.Tests.EditMode
                 bad.Add("WeekScreenView: стрічка дії блимає (поява не раз на результат) або рух не з токенів");
             if (!CodeLine(week, "_hintDefault = CareerScreenLines.WeekHintDefault(promo, strained, CareerScreenLines.WeekRumor(T, Host.LastWeekResult));"))
                 bad.Add("WeekScreenView: чутки немає в рядку-підказці");
-            if (!CodeLine(week, "_dev = CareerTileLayout.WeekDrawerAutoOpen(pw, ph, w.DevPoints);")) bad.Add("WeekScreenView: шухляда на 4:3 відкривається сама");
+            if (!CodeLine(week, "_dev = CareerTileLayout.WeekDrawerAutoOpen(pw, w.DevPoints);")
+                || !CodeLine(week, "if ((float.IsNaN(pw) || pw <= 0f) && Screen.height > 0) pw = Screen.width * CareerTileLayout.PanelH / Screen.height;"))
+                bad.Add("WeekScreenView: шухляда сама відкривається над двома рядами плиток (чи межа — у пікселях, а не в одиницях панелі)");
+            if (!CodeLine(week, "var row = ArenaKit.Abs(ArenaKit.Edge, null, ArenaKit.Edge, ArenaKit.HeaderBottom, null, CareerTileLayout.WeekHeaderH);"))
+                bad.Add("WeekScreenView: шапка ряду дій — не за моделлю (охоронець «букерку видно до пояса» міряє за нею)");
             if (!CodeLine(show, "string age = CareerScreenLines.AgeingNextLine(T, C, CareerScreenLines.SeasonEndActions(C));")
                 || !CodeLine(show, "if (age != null) { var a = MenuKit.Body(age, BrandTokens.TypeMinInfo, RingTheme.Bg, true); a.style.whiteSpace = WhiteSpace.Normal; a.style.marginTop = 8f; col.Add(a); }"))
                 bad.Add("ShowScreens: Б5 — рядок «Тіло старіє…» не на папері кінця сезону так, як прийняв директор (Body 15 напівжирний, відступ 8)");
