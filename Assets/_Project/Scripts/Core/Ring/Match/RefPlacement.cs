@@ -104,6 +104,22 @@ namespace Game.Core.Ring.Match
         public static bool CountSpot(float sx, float sz, float sideX, float sideZ, float headX, float headZ, IList<Seg> bodies,
             float reach, float kneeFwd, float leanFwd, float clear, float leanClear, float lim, out float x, out float z)
         {
+            return CountSpot(sx, sz, sideX, sideZ, headX, headZ, bodies, reach, kneeFwd, leanFwd, clear, leanClear, lim,
+                null, 0f, 0f, out x, out z);
+        }
+
+        /// <summary>
+        /// Те саме, що <see cref="CountSpot(float,float,float,float,float,float,IList{Seg},float,float,float,float,float,float,out float,out float)"/>,
+        /// плюс голова рефері в повному нахилі кліпа відліку: на <paramref name="headFwd"/> уперед від таза вона має бути не
+        /// ближче за <paramref name="headClear"/> до осі кожного ВИСОКОГО тіла (<paramref name="high"/> — нападник, що лежить на
+        /// захисникові: його плечі й голова на висоті голови рефері). Лежачий на маті сюди не входить — голова рефері над ним.
+        /// Замір «Изучение» 15.11.2026: голова рефері на відліку — 0,56 м попереду таза, і вона входила в плече нападника, хоча
+        /// місце за старою перевіркою (нахил 0,4 м) було «вільне». <paramref name="high"/> = null — перевірки немає.
+        /// </summary>
+        public static bool CountSpot(float sx, float sz, float sideX, float sideZ, float headX, float headZ, IList<Seg> bodies,
+            float reach, float kneeFwd, float leanFwd, float clear, float leanClear, float lim,
+            IList<Seg> high, float headFwd, float headClear, out float x, out float z)
+        {
             x = sx + sideX * reach; z = sz + sideZ * reach;
             for (int s = 0; s < 2; s++)
             {
@@ -119,6 +135,7 @@ namespace Game.Core.Ring.Match
                     if (MinDist(cx, cz, bodies) < clear) continue;
                     if (MinDist(cx + fx * kneeFwd, cz + fz * kneeFwd, bodies) < clear) continue;
                     if (MinDist(cx + fx * leanFwd, cz + fz * leanFwd, bodies) < leanClear) continue;
+                    if (high != null && high.Count > 0 && MinDist(cx + fx * headFwd, cz + fz * headFwd, high) < headClear) continue;
                     x = cx; z = cz;
                     return true;
                 }

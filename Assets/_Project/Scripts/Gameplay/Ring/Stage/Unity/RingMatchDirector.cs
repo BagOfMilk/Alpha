@@ -1363,7 +1363,7 @@ namespace Game.Gameplay.Ring.Stage
 
             var refActor = _s.Referee;
             // Утримання: рефері йде до плечей захисника й стає на коліно сам (RefCount) — паралельно з підходом нападника.
-            if (st.Count) StartCoroutine(RefCount(ev, A, B, pA, st.RefClip));
+            if (st.Count) StartCoroutine(RefCount(ev, A, B, PinPelvis(A, pA, yawA), st.RefClip));
             bool hard = fromCut || st.CutIn || !laneFits || laneCut;
             if (hard)
             {
@@ -1931,6 +1931,23 @@ namespace Game.Gameplay.Ring.Stage
         private const float CountLeanFwd = 0.4f;
         /// <summary>Найближче до осі тіла, де голова рефері в нахилі, м (ПЛЕЙСХОЛДЕР, слот 33).</summary>
         private const float CountLeanClear = 0.2f;
+        /// <summary>Де голова рефері в повному нахилі кліпа відліку, уперед від таза, м (замір «Изучение» 15.11.2026: 0,56).</summary>
+        private const float CountHeadFwd = 0.56f;
+        /// <summary>
+        /// Найближче до осі тулуба нападника на накритті, де голова рефері в повному нахилі, м (ПЛЕЙСХОЛДЕР: плече 0,2 + голова
+        /// 0,1 + запас; замір 15.11.2026 — при 0,30 голова входила в плече).
+        /// </summary>
+        private const float CountHeadClear = 0.42f;
+
+        /// <summary>
+        /// Де таз нападника буде в позі накриття, якщо слот пари — <paramref name="slot"/> (старт <c>Cover_Enter</c>): рефері
+        /// обходить тіло на накритті, а не точку старту (замір 15.11.2026: таз у позі — за 0,27 м від слота).
+        /// </summary>
+        private Vector3 PinPelvis(RingActor a, Vector3 slot, float slotYaw)
+        {
+            var hold = _s.Clip("Cover_Hold_Loop_A");
+            return hold != null ? SlotPoint(a, hold, 0f, slot, slotYaw) : slot;
+        }
         /// <summary>На скільки голова й плечі нападника на накритті виходять за вісь захисника, м (ПЛЕЙСХОЛДЕР, слот 33).</summary>
         private const float CoverBeyond = 0.45f;
         /// <summary>Ноги нападника на накритті — назад від таза, м (ПЛЕЙСХОЛДЕР).</summary>
@@ -1966,14 +1983,17 @@ namespace Game.Gameplay.Ring.Stage
             // суперника; слот 33, 13.11.2026: голова рефері впритул до голови нападника, на «два» рефері лежав на героїні). Вісь
             // захисника — від голови до ступнів; нападник — таз біля захисника, тулуб поперек його грудей (CoverBody), а не точка.
             Vector3 feet = hip - h * CountBodyLegs;
+            var cover = RefPlacement.CoverBody(pA.x, pA.z, new RefPlacement.Seg(head.x, head.z, hip.x, hip.z), CoverBeyond, CoverLegs);
             var bodies = new List<RefPlacement.Seg>
             {
                 new RefPlacement.Seg(head.x, head.z, feet.x, feet.z),
-                RefPlacement.CoverBody(pA.x, pA.z, new RefPlacement.Seg(head.x, head.z, hip.x, hip.z), CoverBeyond, CoverLegs),
+                cover,
             };
+            // Голова рефері в повному нахилі — на висоті плечей і голови нападника, що лежить на захисникові; лежачий під нею.
+            var high = new List<RefPlacement.Seg> { cover };
             float cxs, czs;
             bool freeSpot = RefPlacement.CountSpot(sh.x, sh.z, n.x, n.z, h.x, h.z, bodies, CountReach, CountKneeFwd, CountLeanFwd,
-                CountBodyClear, CountLeanClear, lim, out cxs, out czs);
+                CountBodyClear, CountLeanClear, lim, high, CountHeadFwd, CountHeadClear, out cxs, out czs);
             Vector3 spot = new Vector3(Mathf.Clamp(cxs, -lim, lim), RingStage3D.MatY, Mathf.Clamp(czs, -lim, lim));
             float yaw = RingStage3D.YawTo(spot, sh);
             if (Trace && freeSpot) Debug.Log("[Ринг] відлік: рефері біля плечей, вільно (" + spot.x.ToString("0.00", CultureInfo.InvariantCulture) + ", " + spot.z.ToString("0.00", CultureInfo.InvariantCulture) + ")");
