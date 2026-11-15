@@ -24,7 +24,7 @@ namespace Game.Gameplay.Ring.UI
 
         // ---- розкладка (еталон 900; B03 §2: значення 1080p × 0,833) ----
         public const float Edge = CareerTileLayout.Edge;          // безпечні боки ACC-04
-        public const float Top = 45f;
+        public const float Top = CareerTileLayout.Top;
         public const float StripW = CareerTileLayout.StripW, StripH = 106f;
         public const float SecondY = CareerTileLayout.SecondY;      // друга плита під стрічкою
         public const float RopesY = 668f;

@@ -1078,7 +1078,7 @@ namespace Game.Tests.EditMode
             // ряд будує саме Refresh (той самий виклик моделі є й в OnConfirm — сам по собі він ряду не доводить; рев'ю 12.11.2026)
             int seasonEnd = show.IndexOf("class SeasonEndScreenView"), refresh = show.IndexOf("public override void Refresh()", seasonEnd < 0 ? 0 : seasonEnd);
             int rowLoop = show.IndexOf("for (int i = 0; i < actions.Count; i++) AddAction(actions[i], i == 0);", refresh < 0 ? 0 : refresh);
-            int report = show.IndexOf("private VisualElement Report(SeasonReport rep)", refresh < 0 ? 0 : refresh);
+            int report = show.IndexOf("private VisualElement Report(SeasonReport rep, bool column)", refresh < 0 ? 0 : refresh);
             if (seasonEnd < 0 || refresh < 0 || rowLoop < 0 || report < 0 || rowLoop > report)
                 bad.Add("ShowScreens: ряд кінця сезону (Refresh) не з SeasonEndActions");
             if (show.IndexOf("if (C.CanStartNextSeason)", seasonEnd < 0 ? 0 : seasonEnd) >= 0) bad.Add("ShowScreens: «Новий сезон» повз послідовність рішень");
@@ -1139,7 +1139,7 @@ namespace Game.Tests.EditMode
             if (!career.Contains("_devAll = !_devAll; _devAllOpened = _devAll;")) bad.Add("CareerScreens: перемикач «Усе» не позначає щойно розгорнутий список");
             if (!CodeLine(career, "if (opened) DevAllStart = attrsHead;")) bad.Add("CareerScreens: не позначено початок повного списку");
             int n = 0;
-            foreach (Match m in Regex.Matches(show, @"private VisualElement DevPlate\(\)\s*\{"))
+            foreach (Match m in Regex.Matches(show, @"private VisualElement DevPlate\((bool column)?\)\s*\{"))
             {
                 n++;
                 int end = show.IndexOf("return box;", m.Index);
@@ -1149,7 +1149,9 @@ namespace Game.Tests.EditMode
                 if (foot < 0 || panel < foot || scroll < panel || hint < scroll || footAdd < hint)
                     bad.Add("DevPlate №" + n + ": не «підвал → панель із moreTo → прокрутка → підказка в підвал → підвал після прокрутки»");
                 if (!body.Contains("scroll.style.flexShrink = 1f;")) bad.Add("DevPlate №" + n + ": прокрутка не стискається");
-                if (!body.Contains("CareerTileLayout.DevPlateMaxH(")) bad.Add("DevPlate №" + n + ": плита без межі до канатів");
+                // кінець сезону — через DevMaxH: 16:9 — DevPlateMaxH від верху плити, 4:3 — місце під вкладками колонки
+                if (!body.Contains("CareerTileLayout.DevPlateMaxH(") && !body.Contains("box.style.maxHeight = DevMaxH(Root.layout.height);"))
+                    bad.Add("DevPlate №" + n + ": плита без межі до канатів");
                 if (body.Contains("scroll.style.maxHeight = 370f")) bad.Add("DevPlate №" + n + ": стара стала висота прокрутки кінця сезону");
                 if (!body.Contains("scroll.style.minHeight = CareerTileLayout.DevScrollMinH;")) bad.Add("DevPlate №" + n + ": найменша прокрутка не з моделі");
                 // щойно розгорнутий «Усе» — до початку списку (ScrollToDevAll), інакше — та сама прокрутка після перебудови (огляд слоту 31)
@@ -1158,7 +1160,9 @@ namespace Game.Tests.EditMode
             }
             if (n != 2) bad.Add("DevPlate: плит розвитку на екранах показу — дві, знайдено " + n);
             // межа від справжньої висоти панелі — і при зміні розміру (кінець сезону), і при зміні верху на вузькій панелі (підсумок)
-            if (!CodeLine(show, "if (_devBox != null) _devBox.style.maxHeight = CareerTileLayout.DevPlateMaxH(CareerTileLayout.SeasonDevTop, Root.layout.height);"))
+            if (!CodeLine(show, "float w = Root.layout.width, h = Root.layout.height;")
+                || !CodeLine(show, "if (_devBox != null) _devBox.style.maxHeight = DevMaxH(h);")
+                || !CodeLine(show, "return _single ? CareerTileLayout.SeasonColumnRoom(panelH) : CareerTileLayout.DevPlateMaxH(CareerTileLayout.SeasonDevTop, panelH);"))
                 bad.Add("SeasonEnd: межа плити не оновлюється з висотою панелі");
             if (!CodeLine(show, "if (_devCol != null) _devCol.style.maxHeight = CareerTileLayout.DevPlateMaxH(top, Root.layout.height);"))
                 bad.Add("ShowResult.Fit: межа плити не йде за її верхом");
@@ -2069,6 +2073,105 @@ namespace Game.Tests.EditMode
                 foreach (bool two in new[] { false, true })
                     Assert.AreEqual(desc, CareerScreenLines.CreateRowHint(t, false, m, RingAttr.Agility, RingAttr.Stamina, two, key), "широка: опис ґіміка");
             Assert.AreEqual("", CareerScreenLines.CreateRowHint(null, true, true, RingAttr.Agility, RingAttr.Stamina, true, key));
+        }
+
+        /// <summary>
+        /// Кінець сезону 4:3 (АД 15.11.2026): рядок шкал — лише на 16:9 (на 4:3 дублює плиту ресурсів); підсумок згорнутий — лише на 4:3 і
+        /// лише на кроках контракту чи пізньої ролі; на 16:9 — повний на будь-якому кроці.
+        /// </summary>
+        [Test]
+        public void SeasonEnd_Column_ScalesLine_AndFoldedSummary()
+        {
+            Assert.IsTrue(CareerScreenLines.SeasonScalesLineShown(false));
+            Assert.IsFalse(CareerScreenLines.SeasonScalesLineShown(true));
+            foreach (bool contract in new[] { false, true })
+                foreach (bool late in new[] { false, true })
+                {
+                    Assert.IsFalse(CareerScreenLines.SeasonSummaryCollapsed(false, contract, late), "16:9 — підсумок повний");
+                    Assert.AreEqual(contract || late, CareerScreenLines.SeasonSummaryCollapsed(true, contract, late),
+                        "4:3: контракт " + contract + ", пізня роль " + late);
+                }
+        }
+
+        /// <summary>
+        /// Проводка кінця сезону 4:3 (АД 15.11.2026, варіант А): розкладка — та сама межа, що на створенні (до розкладки — за екраном),
+        /// перехід межі перебудовує раз; права колонка — вкладки «Кінець сезону» без числа й «Розвиток N» (N — очки з шапки плити,
+        /// золото — як на тижні), компактні TabPlate, перша впритул; папір без рядка шкал, згорнутий на кроках контракту й пізньої ролі
+        /// (рядок звільнення лишається); плита розвитку — місце під вкладками.
+        /// </summary>
+        [Test]
+        public void Sources_SeasonEndColumn_AreWired()
+        {
+            string dir = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring");
+            string show = File.ReadAllText(Path.Combine(dir, "UI", "Career", "ShowScreens.cs"));
+            string kit = File.ReadAllText(Path.Combine(dir, "UI", "Career", "ArenaKit.cs"));
+            int start = show.IndexOf("public sealed class SeasonEndScreenView");
+            Assert.Greater(start, 0, "немає SeasonEndScreenView");
+            string season = show.Substring(start);
+            var bad = new List<string>();
+            foreach (var l in new[] {
+                "float pw = Root.layout.width, ph = Root.layout.height;",
+                "if (float.IsNaN(pw) || float.IsNaN(ph) || pw <= 0f || ph <= 0f) { pw = Screen.width; ph = Screen.height; }",
+                "_single = CareerTileLayout.CreateSingleColumn(pw, ph);",
+                "_relayout = false;",
+                "if (!float.IsNaN(w) && !float.IsNaN(h) && w > 0f && h > 0f && CareerTileLayout.CreateSingleColumn(w, h) != _single)",
+                "if (!_relayout) { _relayout = true; Root.schedule.Execute(Refresh); }",
+                "if (_devBox != null) _devBox.style.maxHeight = DevMaxH(h);",
+                "return _single ? CareerTileLayout.SeasonColumnRoom(panelH) : CareerTileLayout.DevPlateMaxH(CareerTileLayout.SeasonDevTop, panelH);",
+                "if (_single) Root.Add(SeasonColumn(rep));",
+                "Root.Add(Report(rep, false));",
+                "Root.Add(DevPlate(false));",
+                "var col = ArenaKit.Abs(null, ArenaKit.Top, ArenaKit.Edge, null, CareerTileLayout.SeasonColumnW, null);",
+                "var report = new TabPlate(T.Get(\"c.season.tab\"), -1, _tab == TabReport, () => { if (_tab != TabReport) { _tab = TabReport; Refresh(); } }, false, true);",
+                "report.style.marginLeft = 0f;",
+                "var dev = new TabPlate(T.Get(\"dev.title\"), C.DevPoints, _tab == TabDev, () => { if (_tab != TabDev) { _tab = TabDev; Refresh(); } }, C.DevPoints > 0, true);",
+                "dev.style.marginLeft = CareerTileLayout.ColumnTabGap;",
+                "var plate = _tab == TabDev ? DevPlate(true) : Report(rep, true);",
+                "plate.style.marginTop = CareerTileLayout.ColumnPlateGap;",
+                "var box = column ? new VisualElement() : ArenaKit.Abs(null, ArenaKit.Top, ArenaKit.Edge, null, 520f, null);",
+                "bool folded = CareerScreenLines.SeasonSummaryCollapsed(column, CareerScreenLines.OfferShown(C, _offer) && _offer.ShowContract,",
+                "CareerScreenLines.LateRoleShown(C, actions));",
+                "if (C.State.SeasonPopStart >= 0 && !folded)",
+                "if (CareerScreenLines.SeasonScalesLineShown(column))",
+                "var hammer = folded ? null : C.Content.FindNpc(CareerContent.HammerId);",
+                "if (!folded && rep.TitleDone)",
+                "else if (!folded && rep.TitleEligible)",
+                "else if (!folded && !rep.Fired)",
+                "string fired = CareerScreenLines.FiredLine(T, C, _offer);",
+                "var box = column ? new VisualElement() : ArenaKit.Abs(ArenaKit.Edge, CareerTileLayout.SeasonDevTop, null, null, ArenaKit.StripW, null);",
+                "box.style.maxHeight = DevMaxH(Root.layout.height);",
+                "internal static readonly bool DevTabFirstForShots = Array.IndexOf(Environment.GetCommandLineArgs(), \"-ring-shot-season-dev\") >= 0;" })
+                if (!CodeLine(season, l)) bad.Add("SeasonEndScreenView: немає «" + l + "»");
+            if (!CodeLine(kit, "public const float Top = CareerTileLayout.Top;")) bad.Add("ArenaKit: верх екранів — не з моделі");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Підказка плитки під курсором після перебудови (АД 15.11.2026, п. 3): позиція й пристрій вказівника — з руху й натискання
+        /// (обидва — TrickleDown на корені), після перебудови — один раз, із запізненням на розкладку; лише миша й не після геймпада;
+        /// плитка під курсором — та сама дорога наведення (OnHover: підсвітка й рядок підказки).
+        /// </summary>
+        [Test]
+        public void Sources_CreateHoverAfterRebuild_IsWired()
+        {
+            string dir = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring");
+            string create = File.ReadAllText(Path.Combine(dir, "UI", "Career", "CreateScreenView.cs"));
+            var bad = new List<string>();
+            foreach (var l in new[] {
+                "Root.RegisterCallback<PointerMoveEvent>(e => { _ptr = new Vector2(e.position.x, e.position.y); _ptrMouse = e.pointerType == PointerType.mouse; }, TrickleDown.TrickleDown);",
+                "Root.RegisterCallback<PointerDownEvent>(e => { _ptr = new Vector2(e.position.x, e.position.y); _ptrMouse = e.pointerType == PointerType.mouse; }, TrickleDown.TrickleDown);",
+                "if (!_ptrMouse || CareerPadFeature.PadHints(Menus.RingMenuInput.PadLast) || _hint == null) return;",
+                "if (t.panel == null || t.OnHover == null) continue;",
+                "var r = t.worldBound;",
+                "if (_ptr.x >= r.xMin && _ptr.x <= r.xMax && _ptr.y >= r.yMin && _ptr.y <= r.yMax) { t.OnHover(); return; }",
+                "if (_ptrMouse) Root.schedule.Execute(RestoreHover).ExecuteLater(30);" })
+                if (!CodeLine(create, l)) bad.Add("CreateScreenView: немає «" + l + "»");
+            // після перебудови: виклик — у Refresh, після очищення рядів (нові плитки вже в _tiles до розкладки)
+            int refresh = create.IndexOf("public override void Refresh()");
+            int clear = refresh < 0 ? -1 : create.IndexOf("_attrRows.Clear();", refresh);
+            int later = refresh < 0 ? -1 : create.IndexOf("Root.schedule.Execute(RestoreHover)", refresh);
+            if (refresh < 0 || clear < 0 || later < clear) bad.Add("CreateScreenView: відновлення підказки не в Refresh");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
         }
 
         /// <summary>

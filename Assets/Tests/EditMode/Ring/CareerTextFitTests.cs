@@ -824,6 +824,17 @@ namespace Game.Tests.EditMode
             h += BulletH(Longest(string.Format(Ui("c.season.feud"), hammer, 4, 4), string.Format(Ui("c.season.feud_done"), hammer)), col);
             h += BulletH(Longest(Ui("c.season.belt_yes"), Ui("c.season.belt_no"), Ui("season.title_shot"), Ui("season.defense"),
                 string.Format(Ui("c.season.goal"), 4, 4)), col);
+            int statusLines;
+            h += OfferBlockH(col, fed, out statusLines);
+            h += PaperPadB;
+            Assert.LessOrEqual(top + h, ropesY - PaperClear,
+                string.Format("папір кінця сезону: {0:0} + {1:0} = {2:0} > канати {3:0} − {4:0} (рядок стану — {5} рядки)", top, h, top + h, ropesY, PaperClear, statusLines));
+        }
+
+        /// <summary>Блок пропозиції кроку «пропозиція»: заголовок, обидва ключі з «чого бракує» і найдовший рядок стану разом.</summary>
+        private static float OfferBlockH(float col, string fed, out int statusLines)
+        {
+            float h = 0f;
             // блок пропозиції
             h += 18f;
             h += Para(Longest(string.Format(Ui("c.offer.title"), fed), string.Format(Ui("c.offer.progress"), fed), string.Format(Ui("c.offer.top"), fed)),
@@ -835,15 +846,138 @@ namespace Game.Tests.EditMode
             string status = Longest(Ui("c.offer.ready"), Ui("c.offer.farewell"), Ui("c.offer.declined"), Ui("c.offer.offended"),
                 string.Format(Ui("c.offer.moved"), fed), string.Format(Ui("c.offer.farewell.ok"), fed), string.Format(Ui("c.offer.farewell.bad"), fed, fed),
                 string.Format(Ui("c.season.demoted"), fed, fed));
-            int statusLines;
             h += 8f + Para(status, BrandTokens.TypeMinInfo, col, out statusLines);
-            h += PaperPadB;
-            Assert.LessOrEqual(top + h, ropesY - PaperClear,
-                string.Format("папір кінця сезону: {0:0} + {1:0} = {2:0} > канати {3:0} − {4:0} (рядок стану — {5} рядки)", top, h, top + h, ropesY, PaperClear, statusLines));
+            return h;
         }
 
-        /// <summary>Підсумок сезону на папері (без блоку пропозиції й нижнього відступу) — найдовшими рядками, як у тесті вище.</summary>
-        private static float SeasonPaperSummaryH(float col, out string fed)
+        /// <summary>Блок кроку контракту (№8): ключі виконано, рядок стану, аванс, пункт пастки, менеджерка, штраф — усе разом.</summary>
+        private static float ContractBlockH(float col, string fed)
+        {
+            float h = 0f;
+            h += OfferKeysH(col, fed, 0);
+            h += 8f + Para(Longest(Ui("c.offer.ready"), Ui("c.offer.farewell"), Ui("c.offer.farewell.f")), BrandTokens.TypeMinInfo, col);
+            h += BulletH(Longest(Ui("c.offer.advance", 99999), Ui("c.offer.advance.manager", 99999, 25)), col);
+            float line = col - CareerTileLayout.BulletIndent;
+            h += 4f + Para(Longest(Ui("c.offer.fine.unread"), Ui("c.offer.fine.missed"), Ui("c.offer.fine.hint"), Ui("c.offer.fine.clean_hint"),
+                Ui("c.offer.fine.clean"), Ui("c.offer.fine.exclusive", 50, 2, 9999)), BrandTokens.TypeMinInfo, line);
+            h += 4f + Para(Ui("c.offer.fine.manager"), BrandTokens.TypeMinInfo, line);
+            h += 4f + Para(Longest(Ui("c.offer.locked", 9999, 99999), Ui("c.offer.penalty", 9999)), BrandTokens.TypeMinInfo, line);
+            return h;
+        }
+
+        /// <summary>Блок кроку пізньої ролі (№11): найвищий зі станів пропозиції, «Пізня роль» з кнопками й рядком під ними, Б5.</summary>
+        private static float LateBlockH(float col, string fed, out int rows, out int ageLines)
+        {
+            float h = 0f;
+            // блок пропозиції на цьому кроці — найвищий зі станів, що бувають (SeasonOfferModel.StatusText): пропозиції ще немає —
+            // ключі з двома «чого бракує» без рядка стану; відмова — ключі (довіра після образи могла впасти — одна підказка) і рядок
+            // відмови; перехід — ключів нової федерації не видно, лише рядок стану. Звільнений — блоку немає (рядок звільнення вище).
+            float none = OfferKeysH(col, fed, 2);
+            float declined = OfferKeysH(col, fed, 1) + 8f + Para(Longest(Ui("c.offer.declined"), Ui("c.offer.declined.f"), Ui("c.offer.offended")),
+                BrandTokens.TypeMinInfo, col);
+            float moved = 18f + 8f + Para(Longest(string.Format(Ui("c.offer.moved"), fed), string.Format(Ui("c.offer.farewell.ok"), fed),
+                string.Format(Ui("c.offer.farewell.ok.f"), fed), string.Format(Ui("c.offer.farewell.bad"), fed, fed)), BrandTokens.TypeMinInfo, col);
+            h += Math.Max(none, Math.Max(declined, moved));
+            // блок пізньої ролі
+            // заголовок — чинна роль (043f2706: «Пізня роль: Зірка поза рингом» найдовша), без ролі — «Пізня роль»
+            h += 18f + Para(Longest(Ui("c.late.title"), Ui("c.late.current", Ui("c.late.icon")), Ui("c.late.current", Ui("c.late.legend")),
+                Ui("c.late.current", Ui("c.late.star"))), BrandTokens.TypeBody, col);
+            var names = new[] { Ui("c.late.icon"), Ui("c.late.legend"), Ui("c.late.star"), Ui("c.late.none") };
+            rows = 1;
+            float x = 0f;
+            foreach (var n in names)
+            {
+                float w = TextFont.Width(n, 13f) + 8f + 8f + 4f + 1f + 4f;
+                if (x > 0f && x + w > col) { rows++; x = 0f; }
+                x += w;
+            }
+            h += 6f + rows * RecButtonH;
+            // рядок під кнопками (CareerScreenLines.LateRoleNote): «З наступного сезону: роль. Що дає.», та сама — що дає, без ролі — правило
+            string note = Longest(Ui("c.late.hint"),
+                Ui("c.late.next", Ui("c.late.icon")) + ". " + Ui("c.late.icon.desc", 9) + ".",
+                Ui("c.late.next", Ui("c.late.legend")) + ". " + Ui("c.late.legend.desc") + ".",
+                Ui("c.late.next", Ui("c.late.star")) + ". " + Ui("c.late.star.desc", 999, 999) + ".",
+                Ui("c.late.next", Ui("c.late.none")) + ".");
+            h += 2f + Para(note, BrandTokens.TypeMinInfo, col);
+            // Б5: на останньому кроці кінців сезонів 3 і 6 — «Тіло старіє: …» одним рядком (ПМ 14.11.2026; на екран — після У0
+            // арт-директора; мітка TypeMinInfo, напівжирна, відступ 8 — як інші рядки паперу)
+            h += 8f + Para(Longest(Ui("c.age.next", 4, 4), Ui("c.age.next.many", 4, 5)), BrandTokens.TypeMinInfo, col, out ageLines);
+            return h;
+        }
+
+        /// <summary>
+        /// Кінець сезону 4:3 (АД 15.11.2026, варіант А): права колонка <see cref="CareerTileLayout.SeasonColumnW"/> з вкладками
+        /// «Кінець сезону · Розвиток N». Під вкладками (<see cref="CareerTileLayout.SeasonColumnRoom"/>, 565) уміщаються папір кожного
+        /// кроку — рядка шкал у колонці немає, на кроках контракту й пізньої ролі підсумок згорнутий до назви, федерації й рекорду — і
+        /// плита розвитку з трьома порадами цілком, без прокрутки (і з розгорнутим «Усе»). Згортання справді потрібне: повний підсумок на
+        /// цих кроках не вміщається (інакше — до АД, чи повертати його).
+        /// </summary>
+        [Test]
+        public void SeasonEnd_Column_EveryStepAndTheDevTab_FitUnderTheTabs()
+        {
+            float room = CareerTileLayout.SeasonColumnRoom(CareerTileLayout.PanelH);
+            Assert.AreEqual(565f, room, 0.05f, "місце під вкладками кінця сезону змінилось — АД рахував 565 (15.11.2026)");
+            Assert.AreEqual(room, CareerTileLayout.SeasonColumnRoom(float.NaN), 0.01f, "до першої розкладки — еталонна панель");
+            float col = CareerTileLayout.SeasonColumnW - PaperPadL - PaperPadR;
+            string fed;
+            float full = SeasonPaperSummaryH(col, out fed, false, false), folded = SeasonPaperSummaryH(col, out fed, false, true);
+            int statusLines, rows, ageLines;
+            float summary = full + PaperPadB;
+            float offer = full + OfferBlockH(col, fed, out statusLines) + PaperPadB;
+            float contractBlock = ContractBlockH(col, fed), lateBlock = LateBlockH(col, fed, out rows, out ageLines);
+            float contract = folded + contractBlock + PaperPadB, late = folded + lateBlock + PaperPadB;
+            float dev = SeasonDevPlateH(CareerTileLayout.SeasonColumnW, false), devAll = SeasonDevPlateH(CareerTileLayout.SeasonColumnW, true);
+            TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                "4:3, під вкладками {0:0.0}: підсумок {1:0.0}; пропозиція {2:0.0}; контракт {3:0.0} (повний — {4:0.0}); пізня роль {5:0.0} (повний — {6:0.0}); розвиток {7:0.0}, з «Усе» {8:0.0}",
+                room, summary, offer, contract, full + contractBlock + PaperPadB, late, full + lateBlock + PaperPadB, dev, devAll));
+            Assert.LessOrEqual(summary, room, "крок «підсумок»");
+            Assert.LessOrEqual(offer, room, "крок «пропозиція» (повний підсумок)");
+            Assert.LessOrEqual(contract, room, "крок контракту (згорнутий підсумок)");
+            Assert.LessOrEqual(late, room, "крок пізньої ролі (згорнутий підсумок)");
+            Assert.LessOrEqual(rows, 2, "кнопки пізньої ролі — щонайбільше два рядки");
+            Assert.LessOrEqual(dev, room, "вкладка «Розвиток»: три поради цілком");
+            Assert.LessOrEqual(devAll, room, "вкладка «Розвиток» з розгорнутим «Усе»");
+            Assert.Greater(full + contractBlock + PaperPadB, room, "повний підсумок на кроці контракту вже влазить — спитати АД, чи не згортати");
+            Assert.Greater(full + lateBlock + PaperPadB, room, "повний підсумок на кроці пізньої ролі вже влазить — спитати АД, чи не згортати");
+        }
+
+        /// <summary>
+        /// Колонка кінця сезону 4:3: разом із краєм — не ширша за 46 % кадру, ліворуч від неї герою вільно не менше за плечі (16 %);
+        /// вкладки «КІНЕЦЬ СЕЗОНУ» і «РОЗВИТОК» з числом очок (найширше — «99»; ті самі компактні TabPlate, що на створенні: відступи 14 / 18,
+        /// проміжок 10, перша впритул) — не ширші за колонку в кожній мові, де ключі є.
+        /// </summary>
+        [Test]
+        public void SeasonEnd_Column_Edge_Hero_AndTabs()
+        {
+            Assert.AreEqual(CareerTileLayout.ColumnMaxFrac * 1200f - CareerTileLayout.Edge, CareerTileLayout.SeasonColumnW, 0.01f, "колонка — 46 % кадру 1200 без краю");
+            Assert.IsTrue(CareerTileLayout.CreateSingleColumn(1200f, 900f), "4:3 — колонка");
+            Assert.GreaterOrEqual(1200f - CareerTileLayout.Edge - CareerTileLayout.SeasonColumnW, CareerTileLayout.SeasonHeroShouldersW,
+                "ліворуч від колонки вужче за плечі героя");
+            const float size = 19f, track = 0.06f;
+            float num = WordFont.Width("99", 21f, 0f);
+            int langs = 0;
+            foreach (var path in System.IO.Directory.GetFiles(RingCampaignDriver.Dir(), "ui_*.json"))
+            {
+                var ui = MiniJson.ParseObject(System.IO.File.ReadAllText(path));
+                object a, b;
+                if (!ui.TryGetValue("c.season.tab", out a) || !ui.TryGetValue("dev.title", out b)) continue;
+                langs++;
+                float total = CareerTileLayout.ColumnTabPadLeft + TitleFont.Width(Caps((string)a), size, track) + CareerTileLayout.ColumnTabPadRight
+                    + CareerTileLayout.ColumnTabGap
+                    + CareerTileLayout.ColumnTabPadLeft + TitleFont.Width(Caps((string)b), size, track) + 14f + num + CareerTileLayout.ColumnTabPadRight;
+                string where = System.IO.Path.GetFileName(path) + ": «" + Caps((string)a) + " / " + Caps((string)b) + " 99» — "
+                    + total.ToString("0.0", CultureInfo.InvariantCulture) + " з " + CareerTileLayout.SeasonColumnW;
+                TestContext.WriteLine(where);
+                Assert.LessOrEqual(total + RenderSlack, CareerTileLayout.SeasonColumnW, where + " — ширше за колонку");
+            }
+            Assert.Greater(langs, 0, "жодної мови з ключами вкладок кінця сезону");
+        }
+
+        /// <summary>
+        /// Підсумок сезону на папері (без блоку пропозиції й нижнього відступу) — найдовшими рядками, як у тесті вище; <paramref name="scales"/> —
+        /// з рядком шкал (на 4:3 його немає), <paramref name="folded"/> — згорнутий до назви, федерації й рекорду (4:3, контракт і пізня роль).
+        /// </summary>
+        private static float SeasonPaperSummaryH(float col, out string fed, bool scales = true, bool folded = false)
         {
             var content = CareerKit.Content();
             fed = "";
@@ -854,8 +988,9 @@ namespace Game.Tests.EditMode
             h += 2f + Para(string.Format(Ui("c.fed.line"), fed, 4, 4), BrandTokens.TypeMinInfo, col);
             h += 18f;
             h += Para(string.Format(Ui("c.season.record"), 99, 99, 99), 19f, col);
+            if (folded) return h;   // 4:3, контракт і пізня роль: лише назва, федерація й рекорд
             h += BulletH(string.Format(Ui("c.season.pop"), 10, 10), col);
-            h += 6f + Para(string.Format(Ui("c.season.line"), 10, 5, 99999), BrandTokens.TypeMinInfo, col);
+            if (scales) h += 6f + Para(string.Format(Ui("c.season.line"), 10, 5, 99999), BrandTokens.TypeMinInfo, col);
             h += BulletH(Longest(string.Format(Ui("c.season.feud"), hammer, 4, 4), string.Format(Ui("c.season.feud_done"), hammer)), col);
             h += BulletH(Longest(Ui("c.season.belt_yes"), Ui("c.season.belt_no"), Ui("season.title_shot"), Ui("season.defense"),
                 string.Format(Ui("c.season.goal"), 4, 4)), col);
@@ -887,14 +1022,7 @@ namespace Game.Tests.EditMode
             float col = PaperW - PaperPadL - PaperPadR;
             string fed;
             float h = SeasonPaperSummaryH(col, out fed);
-            h += OfferKeysH(col, fed, 0);
-            h += 8f + Para(Longest(Ui("c.offer.ready"), Ui("c.offer.farewell"), Ui("c.offer.farewell.f")), BrandTokens.TypeMinInfo, col);
-            h += BulletH(Longest(Ui("c.offer.advance", 99999), Ui("c.offer.advance.manager", 99999, 25)), col);
-            float line = col - CareerTileLayout.BulletIndent;
-            h += 4f + Para(Longest(Ui("c.offer.fine.unread"), Ui("c.offer.fine.missed"), Ui("c.offer.fine.hint"), Ui("c.offer.fine.clean_hint"),
-                Ui("c.offer.fine.clean"), Ui("c.offer.fine.exclusive", 50, 2, 9999)), BrandTokens.TypeMinInfo, line);
-            h += 4f + Para(Ui("c.offer.fine.manager"), BrandTokens.TypeMinInfo, line);
-            h += 4f + Para(Longest(Ui("c.offer.locked", 9999, 99999), Ui("c.offer.penalty", 9999)), BrandTokens.TypeMinInfo, line);
+            h += ContractBlockH(col, fed);
             h += PaperPadB;
             Assert.LessOrEqual(top + h, ropesY - PaperClear,
                 string.Format("папір кінця сезону з контрактом: {0:0} + {1:0} = {2:0} > канати {3:0} − {4:0}", top, h, top + h, ropesY, PaperClear));
@@ -912,40 +1040,8 @@ namespace Game.Tests.EditMode
             float col = PaperW - PaperPadL - PaperPadR;
             string fed;
             float h = SeasonPaperSummaryH(col, out fed);
-            // блок пропозиції на цьому кроці — найвищий зі станів, що бувають (SeasonOfferModel.StatusText): пропозиції ще немає —
-            // ключі з двома «чого бракує» без рядка стану; відмова — ключі (довіра після образи могла впасти — одна підказка) і рядок
-            // відмови; перехід — ключів нової федерації не видно, лише рядок стану. Звільнений — блоку немає (рядок звільнення вище).
-            float none = OfferKeysH(col, fed, 2);
-            float declined = OfferKeysH(col, fed, 1) + 8f + Para(Longest(Ui("c.offer.declined"), Ui("c.offer.declined.f"), Ui("c.offer.offended")),
-                BrandTokens.TypeMinInfo, col);
-            float moved = 18f + 8f + Para(Longest(string.Format(Ui("c.offer.moved"), fed), string.Format(Ui("c.offer.farewell.ok"), fed),
-                string.Format(Ui("c.offer.farewell.ok.f"), fed), string.Format(Ui("c.offer.farewell.bad"), fed, fed)), BrandTokens.TypeMinInfo, col);
-            h += Math.Max(none, Math.Max(declined, moved));
-            // блок пізньої ролі
-            // заголовок — чинна роль (043f2706: «Пізня роль: Зірка поза рингом» найдовша), без ролі — «Пізня роль»
-            h += 18f + Para(Longest(Ui("c.late.title"), Ui("c.late.current", Ui("c.late.icon")), Ui("c.late.current", Ui("c.late.legend")),
-                Ui("c.late.current", Ui("c.late.star"))), BrandTokens.TypeBody, col);
-            var names = new[] { Ui("c.late.icon"), Ui("c.late.legend"), Ui("c.late.star"), Ui("c.late.none") };
-            int rows = 1;
-            float x = 0f;
-            foreach (var n in names)
-            {
-                float w = TextFont.Width(n, 13f) + 8f + 8f + 4f + 1f + 4f;
-                if (x > 0f && x + w > col) { rows++; x = 0f; }
-                x += w;
-            }
-            h += 6f + rows * RecButtonH;
-            // рядок під кнопками (CareerScreenLines.LateRoleNote): «З наступного сезону: роль. Що дає.», та сама — що дає, без ролі — правило
-            string note = Longest(Ui("c.late.hint"),
-                Ui("c.late.next", Ui("c.late.icon")) + ". " + Ui("c.late.icon.desc", 9) + ".",
-                Ui("c.late.next", Ui("c.late.legend")) + ". " + Ui("c.late.legend.desc") + ".",
-                Ui("c.late.next", Ui("c.late.star")) + ". " + Ui("c.late.star.desc", 999, 999) + ".",
-                Ui("c.late.next", Ui("c.late.none")) + ".");
-            h += 2f + Para(note, BrandTokens.TypeMinInfo, col);
-            // Б5: на останньому кроці кінців сезонів 3 і 6 — «Тіло старіє: …» одним рядком (ПМ 14.11.2026; на екран — після У0
-            // арт-директора; мітка TypeMinInfo, напівжирна, відступ 8 — як інші рядки паперу)
-            int ageLines;
-            h += 8f + Para(Longest(Ui("c.age.next", 4, 4), Ui("c.age.next.many", 4, 5)), BrandTokens.TypeMinInfo, col, out ageLines);
+            int rows, ageLines;
+            h += LateBlockH(col, fed, out rows, out ageLines);
             Assert.AreEqual(1, ageLines, "рядок «Тіло старіє…» — один рядок паперу");
             h += PaperPadB;
             Assert.LessOrEqual(rows, 2, "кнопки ролей — щонайбільше два рядки");
@@ -978,13 +1074,25 @@ namespace Game.Tests.EditMode
         /// Ширина пояснення поради на плиті кінця сезону: плита 410 − прокрутка 20 і 14 − картка (рамка 4 і 1, поля 10 і 10) − відступ мітки 6 −
         /// поля мітки Unity 2 і 2 − запас на рендер.
         /// </summary>
-        private static float SeasonDevWhyW
+        private static float SeasonDevWhyW { get { return SeasonDevWhyWFor(CareerTileLayout.StripW); } }
+
+        /// <summary>Те саме для плити ширини <paramref name="plateW"/> (4:3 — вкладка «Розвиток» на ширину колонки).</summary>
+        private static float SeasonDevWhyWFor(float plateW)
         {
-            get
-            {
-                return CareerTileLayout.StripW - CareerTileLayout.DevPadLeft - CareerTileLayout.DevPadRight - 4f - 1f - 2f * 10f - 6f - 4f
-                    - RenderSlack;
-            }
+            return plateW - CareerTileLayout.DevPadLeft - CareerTileLayout.DevPadRight - 4f - 1f - 2f * 10f - 6f - 4f - RenderSlack;
+        }
+
+        /// <summary>
+        /// Плита розвитку кінця сезону ширини <paramref name="plateW"/> з трьома найгіршими порадами цілком (як у тесті нижче): шапка,
+        /// картка, прокрутка й підвал (<paramref name="expanded"/> — з рядком-підказкою розгорнутого «Усе»).
+        /// </summary>
+        private static float SeasonDevPlateH(float plateW, bool expanded)
+        {
+            string which;
+            int lines = WorstThreeWhyLines(SeasonDevWhyWFor(plateW), out which);
+            float line15 = TextFont.LineHeight(BrandTokens.TypeMinInfo), line12 = TextFont.LineHeight(12f);
+            float card = 1f + 8f + line12 + 1f + 3 * (RecButtonH + RecGap) + lines * line15 + 8f + 1f;
+            return SeasonDevHead + card + CareerTileLayout.DevScrollPadBottom + DevFoot(expanded, CareerTileLayout.DevFootPadBottom);
         }
 
         /// <summary>

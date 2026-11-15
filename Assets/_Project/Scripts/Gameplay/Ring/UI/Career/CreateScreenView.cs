@@ -94,6 +94,29 @@ namespace Game.Gameplay.Ring.UI
             _d.FreePoint = RingAttr.Stamina;
             CareerScreenLines.NormalizeFreePoints(_d, Current.FreePoints, Current.BaseAttr, _v.MaxAttr);   // стартова заготовка — без рядка
             Root.RegisterCallback<GeometryChangedEvent>(e => Fit());
+            // остання позиція вказівника (АД 15.11.2026, п. 3): після перебудови — підказка плитки під курсором миші
+            Root.RegisterCallback<PointerMoveEvent>(e => { _ptr = new Vector2(e.position.x, e.position.y); _ptrMouse = e.pointerType == PointerType.mouse; }, TrickleDown.TrickleDown);
+            Root.RegisterCallback<PointerDownEvent>(e => { _ptr = new Vector2(e.position.x, e.position.y); _ptrMouse = e.pointerType == PointerType.mouse; }, TrickleDown.TrickleDown);
+        }
+
+        private Vector2 _ptr;
+        private bool _ptrMouse;
+
+        /// <summary>
+        /// Після перебудови екрана (натиснута плитка, вибір ґіміка чи ролі) курсор миші лишається над плиткою, але PointerEnter не
+        /// повторюється — рядок підказки повертався до типового, доки не порухати мишею (АД 15.11.2026, п. 3). Один раз після
+        /// перебудови: плитка під курсором показує свою підказку — однаково на 16:9 (С-1) і 4:3. Лише миша: після дотику пальця «над»
+        /// плиткою немає; геймпад веде фокус сам.
+        /// </summary>
+        private void RestoreHover()
+        {
+            if (!_ptrMouse || CareerPadFeature.PadHints(Menus.RingMenuInput.PadLast) || _hint == null) return;
+            foreach (var t in _tiles)
+            {
+                if (t.panel == null || t.OnHover == null) continue;
+                var r = t.worldBound;
+                if (_ptr.x >= r.xMin && _ptr.x <= r.xMax && _ptr.y >= r.yMin && _ptr.y <= r.yMax) { t.OnHover(); return; }
+            }
         }
 
         // рядок «вільний бал перейшов» — для тієї заготовки, на якій перестановка сталась: переставив бал чи ґімік — на місце
@@ -211,6 +234,7 @@ namespace Game.Gameplay.Ring.UI
             // плити попередньої розкладки не тягнуться в нову (Fit перевіряє їх на null)
             _movesBox = null; _rightCol = null; _desc = null; _paperMoves = null; _movesCard = null; _posterCol = null; _posterName = null;
             _attrRows.Clear();
+            if (_ptrMouse) Root.schedule.Execute(RestoreHover).ExecuteLater(30);   // після розкладки нового ряду
             Root.style.paddingLeft = 0f; Root.style.paddingRight = 0f; Root.style.paddingTop = 0f; Root.style.paddingBottom = 0f;
             _tiles.Clear();
             _roleChips.Clear();

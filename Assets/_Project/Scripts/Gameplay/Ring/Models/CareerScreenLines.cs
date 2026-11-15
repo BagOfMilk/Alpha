@@ -45,6 +45,18 @@ namespace Game.Gameplay.Ring.Models
         public static bool SeasonSummaryShown(CareerSession c) { return c.SeasonSummaryFinal; }
 
         /// <summary>
+        /// Рядок шкал підсумку («Популярність N, довіра букера N, гроші N»): на 4:3 — ні на якому кроці, він дублює плиту ресурсів
+        /// ліворуч угорі того самого екрана (АД 15.11.2026).
+        /// </summary>
+        public static bool SeasonScalesLineShown(bool column) { return !column; }
+
+        /// <summary>
+        /// Підсумок згорнутий до назви, федерації й рекорду: на 4:3 на кроках контракту й пізньої ролі — решту гравець бачив на першому
+        /// кроці, а повний не вміщається під вкладками (АД 15.11.2026). На кроках «підсумок» і «пропозиція» і на 16:9 — повний.
+        /// </summary>
+        public static bool SeasonSummaryCollapsed(bool column, bool contractShown, bool lateRoleShown) { return column && (contractShown || lateRoleShown); }
+
+        /// <summary>
         /// «Радимо зараз»: поради ядра (<see cref="DevelopmentAdvice.For"/> — від ролі, ґіміка й минулого матчу; очок багато — на
         /// одну більше). Пояснення — ключ поради (<see cref="DevAdvice.WhyKey"/>), а без нього — як раніше: опис перка,
         /// «новий прийом для дії…», навіщо атрибут.

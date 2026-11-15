@@ -343,6 +343,22 @@ namespace UnityEngine.UIElements
     {
         public int button { get { return 0; } }
         public UnityEngine.Vector3 localPosition { get { return default(UnityEngine.Vector3); } }
+        public UnityEngine.Vector3 position { get { return default(UnityEngine.Vector3); } }
+        public string pointerType { get { return null; } }
+    }
+
+    // створення «Рингу»: підказка плитки під курсором після перебудови (позиція й пристрій вказівника)
+    public sealed class PointerMoveEvent : EventBase<PointerMoveEvent>
+    {
+        public UnityEngine.Vector3 position { get { return default(UnityEngine.Vector3); } }
+        public string pointerType { get { return null; } }
+    }
+
+    public static class PointerType
+    {
+        public static readonly string mouse = "mouse";
+        public static readonly string touch = "touch";
+        public static readonly string pen = "pen";
     }
 
     public sealed class PointerUpEvent : EventBase<PointerUpEvent> { public int button { get { return 0; } } }
@@ -362,7 +378,10 @@ namespace UnityEngine.UIElements
             where TEventType : EventBase<TEventType>, new() { }
     }
 
-    public interface IVisualElementScheduledItem { }
+    public interface IVisualElementScheduledItem
+    {
+        void ExecuteLater(long delayMs);
+    }
 
     public interface IVisualElementScheduler
     {

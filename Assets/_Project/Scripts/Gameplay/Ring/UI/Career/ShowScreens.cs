@@ -723,15 +723,35 @@ namespace Game.Gameplay.Ring.UI
         private ShowBottomRow _bar = new ShowBottomRow();
         private SeasonOfferModel _offer;
         private VisualElement _devBox;
+        // 4:3 (АД 15.11.2026, варіант А): права колонка з вкладками «Кінець сезону · Розвиток N»; 16:9 — як було
+        private bool _single, _relayout;
+        private int _tab = DevTabFirstForShots ? TabDev : TabReport;
+        internal const int TabReport = 0, TabDev = 1;
+        /// <summary>Огляд: <c>-ring-shot-season-dev</c> — на 4:3 кінець сезону відкривається вкладкою «Розвиток» (кадри У2 обох вкладок).</summary>
+        internal static readonly bool DevTabFirstForShots = Array.IndexOf(Environment.GetCommandLineArgs(), "-ring-shot-season-dev") >= 0;
+        internal bool SingleColumnForShots { get { return _single; } }
 
         public SeasonEndScreenView(RingUiContext ctx) : base(ctx)
         {
             Root.RegisterCallback<GeometryChangedEvent>(e =>
             {
                 _bar.Fit(Root.layout.width);
+                // співвідношення перейшло межу 3:2 (зміна вікна) — інша розкладка, збирається наново один раз, наступним кроком
+                float w = Root.layout.width, h = Root.layout.height;
+                if (!float.IsNaN(w) && !float.IsNaN(h) && w > 0f && h > 0f && CareerTileLayout.CreateSingleColumn(w, h) != _single)
+                {
+                    if (!_relayout) { _relayout = true; Root.schedule.Execute(Refresh); }
+                    return;
+                }
                 // канати — відлік знизу: розмір інтерфейсу міняє висоту панелі, а з нею — місце плити розвитку
-                if (_devBox != null) _devBox.style.maxHeight = CareerTileLayout.DevPlateMaxH(CareerTileLayout.SeasonDevTop, Root.layout.height);
+                if (_devBox != null) _devBox.style.maxHeight = DevMaxH(h);
             });
+        }
+
+        /// <summary>Межа плити розвитку: на 16:9 — від її верху до канатів, на 4:3 — місце під вкладками колонки.</summary>
+        private float DevMaxH(float panelH)
+        {
+            return _single ? CareerTileLayout.SeasonColumnRoom(panelH) : CareerTileLayout.DevPlateMaxH(CareerTileLayout.SeasonDevTop, panelH);
         }
 
         public override void Refresh()
@@ -745,8 +765,18 @@ namespace Game.Gameplay.Ring.UI
             var v = C.GetCareerView();
             Root.Add(ShowKit.PlayerStrip(C, T, v));
             Root.Add(ShowKit.Resources(T, v, CareerScreenLines.PopularityMax(C)));
-            Root.Add(Report(rep));
-            Root.Add(DevPlate());
+            // розкладка — за співвідношенням панелі; поки панель не розкладена — за екраном (як на створенні)
+            float pw = Root.layout.width, ph = Root.layout.height;
+            if (float.IsNaN(pw) || float.IsNaN(ph) || pw <= 0f || ph <= 0f) { pw = Screen.width; ph = Screen.height; }
+            _single = CareerTileLayout.CreateSingleColumn(pw, ph);
+            _relayout = false;
+            _devBox = null;
+            if (_single) Root.Add(SeasonColumn(rep));
+            else
+            {
+                Root.Add(Report(rep, false));
+                Root.Add(DevPlate(false));
+            }
 
             var ropes = new RopeLine();
             ArenaKit.Place(ropes, ArenaKit.Edge, null, ArenaKit.Edge, ArenaKit.RopesBottom, null, 22f);
@@ -814,10 +844,42 @@ namespace Game.Gameplay.Ring.UI
             if (a != SeasonEndAction.NextSeason && C.Stage == CareerStage.SeasonEnd) Refresh();
         }
 
-        private VisualElement Report(SeasonReport rep)
+        /// <summary>
+        /// 4:3 (АД 15.11.2026, варіант А): права колонка <see cref="CareerTileLayout.SeasonColumnW"/> — вкладки «Кінець сезону» і
+        /// «Розвиток N» (ті самі компактні TabPlate, що на створенні: відкрита — з обводкою, перша впритул; N — те саме число очок, що в
+        /// шапці плити розвитку, є очки — золота смужка, як «Розвиток» на тижні) і плита відкритої вкладки під ними.
+        /// </summary>
+        private VisualElement SeasonColumn(SeasonReport rep)
         {
-            var box = ArenaKit.Abs(null, ArenaKit.Top, ArenaKit.Edge, null, 520f, null);
+            var col = ArenaKit.Abs(null, ArenaKit.Top, ArenaKit.Edge, null, CareerTileLayout.SeasonColumnW, null);
+            col.style.overflow = Overflow.Visible;
+            col.pickingMode = PickingMode.Ignore;
+            var tabs = ArenaKit.Row();
+            tabs.pickingMode = PickingMode.Ignore;
+            var report = new TabPlate(T.Get("c.season.tab"), -1, _tab == TabReport, () => { if (_tab != TabReport) { _tab = TabReport; Refresh(); } }, false, true);
+            report.style.flexShrink = 0f;
+            report.style.marginLeft = 0f;
+            tabs.Add(report);
+            var dev = new TabPlate(T.Get("dev.title"), C.DevPoints, _tab == TabDev, () => { if (_tab != TabDev) { _tab = TabDev; Refresh(); } }, C.DevPoints > 0, true);
+            dev.style.flexShrink = 0f;
+            dev.style.marginLeft = CareerTileLayout.ColumnTabGap;
+            tabs.Add(dev);
+            col.Add(tabs);
+            var plate = _tab == TabDev ? DevPlate(true) : Report(rep, true);
+            plate.style.marginTop = CareerTileLayout.ColumnPlateGap;
+            col.Add(plate);
+            return col;
+        }
+
+        private VisualElement Report(SeasonReport rep, bool column)
+        {
+            // 4:3: папір — плита вкладки «Кінець сезону» на ширину колонки; 16:9 — праворуч угорі, 520
+            var box = column ? new VisualElement() : ArenaKit.Abs(null, ArenaKit.Top, ArenaKit.Edge, null, 520f, null);
             box.style.overflow = Overflow.Visible;
+            var actions = CareerScreenLines.SeasonEndActions(C);
+            // 4:3 (АД 15.11.2026): на кроках контракту й пізньої ролі підсумок згорнутий до назви, федерації й рекорду
+            bool folded = CareerScreenLines.SeasonSummaryCollapsed(column, CareerScreenLines.OfferShown(C, _offer) && _offer.ShowContract,
+                CareerScreenLines.LateRoleShown(C, actions));
             box.Add(new PaperSheet { Torn = true });
             var col = new VisualElement();
             col.pickingMode = PickingMode.Ignore;
@@ -845,13 +907,17 @@ namespace Game.Gameplay.Ring.UI
             var record = MenuKit.Body(T.Format("c.season.record", rec[0], rec[1], rec[2]), 19f, RingTheme.Bg, true);
             record.style.whiteSpace = WhiteSpace.Normal;
             col.Add(record);
-            if (C.State.SeasonPopStart >= 0)
+            if (C.State.SeasonPopStart >= 0 && !folded)
                 col.Add(ShowKit.Bullet(T.Format("c.season.pop", C.State.SeasonPopStart, rep.Popularity)));
-            var line = MenuKit.Body(T.Format("c.season.line", rep.Popularity, rep.Trust, rep.Money), BrandTokens.TypeMinInfo, RingTheme.Bg, true);
-            line.style.whiteSpace = WhiteSpace.Normal;
-            line.style.marginTop = 6f;
-            col.Add(line);
-            var hammer = C.Content.FindNpc(CareerContent.HammerId);
+            // рядок шкал на 4:3 — ні на якому кроці: дублює плиту ресурсів ліворуч угорі (АД 15.11.2026)
+            if (CareerScreenLines.SeasonScalesLineShown(column))
+            {
+                var line = MenuKit.Body(T.Format("c.season.line", rep.Popularity, rep.Trust, rep.Money), BrandTokens.TypeMinInfo, RingTheme.Bg, true);
+                line.style.whiteSpace = WhiteSpace.Normal;
+                line.style.marginTop = 6f;
+                col.Add(line);
+            }
+            var hammer = folded ? null : C.Content.FindNpc(CareerContent.HammerId);
             if (hammer != null)
             {
                 string hn = T.Get(hammer.NameKey);
@@ -867,13 +933,15 @@ namespace Game.Gameplay.Ring.UI
                 f.style.marginTop = 10f;
                 col.Add(f);
             }
-            if (rep.TitleDone)
+            // згорнутий підсумок (4:3, контракт і пізня роль): пояс і мета були на першому кроці; рядок звільнення лишається — це наслідок,
+            // а не повтор чисел (звільненому блоку пропозиції немає, тож папір нижчий)
+            if (!folded && rep.TitleDone)
             {
                 col.Add(ShowKit.Bullet(T.Get(rep.TitleWon || rep.BeltIsPlayers ? "c.season.belt_yes" : "c.season.belt_no")));
             }
-            else if (rep.TitleEligible)
+            else if (!folded && rep.TitleEligible)
                 col.Add(ShowKit.Bullet(T.Get(rep.IsDefense ? "season.defense" : "season.title_shot")));
-            else if (!rep.Fired)
+            else if (!folded && !rep.Fired)
                 col.Add(ShowKit.Bullet(T.Format("c.season.goal", CareerRules.TitleShotTrust, CareerRules.MaxFeud)));
             if (CareerScreenLines.OfferShown(C, _offer)) OfferBlock(col, _offer);
             if (CareerScreenLines.LateRoleShown(C, CareerScreenLines.SeasonEndActions(C))) LateRoleBlock(col);
@@ -1000,10 +1068,11 @@ namespace Game.Gameplay.Ring.UI
         /// лише прокрутка; число очок — у шапці, як на підсумку матчу: рядок «Очок розвитку: N» у картці з'їдав висоту третьої
         /// поради. Три поради з найдовшими поясненнями й підвал уміщаються — CareerTextFitTests.SeasonEnd_DevPlate_…
         /// </summary>
-        private VisualElement DevPlate()
+        private VisualElement DevPlate(bool column)
         {
-            var box = ArenaKit.Abs(ArenaKit.Edge, CareerTileLayout.SeasonDevTop, null, null, ArenaKit.StripW, null);
-            box.style.maxHeight = CareerTileLayout.DevPlateMaxH(CareerTileLayout.SeasonDevTop, Root.layout.height);
+            // 4:3: плита вкладки «Розвиток» на ширину колонки, до канатів — місце під вкладками (три поради цілком)
+            var box = column ? new VisualElement() : ArenaKit.Abs(ArenaKit.Edge, CareerTileLayout.SeasonDevTop, null, null, ArenaKit.StripW, null);
+            box.style.maxHeight = DevMaxH(Root.layout.height);
             box.style.flexDirection = FlexDirection.Column;
             box.style.overflow = Overflow.Visible;
             box.pickingMode = PickingMode.Position;

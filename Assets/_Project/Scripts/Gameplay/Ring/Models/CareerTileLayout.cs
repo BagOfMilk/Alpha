@@ -523,6 +523,33 @@ namespace Game.Gameplay.Ring.Models
             return RowWidth(panelWidth) - gimmickWordW - CreateHintGap - 2f * UnderlayPadH;
         }
 
+        // ---------------- кінець сезону 4:3: права колонка з вкладками (АД 15.11.2026, варіант А) ----------------
+
+        /// <summary>Верх екранів кар'єри (стрічки гравця, папір кінця сезону) — <c>ArenaKit.Top</c>.</summary>
+        public const float Top = 45f;
+
+        /// <summary>
+        /// Права колонка кінця сезону на 4:3: <see cref="ColumnMaxFrac"/> кадру 1200 без безпечного краю — 472 (папір 16:9 шириною 520
+        /// займав би 50 %). Розкладка — та сама межа, що на створенні (<see cref="CreateSingleColumn"/>): на 4:3 одна мова для обох екранів.
+        /// </summary>
+        public const float SeasonColumnW = 472f;
+
+        /// <summary>Плечі героя на кінці сезону 4:3 — 16 % кадру (заміри «Изучение» на 1024×768); ліворуч від колонки вільно не менше.</summary>
+        public const float SeasonHeroShouldersW = 0.16f * 1200f;
+
+        /// <summary>Між низом паперу кінця сезону й канатами — як в охоронцях паперу.</summary>
+        public const float SeasonPaperClear = 10f;
+
+        /// <summary>
+        /// Місце під вкладками колонки кінця сезону: від низу вкладок (верх, вкладка, проміжок) до канатів без просвіту паперу; на панелі
+        /// 900 — 565. Папір кожного кроку й плита розвитку з трьома порадами вміщаються — CareerTextFitTests.SeasonEnd_Column_….
+        /// </summary>
+        public static float SeasonColumnRoom(float panelH)
+        {
+            if (float.IsNaN(panelH) || panelH <= 0f) panelH = PanelH;   // до першої розкладки — еталон
+            return Math.Max(0f, RopesTop(panelH) - SeasonPaperClear - (Top + TabPlateH + ColumnPlateGap));
+        }
+
         /// <summary>
         /// Плита ролі в колонці золотої плити (Б4-1): низька — лише назва й ключ; між двома плитами — проміжок, більший за підйом
         /// плитки у фокусі (7), щоб нижня у фокусі не лягала на верхню.
