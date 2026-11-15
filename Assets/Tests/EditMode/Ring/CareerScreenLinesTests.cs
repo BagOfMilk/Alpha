@@ -419,6 +419,321 @@ namespace Game.Tests.EditMode
             return t;
         }
 
+        /// <summary>Ширина-заглушка для правила імені: 20 на знак на кеглі 40 (лінійна за кеглем).</summary>
+        private static float Px20(string s) { return 20f * (s ?? "").Length; }
+
+        /// <summary>
+        /// Довге ім'я на стрічці (ПМ 14.11.2026: «можна зменшувати кегль до мінімуму токенів (не нижче 15 — охоронець), а далі
+        /// другий рядок або «…». Мітка ролі й силует мають лишатися вільними»): правило <see cref="CareerTileLayout.FitStripName"/>
+        /// крок за кроком — 40; менший з ґіміком до 26; без ґіміка до 18; два рядки 19…15; один рядок до 15; «…» на 15.
+        /// </summary>
+        [Test]
+        public void StripName_FitRule_StepByStep()
+        {
+            var f = CareerTileLayout.FitStripName("ЛЕВ", Px20, 200f, 300f);
+            Assert.AreEqual(40f, f.Size); Assert.IsFalse(f.HideOptional); Assert.AreEqual("ЛЕВ", f.Text); Assert.IsFalse(f.TwoLines || f.Ellipsis);
+            // 15 знаків = 300 на 40; до мітки з ґіміком 210 → 28: ґімік лишається
+            string n15 = new string('А', 15);
+            f = CareerTileLayout.FitStripName(n15, Px20, 210f, 300f);
+            Assert.AreEqual(28f, f.Size); Assert.IsFalse(f.HideOptional, "28 ≥ 26 — ґімік на місці");
+            // 180 → 24 < 26: ґімік ховається, без нього 250 → 33
+            f = CareerTileLayout.FitStripName(n15, Px20, 180f, 250f);
+            Assert.AreEqual(33f, f.Size); Assert.IsTrue(f.HideOptional); Assert.IsFalse(f.TwoLines || f.Ellipsis);
+            // без ґіміка місця вдосталь — кегль не більший за 40
+            f = CareerTileLayout.FitStripName(n15, Px20, 180f, 1000f);
+            Assert.AreEqual(40f, f.Size); Assert.IsTrue(f.HideOptional);
+            // ім'я з пробілом, що без ґіміка влазить одним рядком (180 → 20 ≥ 18 на кроці 1) — один рядок, а не два
+            f = CareerTileLayout.FitStripName("АААА ББББ", Px20, 50f, 90f);
+            Assert.AreEqual(20f, f.Size); Assert.IsFalse(f.TwoLines, "один рядок на 20 — раніше за два"); Assert.AreEqual(1, f.Drop);
+            f = CareerTileLayout.FitStripName("АААА ББББ", Px20, new[] { 50f, 90f, 200f, 300f });
+            Assert.AreEqual(1, f.Drop, "поясу не чіпаємо, коли один рядок ≥ 18 є вже без ґіміка"); Assert.IsFalse(f.TwoLines);
+            // 10 + пробіл + 11 = 440; без ґіміка 150 → 13 < 18: два рядки, довший 220 → 27, але не більше StripNameTwoLineMax
+            string two = new string('А', 10) + " " + new string('Б', 11);
+            f = CareerTileLayout.FitStripName(two, Px20, 100f, 150f);
+            Assert.IsTrue(f.TwoLines); Assert.IsTrue(f.HideOptional); Assert.IsFalse(f.Ellipsis);
+            Assert.AreEqual(CareerTileLayout.StripNameTwoLineMax, f.Size);
+            Assert.AreEqual(new string('А', 10) + "\n" + new string('Б', 11), f.Text);
+            // два рядки на 16: довший 220, місця 88
+            f = CareerTileLayout.FitStripName(two, Px20, 50f, 88f);
+            Assert.IsTrue(f.TwoLines); Assert.AreEqual(16f, f.Size);
+            // без пробілу двох рядків немає: один рядок 16 (300 у 120)
+            f = CareerTileLayout.FitStripName(n15, Px20, 50f, 120f);
+            Assert.IsFalse(f.TwoLines || f.Ellipsis); Assert.AreEqual(16f, f.Size); Assert.AreEqual(n15, f.Text);
+            // і на 15 не влазить — «…» на 15: місце 100 на 15 = 266,7 на 40 → 12 літер + «…» (260)
+            f = CareerTileLayout.FitStripName(n15, Px20, 50f, 100f);
+            Assert.IsTrue(f.Ellipsis); Assert.IsTrue(f.HideOptional); Assert.IsFalse(f.TwoLines);
+            Assert.AreEqual(CareerTileLayout.StripNameMinSize, f.Size); Assert.AreEqual(new string('А', 12) + "…", f.Text);
+            // перше слово не влазить і на 15 (200 > 160) — «…» одним рядком: 7 літер + «…»
+            f = CareerTileLayout.FitStripName(two, Px20, 50f, 60f);
+            Assert.IsTrue(f.Ellipsis); Assert.IsFalse(f.TwoLines); Assert.AreEqual(new string('А', 7) + "…", f.Text);
+            // перше слово влазить на 15, а рівні рядки — ні (240 > 160): перший рядок цілим, другий — з «…»
+            f = CareerTileLayout.FitStripName("АААА " + new string('Б', 12), Px20, 50f, 60f);
+            Assert.IsTrue(f.Ellipsis); Assert.IsTrue(f.TwoLines); Assert.AreEqual(CareerTileLayout.StripNameMinSize, f.Size);
+            Assert.AreEqual("АААА\n" + new string('Б', 7) + "…", f.Text);
+            // кілька слів: першим рядком — найбільше слів, що влазять
+            f = CareerTileLayout.FitStripName("АА ББ ВВ " + new string('Г', 12), Px20, 50f, 60f);
+            Assert.AreEqual("АА ББ ВВ\n" + new string('Г', 7) + "…", f.Text);
+            Assert.AreEqual("…", CareerTileLayout.Clip("ААА", Px20, 10f), "і перша літера не влазить — лише «…»");
+            Assert.AreEqual("ААА", CareerTileLayout.Clip("ААА", Px20, 60f), "влазить — як є");
+            Assert.AreEqual("А…", CareerTileLayout.Clip("А БВ", Px20, 50f), "пробіл перед «…» знято");
+            // розкладки ще немає — ім'я як є
+            f = CareerTileLayout.FitStripName(n15, Px20, float.NaN, 100f);
+            Assert.AreEqual(40f, f.Size); Assert.IsFalse(f.HideOptional || f.Ellipsis || f.TwoLines);
+            f = CareerTileLayout.FitStripName(n15, Px20, 100f, float.NaN);
+            Assert.AreEqual(40f, f.Size); Assert.IsFalse(f.HideOptional || f.Ellipsis);
+            f = CareerTileLayout.FitStripName(null, Px20, 10f, 10f);
+            Assert.AreEqual("", f.Text); Assert.AreEqual(40f, f.Size);
+
+            // кроки мітки (АД 14.11.2026): ґімік → кегль до 18 → два рядки 15–19 → короткий пояс → пояс → лише тоді «…».
+            // 10 + пробіл + 12 = 460, довший рядок 240. Повний пояс 80: два рядки на 13 < 15 — короткий пояс 120: два рядки на 19
+            string belt = new string('А', 10) + " " + new string('Б', 12);
+            f = CareerTileLayout.FitStripName(belt, Px20, new[] { 50f, 80f, 120f, 200f });
+            Assert.AreEqual(2, f.Drop, "короткий пояс"); Assert.IsTrue(f.TwoLines); Assert.IsFalse(f.Ellipsis);
+            Assert.AreEqual(CareerTileLayout.StripNameTwoLineMax, f.Size);
+            // повний пояс лишає два рядки на 15 — поясу не чіпаємо, хоч з коротким було б 19
+            f = CareerTileLayout.FitStripName(belt, Px20, new[] { 50f, 90f, 120f, 200f });
+            Assert.AreEqual(1, f.Drop); Assert.AreEqual(15f, f.Size); Assert.IsTrue(f.TwoLines);
+            // і короткий не рятує — пояс ховається: без нього 200 → 17 одним рядком < 18, два рядки на 19
+            f = CareerTileLayout.FitStripName(belt, Px20, new[] { 50f, 60f, 80f, 200f });
+            Assert.AreEqual(3, f.Drop, "пояс сховано"); Assert.AreEqual(CareerTileLayout.StripNameTwoLineMax, f.Size); Assert.IsFalse(f.Ellipsis);
+            // «…» — лише коли віддано все: на останньому кроці 40 (106,7 на 40) — перше слово 200 не влазить, «АААА…»
+            f = CareerTileLayout.FitStripName(belt, Px20, new[] { 10f, 20f, 30f, 40f });
+            Assert.IsTrue(f.Ellipsis); Assert.AreEqual(3, f.Drop); Assert.AreEqual("АААА…", f.Text);
+            // два кроки — те саме, що стара пара «з ґіміком / без»
+            var p2 = CareerTileLayout.FitStripName(belt, Px20, 50f, 88f);
+            var l2 = CareerTileLayout.FitStripName(belt, Px20, new[] { 50f, 88f });
+            Assert.AreEqual(p2.Size, l2.Size); Assert.AreEqual(p2.Text, l2.Text); Assert.AreEqual(p2.Drop, l2.Drop);
+            Assert.AreEqual(40f, CareerTileLayout.FitStripName(belt, Px20, new[] { 50f }).Size, "один крок — ім'я як є");
+            Assert.AreEqual(40f, CareerTileLayout.FitStripName(belt, Px20, new[] { 50f, 80f, float.NaN }).Size, "NaN — ім'я як є");
+        }
+
+        /// <summary>
+        /// Порядок кроків мітки (АД 14.11.2026: «обрізаємо його останнім, після всіх приміток»): хоч яким буде місце на чотирьох
+        /// кроках, крок k віддано лише тоді, коли на кроці k − 1 ім'я цілим не вміщалось; «…» — лише на останньому кроці; кожен рядок —
+        /// у місці свого кроку.
+        /// </summary>
+        [Test]
+        public void StripName_Steps_GiveTheNotesBeforeTheName()
+        {
+            string[] names = { "МАКСИМІЛІАН ШЕРШЕНЬКОВИЙ", new string('Ю', 24), new string('А', 10) + " " + new string('Б', 12), "ЛЕВ" };
+            int dropped2 = 0, dropped3 = 0, ell = 0;
+            foreach (var n in names)
+                for (float a0 = 0f; a0 <= 300f; a0 += 37f)
+                    for (float d1 = 0f; d1 <= 120f; d1 += 23f)
+                        for (float d2 = 0f; d2 <= 80f; d2 += 19f)
+                            for (float d3 = 0f; d3 <= 60f; d3 += 29f)
+                            {
+                                var av = new[] { a0, a0 + d1, a0 + d1 + d2, a0 + d1 + d2 + d3 };
+                                var f = CareerTileLayout.FitStripName(n, Px20, av);
+                                string where = string.Format("«{0}», місце {1}/{2}/{3}/{4}", n, av[0], av[1], av[2], av[3]);
+                                for (int k = 1; k < f.Drop; k++)
+                                {
+                                    var g = CareerTileLayout.FitStripName(n, Px20, new[] { av[0], av[k] });
+                                    if (!g.Ellipsis) Assert.Fail(where + ": віддано крок " + f.Drop + ", а на кроці " + k + " ім'я вміщалось цілим");
+                                }
+                                if (f.Ellipsis) { Assert.AreEqual(3, f.Drop, where + ": «…» до останнього кроку"); ell++; }
+                                foreach (var line in f.Text.Split('\n'))
+                                    if (line != "…") Assert.LessOrEqual(Px20(line) * f.Size / CareerTileLayout.StripNameSize, av[f.Drop] + 0.01f, where + ": рядок «" + line + "»");
+                                if (f.Drop == 2) dropped2++;
+                                if (f.Drop == 3) dropped3++;
+                            }
+            Assert.Greater(dropped2, 0, "короткий пояс справді трапляється");
+            Assert.Greater(dropped3, 0, "і пояс ховається");
+            Assert.Greater(ell, 0, "і «…» на останньому кроці");
+        }
+
+        /// <summary>
+        /// Хоч яким буде місце, ім'я не лягає на мітку ролі й ляльку: кожен рядок у місці (з ґіміком чи без нього — як вирішено),
+        /// кегль 15…40, ґімік на місці лише від 26, два рядки — не більше StripNameTwoLineMax, «…» — лише на 15.
+        /// </summary>
+        [Test]
+        public void StripName_Fit_NeverCoversTheTagOrTheDoll()
+        {
+            string[] names = { "ЛЕВ", "МАКСИМІЛІАН ШЕРШЕНЬКОВИЙ", new string('Ю', 24), "А Б В Г Д Е Є Ж З И І Ї", "ДУЖЕ  ДОВГЕ  ІМ'Я" };
+            int fits = 0, ell = 0;
+            foreach (var n in names)
+                for (float without = 20f; without <= 420f; without += 7f)
+                    for (float with = 0f; with <= without; with += 11f)
+                    {
+                        var f = CareerTileLayout.FitStripName(n, Px20, with, without);
+                        string where = string.Format("«{0}», з ґіміком {1}, без {2}", n, with, without);
+                        Assert.GreaterOrEqual(f.Size, CareerTileLayout.StripNameMinSize, where);
+                        Assert.LessOrEqual(f.Size, CareerTileLayout.StripNameSize, where);
+                        if (!f.HideOptional) Assert.GreaterOrEqual(f.Size, CareerTileLayout.StripNameKeepTagMin, where + ": ґімік лишився на дрібному імені");
+                        if (f.TwoLines) Assert.LessOrEqual(f.Size, CareerTileLayout.StripNameTwoLineMax, where);
+                        float room = f.HideOptional ? without : with;
+                        string[] lines = f.Text.Split('\n');
+                        foreach (var line in lines)
+                            if (line != "…") Assert.LessOrEqual(Px20(line) * f.Size / CareerTileLayout.StripNameSize, room + 0.01f, where + ": рядок «" + line + "»");
+                        Assert.AreEqual(f.TwoLines, f.Text.Contains("\n"), where);
+                        Assert.LessOrEqual(lines.Length, 2, where);
+                        if (f.Ellipsis)
+                        {
+                            Assert.AreEqual(CareerTileLayout.StripNameMinSize, f.Size, where);
+                            Assert.IsTrue(f.Text.EndsWith("…"), where + ": урізане — з «…» в кінці");
+                            string seen = f.Text.Replace("\n", " ").TrimEnd('…').TrimEnd();
+                            Assert.IsTrue(n.Replace(" ", "").StartsWith(seen.Replace(" ", "")), where + ": видно початок імені, а не щось інше («" + seen + "»)");
+                            ell++;
+                            continue;
+                        }
+                        Assert.AreEqual(n.Replace(" ", ""), f.Text.Replace("\n", "").Replace(" ", ""), where + ": ціле ім'я — без утрат");
+                        fits++;
+                    }
+            Assert.Greater(fits, 0); Assert.Greater(ell, 0, "і «…» справді трапляється (24 знаки без пробілу у 20)");
+        }
+
+        /// <summary>Поділ на два рядки — за пробілом, де довший рядок найкоротший; без пробілу всередині — ні.</summary>
+        [Test]
+        public void StripName_TwoLines_SplitWhereTheLongerLineIsShortest()
+        {
+            string a, b;
+            Assert.IsTrue(CareerTileLayout.SplitTwoLines("А ББББ ВВВВ", Px20, out a, out b));
+            Assert.AreEqual("А ББББ", a); Assert.AreEqual("ВВВВ", b);
+            Assert.IsTrue(CareerTileLayout.SplitTwoLines("МАКСИМІЛІАН ШЕРШЕНЬКОВИЙ", Px20, out a, out b));
+            Assert.AreEqual("МАКСИМІЛІАН", a); Assert.AreEqual("ШЕРШЕНЬКОВИЙ", b);
+            Assert.IsTrue(CareerTileLayout.SplitTwoLines("А  Б", Px20, out a, out b), "подвійний пробіл");
+            Assert.AreEqual("А", a); Assert.AreEqual("Б", b);
+            Assert.IsFalse(CareerTileLayout.SplitTwoLines("БЕЗПРОБІЛУ", Px20, out a, out b));
+            Assert.IsFalse(CareerTileLayout.SplitTwoLines(" КРАЙ ", Px20, out a, out b), "пробіл лише з країв — не поділ");
+            Assert.IsFalse(CareerTileLayout.SplitTwoLines(null, Px20, out a, out b));
+        }
+
+        /// <summary>
+        /// Числа стрічки й поля імені: два рядки на найбільшому кеглі — над рядками зон (і він найбільший такий); пороги правила
+        /// впорядковані; поле — ширина плити без полів і запасу під курсор, кегль 30 → не нижче 15.
+        /// </summary>
+        [Test]
+        public void StripName_AndNameField_Numbers()
+        {
+            float max = CareerTileLayout.StripNameTwoLineMax;
+            // чорнило двох рядків (АД 14.11.2026): висхідна + крок 1,25 + хвіст великих — щонайменше за 2 до зон
+            float ink = CareerTileLayout.DisplayAscentEm + CareerTileLayout.StripNameLinePitchEm + CareerTileLayout.DisplayCapsTailEm;
+            float floorY = CareerTileLayout.StripZonesTop - CareerTileLayout.StripNameInkClear;
+            Assert.LessOrEqual(CareerTileLayout.StripNameTop + ink * max, floorY, "хвіст другого рядка — за 2 до зон");
+            Assert.Greater(CareerTileLayout.StripNameTop + ink * (max + 1f), floorY, "найбільший можливий");
+            Assert.AreEqual(1.25f, CareerTileLayout.StripNameLinePitchEm, "крок двох рядків — 1,25 (АД)");
+            Assert.AreEqual(2f, CareerTileLayout.StripNameInkClear);
+            Assert.AreEqual(18f, max, "на кроці 1,25 — 18: на 19 хвіст абетки ліг би на 52,8");
+            Assert.AreEqual(22.5f, CareerTileLayout.StripNameLine2Offset(18f), 0.001f);
+            Assert.GreaterOrEqual(max, CareerTileLayout.StripNameMinSize);
+            Assert.GreaterOrEqual(CareerTileLayout.StripNameMinSize, 15f, "мінімум токенів, не нижче 15");
+            Assert.Less(CareerTileLayout.StripNameOneLineMin, CareerTileLayout.StripNameKeepTagMin);
+            Assert.Less(CareerTileLayout.StripNameKeepTagMin, CareerTileLayout.StripNameSize);
+            Assert.AreEqual(CareerTileLayout.StripW - CareerTileLayout.NameWellLeft - CareerTileLayout.NameWellRight - 2f * CareerTileLayout.NameFieldInset
+                - CareerTileLayout.NameInputPadLeft - CareerTileLayout.NameFieldCaretRoom, CareerTileLayout.NameFieldTextWidth);
+            Assert.AreEqual(30f, CareerTileLayout.FitNameField(100f));
+            Assert.AreEqual(30f, CareerTileLayout.FitNameField(CareerTileLayout.NameFieldTextWidth));
+            Assert.AreEqual(15f, CareerTileLayout.FitNameField(10000f), "не нижче 15");
+            Assert.AreEqual((float)System.Math.Floor(30f * CareerTileLayout.NameFieldTextWidth / 500f), CareerTileLayout.FitNameField(500f));
+            Assert.IsNaN(CareerTileLayout.FitNameField(float.NaN));
+        }
+
+        /// <summary>
+        /// Довге ім'я вбудовано в екрани (ПМ 14.11.2026): стрічки героя й суперника вміщають ім'я правилом FitStripName з мір кожної
+        /// розкладки (лялька — перешкода героя), числа стрічки — з моделі; поле створення меншає за FitNameField із межею довжини.
+        /// </summary>
+        [Test]
+        public void Sources_LongName_AreWired()
+        {
+            string ui = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI");
+            string show = File.ReadAllText(Path.Combine(ui, "Career", "ShowScreens.cs"));
+            string create = File.ReadAllText(Path.Combine(ui, "Career", "CreateScreenView.cs"));
+            string kit = File.ReadAllText(Path.Combine(ui, "Career", "ArenaKit.cs"));
+            var bad = new List<string>();
+            foreach (var l in new[] {
+                "var name = ArenaKit.Big(v.RingName, CareerTileLayout.StripNameSize, RingTheme.Text);",
+                "ArenaKit.Place(name, CareerTileLayout.StripNameLeft, CareerTileLayout.StripNameTop, null, null);",
+                "ArenaKit.Place(tag, null, CareerTileLayout.StripTagTop, CareerTileLayout.StripTagRight, null);",
+                "ArenaKit.FitNameAndTag(box, name, tag, gimmick, true, doll, belt, belt != null ? \" · \" + t.Get(\"c.champion.short\") : null);",
+                "if (v.IsChampion) { belt = ArenaKit.Tag(\" · \" + t.Get(\"c.champion\"), RingTheme.Gold); tag.Add(belt); }",
+                "ArenaKit.Place(zones, CareerTileLayout.StripNameLeft, CareerTileLayout.StripZonesTop, null, null);",
+                "ArenaKit.Place(doll, null, CareerTileLayout.StripDollTop, CareerTileLayout.StripDollRight, null);",
+                "var nl = ArenaKit.Big(nick, CareerTileLayout.StripNameSize, RingTheme.Text);",
+                "ArenaKit.Place(nl, null, CareerTileLayout.StripNameTop, CareerTileLayout.StripNameLeft, null);",
+                "ArenaKit.FitNameAndTag(box, nl, tag, rg, false);",
+                "ArenaKit.Place(real, null, CareerTileLayout.StripZonesTop, CareerTileLayout.StripNameLeft, null);" })
+                if (!CodeLine(show, l)) bad.Add("ShowScreens: немає «" + l + "»");
+            int dollAt = show.IndexOf("var doll = new InjuryDoll();"), fitAt = show.IndexOf("ArenaKit.FitNameAndTag(box, name, tag, gimmick, true, doll, belt,");
+            if (dollAt < 0 || fitAt < 0 || dollAt > fitAt) bad.Add("ShowScreens: лялька має бути створена до FitNameAndTag (перешкода імені)");
+            foreach (var l in new[] {
+                "public static void FitNameAndTag(VisualElement box, Label name, VisualElement tag, VisualElement optional, bool nameLeft, VisualElement obstacle = null,",
+                "Label belt = null, string beltShort = null)",
+                "var probe = Big(text, CareerTileLayout.StripNameSize, RingTheme.Text);",
+                "probe.style.visibility = Visibility.Hidden;",
+                "var f = CareerTileLayout.FitStripName(text, measure, avail);",
+                "if (beltCut != null && beltCut != beltFull) steps.Add(2);",
+                "if (belt != null) steps.Add(3);",
+                "string beltCut = belt != null && !string.IsNullOrEmpty(beltShort) ? RingTheme.Caps(beltShort) : null;",
+                "if (belt != null && state < 3 && !float.IsNaN(belt.layout.width)) beltW = belt.layout.width + (state == 2 ? cut : 0f);",
+                "float tagAll = t.width + Given(state, opt, cut, bw);",
+                "float tagK = tagAll - Given(steps[k], opt, cut, bw);",
+                "avail[k] = nameLeft ? Math.Min(t.xMax - tagK, ob) - CareerTileLayout.StripNameGap - n.x",
+                ": n.xMax - (t.x + tagK) - CareerTileLayout.StripNameGap;",
+                "int next = steps[f.Drop];",
+                "belt.style.display = state >= 3 ? DisplayStyle.None : DisplayStyle.Flex;",
+                "belt.text = state == 2 ? beltCut : beltFull;",
+                "return (step >= 1 ? gimmick : 0f) + (step == 2 ? beltCut : step >= 3 ? belt : 0f);",
+                "name.style.fontSize = f.Size;",
+                "name.style.letterSpacing = new Length(f.Size * CareerTileLayout.StripNameTrack);",
+                "name.style.whiteSpace = WhiteSpace.NoWrap;",
+                "name.style.width = StyleKeyword.Auto;",
+                "string key = f.Size + \"|\" + next + \"|\" + f.Text;",
+                "float ob = obstacle != null && !float.IsNaN(obstacle.layout.x) ? obstacle.layout.x : float.MaxValue;",
+                "if (optional != null) optional.style.display = state >= 1 ? DisplayStyle.None : DisplayStyle.Flex;",
+                "string[] lines = f.Text.Split('\\n');",
+                "name.text = lines[0];",
+                "var line2 = Big(\"\", CareerTileLayout.StripNameSize, RingTheme.Text);",
+                "line2.style.display = lines.Length > 1 ? DisplayStyle.Flex : DisplayStyle.None;",
+                "line2.text = lines[1];",
+                "line2.style.fontSize = f.Size;",
+                "line2.style.top = n.y + CareerTileLayout.StripNameLine2Offset(f.Size);",
+                "if (nameLeft) { line2.style.left = n.x; line2.style.right = StyleKeyword.Auto; }",
+                "else { line2.style.right = box.layout.width - n.xMax; line2.style.left = StyleKeyword.Auto; }",
+                "box.RegisterCallback(fit);", "tag.RegisterCallback(fit);", "probe.RegisterCallback(fit);",
+                "style.width = CareerTileLayout.StripDollW; style.height = CareerTileLayout.StripDollH;" })
+                if (!CodeLine(kit, l)) bad.Add("ArenaKit: немає «" + l + "»");
+            if (Regex.IsMatch(kit, @"FitNameAndTag\([^)]*float size")) bad.Add("ArenaKit: старий ланцюг кроків FitNameAndTag(…, size, minSize) повернувся");
+            foreach (var l in new[] {
+                "var well = ArenaKit.Abs(CareerTileLayout.NameWellLeft, 36f, CareerTileLayout.NameWellRight, null, null, 58f);",
+                "var field = new TextField { value = _d.RingName, maxLength = _v.MaxNameLength };",
+                "field.style.left = CareerTileLayout.NameFieldInset; field.style.right = CareerTileLayout.NameFieldInset;",
+                "var probe = RingUi.Lbl(\"\", CareerTileLayout.NameFieldSize, RingTheme.Text);",
+                "RingFonts.Apply(probe, RingFontRole.TextBold);",
+                "field.RegisterValueChangedCallback(e => { _d.RingName = e.newValue; FitNameText(field, probe); });",
+                "well.RegisterCallback<GeometryChangedEvent>(e => FitNameText(field, probe));",
+                "input.style.fontSize = CareerTileLayout.NameFieldSize;",
+                "input.style.paddingLeft = CareerTileLayout.NameInputPadLeft;",
+                "float size = nat <= 0f ? CareerTileLayout.NameFieldSize : CareerTileLayout.FitNameField(nat);",
+                "if (!float.IsNaN(size)) input.style.fontSize = size;" })
+                if (!CodeLine(create, l)) bad.Add("CreateScreenView: немає «" + l + "»");
+            // варіант афіші «роль під назвою» — лише кадри огляду: вмикає й вимикає тільки RingMenuShots
+            foreach (var f in Directory.GetFiles(Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring"), "*.cs", SearchOption.AllDirectories))
+            {
+                if (Path.GetFileName(f) == "RingMenuShots.cs") continue;
+                foreach (var l in File.ReadAllText(f).Split('\n'))
+                    if (l.Contains("PosterRoleBelowForShots = true")) bad.Add(Path.GetFileName(f) + ": вмикає варіант огляду «роль під назвою» поза RingMenuShots");
+            }
+            // і сама RingMenuShots вимикає його навіть після винятку в кадрі (рев'ю 14.11.2026)
+            string shots = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "RingMenuShots.cs"));
+            if (!shots.Contains("finally { UI.CreateScreenView.PosterRoleBelowForShots = false; }"))
+                bad.Add("RingMenuShots.cs: варіант «роль під назвою» не вимикається в finally");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Базова лінія назви афіші (У0 арт-директора 14.11.2026): назва кегля s, прибита до верху рядка зі зсувом
+        /// <see cref="CareerTileLayout.PosterNameTopShift"/>, має базову лінію там само, де назва 52 (висхідна × кегль від верху тексту).
+        /// </summary>
+        [Test]
+        public void PosterName_SmallerSize_KeepsTheBaselineOf52()
+        {
+            float b52 = CareerTileLayout.PosterNameAscent * CareerTileLayout.PosterNameSize;
+            for (float s = CareerTileLayout.PosterNameMinSize; s <= CareerTileLayout.PosterNameSize; s += 1f)
+                Assert.AreEqual(b52, CareerTileLayout.PosterNameTopShift(s) + CareerTileLayout.PosterNameAscent * s, 0.01f, "кегль " + s);
+            Assert.AreEqual(0f, CareerTileLayout.PosterNameTopShift(CareerTileLayout.PosterNameSize), "на 52 — без зсуву");
+            Assert.AreEqual(0f, CareerTileLayout.PosterNameTopShift(float.NaN), "до розкладки — без зсуву");
+        }
+
         /// <summary>
         /// Злиття «Кар'єри» (74a7d4b1, тіло старіє, §5.5; ПМ 12.11.2026, п. А1): з сезону 4 витривалість дорожча — і в очках розвитку, і в
         /// тренувань тренера. Екран показує ту ціну, що спише покупка, і той крок, що рахує тренування: стала <c>Development.AttrCost</c> /
@@ -763,7 +1078,7 @@ namespace Game.Tests.EditMode
             // ряд будує саме Refresh (той самий виклик моделі є й в OnConfirm — сам по собі він ряду не доводить; рев'ю 12.11.2026)
             int seasonEnd = show.IndexOf("class SeasonEndScreenView"), refresh = show.IndexOf("public override void Refresh()", seasonEnd < 0 ? 0 : seasonEnd);
             int rowLoop = show.IndexOf("for (int i = 0; i < actions.Count; i++) AddAction(actions[i], i == 0);", refresh < 0 ? 0 : refresh);
-            int report = show.IndexOf("private VisualElement Report(SeasonReport rep)", refresh < 0 ? 0 : refresh);
+            int report = show.IndexOf("private VisualElement Report(SeasonReport rep, bool column)", refresh < 0 ? 0 : refresh);
             if (seasonEnd < 0 || refresh < 0 || rowLoop < 0 || report < 0 || rowLoop > report)
                 bad.Add("ShowScreens: ряд кінця сезону (Refresh) не з SeasonEndActions");
             if (show.IndexOf("if (C.CanStartNextSeason)", seasonEnd < 0 ? 0 : seasonEnd) >= 0) bad.Add("ShowScreens: «Новий сезон» повз послідовність рішень");
@@ -824,7 +1139,7 @@ namespace Game.Tests.EditMode
             if (!career.Contains("_devAll = !_devAll; _devAllOpened = _devAll;")) bad.Add("CareerScreens: перемикач «Усе» не позначає щойно розгорнутий список");
             if (!CodeLine(career, "if (opened) DevAllStart = attrsHead;")) bad.Add("CareerScreens: не позначено початок повного списку");
             int n = 0;
-            foreach (Match m in Regex.Matches(show, @"private VisualElement DevPlate\(\)\s*\{"))
+            foreach (Match m in Regex.Matches(show, @"private VisualElement DevPlate\((bool column)?\)\s*\{"))
             {
                 n++;
                 int end = show.IndexOf("return box;", m.Index);
@@ -834,7 +1149,9 @@ namespace Game.Tests.EditMode
                 if (foot < 0 || panel < foot || scroll < panel || hint < scroll || footAdd < hint)
                     bad.Add("DevPlate №" + n + ": не «підвал → панель із moreTo → прокрутка → підказка в підвал → підвал після прокрутки»");
                 if (!body.Contains("scroll.style.flexShrink = 1f;")) bad.Add("DevPlate №" + n + ": прокрутка не стискається");
-                if (!body.Contains("CareerTileLayout.DevPlateMaxH(")) bad.Add("DevPlate №" + n + ": плита без межі до канатів");
+                // кінець сезону — через DevMaxH: 16:9 — DevPlateMaxH від верху плити, 4:3 — місце під вкладками колонки
+                if (!body.Contains("CareerTileLayout.DevPlateMaxH(") && !body.Contains("box.style.maxHeight = DevMaxH(Root.layout.height);"))
+                    bad.Add("DevPlate №" + n + ": плита без межі до канатів");
                 if (body.Contains("scroll.style.maxHeight = 370f")) bad.Add("DevPlate №" + n + ": стара стала висота прокрутки кінця сезону");
                 if (!body.Contains("scroll.style.minHeight = CareerTileLayout.DevScrollMinH;")) bad.Add("DevPlate №" + n + ": найменша прокрутка не з моделі");
                 // щойно розгорнутий «Усе» — до початку списку (ScrollToDevAll), інакше — та сама прокрутка після перебудови (огляд слоту 31)
@@ -843,7 +1160,9 @@ namespace Game.Tests.EditMode
             }
             if (n != 2) bad.Add("DevPlate: плит розвитку на екранах показу — дві, знайдено " + n);
             // межа від справжньої висоти панелі — і при зміні розміру (кінець сезону), і при зміні верху на вузькій панелі (підсумок)
-            if (!CodeLine(show, "if (_devBox != null) _devBox.style.maxHeight = CareerTileLayout.DevPlateMaxH(CareerTileLayout.SeasonDevTop, Root.layout.height);"))
+            if (!CodeLine(show, "float w = Root.layout.width, h = Root.layout.height;")
+                || !CodeLine(show, "if (_devBox != null) _devBox.style.maxHeight = DevMaxH(h);")
+                || !CodeLine(show, "return _single ? CareerTileLayout.SeasonColumnRoom(panelH) : CareerTileLayout.DevPlateMaxH(CareerTileLayout.SeasonDevTop, panelH);"))
                 bad.Add("SeasonEnd: межа плити не оновлюється з висотою панелі");
             if (!CodeLine(show, "if (_devCol != null) _devCol.style.maxHeight = CareerTileLayout.DevPlateMaxH(top, Root.layout.height);"))
                 bad.Add("ShowResult.Fit: межа плити не йде за її верхом");
@@ -1633,6 +1952,334 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
+        /// Зміна ґіміка не лишає вільного балу за стелею (ПМ 14.11.2026): кожна пара ґімік → ґімік із будь-яким дозволеним розміщенням
+        /// вільних балів першого — після <see cref="CareerScreenLines.NormalizeFreePoints(CharacterDraft, int, int[], int, out RingAttr, out RingAttr)"/>
+        /// CanCreate без відмови; переставляється рівно тоді, коли ядро відмовило б attr_max, а бал, що влазить, не рухається (заготовка
+        /// та сама); «звідки» — атрибут, що вийшов за стелю, «куди» — під стелею. Сценарій ПМ: Монстр, бал у Силу (3), потім Силач — бал
+        /// переходить, Сила 3, і рядок афіші каже, куди й звідки.
+        /// </summary>
+        [Test]
+        public void GimmickChange_NeverLeavesAFreePointOverTheCap()
+        {
+            var s = CareerKit.NewAtCreate(7);
+            var v = s.GetCreationView();
+            // усі ґіміки даних, не лише ті, що зараз на екрані створення (5–8 виходять за onCreationScreen)
+            var all = new List<GimmickView>();
+            foreach (var g in s.Content.Gimmicks) all.Add(new GimmickView { Def = g, BaseAttr = (int[])g.Attr.Clone(), FreePoints = g.FreePoints });
+            var bad = new List<string>();
+            int pairs = 0, moved = 0;
+            foreach (var from in all)
+                foreach (var start in FreePlacements(from, v.MaxAttr))
+                    foreach (var to in all)
+                    {
+                        var d = CareerKit.Draft(from.Def.Id, CareerRole.Hero, start[0]);
+                        d.FreePoint2 = start.Length > 1 ? start[1] : (RingAttr?)null;
+                        string why;
+                        string where = from.Def.Key + " " + start[0] + (start.Length > 1 ? "+" + start[1] : "") + " → " + to.Def.Key;
+                        if (!s.CanCreate(d, out why)) { bad.Add(where + ": початкове розміщення не дозволене — " + why); continue; }
+                        d.Gimmick = to.Def.Id;
+                        bool over = !s.CanCreate(d, out why) && why == "attr_max";
+                        var fp = d.FreePoint; var fp2 = d.FreePoint2;
+                        RingAttr was, now;
+                        bool m = CareerScreenLines.NormalizeFreePoints(d, to.FreePoints, to.BaseAttr, v.MaxAttr, out was, out now);
+                        pairs++; if (m) moved++;
+                        if (m != over) bad.Add(where + ": переставлено — " + m + ", за стелею було — " + over);
+                        if (!m && (d.FreePoint != fp || d.FreePoint2 != fp2)) bad.Add(where + ": заготовка змінилась без перестановки");
+                        if (m && to.FreePoints < 2 && (was != fp || to.BaseAttr[(int)was] + 1 <= v.MaxAttr)) bad.Add(where + ": «звідки» " + was + " — не той бал, що вийшов за стелю");
+                        if (m && to.BaseAttr[(int)now] + CareerScreenLines.FreePointsIn(d, to.FreePoints, now) > v.MaxAttr) bad.Add(where + ": «куди» " + now + " за стелею");
+                        if (!s.CanCreate(d, out why)) bad.Add(where + ": після зміни ґіміка CanCreate — " + why);
+                        int sum = 0;
+                        for (int i = 0; i < to.BaseAttr.Length; i++) sum += CareerScreenLines.FreePointsIn(d, to.FreePoints, (RingAttr)i);
+                        if (sum != to.FreePoints) bad.Add(where + ": вільних балів " + sum + ", а має бути " + to.FreePoints);
+                    }
+            Assert.Greater(pairs, all.Count * all.Count, "пари справді перебрано");
+            Assert.Greater(moved, 0, "перестановка справді трапляється — гілка міряється");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+
+            // сценарій ПМ
+            GimmickView strong = null;
+            foreach (var g in all) if (g.Def.Id == Gimmick.Strongman) strong = g;
+            Assert.IsNotNull(strong, "передумова: Силач у даних ґіміків");
+            var pm = CareerKit.Draft(Gimmick.Monster, CareerRole.Hero, RingAttr.Strength);
+            string r;
+            Assert.IsTrue(s.CanCreate(pm, out r), "Монстр + Сила: " + r);
+            pm.Gimmick = Gimmick.Strongman;
+            Assert.IsFalse(s.CanCreate(pm, out r), "передумова: без перестановки Силач + Сила за стелею");
+            Assert.AreEqual("attr_max", r);
+            RingAttr f0, t0;
+            Assert.IsTrue(CareerScreenLines.NormalizeFreePoints(pm, strong.FreePoints, strong.BaseAttr, v.MaxAttr, out f0, out t0));
+            Assert.AreEqual(RingAttr.Strength, f0, "звідки — Сила");
+            Assert.AreEqual(pm.FreePoint, t0, "куди — туди, де бал тепер");
+            Assert.AreNotEqual(RingAttr.Strength, pm.FreePoint, "бал пішов із Сили");
+            Assert.AreEqual(0, CareerScreenLines.FreePointsIn(pm, strong.FreePoints, RingAttr.Strength), "Сила — основа Силача, 3");
+            Assert.IsTrue(s.CanCreate(pm, out r), r);
+            string line = CareerScreenLines.FreeMovedLine(T, f0, t0);
+            NoMissingKey(line, "рядок афіші");
+            StringAssert.Contains("у Силі", line, "звідки — місцевим відмінком");
+            StringAssert.Contains("у " + T.Get("attr." + FeudVars.AttrName(t0) + ".acc"), line, "куди — знахідним");
+            Assert.IsFalse(CareerScreenLines.NormalizeFreePoints(null, 1, strong.BaseAttr, v.MaxAttr));
+            Assert.IsFalse(CareerScreenLines.NormalizeFreePoints(pm, 0, strong.BaseAttr, v.MaxAttr), "без вільних балів — нічого");
+
+            // два бали, обидва за стелею (у даних такого ґіміка немає — Самородок з основами 0): кожен шукає місце з урахуванням
+            // уже поставленого — Спритність 2 + 1, далі Техніка 2 + 1, а не обидва в Спритність (2 + 2 > 3)
+            var syn = new[] { 3, 2, 2, 3, 3 };
+            var two = CareerKit.Draft(Gimmick.Rookie, CareerRole.Hero, RingAttr.Strength);
+            two.FreePoint2 = null;   // обидва — у Силу
+            Assert.IsTrue(CareerScreenLines.NormalizeFreePoints(two, 2, syn, v.MaxAttr, out f0, out t0));
+            Assert.AreEqual(RingAttr.Strength, f0); Assert.AreEqual(RingAttr.Agility, t0);
+            for (int i = 0; i < syn.Length; i++)
+                Assert.LessOrEqual(syn[i] + CareerScreenLines.FreePointsIn(two, 2, (RingAttr)i), v.MaxAttr, "атрибут " + (RingAttr)i + " за стелею");
+            Assert.AreEqual(1, CareerScreenLines.FreePointsIn(two, 2, RingAttr.Agility));
+            Assert.AreEqual(1, CareerScreenLines.FreePointsIn(two, 2, RingAttr.Technique));
+            // місця немає ніде — заготовка та сама, false
+            var full = CareerKit.Draft(Gimmick.Monster, CareerRole.Hero, RingAttr.Charisma);
+            Assert.IsFalse(CareerScreenLines.NormalizeFreePoints(full, 1, new[] { 3, 3, 3, 3, 3 }, v.MaxAttr));
+            Assert.AreEqual(RingAttr.Charisma, full.FreePoint, "без місця бал не рухається");
+        }
+
+        /// <summary>Усі дозволені розміщення вільних балів ґіміка: один — кожен атрибут під стелею; два — кожна пара (давніший, новіший).</summary>
+        private static IEnumerable<RingAttr[]> FreePlacements(GimmickView g, int max)
+        {
+            int n = g.BaseAttr.Length;
+            if (g.FreePoints < 2)
+            {
+                for (int a = 0; a < n; a++) if (g.BaseAttr[a] + 1 <= max) yield return new[] { (RingAttr)a };
+                yield break;
+            }
+            for (int a = 0; a < n; a++)
+                for (int b = 0; b < n; b++)
+                    if (a == b ? g.BaseAttr[a] + 2 <= max : g.BaseAttr[a] + 1 <= max && g.BaseAttr[b] + 1 <= max)
+                        yield return new[] { (RingAttr)a, (RingAttr)b };
+        }
+
+        /// <summary>
+        /// Рядок підказки над рядом створення (АД 15.11.2026, Б1): на 4:3 (колонка) — «бал перейшов» &gt; С-1 &gt; опис ґіміка; на
+        /// широкій — завжди опис ґіміка (рядок і С-1 там на папері).
+        /// </summary>
+        [Test]
+        public void CreateRowHint_FourThree_FreeMoved_ThenC1_ThenGimmickDesc()
+        {
+            var t = RingText.FromJson(CareerKit.Read("strings_uk.json"), CareerKit.Read("ui_uk.json"));
+            string key = CareerKit.NewAtCreate(1).GetCreationView().Gimmicks[0].Def.NameKey;
+            string moved = CareerScreenLines.FreeMovedLine(t, RingAttr.Agility, RingAttr.Stamina), c1 = t.Get("c.create.freepoints.hint"), desc = t.Get(key + ".desc");
+            foreach (var s in new[] { moved, c1, desc }) Assert.IsFalse(s.Contains("⟦") || s.Contains("{"), "немає тексту: «" + s + "»");
+            Assert.AreNotEqual(moved, c1);
+            Assert.AreNotEqual(c1, desc);
+            Assert.AreEqual(moved, CareerScreenLines.CreateRowHint(t, true, true, RingAttr.Agility, RingAttr.Stamina, true, key), "4:3: «бал перейшов» — першим");
+            Assert.AreEqual(moved, CareerScreenLines.CreateRowHint(t, true, true, RingAttr.Agility, RingAttr.Stamina, false, key));
+            Assert.AreEqual(c1, CareerScreenLines.CreateRowHint(t, true, false, RingAttr.Agility, RingAttr.Stamina, true, key), "4:3: без перестановки — С-1");
+            Assert.AreEqual(desc, CareerScreenLines.CreateRowHint(t, true, false, RingAttr.Agility, RingAttr.Stamina, false, key), "4:3: інакше — опис ґіміка");
+            foreach (bool m in new[] { false, true })
+                foreach (bool two in new[] { false, true })
+                    Assert.AreEqual(desc, CareerScreenLines.CreateRowHint(t, false, m, RingAttr.Agility, RingAttr.Stamina, two, key), "широка: опис ґіміка");
+            Assert.AreEqual("", CareerScreenLines.CreateRowHint(null, true, true, RingAttr.Agility, RingAttr.Stamina, true, key));
+        }
+
+        /// <summary>
+        /// Кінець сезону 4:3 (АД 15.11.2026): рядок шкал — лише на 16:9 (на 4:3 дублює плиту ресурсів); підсумок згорнутий — лише на 4:3 і
+        /// лише на кроках контракту чи пізньої ролі; на 16:9 — повний на будь-якому кроці.
+        /// </summary>
+        [Test]
+        public void SeasonEnd_Column_ScalesLine_AndFoldedSummary()
+        {
+            Assert.IsTrue(CareerScreenLines.SeasonScalesLineShown(false));
+            Assert.IsFalse(CareerScreenLines.SeasonScalesLineShown(true));
+            foreach (bool contract in new[] { false, true })
+                foreach (bool late in new[] { false, true })
+                {
+                    Assert.IsFalse(CareerScreenLines.SeasonSummaryCollapsed(false, contract, late), "16:9 — підсумок повний");
+                    Assert.AreEqual(contract || late, CareerScreenLines.SeasonSummaryCollapsed(true, contract, late),
+                        "4:3: контракт " + contract + ", пізня роль " + late);
+                }
+        }
+
+        /// <summary>
+        /// Проводка кінця сезону 4:3 (АД 15.11.2026, варіант А): розкладка — та сама межа, що на створенні (до розкладки — за екраном),
+        /// перехід межі перебудовує раз; права колонка — вкладки «Кінець сезону» без числа й «Розвиток N» (N — очки з шапки плити,
+        /// золото — як на тижні), компактні TabPlate, перша впритул; папір без рядка шкал, згорнутий на кроках контракту й пізньої ролі
+        /// (рядок звільнення лишається); плита розвитку — місце під вкладками.
+        /// </summary>
+        [Test]
+        public void Sources_SeasonEndColumn_AreWired()
+        {
+            string dir = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring");
+            string show = File.ReadAllText(Path.Combine(dir, "UI", "Career", "ShowScreens.cs"));
+            string kit = File.ReadAllText(Path.Combine(dir, "UI", "Career", "ArenaKit.cs"));
+            int start = show.IndexOf("public sealed class SeasonEndScreenView");
+            Assert.Greater(start, 0, "немає SeasonEndScreenView");
+            string season = show.Substring(start);
+            var bad = new List<string>();
+            foreach (var l in new[] {
+                "float pw = Root.layout.width, ph = Root.layout.height;",
+                "if (float.IsNaN(pw) || float.IsNaN(ph) || pw <= 0f || ph <= 0f) { pw = Screen.width; ph = Screen.height; }",
+                "_single = CareerTileLayout.CreateSingleColumn(pw, ph);",
+                "_relayout = false;",
+                "if (!float.IsNaN(w) && !float.IsNaN(h) && w > 0f && h > 0f && CareerTileLayout.CreateSingleColumn(w, h) != _single)",
+                "if (!_relayout) { _relayout = true; Root.schedule.Execute(Refresh); }",
+                "if (_devBox != null) _devBox.style.maxHeight = DevMaxH(h);",
+                "return _single ? CareerTileLayout.SeasonColumnRoom(panelH) : CareerTileLayout.DevPlateMaxH(CareerTileLayout.SeasonDevTop, panelH);",
+                "if (_single) Root.Add(SeasonColumn(rep));",
+                "Root.Add(Report(rep, false));",
+                "Root.Add(DevPlate(false));",
+                "var col = ArenaKit.Abs(null, ArenaKit.Top, ArenaKit.Edge, null, CareerTileLayout.SeasonColumnW, null);",
+                "var report = new TabPlate(T.Get(\"c.season.tab\"), -1, _tab == TabReport, () => { if (_tab != TabReport) { _tab = TabReport; Refresh(); } }, false, true);",
+                "report.style.marginLeft = 0f;",
+                "var dev = new TabPlate(T.Get(\"dev.title\"), C.DevPoints, _tab == TabDev, () => { if (_tab != TabDev) { _tab = TabDev; Refresh(); } }, C.DevPoints > 0, true);",
+                "dev.style.marginLeft = CareerTileLayout.ColumnTabGap;",
+                "var plate = _tab == TabDev ? DevPlate(true) : Report(rep, true);",
+                "plate.style.marginTop = CareerTileLayout.ColumnPlateGap;",
+                "var box = column ? new VisualElement() : ArenaKit.Abs(null, ArenaKit.Top, ArenaKit.Edge, null, 520f, null);",
+                "bool folded = CareerScreenLines.SeasonSummaryCollapsed(column, CareerScreenLines.OfferShown(C, _offer) && _offer.ShowContract,",
+                "CareerScreenLines.LateRoleShown(C, actions));",
+                "if (C.State.SeasonPopStart >= 0 && !folded)",
+                "if (CareerScreenLines.SeasonScalesLineShown(column))",
+                "var hammer = folded ? null : C.Content.FindNpc(CareerContent.HammerId);",
+                "if (!folded && rep.TitleDone)",
+                "else if (!folded && rep.TitleEligible)",
+                "else if (!folded && !rep.Fired)",
+                "string fired = CareerScreenLines.FiredLine(T, C, _offer);",
+                "var box = column ? new VisualElement() : ArenaKit.Abs(ArenaKit.Edge, CareerTileLayout.SeasonDevTop, null, null, ArenaKit.StripW, null);",
+                "box.style.maxHeight = DevMaxH(Root.layout.height);",
+                "internal static readonly bool DevTabFirstForShots = Array.IndexOf(Environment.GetCommandLineArgs(), \"-ring-shot-season-dev\") >= 0;" })
+                if (!CodeLine(season, l)) bad.Add("SeasonEndScreenView: немає «" + l + "»");
+            if (!CodeLine(kit, "public const float Top = CareerTileLayout.Top;")) bad.Add("ArenaKit: верх екранів — не з моделі");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Підказка плитки під курсором після перебудови (АД 15.11.2026, п. 3): позиція й пристрій вказівника — з руху й натискання
+        /// (обидва — TrickleDown на корені), після перебудови — один раз, із запізненням на розкладку; лише миша й не після геймпада;
+        /// плитка під курсором — та сама дорога наведення (OnHover: підсвітка й рядок підказки).
+        /// </summary>
+        [Test]
+        public void Sources_CreateHoverAfterRebuild_IsWired()
+        {
+            string dir = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring");
+            string create = File.ReadAllText(Path.Combine(dir, "UI", "Career", "CreateScreenView.cs"));
+            var bad = new List<string>();
+            foreach (var l in new[] {
+                "Root.RegisterCallback<PointerMoveEvent>(e => { _ptr = new Vector2(e.position.x, e.position.y); _ptrMouse = e.pointerType == PointerType.mouse; }, TrickleDown.TrickleDown);",
+                "Root.RegisterCallback<PointerDownEvent>(e => { _ptr = new Vector2(e.position.x, e.position.y); _ptrMouse = e.pointerType == PointerType.mouse; }, TrickleDown.TrickleDown);",
+                "if (!_ptrMouse || CareerPadFeature.PadHints(Menus.RingMenuInput.PadLast) || _hint == null) return;",
+                "if (t.panel == null || t.OnHover == null) continue;",
+                "var r = t.worldBound;",
+                "if (_ptr.x >= r.xMin && _ptr.x <= r.xMax && _ptr.y >= r.yMin && _ptr.y <= r.yMax) { t.OnHover(); return; }",
+                "if (_ptrMouse) Root.schedule.Execute(RestoreHover).ExecuteLater(30);" })
+                if (!CodeLine(create, l)) bad.Add("CreateScreenView: немає «" + l + "»");
+            // після перебудови: виклик — у Refresh, після очищення рядів (нові плитки вже в _tiles до розкладки)
+            int refresh = create.IndexOf("public override void Refresh()");
+            int clear = refresh < 0 ? -1 : create.IndexOf("_attrRows.Clear();", refresh);
+            int later = refresh < 0 ? -1 : create.IndexOf("Root.schedule.Execute(RestoreHover)", refresh);
+            if (refresh < 0 || clear < 0 || later < clear) bad.Add("CreateScreenView: відновлення підказки не в Refresh");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Проводка створення 4:3 (АД 14–15.11.2026): розкладка — за співвідношенням панелі (до розкладки — за екраном), перехід межі
+        /// 3:2 перебудовує раз; колонка — стрічка імені, три вкладки (ті самі TabPlate, компактні, «Прийоми» без числа, перша впритул,
+        /// відкрита з обводкою) і плита відкритої вкладки; афіша колонки — без заголовка й опису ролі (Б1), рядок підказки —
+        /// CreateRowHint; опис ролі — підказкою плитки ролі; Esc на «Прийомах» — назад на афішу; вертикаль афіші й «Вигляду» — з
+        /// констант моделі, які міряє охоронець CareerTextFitTests.
+        /// </summary>
+        [Test]
+        public void Sources_CreateColumn_AreWired()
+        {
+            string dir = Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring");
+            string create = File.ReadAllText(Path.Combine(dir, "UI", "Career", "CreateScreenView.cs"));
+            string kit = File.ReadAllText(Path.Combine(dir, "UI", "Career", "ArenaKit.cs"));
+            string shots = File.ReadAllText(Path.Combine(dir, "RingMenuShots.cs"));
+            var bad = new List<string>();
+            foreach (var l in new[] {
+                "float pw = Root.layout.width, ph = Root.layout.height;",
+                "if (float.IsNaN(pw) || float.IsNaN(ph) || pw <= 0f || ph <= 0f) { pw = Screen.width; ph = Screen.height; }",
+                "_single = CareerTileLayout.CreateSingleColumn(pw, ph);",
+                "if (!float.IsNaN(height) && height > 0f && CareerTileLayout.CreateSingleColumn(width, height) != _single)",
+                "if (!_relayout) { _relayout = true; Root.schedule.Execute(Refresh); }",
+                "if (_single) Root.Add(TabColumn(path, roleColor));",
+                "var col = ArenaKit.Abs(ArenaKit.Edge, ArenaKit.SecondY, null, null, ArenaKit.StripW, null);",
+                "string[] words = { T.Get(\"c.hub.create.poster\"), T.Get(\"c.create.look\"), T.Get(\"c.hub.create.moves\") };",
+                "var tab = new TabPlate(words[i], -1, _tab == i, () => { if (_tab != k) { _tab = k; Refresh(); } }, false, true);",
+                "tab.style.flexShrink = 0f;",
+                "tab.style.marginLeft = i == 0 ? 0f : CareerTileLayout.ColumnTabGap;",
+                "else if (_tab == TabMoves) plate = MovesCard();",
+                "else plate = Poster(path, roleColor, true);",
+                "plate.style.marginTop = CareerTileLayout.ColumnPlateGap;",
+                "if (!column) col.Add(MenuKit.Display(T.Get(\"c.hub.create.poster\"), 24f, RingTheme.Bg, RingFontRole.Display800, 0.04f));",
+                "_hintDefault = CareerScreenLines.CreateRowHint(T, _single, FreeMovedNote, _freeMovedFrom, _freeMovedTo, Current.FreePoints >= 2, Current.Def.NameKey);",
+                "_hint.style.marginLeft = CareerTileLayout.CreateHintGap;",
+                "var tile = AddTile(r == CareerRole.Hero ? heroKey : villainKey, T.Get(key), \"\", () => { _d.Role = rr; Refresh(); }, T.Get(key + \".desc\"));",
+                "col.style.paddingTop = CareerTileLayout.CreatePosterPadTop; col.style.paddingBottom = CareerTileLayout.CreatePaperPadBottom;",
+                "head.style.marginTop = CareerTileLayout.CreatePosterHeadTop;",
+                "line.style.height = CareerTileLayout.CreatePosterRuleH; line.style.backgroundColor = RingTheme.Bg;",
+                "line.style.marginTop = CareerTileLayout.CreatePosterRuleTop; line.style.marginBottom = CareerTileLayout.CreatePosterRuleBottom;",
+                "hr.style.marginBottom = CareerTileLayout.CreatePosterPickGap;",
+                "var box = ArenaKit.Abs(ArenaKit.Edge, ArenaKit.SecondY, null, null, ArenaKit.StripW, CareerTileLayout.CreateLookH);",
+                "foreach (var r in _attrRows) r.style.height = tall ? CareerTileLayout.CreateAttrRowNarrowH : CareerTileLayout.CreateAttrRowH;",
+                "if (_tab != TabMoves) return false;",
+                "plate.style.position = Position.Relative;",
+                "plate.style.left = StyleKeyword.Auto; plate.style.top = StyleKeyword.Auto;",
+                "_movesBox = null; _rightCol = null; _desc = null; _paperMoves = null; _movesCard = null; _posterCol = null; _posterName = null;" })
+                if (!CodeLine(create, l)) bad.Add("CreateScreenView: немає «" + l + "»");
+            // Esc у колонці: лише з «Прийомів» — на афішу, і до гілки широкої розкладки
+            int back = create.IndexOf("public override bool OnBack()");
+            int movesOnly = back < 0 ? -1 : create.IndexOf("if (_tab != TabMoves) return false;", back);
+            int toPoster = back < 0 ? -1 : create.IndexOf("_tab = TabPoster;", back);
+            int wide = back < 0 ? -1 : create.IndexOf("if (!_moves) return false;", back);
+            if (movesOnly < 0 || toPoster < movesOnly || wide < toPoster) bad.Add("CreateScreenView: Esc на «Прийомах» колонки не повертає на афішу");
+            // колонка розрахована на панель 900: екрани кар'єри — у масштабі меню, «розмір інтерфейсу» їх не міняє (RingGameBootstrap)
+            string boot = File.ReadAllText(Path.Combine(dir, "RingGameBootstrap.cs"));
+            if (!CodeLine(boot, "bool menu = _view is IMenuNavigable || _view is UI.CareerScreenView"))
+                bad.Add("RingGameBootstrap: екрани кар'єри більше не в масштабі меню — колонку 4:3 міряли на панелі 900");
+            foreach (var l in new[] {
+                "public TabPlate(string text, int number, bool open, Action onClick, bool goldStripe) : this(text, number, open, onClick, goldStripe, false) { }",
+                "style.height = CareerTileLayout.TabPlateH;",
+                "style.paddingLeft = compact ? CareerTileLayout.ColumnTabPadLeft : 18f; style.paddingRight = compact ? CareerTileLayout.ColumnTabPadRight : 26f;",
+                "var plate = new ArenaPlate { Fill = RingTheme.Panel, Stripe = goldStripe ? (Color?)RingTheme.Gold : null, StripeW = 5f, Outline = open ? (Color?)RingTheme.Text : null, OutlineW = 2f };",
+                "if (number >= 0)" })
+                if (!CodeLine(kit, l)) bad.Add("ArenaKit: немає «" + l + "»");
+            foreach (var l in new[] {
+                "string pair = create.FreeMovedForShots(CareerRole.Hero);",
+                "foreach (int tab in new[] { UI.CreateScreenView.TabLook, UI.CreateScreenView.TabMoves })",
+                "if (float.IsNaN(size) || size >= PosterBelowUnder || create.SingleColumnForShots) continue;" })
+                if (!CodeLine(shots, l)) bad.Add("RingMenuShots: немає «" + l + "»");
+            // опис ролі на афіші колонки не будується: блок опису — під if (!column) у Poster
+            int poster = create.IndexOf("private VisualElement Poster(RingPath path, Color roleColor, bool column = false)");
+            int notCol = poster < 0 ? -1 : create.IndexOf("if (!column)", create.IndexOf("_paperMoves = null;", poster));
+            int descAt = poster < 0 ? -1 : create.IndexOf("var desc = FreeMovedNote ?", poster);
+            if (notCol < 0 || descAt < notCol) bad.Add("CreateScreenView: опис ролі на афіші колонки не під if (!column)");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
+        /// Проводка зміни ґіміка на створенні (ПМ 14.11.2026): плитка, клавіша й огляд ідуть через PickGimmick (перестановка вільного
+        /// балу), інших присвоєнь ґіміка заготовці немає; рядок — на папері на місці опису ролі чи С-1 (АД, варіант (1)), чорнилом
+        /// паперу, і лише доки заготовка та сама.
+        /// </summary>
+        [Test]
+        public void Sources_GimmickChange_NormalizesTheFreePoint()
+        {
+            string create = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "Gameplay", "Ring", "UI", "Career", "CreateScreenView.cs"));
+            var bad = new List<string>();
+            foreach (var l in new[] {
+                "() => { PickGimmick(gid); Refresh(); }, T.Get(g.Def.NameKey + \".desc\"));",
+                "else if (d >= 0) { PickGimmick(_v.Gimmicks[d].Def.Id); Refresh(); }",
+                "_freeMoved = CareerScreenLines.NormalizeFreePoints(_d, cur.FreePoints, cur.BaseAttr, _v.MaxAttr, out _freeMovedFrom, out _freeMovedTo);",
+                "_freeMovedGimmick = _d.Gimmick; _freeMovedFp = _d.FreePoint; _freeMovedFp2 = _d.FreePoint2;",
+                "get { return _freeMoved && _d.Gimmick == _freeMovedGimmick && _d.FreePoint == _freeMovedFp && _d.FreePoint2 == _freeMovedFp2; }",
+                "CareerScreenLines.NormalizeFreePoints(_d, Current.FreePoints, Current.BaseAttr, _v.MaxAttr);",
+                "var desc = FreeMovedNote ? MenuKit.Body(CareerScreenLines.FreeMovedLine(T, _freeMovedFrom, _freeMovedTo), BrandTokens.TypeMinInfo, RingTheme.Bg)",
+                ": two ? MenuKit.Body(T.Get(\"c.create.freepoints.hint\"), BrandTokens.TypeMinInfo, RingTheme.Bg)" })
+                if (!CodeLine(create, l)) bad.Add("CreateScreenView: немає «" + l + "»");
+            int shotsAt = create.IndexOf("internal void SetForShots(Gimmick g, CareerRole r)");
+            int pick = shotsAt < 0 ? -1 : create.IndexOf("PickGimmick(g);", shotsAt);
+            if (pick < 0 || pick > create.IndexOf("Refresh();", shotsAt)) bad.Add("CreateScreenView: огляд ставить ґімік повз PickGimmick");
+            int assigns = Regex.Matches(create, @"_d\.Gimmick\s*=[^=]").Count;
+            if (assigns != 2) bad.Add("CreateScreenView: присвоєнь _d.Gimmick " + assigns + " — лише стартове і в PickGimmick");
+            if (create.Contains("create.note.free_moved")) bad.Add("CreateScreenView: рядок — лише через CareerScreenLines.FreeMovedLine");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
+        /// <summary>
         /// Б4: два вільні бали Самородка — клік ставить бал сюди, найдавніший переходить; двічі по тому самому — обидва там; вище стелі
         /// бал не ставиться. Один бал — просто переходить. Ядро рахує заготовку так само (CreateHero дає основу + бали).
         /// </summary>
@@ -1888,7 +2535,8 @@ namespace Game.Tests.EditMode
                 || !create.Contains("CareerScreenLines.FreePointsIn(_d, Current.FreePoints, a)")) bad.Add("CreateScreenView: вільні бали не з моделі");
             if (!create.Contains("CareerTileLayout.CreateAttrCells(baseValue, free, _v.MaxAttr)")) bad.Add("CreateScreenView: клітинки шкали не з моделі");
             if (!create.Contains("T.Get(two ? \"c.create.freepoints\" : \"c.create.freepoint\")")) bad.Add("CreateScreenView: заголовок «Вільні бали (+2)»");
-            if (!create.Contains("var desc = two ? MenuKit.Body(T.Get(\"c.create.freepoints.hint\")")) bad.Add("CreateScreenView: С-1 — підказка Самородка не на місці опису ролі");
+            // С-1 — на місці опису ролі; тимчасово його заступає лише рядок «вільний бал перейшов» (АД 14.11.2026, варіант (1))
+            if (!create.Contains(": two ? MenuKit.Body(T.Get(\"c.create.freepoints.hint\")")) bad.Add("CreateScreenView: С-1 — підказка Самородка не на місці опису ролі");
             if (!CodeLine(create, "bool eight = CareerTileLayout.CreateEight(_v.Gimmicks.Count);")) bad.Add("CreateScreenView: Б4-1 не за моделлю");
             if (!CodeLine(create, "tile.SetLow();") || !create.Contains("_roleCol.Add(tile);")) bad.Add("CreateScreenView: Б4-1 — ролі не низькими плитами в колонці");
             if (!create.Contains("_reasonBox.style.height = eight ? CareerTileLayout.CreateRoleReasonH : 45f;")) bad.Add("CreateScreenView: Б4-1 — причина не в просвіті");
@@ -1896,7 +2544,11 @@ namespace Game.Tests.EditMode
             if (!week.Contains("CareerScreenLines.ScarTail(T, T.Format(\"c.injury.tile\"") || !CodeLine(week, "i.ScarWeeks);   // Б5: слід"))
                 bad.Add("WeekScreenView: ризик травми без сліду");
             if (!CodeLine(week, "string opp = CareerScreenLines.OpponentLine(T, r, OpponentName());")) bad.Add("WeekScreenView: Б6 — без рядка суперника");
-            if (show.Contains("AgeingNextLine")) bad.Add("ShowScreens: рядок «Тіло старіє…» на папері — лише після У0 арт-директора (ПМ 14.11.2026)");
+            if (!CodeLine(show, "string age = CareerScreenLines.AgeingNextLine(T, C, CareerScreenLines.SeasonEndActions(C));")
+                || !CodeLine(show, "if (age != null) { var a = MenuKit.Body(age, BrandTokens.TypeMinInfo, RingTheme.Bg, true); a.style.whiteSpace = WhiteSpace.Normal; a.style.marginTop = 8f; col.Add(a); }"))
+                bad.Add("ShowScreens: Б5 — рядок «Тіло старіє…» не на папері кінця сезону так, як прийняв директор (Body 15 напівжирний, відступ 8)");
+            if (!CodeLine(create, "gname.style.alignSelf = Align.FlexStart;") || !CodeLine(create, "gname.style.marginTop = CareerTileLayout.PosterNameTopShift(s);"))
+                bad.Add("CreateScreenView: менша назва афіші не на базовій лінії 52 (У0 директора: не пливе від плашки ролі)");
             // шапка шухляди — ті розміри, за якими CareerTextFitTests.DrawerHead_Hint_… міряє підказки атрибутів і тренерів
             string rui = File.ReadAllText(Path.Combine(ui, "RingUi.cs"));
             if (!week.Contains("ArenaKit.Abs(null, null, ArenaKit.Edge, CareerTileLayout.DrawerBottom, 560f, null)")

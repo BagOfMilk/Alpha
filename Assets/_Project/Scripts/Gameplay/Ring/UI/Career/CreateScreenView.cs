@@ -34,6 +34,28 @@ namespace Game.Gameplay.Ring.UI
         /// ПМ). Тепер там відкриті «Прийоми» стають на папір замість опису ролі, а характеристики лишаються видимі (<see cref="Fit"/>).
         /// </summary>
         private VisualElement _desc, _paperMoves, _movesCard, _posterCol;
+        /// <summary>Назва ґіміка на афіші (кегль після вміщення — для кадрів огляду).</summary>
+        private Label _posterName;
+
+        /// <summary>
+        /// Одна ліва колонка з вкладками (панель вужча за 3:2 — <see cref="CareerTileLayout.CreateSingleColumn"/>, АД 14–15.11.2026):
+        /// стрічка імені, вкладки «Твій борець / Вигляд / Прийоми» і плита відкритої вкладки; права половина кадру — герою.
+        /// </summary>
+        private bool _single, _relayout;
+        /// <summary>Відкрита вкладка колонки (<see cref="TabPoster"/>, <see cref="TabLook"/>, <see cref="TabMoves"/>).</summary>
+        private int _tab;
+        internal const int TabPoster = 0, TabLook = 1, TabMoves = 2;
+        /// <summary>Огляд: створення зараз в одну колонку.</summary>
+        internal bool SingleColumnForShots { get { return _single; } }
+
+        /// <summary>
+        /// Лише кадри огляду У2 (арт-директор 14.11.2026: назви, стиснуті нижче 36, — «стиснуто» і «роль під назвою», вирішує
+        /// власник): плита ролі рядком під назвою, назва на 52 цілим. Гра цього не вмикає; чинне — назва в рядку з плитою.
+        /// </summary>
+        internal static bool PosterRoleBelowForShots;
+
+        /// <summary>Кегль назви ґіміка на афіші зараз (огляд); NaN — афіші ще немає.</summary>
+        internal float PosterNameSizeForShots { get { return _posterName == null ? float.NaN : _posterName.resolvedStyle.fontSize; } }
         /// <summary>Рядки характеристик афіші — Fit робить їх нижчими на вузькій панелі (<see cref="CareerTileLayout.CreateAttrRowNarrowH"/>).</summary>
         private readonly List<VisualElement> _attrRows = new List<VisualElement>();
         private string _hintDefault = "";
@@ -70,7 +92,57 @@ namespace Game.Gameplay.Ring.UI
             _d.RingName = T.Get("c.create.default_name");
             _d.Gimmick = Gimmick.Monster;
             _d.FreePoint = RingAttr.Stamina;
+            CareerScreenLines.NormalizeFreePoints(_d, Current.FreePoints, Current.BaseAttr, _v.MaxAttr);   // стартова заготовка — без рядка
             Root.RegisterCallback<GeometryChangedEvent>(e => Fit());
+            // остання позиція вказівника (АД 15.11.2026, п. 3): після перебудови — підказка плитки під курсором миші
+            Root.RegisterCallback<PointerMoveEvent>(e => { _ptr = new Vector2(e.position.x, e.position.y); _ptrMouse = e.pointerType == PointerType.mouse; }, TrickleDown.TrickleDown);
+            Root.RegisterCallback<PointerDownEvent>(e => { _ptr = new Vector2(e.position.x, e.position.y); _ptrMouse = e.pointerType == PointerType.mouse; }, TrickleDown.TrickleDown);
+        }
+
+        private Vector2 _ptr;
+        private bool _ptrMouse;
+
+        /// <summary>
+        /// Після перебудови екрана (натиснута плитка, вибір ґіміка чи ролі) курсор миші лишається над плиткою, але PointerEnter не
+        /// повторюється — рядок підказки повертався до типового, доки не порухати мишею (АД 15.11.2026, п. 3). Один раз після
+        /// перебудови: плитка під курсором показує свою підказку — однаково на 16:9 (С-1) і 4:3. Лише миша: після дотику пальця «над»
+        /// плиткою немає; геймпад веде фокус сам.
+        /// </summary>
+        private void RestoreHover()
+        {
+            if (!_ptrMouse || CareerPadFeature.PadHints(Menus.RingMenuInput.PadLast) || _hint == null) return;
+            foreach (var t in _tiles)
+            {
+                if (t.panel == null || t.OnHover == null) continue;
+                var r = t.worldBound;
+                if (_ptr.x >= r.xMin && _ptr.x <= r.xMax && _ptr.y >= r.yMin && _ptr.y <= r.yMax) { t.OnHover(); return; }
+            }
+        }
+
+        // рядок «вільний бал перейшов» — для тієї заготовки, на якій перестановка сталась: переставив бал чи ґімік — на місце
+        // повертається опис ролі чи С-1 (АД 14.11.2026)
+        private bool _freeMoved;
+        private RingAttr _freeMovedFrom, _freeMovedTo;
+        private Gimmick _freeMovedGimmick;
+        private RingAttr _freeMovedFp;
+        private RingAttr? _freeMovedFp2;
+
+        /// <summary>
+        /// Вибір ґіміка — плитка, клавіша, огляд (ПМ 14.11.2026): вільний бал, що з новою основою вийшов би за стелю, переходить
+        /// (<see cref="CareerScreenLines.NormalizeFreePoints(CharacterDraft, int, int[], int, out RingAttr, out RingAttr)"/>), і на папері
+        /// афіші — рядок про це, доки заготовка та сама.
+        /// </summary>
+        private void PickGimmick(Gimmick g)
+        {
+            _d.Gimmick = g;
+            var cur = Current;
+            _freeMoved = CareerScreenLines.NormalizeFreePoints(_d, cur.FreePoints, cur.BaseAttr, _v.MaxAttr, out _freeMovedFrom, out _freeMovedTo);
+            _freeMovedGimmick = _d.Gimmick; _freeMovedFp = _d.FreePoint; _freeMovedFp2 = _d.FreePoint2;
+        }
+
+        private bool FreeMovedNote
+        {
+            get { return _freeMoved && _d.Gimmick == _freeMovedGimmick && _d.FreePoint == _freeMovedFp && _d.FreePoint2 == _freeMovedFp2; }
         }
 
         private GimmickView Current { get { foreach (var g in _v.Gimmicks) if (g.Def.Id == _d.Gimmick) return g; return _v.Gimmicks[0]; } }
@@ -86,9 +158,40 @@ namespace Game.Gameplay.Ring.UI
         /// <summary>Огляд: ґімік і роль — як клавіші 1–6 (<see cref="OnDigit"/>), і перебудова.</summary>
         internal void SetForShots(Gimmick g, CareerRole r)
         {
-            _d.Gimmick = g;
+            PickGimmick(g);
             _d.Role = r;
             Refresh();
+        }
+
+        /// <summary>Огляд 4:3: відкрити вкладку колонки — та сама перебудова, що від натискання вкладки.</summary>
+        internal void SetTabForShots(int tab)
+        {
+            _tab = tab;
+            Refresh();
+        }
+
+        /// <summary>
+        /// Огляд: перша пара ґіміків екрана, де вільний бал переходить (бал у характеристиці, що в другого вже на стелі), — заготовка
+        /// першого з балом там і вибір другого тією самою дорогою, що плитка (<see cref="PickGimmick"/>). Повертає пару; null — такої немає.
+        /// </summary>
+        internal string FreeMovedForShots(CareerRole role)
+        {
+            int max = _v.MaxAttr;
+            foreach (var a in _v.Gimmicks)
+                foreach (var b in _v.Gimmicks)
+                {
+                    if (a == b || a.FreePoints != 1 || b.FreePoints != 1) continue;
+                    for (int i = 0; i < a.BaseAttr.Length && i < b.BaseAttr.Length; i++)
+                    {
+                        if (a.BaseAttr[i] + 1 > max || b.BaseAttr[i] + 1 <= max) continue;
+                        PickGimmick(a.Def.Id);   // і заготовка першого — тією ж дорогою (інших присвоєнь ґіміка немає)
+                        _d.FreePoint = (RingAttr)i; _d.FreePoint2 = null; _d.Role = role;
+                        PickGimmick(b.Def.Id);
+                        Refresh();
+                        return a.Def.Id + " (" + (RingAttr)i + ") → " + b.Def.Id;
+                    }
+                }
+            return null;
         }
 
         private int MoveCount() { int n = 0; foreach (var m in Current.StartMoves) n++; return n; }
@@ -106,6 +209,14 @@ namespace Game.Gameplay.Ring.UI
         /// <summary>Esc закриває розгорнуту картку «Прийоми»; інакше — пауза.</summary>
         public override bool OnBack()
         {
+            // 4:3: Esc закриває вкладку «Прийоми» — назад на афішу, як згортає картку на 16:9
+            if (_single)
+            {
+                if (_tab != TabMoves) return false;
+                _tab = TabPoster;
+                Refresh();
+                return true;
+            }
             if (!_moves) return false;
             _moves = false;
             Refresh();
@@ -115,6 +226,15 @@ namespace Game.Gameplay.Ring.UI
         public override void Refresh()
         {
             Root.Clear();
+            // розкладка — за співвідношенням панелі; поки панель не розкладена — за екраном (інакше кадр широкої на 4:3)
+            float pw = Root.layout.width, ph = Root.layout.height;
+            if (float.IsNaN(pw) || float.IsNaN(ph) || pw <= 0f || ph <= 0f) { pw = Screen.width; ph = Screen.height; }
+            _single = CareerTileLayout.CreateSingleColumn(pw, ph);
+            _relayout = false;
+            // плити попередньої розкладки не тягнуться в нову (Fit перевіряє їх на null)
+            _movesBox = null; _rightCol = null; _desc = null; _paperMoves = null; _movesCard = null; _posterCol = null; _posterName = null;
+            _attrRows.Clear();
+            if (_ptrMouse) Root.schedule.Execute(RestoreHover).ExecuteLater(30);   // після розкладки нового ряду
             Root.style.paddingLeft = 0f; Root.style.paddingRight = 0f; Root.style.paddingTop = 0f; Root.style.paddingBottom = 0f;
             _tiles.Clear();
             _roleChips.Clear();
@@ -125,8 +245,12 @@ namespace Game.Gameplay.Ring.UI
             Color roleColor = ArenaKit.RoleColor(path);
 
             Root.Add(NameStrip(path, roleColor));
-            Root.Add(LookPlate(roleColor));
-            Root.Add(RightColumn(path, roleColor));
+            if (_single) Root.Add(TabColumn(path, roleColor));
+            else
+            {
+                Root.Add(LookPlate(roleColor));
+                Root.Add(RightColumn(path, roleColor));
+            }
 
             _ropes = new RopeLine();
             ArenaKit.Place(_ropes, ArenaKit.Edge, null, ArenaKit.Edge, ArenaKit.RopesBottom, null, 22f);
@@ -143,7 +267,7 @@ namespace Game.Gameplay.Ring.UI
                 // клавіша — місце плитки (1–8, Б4), а не номер ґіміка в даних: на екрані можуть бути не всі
                 // назва ґіміка — за тілом на екрані, як роль (ПМ 13.11.2026: «Силачка, Летунка…», RingLabels.GimmickName)
                 var tile = AddTile(gi + 1, RingLabels.GimmickName(T, g.Def.Key, HeroForms.ShowsHeroine(T)), "",
-                    () => { _d.Gimmick = gid; Refresh(); }, T.Get(g.Def.NameKey + ".desc"));
+                    () => { PickGimmick(gid); Refresh(); }, T.Get(g.Def.NameKey + ".desc"));
                 // переноси лише між характеристиками; найдовша частина — остання, підписна — перша (Шоумен V8: «Харизма +3 · Сила −1» /
                 // «Витривалість +1», Ш-1); у Самородка — «+2 вільні бали»
                 tile.SetEffectParts(CareerScreenLines.CreateTileParts(T, g.BaseAttr, g.FreePoints));
@@ -225,6 +349,13 @@ namespace Game.Gameplay.Ring.UI
             if (_row == null || _gold == null) return;
             float width = Root.layout.width;
             if (float.IsNaN(width) || width <= 0f) return;
+            // співвідношення перейшло межу 3:2 (зміна вікна) — інша розкладка, збирається наново один раз, наступним кроком
+            float height = Root.layout.height;
+            if (!float.IsNaN(height) && height > 0f && CareerTileLayout.CreateSingleColumn(width, height) != _single)
+            {
+                if (!_relayout) { _relayout = true; Root.schedule.Execute(Refresh); }
+                return;
+            }
             bool narrow = width < ArenaKit.NarrowWidth;
             float gw = CareerTileLayout.GoldWidth(width);   // повна плита лише на 21:9 — інакше плитки ґіміків завузькі
             _gold.style.width = gw;
@@ -331,7 +462,7 @@ namespace Game.Gameplay.Ring.UI
             tag.Add(ArenaKit.Tag(" " + RingLabels.PathName(T, path, HeroForms.ShowsHeroine(T)), ArenaKit.RoleText(path)));   // рід — за тілом на екрані
             box.Add(tag);
 
-            var well = ArenaKit.Abs(24f, 36f, 38f, null, null, 58f);
+            var well = ArenaKit.Abs(CareerTileLayout.NameWellLeft, 36f, CareerTileLayout.NameWellRight, null, null, 58f);
             well.pickingMode = PickingMode.Position;
             well.style.backgroundColor = RingTheme.PanelRaised;
             var field = new TextField { value = _d.RingName, maxLength = _v.MaxNameLength };
@@ -340,9 +471,19 @@ namespace Game.Gameplay.Ring.UI
             field.style.color = RingTheme.Text;
             field.style.backgroundColor = Color.clear;
             field.style.position = Position.Absolute;
-            field.style.left = 8f; field.style.right = 8f; field.style.top = 2f; field.style.height = 50f;
+            field.style.left = CareerTileLayout.NameFieldInset; field.style.right = CareerTileLayout.NameFieldInset; field.style.top = 2f; field.style.height = 50f;
             field.style.marginLeft = 0f; field.style.marginRight = 0f; field.style.marginTop = 0f; field.style.marginBottom = 0f;
-            field.RegisterValueChangedCallback(e => _d.RingName = e.newValue);
+            // проба ширини набраного — тим самим шрифтом і кеглем 30, невидима: довге ім'я меншає, і весь текст із курсором у
+            // кінці видно (ПМ 14.11.2026: було «Максиміліан Шершен» без кінця)
+            var probe = RingUi.Lbl("", CareerTileLayout.NameFieldSize, RingTheme.Text);
+            RingFonts.Apply(probe, RingFontRole.TextBold);
+            probe.style.position = Position.Absolute;
+            probe.style.visibility = Visibility.Hidden;
+            probe.style.whiteSpace = WhiteSpace.NoWrap;
+            probe.pickingMode = PickingMode.Ignore;
+            well.Add(probe);
+            field.RegisterValueChangedCallback(e => { _d.RingName = e.newValue; FitNameText(field, probe); });
+            well.RegisterCallback<GeometryChangedEvent>(e => FitNameText(field, probe));
             // внутрішнє поле вводу має своє біле тло з теми Unity — інакше світлий текст на білому не читався (кадр 08.11.2026)
             var input = field.Q(null, "unity-base-text-field__input");
             if (input != null)
@@ -353,8 +494,8 @@ namespace Game.Gameplay.Ring.UI
                 // Fixel, не display: гравець набирає малими, а малі кириличні display — болгарських форм («в», «к»; Статут
                 // TYPE-03, кадр 1080 08.11.2026). У стрічках ім'я й далі ВЕЛИКИМИ display.
                 RingFonts.Apply(input, RingFontRole.TextBold);
-                input.style.fontSize = 30f;
-                input.style.paddingLeft = 6f;
+                input.style.fontSize = CareerTileLayout.NameFieldSize;
+                input.style.paddingLeft = CareerTileLayout.NameInputPadLeft;
             }
             well.Add(field);
             // ціль фокусу без миші: A / Enter ставить курсор у поле (друкувати — з клавіатури); ранг 5 — першою стає плитка ґіміка.
@@ -368,9 +509,22 @@ namespace Game.Gameplay.Ring.UI
             return box;
         }
 
+        /// <summary>
+        /// Кегль тексту поля імені за <see cref="CareerTileLayout.FitNameField"/>: ширина набраного на 30 — пробою; порожнє — 30.
+        /// </summary>
+        private static void FitNameText(TextField field, Label probe)
+        {
+            var input = field.Q(null, "unity-base-text-field__input");
+            if (input == null || probe.panel == null) return;
+            string s = field.value ?? "";
+            float nat = s.Length == 0 ? 0f : probe.MeasureTextSize(s, 0f, VisualElement.MeasureMode.Undefined, 0f, VisualElement.MeasureMode.Undefined).x;
+            float size = nat <= 0f ? CareerTileLayout.NameFieldSize : CareerTileLayout.FitNameField(nat);
+            if (!float.IsNaN(size)) input.style.fontSize = size;
+        }
+
         private VisualElement LookPlate(Color roleColor)
         {
-            var box = ArenaKit.Abs(ArenaKit.Edge, ArenaKit.SecondY, null, null, ArenaKit.StripW, 252f);
+            var box = ArenaKit.Abs(ArenaKit.Edge, ArenaKit.SecondY, null, null, ArenaKit.StripW, CareerTileLayout.CreateLookH);
             box.style.overflow = Overflow.Visible;
             box.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaPanel), Stripe = roleColor });
             var title = ArenaKit.Big(T.Get("c.create.look"), 30f, RingTheme.Text);
@@ -488,25 +642,70 @@ namespace Game.Gameplay.Ring.UI
             _movesBox.Add(tab);
             if (_moves)
             {
-                var card = new VisualElement();
+                var card = MovesCard();
                 card.style.marginTop = 8f;
-                card.style.overflow = Overflow.Visible;
-                card.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaPlate), Stripe = RingTheme.Gold, StripeW = 5f });
-                var wrap = new VisualElement();
-                wrap.style.paddingLeft = 20f; wrap.style.paddingRight = 26f; wrap.style.paddingTop = 8f; wrap.style.paddingBottom = 10f;
-                wrap.pickingMode = PickingMode.Ignore;
-                // одним рядком з переносом, як було: 10 прийомів стовпчиком заходили на канати й ряд плиток (рев'ю 08.11.2026)
-                var l = MenuKit.Body(MovesLine(), BrandTokens.TypeMinInfo, RingTheme.Text);
-                l.style.whiteSpace = WhiteSpace.Normal;
-                wrap.Add(l);
-                card.Add(wrap);
                 _movesBox.Add(card);
                 _movesCard = card;
             }
             return col;
         }
 
-        private VisualElement Poster(RingPath path, Color roleColor)
+        /// <summary>Темна картка прийомів: на 16:9 — під вкладкою «Прийоми», на 4:3 — плита вкладки «Прийоми» колонки.</summary>
+        private VisualElement MovesCard()
+        {
+            var card = new VisualElement();
+            card.style.overflow = Overflow.Visible;
+            card.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaPlate), Stripe = RingTheme.Gold, StripeW = 5f });
+            var wrap = new VisualElement();
+            wrap.style.paddingLeft = 20f; wrap.style.paddingRight = 26f; wrap.style.paddingTop = 8f; wrap.style.paddingBottom = 10f;
+            wrap.pickingMode = PickingMode.Ignore;
+            // одним рядком з переносом, як було: 10 прийомів стовпчиком заходили на канати й ряд плиток (рев'ю 08.11.2026)
+            var l = MenuKit.Body(MovesLine(), BrandTokens.TypeMinInfo, RingTheme.Text);
+            l.style.whiteSpace = WhiteSpace.Normal;
+            wrap.Add(l);
+            card.Add(wrap);
+            return card;
+        }
+
+        /// <summary>
+        /// Одна ліва колонка 4:3 (АД 14–15.11.2026): під стрічкою імені — вкладки «Твій борець / Вигляд / Прийоми» і плита відкритої
+        /// вкладки. Афіша — без власного заголовка (він — вкладка) і без опису ролі (Б1: опис — підказкою плитки ролі; «бал перейшов»
+        /// і С-1 — у рядку підказки над рядом, <see cref="CareerScreenLines.CreateRowHint"/>). Вкладки — ті самі TabPlate, відкрита —
+        /// з обводкою, як на 16:9; відступи 14 / 18, перша впритул до краю, «Прийоми» без числа (2А).
+        /// </summary>
+        private VisualElement TabColumn(RingPath path, Color roleColor)
+        {
+            var col = ArenaKit.Abs(ArenaKit.Edge, ArenaKit.SecondY, null, null, ArenaKit.StripW, null);
+            col.style.overflow = Overflow.Visible;
+            col.pickingMode = PickingMode.Ignore;
+            var tabs = ArenaKit.Row();
+            tabs.pickingMode = PickingMode.Ignore;
+            string[] words = { T.Get("c.hub.create.poster"), T.Get("c.create.look"), T.Get("c.hub.create.moves") };
+            for (int i = 0; i < words.Length; i++)
+            {
+                int k = i;
+                var tab = new TabPlate(words[i], -1, _tab == i, () => { if (_tab != k) { _tab = k; Refresh(); } }, false, true);
+                tab.style.flexShrink = 0f;
+                tab.style.marginLeft = i == 0 ? 0f : CareerTileLayout.ColumnTabGap;
+                tabs.Add(tab);
+            }
+            col.Add(tabs);
+            VisualElement plate;
+            if (_tab == TabLook)
+            {
+                plate = LookPlate(roleColor);
+                plate.style.position = Position.Relative;
+                plate.style.left = StyleKeyword.Auto; plate.style.top = StyleKeyword.Auto;
+            }
+            else if (_tab == TabMoves) plate = MovesCard();
+            else plate = Poster(path, roleColor, true);
+            plate.style.marginTop = CareerTileLayout.ColumnPlateGap;
+            col.Add(plate);
+            return col;
+        }
+
+        /// <summary>Паперова афіша; <paramref name="column"/> — у вкладці колонки 4:3: без заголовка й без опису ролі (Б1).</summary>
+        private VisualElement Poster(RingPath path, Color roleColor, bool column = false)
         {
             var box = new VisualElement();
             box.style.overflow = Overflow.Visible;
@@ -515,13 +714,13 @@ namespace Game.Gameplay.Ring.UI
             var col = new VisualElement();
             col.pickingMode = PickingMode.Ignore;
             col.style.paddingLeft = CareerTileLayout.CreatePosterPadLeft; col.style.paddingRight = CareerTileLayout.CreatePosterPadRight;
-            col.style.paddingTop = 16f; col.style.paddingBottom = CareerTileLayout.CreatePaperPadBottom;
+            col.style.paddingTop = CareerTileLayout.CreatePosterPadTop; col.style.paddingBottom = CareerTileLayout.CreatePaperPadBottom;
             _posterCol = col;
             _attrRows.Clear();
-            col.Add(MenuKit.Display(T.Get("c.hub.create.poster"), 24f, RingTheme.Bg, RingFontRole.Display800, 0.04f));
+            if (!column) col.Add(MenuKit.Display(T.Get("c.hub.create.poster"), 24f, RingTheme.Bg, RingFontRole.Display800, 0.04f));   // на 4:3 — вкладка
 
             var head = ArenaKit.Row();
-            head.style.marginTop = 8f;
+            head.style.marginTop = CareerTileLayout.CreatePosterHeadTop;
             string gimmickName = RingLabels.GimmickName(T, C.Content.GimmickOf(_d.Gimmick).Key, HeroForms.ShowsHeroine(T));
             // розпірка: невидимий рядок на базовому кеглі тримає висоту — менший кегль не підтягує характеристики вгору
             var strut = ArenaKit.Big(gimmickName, CareerTileLayout.PosterNameSize, RingTheme.Bg);
@@ -529,35 +728,63 @@ namespace Game.Gameplay.Ring.UI
             head.Add(strut);
             var gname = ArenaKit.Big(gimmickName, CareerTileLayout.PosterNameSize, RingTheme.Bg);
             gname.style.flexShrink = 0f;   // природна ширина — для FitPosterName
+            // до верху рядка (висоту тримає розпірка на 52), а не по центру: менший кегль лягає на базову лінію 52 зсувом
+            // PosterNameTopShift — не пливе від плашки ролі (У0 арт-директора 14.11.2026)
+            gname.style.alignSelf = Align.FlexStart;
             head.Add(gname);
-            head.Add(ArenaKit.Spacer());
+            _posterName = gname;
             var plate = RolePlate(path, roleColor);
-            head.Add(plate);
-            col.Add(head);
-            FitPosterName(head, gname, plate);
+            if (PosterRoleBelowForShots)
+            {
+                // варіант «роль під назвою» (лише огляд): назва сама в рядку, плита — нижче, вирівняна з назвою ліворуч
+                col.Add(head);
+                var under = ArenaKit.Row();
+                under.style.marginTop = 4f;
+                under.Add(plate);
+                under.Add(ArenaKit.Spacer());
+                col.Add(under);
+                FitPosterName(head, gname, null);
+            }
+            else
+            {
+                head.Add(ArenaKit.Spacer());
+                head.Add(plate);
+                col.Add(head);
+                FitPosterName(head, gname, plate);
+            }
 
             // С-1 (арт-директор 14.11.2026): у Самородка (два вільні бали) замість опису ролі — як ставити бали; опис ролі
             // лишається підказкою при наведенні на плитку ролі
             bool two = Current.FreePoints >= 2;
             string roleKey = _d.Role == CareerRole.Hero ? "role.hero.desc" : "role.villain.desc";
-            var desc = two ? MenuKit.Body(T.Get("c.create.freepoints.hint"), BrandTokens.TypeMinInfo, RingTheme.Bg)
-                : MenuKit.Body(T.Get(roleKey), BrandTokens.TypeBody, RingTheme.Bg);
-            desc.style.marginTop = 10f;
-            col.Add(desc);
-            _desc = desc;
+            // вільний бал перейшов після зміни ґіміка (ПМ і АД 14.11.2026, варіант (1)) — тимчасово на цьому ж місці: двох текстів
+            // тут не буває; опис ролі лишається підказкою плитки ролі (наведення, дотик, геймпад — та сама дорога, що в С-1)
+            // на 4:3 (колонка) опису ролі й рядків паперу немає — не влазять за висотою (АД 15.11.2026, Б1): опис — підказкою плитки
+            // ролі, «бал перейшов» і С-1 — у рядку підказки над рядом (CareerScreenLines.CreateRowHint)
+            _desc = null;
             _paperMoves = null;
-            if (_moves)
+            if (!column)
             {
-                var pm = MenuKit.Body(MovesLine(), BrandTokens.TypeMinInfo, RingTheme.Bg);
-                pm.style.whiteSpace = WhiteSpace.Normal;
-                pm.style.marginTop = 10f;
-                pm.style.display = DisplayStyle.None;   // показує Fit лише на вузькій панелі
-                col.Add(pm);
-                _paperMoves = pm;
+                var desc = FreeMovedNote ? MenuKit.Body(CareerScreenLines.FreeMovedLine(T, _freeMovedFrom, _freeMovedTo), BrandTokens.TypeMinInfo, RingTheme.Bg)
+                    : two ? MenuKit.Body(T.Get("c.create.freepoints.hint"), BrandTokens.TypeMinInfo, RingTheme.Bg)
+                    : MenuKit.Body(T.Get(roleKey), BrandTokens.TypeBody, RingTheme.Bg);
+                desc.style.marginTop = 10f;
+                col.Add(desc);
+                _desc = desc;
+                if (_moves)
+                {
+                    var pm = MenuKit.Body(MovesLine(), BrandTokens.TypeMinInfo, RingTheme.Bg);
+                    pm.style.whiteSpace = WhiteSpace.Normal;
+                    pm.style.marginTop = 10f;
+                    pm.style.display = DisplayStyle.None;   // показує Fit лише на вузькій панелі
+                    col.Add(pm);
+                    _paperMoves = pm;
+                }
             }
 
             var line = new VisualElement();
-            line.style.height = 2f; line.style.backgroundColor = RingTheme.Bg; line.style.marginTop = 10f; line.style.marginBottom = 8f;
+            line.style.height = CareerTileLayout.CreatePosterRuleH; line.style.backgroundColor = RingTheme.Bg;
+            line.style.marginTop = CareerTileLayout.CreatePosterRuleTop; line.style.marginBottom = CareerTileLayout.CreatePosterRuleBottom;
             col.Add(line);
 
             // Самородок — два вільні бали (Б4): «Вільні бали (+2)»; як ставити обидва — на місці опису ролі (С-1, вище)
@@ -565,7 +792,7 @@ namespace Game.Gameplay.Ring.UI
             hr.Add(MenuKit.Display(T.Get(two ? "c.create.freepoints" : "c.create.freepoint"), BrandTokens.TypeLabel, RingTheme.Ash, RingFontRole.Display700, 0.1f));
             hr.Add(ArenaKit.Spacer());
             hr.Add(MenuKit.Display(T.Get("c.hub.create.pick"), BrandTokens.TypeLabel, RingTheme.Ash, RingFontRole.Display700, 0.1f));
-            hr.style.marginBottom = 4f;
+            hr.style.marginBottom = CareerTileLayout.CreatePosterPickGap;
             col.Add(hr);
 
             var baseAttr = Current.BaseAttr;
@@ -576,20 +803,22 @@ namespace Game.Gameplay.Ring.UI
 
         /// <summary>
         /// Назва ґіміка в один рядок до плити ролі (жіночі назви довші — ПМ 13.11.2026): після розкладки кегль за
-        /// <see cref="CareerTileLayout.FitPosterName"/>; ширина лінійна за кеглем, тож природна на 52 — з поточної.
+        /// <see cref="CareerTileLayout.FitPosterName"/>; ширина лінійна за кеглем, тож природна на 52 — з поточної. Без плити (варіант
+        /// огляду «роль під назвою») — увесь рядок назві.
         /// </summary>
         private static void FitPosterName(VisualElement head, Label gname, VisualElement plate)
         {
             float cur = CareerTileLayout.PosterNameSize;
             EventCallback<GeometryChangedEvent> fit = e =>
             {
-                float w = gname.layout.width, row = head.layout.width, p = plate.layout.width;
+                float w = gname.layout.width, row = head.layout.width, p = plate != null ? plate.layout.width : -CareerTileLayout.PosterNameGap;
                 if (float.IsNaN(w) || float.IsNaN(row) || float.IsNaN(p) || w <= 0f) return;
                 float s = CareerTileLayout.FitPosterName(w * CareerTileLayout.PosterNameSize / cur, row - p - CareerTileLayout.PosterNameGap);
                 if (float.IsNaN(s) || Math.Abs(s - cur) < 0.5f) return;
                 cur = s;
                 gname.style.fontSize = s;
-                gname.style.letterSpacing = new Length(s * CareerTileLayout.PosterNameTrack);
+                gname.style.letterSpacing = new Length(s * CareerTileLayout.PosterNameTrack);   // розрядка та сама — 0,01 кегля
+                gname.style.marginTop = CareerTileLayout.PosterNameTopShift(s);
             };
             // і рядок, і сама назва: ширина назви може змінитись без зміни рядка (рев'ю 13.11.2026); поріг 0,5 не дає зациклитись
             head.RegisterCallback(fit);
@@ -754,9 +983,10 @@ namespace Game.Gameplay.Ring.UI
             var t1 = MenuKit.Display(T.Get("c.create.gimmick"), 27f, RingTheme.Text, RingFontRole.Display900, 0.02f);
             t1.style.unityFontStyleAndWeight = FontStyle.Italic;
             g1.Add(t1);
-            _hintDefault = T.Get(Current.Def.NameKey + ".desc");
+            // без наведення: на 4:3 — «бал перейшов» > С-1 > опис ґіміка (паперу для них там немає, Б1); на широкій — опис ґіміка
+            _hintDefault = CareerScreenLines.CreateRowHint(T, _single, FreeMovedNote, _freeMovedFrom, _freeMovedTo, Current.FreePoints >= 2, Current.Def.NameKey);
             _hint = MenuKit.Body(_hintDefault, BrandTokens.TypeMinInfo, RingTheme.Text);
-            _hint.style.marginLeft = 22f;
+            _hint.style.marginLeft = CareerTileLayout.CreateHintGap;
             _hint.style.flexShrink = 1f;
             MenuKit.Underlay(_hint);
             g1.Add(_hint);
@@ -810,7 +1040,7 @@ namespace Game.Gameplay.Ring.UI
             int d = CareerTileLayout.CreateDigit(n, _v.Gimmicks.Count);
             if (d == CareerTileLayout.CreateDigitHero) { _d.Role = CareerRole.Hero; Refresh(); }
             else if (d == CareerTileLayout.CreateDigitVillain) { _d.Role = CareerRole.Villain; Refresh(); }
-            else if (d >= 0) { _d.Gimmick = _v.Gimmicks[d].Def.Id; Refresh(); }
+            else if (d >= 0) { PickGimmick(_v.Gimmicks[d].Def.Id); Refresh(); }
         }
 
         public override void OnConfirm()

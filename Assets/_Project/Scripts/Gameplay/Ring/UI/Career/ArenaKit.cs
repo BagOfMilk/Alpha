@@ -24,7 +24,7 @@ namespace Game.Gameplay.Ring.UI
 
         // ---- розкладка (еталон 900; B03 §2: значення 1080p × 0,833) ----
         public const float Edge = CareerTileLayout.Edge;          // безпечні боки ACC-04
-        public const float Top = 45f;
+        public const float Top = CareerTileLayout.Top;
         public const float StripW = CareerTileLayout.StripW, StripH = 106f;
         public const float SecondY = CareerTileLayout.SecondY;      // друга плита під стрічкою
         public const float RopesY = 668f;
@@ -146,33 +146,109 @@ namespace Game.Gameplay.Ring.UI
 
         /// <summary>
         /// Ім'я й мітка ролі в одному рядку стрічки (рев'ю 08.11.2026: довге ім'я наїжджало на мітку — нічого їх не міряло).
-        /// Після розкладки, доки ім'я не влазить до мітки з проміжком: (1) зменшити кегль імені пропорційно, не нижче
-        /// <paramref name="minSize"/>; (2) сховати <paramref name="optional"/> (ґімік у мітці); (3) обрізати ім'я по ширині.
-        /// <paramref name="nameLeft"/> — ім'я ліворуч, мітка праворуч (стрічка гравця), інакше дзеркально (суперник).
+        /// Довге ім'я (ПМ 14.11.2026: «Максиміліан Шершеньковий» лягав на мітку «ЛЕТУН · ГЕРОЙ» і на ляльку): колишній ланцюг
+        /// кроків ішов лише з першої розкладки стрічки — після першого зменшення кегля решти кроків не було, а ляльку він не бачив.
+        /// Тепер одне рішення <see cref="CareerTileLayout.FitStripName"/> з мір кожної розкладки: ширина імені на 40 — невидимою
+        /// пробою (тим самим шрифтом і розрядкою), мітка з ґіміком (<paramref name="optional"/>) і без нього, перешкода
+        /// <paramref name="obstacle"/> (лялька травм) праворуч від імені. Мітка ролі й лялька лишаються вільними: ім'я меншає, ховає
+        /// ґімік, стає у два рядки; далі пояс <paramref name="belt"/> коротшає до <paramref name="beltShort"/>, тоді ховається, і лише
+        /// тоді — «…» (урізає модель; АД 14.11.2026: «обрізаємо його останнім, після всіх приміток»). <paramref name="nameLeft"/> — ім'я
+        /// ліворуч, мітка праворуч (стрічка гравця), інакше дзеркально (суперник).
         /// </summary>
-        public static void FitNameAndTag(VisualElement box, Label name, VisualElement tag, VisualElement optional, bool nameLeft, float size, float minSize)
+        public static void FitNameAndTag(VisualElement box, Label name, VisualElement tag, VisualElement optional, bool nameLeft, VisualElement obstacle = null,
+            Label belt = null, string beltShort = null)
         {
-            float cur = size;
-            int stage = 0;
-            box.RegisterCallback<GeometryChangedEvent>(e =>
+            string text = name.text ?? "";
+            var probe = Big(text, CareerTileLayout.StripNameSize, RingTheme.Text);
+            probe.style.position = Position.Absolute;
+            probe.style.left = 0f; probe.style.top = 0f;
+            probe.style.visibility = Visibility.Hidden;
+            probe.pickingMode = PickingMode.Ignore;
+            box.Add(probe);
+            Func<string, float> measure = s => probe.MeasureTextSize(s, 0f, VisualElement.MeasureMode.Undefined, 0f, VisualElement.MeasureMode.Undefined).x;
+            // другий рядок — окремою міткою на крок 1,25 кегля нижче (АД 14.11.2026: на 1,2 хвіст Д/Ц/Щ і крапки Ї злипались би); висоти
+            // рядка в UI Toolkit немає
+            var line2 = Big("", CareerTileLayout.StripNameSize, RingTheme.Text);
+            line2.style.position = Position.Absolute;
+            line2.style.display = DisplayStyle.None;
+            box.Add(line2);
+            // що мітка віддає імені, за порядком (АД 14.11.2026): 0 — усе на місці; 1 — ґімік; 2 — короткий напис поясу; 3 — пояс
+            string beltFull = belt != null ? belt.text : null;
+            string beltCut = belt != null && !string.IsNullOrEmpty(beltShort) ? RingTheme.Caps(beltShort) : null;
+            var steps = new List<int> { 0, 1 };
+            if (beltCut != null && beltCut != beltFull) steps.Add(2);
+            if (belt != null) steps.Add(3);
+            Func<string, float> beltText = s => belt.MeasureTextSize(s, 0f, VisualElement.MeasureMode.Undefined, 0f, VisualElement.MeasureMode.Undefined).x;
+            var avail = new float[steps.Count];
+            float optW = -1f, beltW = -1f;
+            int state = 0;
+            string applied = null;
+            EventCallback<GeometryChangedEvent> fit = e =>
             {
-                Rect n = name.layout, t = tag.layout;
-                if (float.IsNaN(n.width) || float.IsNaN(t.width) || n.width <= 0f) return;
-                float avail = nameLeft ? t.x - n.x - 14f : (n.x + n.width) - (t.x + t.width) - 14f;
-                if (stage >= 3 || n.width <= avail + 0.5f) return;
-                if (stage == 0 && cur > minSize)
+                Rect t = tag.layout, n = name.layout;
+                if (float.IsNaN(t.width) || float.IsNaN(n.x) || float.IsNaN(n.width) || t.width <= 0f) return;
+                if (optional != null && state < 1 && !float.IsNaN(optional.layout.width)) optW = optional.layout.width;
+                float cut = 0f;   // на скільки короткий напис поясу вужчий за повний
+                if (beltCut != null)
                 {
-                    cur = Mathf.Max(minSize, (float)Math.Floor(cur * avail / n.width));
-                    name.style.fontSize = cur;
-                    name.style.letterSpacing = new Length(cur * 0.01f);
-                    if (cur <= minSize) stage = 1;
-                    return;
+                    float full = beltText(beltFull), shorter = beltText(beltCut);
+                    if (!float.IsNaN(full) && !float.IsNaN(shorter)) cut = Math.Max(0f, full - shorter);
                 }
-                if (stage <= 1 && optional != null) { optional.style.display = DisplayStyle.None; stage = 2; return; }
-                name.style.width = Mathf.Max(40f, avail);
-                name.style.overflow = Overflow.Hidden;
-                stage = 3;
-            });
+                if (belt != null && state < 3 && !float.IsNaN(belt.layout.width)) beltW = belt.layout.width + (state == 2 ? cut : 0f);
+                float opt = Math.Max(0f, optW), bw = Math.Max(0f, beltW);
+                // мітка з усім на місці — з поточної ширини, хоч би що зараз сховано чи вкорочено
+                float tagAll = t.width + Given(state, opt, cut, bw);
+                float ob = obstacle != null && !float.IsNaN(obstacle.layout.x) ? obstacle.layout.x : float.MaxValue;
+                for (int k = 0; k < steps.Count; k++)
+                {
+                    float tagK = tagAll - Given(steps[k], opt, cut, bw);
+                    avail[k] = nameLeft ? Math.Min(t.xMax - tagK, ob) - CareerTileLayout.StripNameGap - n.x
+                        : n.xMax - (t.x + tagK) - CareerTileLayout.StripNameGap;
+                }
+                var f = CareerTileLayout.FitStripName(text, measure, avail);
+                int next = steps[f.Drop];
+                // вигляд імені — лише з рішення (кегль, крок мітки, текст): ширина рамки не задається, тож застарілою не стане (рев'ю 14.11.2026)
+                string key = f.Size + "|" + next + "|" + f.Text;
+                if (key == applied) return;   // мітка змінюється від схованого — рішення те саме, без циклу
+                applied = key;
+                state = next;
+                if (optional != null) optional.style.display = state >= 1 ? DisplayStyle.None : DisplayStyle.Flex;
+                if (belt != null)
+                {
+                    belt.style.display = state >= 3 ? DisplayStyle.None : DisplayStyle.Flex;
+                    belt.text = state == 2 ? beltCut : beltFull;
+                }
+                string[] lines = f.Text.Split('\n');
+                name.text = lines[0];
+                name.style.fontSize = f.Size;
+                name.style.letterSpacing = new Length(f.Size * CareerTileLayout.StripNameTrack);
+                name.style.unityTextAlign = nameLeft ? TextAnchor.UpperLeft : TextAnchor.UpperRight;
+                line2.style.display = lines.Length > 1 ? DisplayStyle.Flex : DisplayStyle.None;
+                if (lines.Length > 1)
+                {
+                    line2.text = lines[1];
+                    line2.style.fontSize = f.Size;
+                    line2.style.letterSpacing = new Length(f.Size * CareerTileLayout.StripNameTrack);
+                    line2.style.unityTextAlign = nameLeft ? TextAnchor.UpperLeft : TextAnchor.UpperRight;
+                    line2.style.top = n.y + CareerTileLayout.StripNameLine2Offset(f.Size);
+                    if (nameLeft) { line2.style.left = n.x; line2.style.right = StyleKeyword.Auto; }
+                    else { line2.style.right = box.layout.width - n.xMax; line2.style.left = StyleKeyword.Auto; }
+                }
+                // без переносу за шириною: другий рядок — лише за «\n» моделі, окремою міткою; «…» модель уже поставила; рамка — за
+                // текстом. Перенос у рамці впритул міг дати третій рядок на зонах (рев'ю 14.11.2026)
+                name.style.whiteSpace = WhiteSpace.NoWrap;
+                name.style.width = StyleKeyword.Auto;
+                name.style.overflow = Overflow.Visible;
+            };
+            box.RegisterCallback(fit);
+            tag.RegisterCallback(fit);
+            probe.RegisterCallback(fit);
+        }
+
+        /// <summary>Скільки ширини мітка вже віддала на кроці <paramref name="step"/>: ґімік, далі різниця короткого поясу, далі весь пояс.</summary>
+        private static float Given(int step, float gimmick, float beltCut, float belt)
+        {
+            return (step >= 1 ? gimmick : 0f) + (step == 2 ? beltCut : step >= 3 ? belt : 0f);
         }
 
         /// <summary>Число / коротке слово display Black.</summary>
@@ -397,7 +473,7 @@ namespace Game.Gameplay.Ring.UI
 
         public InjuryDoll()
         {
-            style.width = 36f; style.height = 70f;
+            style.width = CareerTileLayout.StripDollW; style.height = CareerTileLayout.StripDollH;
             pickingMode = PickingMode.Ignore;
             generateVisualContent = Draw;
         }
@@ -997,14 +1073,20 @@ namespace Game.Gameplay.Ring.UI
         void IPadTarget.PadActivate() { if (_onClick != null) _onClick(); }
         bool IPadTarget.PadStep(int delta) { return false; }
 
-        public TabPlate(string text, int number, bool open, Action onClick, bool goldStripe)
+        public TabPlate(string text, int number, bool open, Action onClick, bool goldStripe) : this(text, number, open, onClick, goldStripe, false) { }
+
+        /// <summary>
+        /// <paramref name="compact"/> — вкладки колонки створення 4:3 (АД 15.11.2026, 2А): відступи <see cref="CareerTileLayout.ColumnTabPadLeft"/> /
+        /// <see cref="CareerTileLayout.ColumnTabPadRight"/>; кегль, висота, обводка відкритої й зона натискання — ті самі. Число &lt; 0 — без числа.
+        /// </summary>
+        public TabPlate(string text, int number, bool open, Action onClick, bool goldStripe, bool compact)
         {
             _onClick = onClick;
             _text = text ?? "";
             style.flexDirection = FlexDirection.Row;
             style.alignItems = Align.Center;
-            style.height = 40f;
-            style.paddingLeft = 18f; style.paddingRight = 26f;
+            style.height = CareerTileLayout.TabPlateH;
+            style.paddingLeft = compact ? CareerTileLayout.ColumnTabPadLeft : 18f; style.paddingRight = compact ? CareerTileLayout.ColumnTabPadRight : 26f;
             style.marginLeft = 10f;
             style.overflow = Overflow.Visible;
             var plate = new ArenaPlate { Fill = RingTheme.Panel, Stripe = goldStripe ? (Color?)RingTheme.Gold : null, StripeW = 5f, Outline = open ? (Color?)RingTheme.Text : null, OutlineW = 2f };
@@ -1012,9 +1094,12 @@ namespace Game.Gameplay.Ring.UI
             Add(plate);
             var l = MenuKit.Display(text, 19f, RingTheme.Text, RingFontRole.Display800, 0.06f);
             Add(l);
-            var n = MenuKit.Display(number.ToString(), 21f, goldStripe ? RingTheme.Gold : RingTheme.TextDim, RingFontRole.Display900, 0f);
-            n.style.marginLeft = 14f;
-            Add(n);
+            if (number >= 0)
+            {
+                var n = MenuKit.Display(number.ToString(), 21f, goldStripe ? RingTheme.Gold : RingTheme.TextDim, RingFontRole.Display900, 0f);
+                n.style.marginLeft = 14f;
+                Add(n);
+            }
             RegisterCallback<PointerDownEvent>(e => { if (e.button == 0 && onClick != null) onClick(); });
         }
     }

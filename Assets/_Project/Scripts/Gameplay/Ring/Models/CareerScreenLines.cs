@@ -45,6 +45,18 @@ namespace Game.Gameplay.Ring.Models
         public static bool SeasonSummaryShown(CareerSession c) { return c.SeasonSummaryFinal; }
 
         /// <summary>
+        /// Рядок шкал підсумку («Популярність N, довіра букера N, гроші N»): на 4:3 — ні на якому кроці, він дублює плиту ресурсів
+        /// ліворуч угорі того самого екрана (АД 15.11.2026).
+        /// </summary>
+        public static bool SeasonScalesLineShown(bool column) { return !column; }
+
+        /// <summary>
+        /// Підсумок згорнутий до назви, федерації й рекорду: на 4:3 на кроках контракту й пізньої ролі — решту гравець бачив на першому
+        /// кроці, а повний не вміщається під вкладками (АД 15.11.2026). На кроках «підсумок» і «пропозиція» і на 16:9 — повний.
+        /// </summary>
+        public static bool SeasonSummaryCollapsed(bool column, bool contractShown, bool lateRoleShown) { return column && (contractShown || lateRoleShown); }
+
+        /// <summary>
         /// «Радимо зараз»: поради ядра (<see cref="DevelopmentAdvice.For"/> — від ролі, ґіміка й минулого матчу; очок багато — на
         /// одну більше). Пояснення — ключ поради (<see cref="DevAdvice.WhyKey"/>), а без нього — як раніше: опис перка,
         /// «новий прийом для дії…», навіщо атрибут.
@@ -521,6 +533,73 @@ namespace Game.Gameplay.Ring.Models
             d.FreePoint = newer;
             d.FreePoint2 = a;
             return true;
+        }
+
+        /// <summary>Те саме, що <see cref="NormalizeFreePoints(CharacterDraft, int, int[], int, out RingAttr, out RingAttr)"/>, без «звідки й куди».</summary>
+        public static bool NormalizeFreePoints(CharacterDraft d, int freePoints, int[] baseAttr, int max)
+        {
+            RingAttr from, to;
+            return NormalizeFreePoints(d, freePoints, baseAttr, max, out from, out to);
+        }
+
+        /// <summary>
+        /// Зміна ґіміка (ПМ 14.11.2026: Монстр, вільний бал у Силу — 3, потім Силач — Сила 4 за стелею, і «Почати кар'єру» гасла з
+        /// attr_max): бал, що з основою <paramref name="baseAttr"/> нового ґіміка вийшов би вище <paramref name="max"/>, переходить у
+        /// перший за порядком рядків афіші атрибут, де ще є місце; у ґіміка з двома балами — кожен окремо, давніший першим. Ядро бал не
+        /// знімає (<see cref="CharacterDraft.FreePoint"/> завжди десь стоїть), тож переставляємо. true — переставлено:
+        /// <paramref name="from"/> → <paramref name="to"/> — перший переставлений бал (рядок афіші <see cref="FreeMovedLine"/>);
+        /// false — за стелю не вийшло нічого (заготовка та сама) або місця немає ніде.
+        /// </summary>
+        public static bool NormalizeFreePoints(CharacterDraft d, int freePoints, int[] baseAttr, int max, out RingAttr from, out RingAttr to)
+        {
+            from = to = RingAttr.Strength;
+            if (d == null || baseAttr == null || freePoints <= 0) return false;
+            bool two = freePoints >= 2;
+            var want = two ? new[] { d.FreePoint, d.FreePoint2 ?? d.FreePoint } : new[] { d.FreePoint };
+            var add = new int[baseAttr.Length];
+            bool moved = false;
+            for (int k = 0; k < want.Length; k++)
+            {
+                int a = (int)want[k];
+                if (a < 0 || a >= baseAttr.Length || baseAttr[a] + add[a] + 1 > max)
+                {
+                    int was = a;
+                    a = -1;
+                    for (int i = 0; i < baseAttr.Length && a < 0; i++) if (baseAttr[i] + add[i] + 1 <= max) a = i;
+                    if (a < 0) return false;
+                    if (!moved) { from = was >= 0 && was < baseAttr.Length ? (RingAttr)was : (RingAttr)a; to = (RingAttr)a; }
+                    want[k] = (RingAttr)a;
+                    moved = true;
+                }
+                add[a]++;
+            }
+            if (!moved) return false;
+            d.FreePoint = want[0];
+            d.FreePoint2 = two && want[1] != want[0] ? want[1] : (RingAttr?)null;
+            return true;
+        }
+
+        /// <summary>
+        /// Рядок афіші після перестановки (АД 14.11.2026, варіант (1)): «Вільний бал перейшов у {куди} — у {звідки} уже максимум»;
+        /// назви атрибутів — відмінками з ключів <c>attr.*.acc</c> (знахідний) і <c>attr.*.loc</c> (місцевий).
+        /// </summary>
+        public static string FreeMovedLine(RingText t, RingAttr from, RingAttr to)
+        {
+            if (t == null) return "";
+            return t.Format("create.note.free_moved", t.Get("attr." + FeudVars.AttrName(to) + ".acc"), t.Get("attr." + FeudVars.AttrName(from) + ".loc"));
+        }
+
+        /// <summary>
+        /// Рядок підказки над рядом створення без наведення. На 4:3 (одна колонка: опису ролі й рядків паперу там немає — АД 15.11.2026,
+        /// Б1) за пріоритетом «бал перейшов» &gt; С-1 (два вільні бали) &gt; опис ґіміка — той самий порядок, що на папері 16:9; на
+        /// широкій — опис ґіміка (рядок і С-1 там на папері).
+        /// </summary>
+        public static string CreateRowHint(RingText t, bool column, bool freeMoved, RingAttr from, RingAttr to, bool twoFree, string gimmickNameKey)
+        {
+            if (t == null) return "";
+            if (column && freeMoved) return FreeMovedLine(t, from, to);
+            if (column && twoFree) return t.Get("c.create.freepoints.hint");
+            return t.Get(gimmickNameKey + ".desc");
         }
 
         /// <summary>

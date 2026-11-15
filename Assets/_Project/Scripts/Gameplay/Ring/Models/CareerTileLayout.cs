@@ -249,6 +249,20 @@ namespace Game.Gameplay.Ring.Models
         public const float PosterNameSize = 52f, PosterNameTrack = 0.01f, PosterNameGap = 8f;
         /// <summary>Нижня межа кегля назви — заголовний кегль токенів: назва лишається заголовком афіші, а не підписом.</summary>
         public const float PosterNameMinSize = BrandTokens.TypeTitle;
+        /// <summary>
+        /// Висхідна шрифту назви (display Black, Fira Sans Extra Condensed Black: 935 з 1000 — і hhea, і typo) у частках кегля.
+        /// Базова лінія рядка — висхідна від верху тексту, тож назва меншого кегля, прибита до верху рядка, лягає на ту саму базову
+        /// лінію, що й на 52, зсувом <see cref="PosterNameTopShift"/> (У0 арт-директора 14.11.2026: «менша назва не пливе вгору чи
+        /// вниз від плашки ролі»). Число звіряє тест із TTF.
+        /// </summary>
+        public const float PosterNameAscent = 0.935f;
+
+        /// <summary>Відступ зверху назви кегля <paramref name="size"/>: її базова лінія — там само, де в назви на <see cref="PosterNameSize"/>.</summary>
+        public static float PosterNameTopShift(float size)
+        {
+            if (float.IsNaN(size) || size >= PosterNameSize) return 0f;
+            return PosterNameAscent * (PosterNameSize - size);
+        }
         public const float RolePlateWordSize = 26f, RolePlateWordTrack = 0.04f, RolePlatePadLeft = 24f, RolePlatePadRight = 22f;
 
         /// <summary>
@@ -417,6 +431,130 @@ namespace Game.Gameplay.Ring.Models
 
         /// <summary>Підйом канатів, шапки й вкладки «Прийоми», коли плитки створення стоять двома рядами (вузька панель чи Б4-1).</summary>
         public const float CreateLift = TileH + CreateRowsGap;
+
+        // ---------------- створення 4:3: одна ліва колонка з вкладками (АД 14–15.11.2026) ----------------
+
+        /// <summary>
+        /// Співвідношення панелі, нижче якого створення — одна ліва колонка з вкладками «Твій борець / Вигляд / Прийоми», а права
+        /// половина кадру — герою (АД 14.11.2026: права колонка зливається з «Виглядом» в одну ліву колонку з вкладками). 4:3 і 5:4 —
+        /// одна колонка; рівно 3:2 (1,5), 16:10 і ширше — дві, як було (межа — у кадрах У2, АД 15.11.2026, п. 3).
+        /// </summary>
+        public const float CreateColumnAspect = 1.5f;
+
+        /// <summary>
+        /// Допуск межі: ширина панелі — екран на сталий масштаб (Screen.height / 900), і рівно 3:2 у float буває 1349,9999 — без
+        /// допуску такий екран ставав колонкою (рев'ю 15.11.2026). Між 4:3 (1,33) і 3:2 справжніх екранів немає.
+        /// </summary>
+        public const float CreateColumnAspectSlack = 0.01f;
+
+        /// <summary>
+        /// Найвужча панель, для якої колонка тримає правила (не далі <see cref="ColumnMaxFrac"/> кадру, плечі героя вільні) — 5:4.
+        /// Вужчі (вікно майже квадратне) — колонка 490 займає понад 46 % кадру; таких екранів гра не обіцяє.
+        /// </summary>
+        public const float CreateNarrowestAspect = 1.25f;
+
+        /// <summary>Створення в одну колонку: панель вужча за <see cref="CreateColumnAspect"/> (з допуском похибки).</summary>
+        public static bool CreateSingleColumn(float panelWidth, float panelHeight)
+        {
+            return panelWidth > 0f && panelHeight > 0f && panelWidth / panelHeight < CreateColumnAspect - CreateColumnAspectSlack;
+        }
+
+        /// <summary>Колонка на будь-якій панелі — не далі цієї частки кадру від свого краю (АД 14.11.2026, п. 3).</summary>
+        public const float ColumnMaxFrac = 0.46f;
+
+        /// <summary>
+        /// Плечі героя: 21 % ширини кадру 4:3 1024×768 (замір «Изучение», 14.11.2026), в одиницях панелі 1200 — 252. Висота панелі
+        /// стала (900), тож ширина плечей у панелі та сама на будь-якому співвідношенні; вільна зона героя — не вужча.
+        /// </summary>
+        public const float HeroShouldersW = 0.21f * 1200f;
+
+        /// <summary>Вільна від колонок смуга створення: одна колонка — від неї до правого безпечного краю; дві — між ними.</summary>
+        public static float CreateHeroFreeWidth(float panelWidth, bool single)
+        {
+            float col = Edge + StripW;
+            return single ? panelWidth - Edge - col : panelWidth - 2f * col;
+        }
+
+        /// <summary>Висота вкладки (TabPlate) — та сама на всіх екранах.</summary>
+        public const float TabPlateH = 40f;
+
+        /// <summary>
+        /// Вкладки колонки: TabPlate кеглем 19, відступи 14 / 18 замість 18 / 26, перша — впритул до краю колонки, «Прийоми» без
+        /// числа (АД 15.11.2026, 2А). Правий відступ більший за зріз 12° на висоті вкладки — плита ширша за текст і в активної.
+        /// </summary>
+        public const float ColumnTabPadLeft = 14f, ColumnTabPadRight = 18f, ColumnTabGap = 10f;
+
+        /// <summary>Між вкладками і плитою вкладки; від низу плити до піднятих канатів.</summary>
+        public const float ColumnPlateGap = 8f, ColumnRopeClear = 8f;
+
+        /// <summary>Висота під плиту вкладки на панелі висоти <paramref name="panelHeight"/>: до канатів, піднятих на <paramref name="lift"/>.</summary>
+        public static float CreateColumnRoom(float panelHeight, float lift)
+        {
+            return RopesTop(panelHeight) - lift - ColumnRopeClear - (SecondY + TabPlateH + ColumnPlateGap);
+        }
+
+        /// <summary>
+        /// Афіша створення згори вниз: відступ паперу, назва ґіміка з плитою ролі, лінія, «Вільний бал · Обери», п'ять рядків
+        /// характеристик. На 4:3 (колонка) — без заголовка (він — вкладка) і без опису ролі (Б1, АД 15.11.2026).
+        /// </summary>
+        public const float CreatePosterPadTop = 16f, CreatePosterHeadTop = 8f;
+        public const float CreatePosterRuleTop = 10f, CreatePosterRuleH = 2f, CreatePosterRuleBottom = 8f, CreatePosterPickGap = 4f;
+
+        /// <summary>Плита «Вигляд» (колір костюма, тіло, зачіска) — на 16:9 під стрічкою імені, на 4:3 — плита вкладки «Вигляд».</summary>
+        public const float CreateLookH = 252f;
+
+        /// <summary>
+        /// Висота афіші в колонці 4:3 (вузька: рядки по <see cref="CreateAttrRowNarrowH"/>): <paramref name="headLineH"/> — рядок назви
+        /// ґіміка (display на <see cref="PosterNameSize"/>), <paramref name="pickLineH"/> — рядок «Вільний бал · Обери».
+        /// </summary>
+        public static float CreateColumnPosterHeight(float headLineH, float pickLineH)
+        {
+            return CreatePosterPadTop + CreatePosterHeadTop + headLineH + CreatePosterRuleTop + CreatePosterRuleH + CreatePosterRuleBottom
+                + pickLineH + CreatePosterPickGap + 5f * CreateAttrRowNarrowH + CreatePaperPadBottomNarrow;
+        }
+
+        /// <summary>
+        /// Ширина тексту підказки над рядом створення (кегль 15): ряд мінус слово «Ґімік» (<paramref name="gimmickWordW"/>), відступ
+        /// <see cref="CreateHintGap"/> і поля підкладки. На вузькій панелі «Роль» у шапці прихована — підказка бере весь ряд.
+        /// </summary>
+        public const float CreateHintGap = 22f, UnderlayPadH = 10f;
+        public static float CreateRowHintWidth(float panelWidth, float gimmickWordW)
+        {
+            return RowWidth(panelWidth) - gimmickWordW - CreateHintGap - 2f * UnderlayPadH;
+        }
+
+        // ---------------- кінець сезону 4:3: права колонка з вкладками (АД 15.11.2026, варіант А) ----------------
+
+        /// <summary>Верх екранів кар'єри (стрічки гравця, папір кінця сезону) — <c>ArenaKit.Top</c>.</summary>
+        public const float Top = 45f;
+
+        /// <summary>
+        /// Права колонка кінця сезону на 4:3: <see cref="ColumnMaxFrac"/> кадру 1200 без безпечного краю — 472 (папір 16:9 шириною 520
+        /// займав би 50 %). Розкладка — та сама межа, що на створенні (<see cref="CreateSingleColumn"/>): на 4:3 одна мова для обох екранів.
+        /// Виняток 5:4, АД 15.11.2026: мета (герой вільний) виконана, % — ні. На 5:4 (1125) колонка з краєм — 49 %, але її лівий край
+        /// (<see cref="SeasonColumnLeft"/>, 573) правіше за середину кадру (562,5), і героєві ліворуч вільно вдвічі більше за плечі; вужча
+        /// колонка (437,5) не вміщала кроки контракту й пізньої ролі. Загальне правило ≤ 46 % для інших екранів і для 4:3 — без змін.
+        /// </summary>
+        public const float SeasonColumnW = 472f;
+
+        /// <summary>Лівий край колонки кінця сезону на панелі цієї ширини — до нього кадр вільний героєві.</summary>
+        public static float SeasonColumnLeft(float panelWidth) { return panelWidth - Edge - SeasonColumnW; }
+
+        /// <summary>Плечі героя на кінці сезону 4:3 — 16 % кадру (заміри «Изучение» на 1024×768); ліворуч від колонки вільно не менше.</summary>
+        public const float SeasonHeroShouldersW = 0.16f * 1200f;
+
+        /// <summary>Між низом паперу кінця сезону й канатами — як в охоронцях паперу.</summary>
+        public const float SeasonPaperClear = 10f;
+
+        /// <summary>
+        /// Місце під вкладками колонки кінця сезону: від низу вкладок (верх, вкладка, проміжок) до канатів без просвіту паперу; на панелі
+        /// 900 — 565. Папір кожного кроку й плита розвитку з трьома порадами вміщаються — CareerTextFitTests.SeasonEnd_Column_….
+        /// </summary>
+        public static float SeasonColumnRoom(float panelH)
+        {
+            if (float.IsNaN(panelH) || panelH <= 0f) panelH = PanelH;   // до першої розкладки — еталон
+            return Math.Max(0f, RopesTop(panelH) - SeasonPaperClear - (Top + TabPlateH + ColumnPlateGap));
+        }
 
         /// <summary>
         /// Плита ролі в колонці золотої плити (Б4-1): низька — лише назва й ключ; між двома плитами — проміжок, більший за підйом
@@ -672,6 +810,198 @@ namespace Game.Gameplay.Ring.Models
             if (next.Bottom - next.Top > view - RowEps) return t;  // вищий за вікно — цілим не стане ніколи: краще частина, ніж порожнеча
             if (next.Top < bottom - RowEps) extra = bottom - next.Top;
             return t;
+        }
+
+        // ---- ім'я борця: стрічка гравця й суперника, поле «Ім'я на рингу» (довге ім'я — ПМ 14.11.2026) ----
+
+        /// <summary>
+        /// Стрічка гравця (ShowKit.PlayerStrip) — ім'я ліворуч угорі, мітка «ҐІМІК · РОЛЬ» праворуч, лялька травм під міткою, рядки
+        /// зон під іменем. Логічні одиниці від лівого й верхнього країв стрічки ширини <see cref="StripW"/>.
+        /// </summary>
+        public const float StripNameLeft = 24f, StripNameTop = 8f, StripTagRight = 34f, StripTagTop = 12f;
+        public const float StripDollRight = 48f, StripDollTop = 34f, StripDollW = 36f, StripDollH = 70f, StripZonesTop = 54f;
+        /// <summary>Ім'я: display Black 40 з розрядкою 0,01; просвіт до мітки й ляльки — 14.</summary>
+        public const float StripNameSize = 40f, StripNameTrack = 0.01f, StripNameGap = 14f;
+        /// <summary>Доки ім'я не нижче 26 — ґімік у мітці лишається; далі ґімік ховається (роль лишається завжди).</summary>
+        public const float StripNameKeepTagMin = 26f;
+        /// <summary>Один рядок — не нижче 18; далі — два рядки (за пробілом), а тоді — один рядок до 15 і «…».</summary>
+        public const float StripNameOneLineMin = 18f;
+        /// <summary>Найменший кегль імені — мінімум токенів (не нижче 15, Статут: охоронець кегля).</summary>
+        public const float StripNameMinSize = BrandTokens.TypeMinInfo;
+        /// <summary>Висота рядка display (Fira Sans Extra Condensed: висхідна 935 + низхідна 265 з 1000) у частках кегля.</summary>
+        public const float DisplayLineEm = 1.2f;
+
+        /// <summary>
+        /// Чорнило display (Fira Sans Extra Condensed Black, з 1000): висхідна 935 — від верху рядка до базової лінії; найглибший хвіст
+        /// великих (Д, Ц, Щ) — 173 нижче базової. Міра двох рядків — чорнило, а не рамка кегля (АД 14.11.2026); охоронець звіряє з TTF.
+        /// </summary>
+        public const float DisplayAscentEm = 0.935f, DisplayCapsTailEm = 0.173f;
+        /// <summary>
+        /// Крок двох рядків імені — 1,25 кегля (АД 14.11.2026: на 1,2 між хвостом Д/Ц/Щ першого рядка і крапками Ї другого лишалось
+        /// 1,3 px — менше за піксель згладжування з кожного боку, на кадрі злиплось би). Другий рядок — окремою міткою на цей крок нижче:
+        /// висоти рядка в UI Toolkit немає.
+        /// </summary>
+        public const float StripNameLinePitchEm = 1.25f;
+        /// <summary>Від хвоста другого рядка до рядків зон — не менше 2.</summary>
+        public const float StripNameInkClear = 2f;
+
+        /// <summary>Зсув верху другого рядка імені від верху першого.</summary>
+        public static float StripNameLine2Offset(float size) { return StripNameLinePitchEm * size; }
+
+        /// <summary>
+        /// Кегль двох рядків: хвіст другого — щонайменше на <see cref="StripNameInkClear"/> над рядками зон (<see cref="StripZonesTop"/>);
+        /// з кроком 1,25 це 18 (на 19 хвіст ліг би на 52,8).
+        /// </summary>
+        public static float StripNameTwoLineMax
+        {
+            get { return (float)Math.Floor((StripZonesTop - StripNameInkClear - StripNameTop) / (DisplayAscentEm + StripNameLinePitchEm + DisplayCapsTailEm)); }
+        }
+
+        /// <summary>
+        /// Рішення для імені на стрічці: кегль, скільки необов'язкових частин мітки віддано імені, текст до показу (з «\n» між двома
+        /// рядками; урізаний — уже з «…» в кінці), чи два рядки, чи урізано.
+        /// </summary>
+        public struct StripNameFit
+        {
+            public float Size;
+            /// <summary>
+            /// Скільки кроків місця віддано (індекс у списку місць <see cref="FitStripName(string, Func{string, float}, IList{float})"/>):
+            /// 0 — мітка вся; 1 — ґімік сховано; далі — що мітка віддає ще (на стрічці героя: короткий напис поясу, тоді пояс сховано).
+            /// </summary>
+            public int Drop;
+            /// <summary>Ґімік у мітці сховано (віддано хоч один крок).</summary>
+            public bool HideOptional { get { return Drop >= 1; } }
+            public string Text;
+            public bool TwoLines;
+            public bool Ellipsis;
+        }
+
+        /// <summary>
+        /// Як умістити ім'я на стрічці (ПМ 14.11.2026: «можна зменшувати кегль до мінімуму токенів, а далі другий рядок або «…»;
+        /// мітка ролі й силует мають лишатися вільними»): (1) <see cref="StripNameSize"/>, якщо влазить до мітки з ґіміком;
+        /// (2) менший кегль, доки не нижче <see cref="StripNameKeepTagMin"/>, — ґімік лишається; (3) ґімік сховано, кегль — скільки
+        /// влазить до мітки без нього, не нижче <see cref="StripNameOneLineMin"/>; (4) два рядки за пробілом (поділ, за якого довший
+        /// рядок найкоротший), кегль — не більше <see cref="StripNameTwoLineMax"/> і не нижче <see cref="StripNameMinSize"/>;
+        /// (5) один рядок до <see cref="StripNameMinSize"/>; (6) «…» на <see cref="StripNameMinSize"/>: два рядки — перший (найбільше
+        /// слів, що влазять) цілим, другий урізано з «…»; якщо й перше слово не влазить — один рядок із «…». Урізає модель сама (текст
+        /// уже з «…»), тож охоронець міряє те, що на екрані. <paramref name="widthAtBase"/> — ширина тексту на <see cref="StripNameSize"/> (з розрядкою;
+        /// ширина лінійна за кеглем). <paramref name="availWith"/> / <paramref name="availWithout"/> — місце для імені до мітки з
+        /// ґіміком / без нього (і до ляльки). NaN — розкладки ще немає: ім'я як є.
+        /// </summary>
+        public static StripNameFit FitStripName(string name, Func<string, float> widthAtBase, float availWith, float availWithout)
+        {
+            return FitStripName(name, widthAtBase, new[] { availWith, availWithout });
+        }
+
+        /// <summary>
+        /// Те саме правило з кількома кроками місця (АД 14.11.2026: «Ім'я, яке набрав гравець, — це його герой. Обрізаємо його
+        /// останнім, після всіх приміток»): <paramref name="avail"/>[0] — місце до мітки з усім, [1] — без ґіміка, далі — по кроку
+        /// мітки (на стрічці героя-чемпіона: [2] — короткий напис поясу, [3] — пояс сховано). Порядок: кегль до 26 з усім; ґімік;
+        /// на кожному кроці від [1] — кегль до 18 одним рядком, два рядки 15…<see cref="StripNameTwoLineMax"/>, один рядок до 15; не
+        /// влізло — наступний крок; «…» —
+        /// лише на останньому. Менше двох кроків чи NaN — ім'я як є.
+        /// </summary>
+        public static StripNameFit FitStripName(string name, Func<string, float> widthAtBase, IList<float> avail)
+        {
+            var r = new StripNameFit { Size = StripNameSize, Text = name ?? "" };
+            if (string.IsNullOrEmpty(name) || widthAtBase == null || avail == null || avail.Count < 2) return r;
+            foreach (float a in avail) if (float.IsNaN(a)) return r;
+            float nat = widthAtBase(name);
+            if (float.IsNaN(nat) || nat <= 0f) return r;
+            if (nat <= avail[0]) return r;
+            float s = avail[0] > 0f ? (float)Math.Floor(StripNameSize * avail[0] / nat) : 0f;
+            if (s >= StripNameKeepTagMin) { r.Size = s; return r; }
+            string l1, l2;
+            bool split = SplitTwoLines(name, widthAtBase, out l1, out l2);
+            float wide = split ? Math.Max(widthAtBase(l1), widthAtBase(l2)) : 0f;
+            for (int k = 1; k < avail.Count; k++)
+            {
+                float av = avail[k];
+                r.Drop = k;
+                s = av > 0f ? Math.Min(StripNameSize, (float)Math.Floor(StripNameSize * av / nat)) : 0f;
+                if (s >= StripNameOneLineMin) { r.Size = s; return r; }
+                if (split)
+                {
+                    float s2 = wide > 0f && av > 0f ? Math.Min(StripNameTwoLineMax, (float)Math.Floor(StripNameSize * av / wide)) : 0f;
+                    if (s2 >= StripNameMinSize) { r.Size = s2; r.Text = l1 + "\n" + l2; r.TwoLines = true; return r; }
+                }
+                if (s >= StripNameMinSize) { r.Size = s; return r; }
+            }
+            r.Size = StripNameMinSize;
+            r.Ellipsis = true;
+            float room = avail[avail.Count - 1] * StripNameSize / StripNameMinSize;   // місце на 15 — у ширині на 40
+            for (int i = name.Length - 1; i > 0; i--)
+            {
+                if (name[i] != ' ') continue;
+                string a = name.Substring(0, i).TrimEnd(), b = name.Substring(i + 1).TrimStart();
+                if (a.Length == 0 || b.Length == 0 || widthAtBase(a) > room) continue;
+                r.Text = a + "\n" + Clip(b, widthAtBase, room);
+                r.TwoLines = true;
+                return r;
+            }
+            r.Text = Clip(name, widthAtBase, room);
+            return r;
+        }
+
+        /// <summary>Знак урізаного імені.</summary>
+        public const string Ellipsis = "…";
+
+        /// <summary>
+        /// Найдовший початок <paramref name="text"/> з «…», що влазить у <paramref name="room"/> (ширина на базовому кеглі); весь текст —
+        /// як є, якщо влазить. Пробіли перед «…» знято. Якщо не влазить і перша літера — лише «…».
+        /// </summary>
+        public static string Clip(string text, Func<string, float> width, float room)
+        {
+            if (string.IsNullOrEmpty(text) || width == null || width(text) <= room) return text ?? "";
+            for (int n = text.Length - 1; n > 0; n--)
+            {
+                string p = text.Substring(0, n).TrimEnd();
+                if (p.Length > 0 && width(p + Ellipsis) <= room) return p + Ellipsis;
+            }
+            return Ellipsis;
+        }
+
+        /// <summary>
+        /// Поділ імені на два рядки за пробілом: той, за якого довший рядок найкоротший (рівновага рядків). Без пробілу — ні.
+        /// </summary>
+        public static bool SplitTwoLines(string name, Func<string, float> width, out string first, out string second)
+        {
+            first = name; second = null;
+            if (string.IsNullOrEmpty(name) || width == null) return false;
+            float best = float.MaxValue;
+            for (int i = 0; i < name.Length; i++)
+            {
+                if (name[i] != ' ') continue;
+                string a = name.Substring(0, i).TrimEnd(), b = name.Substring(i + 1).TrimStart();
+                if (a.Length == 0 || b.Length == 0) continue;
+                float w = Math.Max(width(a), width(b));
+                if (w < best) { best = w; first = a; second = b; }
+            }
+            return second != null;
+        }
+
+        /// <summary>
+        /// Поле «Ім'я на рингу» на створенні: шрифт Fixel напівжирний 30 (гравець набирає малими — Статут TYPE-03); ім'я, що не
+        /// влазить, меншає до мінімуму токенів 15 — увесь набраний текст і курсор у кінці видно (довге ім'я — ПМ 14.11.2026).
+        /// Межа довжини — <c>CareerSession.MaxNameLength</c> (24): найширше справжнє ім'я цієї довжини влазить (тест).
+        /// Плита поля: ліворуч 24, праворуч 38 від країв стрічки; поле в ній — поля 8 і 8; текст — від лівого поля вводу 6.
+        /// </summary>
+        public const float NameFieldSize = 30f, NameFieldMinSize = BrandTokens.TypeMinInfo;
+        public const float NameWellLeft = 24f, NameWellRight = 38f, NameFieldInset = 8f, NameInputPadLeft = 6f;
+
+        /// <summary>Ширина тексту в полі імені (без поля вводу ліворуч і запасу під курсор праворуч).</summary>
+        public static float NameFieldTextWidth
+        {
+            get { return StripW - NameWellLeft - NameWellRight - 2f * NameFieldInset - NameInputPadLeft - NameFieldCaretRoom; }
+        }
+
+        /// <summary>Запас праворуч під курсор після останньої літери й рамку поля вводу Unity (поля й обведення input).</summary>
+        public const float NameFieldCaretRoom = 8f;
+
+        /// <summary>Кегль поля імені: 30, якщо влазить; інакше менший пропорційно, не нижче 15. NaN — розкладки ще немає.</summary>
+        public static float FitNameField(float naturalAtBase)
+        {
+            return FitOneLine(NameFieldSize, NameFieldMinSize, naturalAtBase, NameFieldTextWidth);
         }
     }
 
