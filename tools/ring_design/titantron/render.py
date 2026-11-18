@@ -236,3 +236,67 @@ def quantize(beat, bpm, fps):
     """Ступінчастий показ: час округлюється вниз до кадру щабля (проєктор 6 к/с, ТВ 12 к/с, LED 30 к/с)."""
     sec = beat * 60.0 / bpm
     return math.floor(sec * fps) / fps * bpm / 60.0
+
+
+# ----------------------------------------------------------------- зазор тега до плити (правило арт-директора 15.11.2026)
+
+def _alpha_layer(layer, beat, slots, texts, tier, force_alpha=None, size=(W, H)):
+    """Альфа-канал одного шару на прозорому полотні (як render(), але без тла) — для вимірів."""
+    from PIL import ImageChops  # noqa: F401
+    st = T.state(layer, beat)
+    if force_alpha is not None:
+        st["a"] = force_alpha
+    im = _base_stamp(layer, st, slots, texts, tier, size[1])
+    base = Image.new("L", size, 0)
+    if im is None:
+        return base
+    rot = st["rot"]
+    if abs(rot) > 0.01:
+        im = im.rotate(-rot, expand=True, resample=Image.BICUBIC)
+    left = round(size[0] / 2 + (st["x"] + st["ox"]) * size[1] - im.width / 2)
+    top = round(size[1] / 2 + (st["y"] + st["oy"]) * size[1] - im.height / 2)
+    base.paste(im.getchannel("A"), (left, top))
+    return base
+
+
+def tag_gap(tl, text, thr=32):
+    """Зазор у px між найнижчою точкою плити (plate + plate_back) і верхом чорнила тега ЦИМ написом у кінцевому усталеному
+    стані (біт hitBeat + 1 — пік пульсу плити), у горизонтальному проміжку, який займає чорнило тега.
+    Від'ємний — тег заходить під плиту. Повертає (зазор, верх чорнила, низ чорнила, низ плити)."""
+    from PIL import ImageChops
+    tier = tl["tier"]
+    slots = resolve_slots(tl["role"], tier)
+    beat = tl["hitBeat"] + 1.0
+    plates = Image.new("L", (W, H), 0)
+    tag_layer = None
+    for lay in tl["layers"]:
+        if lay["id"] in ("plate", "plate_back"):
+            plates = ImageChops.lighter(plates, _alpha_layer(lay, beat, slots, {}, tier))
+        elif lay["id"] == "tag":
+            tag_layer = lay
+    tag = _alpha_layer(tag_layer, beat, slots, {"tag": text}, tier, force_alpha=1.0)
+    tb = tag.point(lambda v: 255 if v > thr else 0).getbbox()
+    pm = plates.point(lambda v: 255 if v > thr else 0).crop((tb[0], 0, tb[2], H))
+    pb = pm.getbbox()[3] - 1
+    return tb[1] - pb - 1, tb[1], tb[3], pb
+
+
+def resolve_slots(role, tier):
+    from .common import slot_map
+    return slot_map(role, tier)
+
+
+def player_ink_top_offset(text, spec, size_px, fit_px, tier):
+    """Оцінка для програвача гри (EntranceScreenPlayer): Label центрується ЯЩИКОМ рядка (ascent + descent шрифта), а не чорнилом,
+    тоді як text_stamp центрує чорнило. Повертає зсув верху чорнила від центра шару в px кадру (від'ємний — вище центра) з
+    урахуванням fit-стиснення. Це розрахунок за метриками шрифта (Pillow/FreeType), не знімок з Unity."""
+    fkey = spec.get("font", "display900")
+    if fkey.startswith("display") and tier and KITS["tiers"][tier]["handFont"] and spec.get("hand"):
+        fkey, size_px = "hand", size_px * 1.35
+    px = int(size_px * 2)
+    f = _font(fkey, px)
+    asc, desc = f.getmetrics()
+    _, top, _, bottom = f.getbbox(text, anchor="la")
+    raw = _text_raw(text, fkey, px, (255, 255, 255), None, 0, 0, None, 0, spec.get("slant", 0), spec.get("tracking", 0.0))
+    k = min(1.0, fit_px / (raw.width * 0.5)) if fit_px else 1.0
+    return (top - (asc + desc) / 2.0) / 2.0 * k

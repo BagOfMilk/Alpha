@@ -6,7 +6,7 @@ import json
 import sys
 
 from . import bake, compose, render, timeline as T
-from .common import ALPHA, ART, BRAND, COL, KITS, POOLS, ROOT, SPRITES, TIERS, allowed_alphas, slot_map, token_of, utf8
+from .common import tag_texts, ALPHA, ART, BRAND, COL, KITS, POOLS, ROOT, SPRITES, TIERS, H as H_FRAME, allowed_alphas, slot_map, token_of, utf8
 
 ERR = []
 
@@ -128,6 +128,31 @@ def check_names():
     return worst
 
 
+def check_tag_gaps(pool_map):
+    """Правило арт-директора (15.11.2026): верх чорнила тега ≥ TAG_GAP_MIN px нижче за низ плити з plate_back, у проміжку
+    тексту, для кожного пулу × варіанта у кінцевому стані ролика, на всіх справжніх написах тега; тег не виходить за кадр."""
+    worst = None
+    for name, pool in pool_map.items():
+        texts = tag_texts(pool["gimmick"], pool["role"])
+        for tl in pool["variants"]:
+            for txt in texts:
+                gap, top, bottom, _ = render.tag_gap(tl, txt)
+                if worst is None or gap < worst:
+                    worst = gap
+                if gap < compose.TAG_GAP_MIN:
+                    err("%s v%d: тег «%s» — зазор до плити %d px < %d" % (name, tl["variant"], txt, gap, compose.TAG_GAP_MIN))
+                # оцінка для програвача (центр ящика рядка): верх чорнила = центр шару + зсув за метриками шрифта
+                tagL = next(l for l in tl["layers"] if l["id"] == "tag")
+                sp = tagL["text"]
+                off = render.player_ink_top_offset(txt, sp, sp["size"] * H_FRAME, sp.get("fit", 0) * H_FRAME, tl["tier"])
+                pgap = round(H_FRAME / 2 + tagL["y"] * H_FRAME + off) - (top - gap - 1) - 1
+                if pgap < compose.TAG_GAP_MIN:
+                    err("%s v%d: тег «%s» — зазор до плити в моделі програвача %d px < %d" % (name, tl["variant"], txt, pgap, compose.TAG_GAP_MIN))
+                if bottom > H_FRAME - 8:
+                    err("%s v%d: тег «%s» впритул до низу кадру (низ чорнила %d)" % (name, tl["variant"], txt, bottom))
+    return worst
+
+
 def main():
     utf8()
     sprites_idx = json.loads((ART / "sprites.json").read_text(encoding="utf-8"))
@@ -160,7 +185,9 @@ def main():
             if abs(T.EASE[nm](t) - v) > 1e-4:
                 err("golden: плавність %s(%s) розходиться" % (nm, t))
     worst = check_names()
+    tag_worst = check_tag_gaps(fresh)
     print("пулів: %d; шарів у найбільшому ролику: %d" % (len(fresh), max(len(tl["layers"]) for p in fresh.values() for tl in p["variants"])))
+    print("тег під плитою: мінімальний зазор %d px (поріг %d)" % (tag_worst, compose.TAG_GAP_MIN))
     print("підгонка імен (ширина, масштаб):", worst)
     if ERR:
         print("ПОМИЛОК: %d" % len(ERR))
