@@ -30,7 +30,7 @@ namespace Game.Gameplay.Ring.UI.Menus
         private readonly Func<string> _leaveBodyKey;
         private MenuDialog _dialog;
         private SettingsPanel _settings;
-        private bool _closing;
+        private bool _closing, _leaving;
 
         /// <param name="context">Рядок під заголовком («Сезон 1 · Тиждень 3»), може бути порожнім.</param>
         /// <param name="leaveBodyKey">Ключ пояснення в діалозі «На титул?» — питається в мить натискання (стан гри міг змінитись).</param>
@@ -119,6 +119,14 @@ namespace Game.Gameplay.Ring.UI.Menus
 
         /// <summary>Налаштування відкриті поверх паузи (хост тримає меню в еталонному масштабі).</summary>
         public bool SettingsOpen { get { return _settings != null; } }
+
+        /// <summary>
+        /// Над паузою відкрито налаштування чи діалог — екран гри під ними хост ховає (кадри 15.11.2026, 043_pause_settings і
+        /// 045_pause_leave_dialog: картка «Твій борець» і плитки ґіміків читались крізь затемнення, кнопки налаштувань лягали на
+        /// кнопки екрана — текст поверх тексту). Сама пауза екран гри лишає видимим під затемненням. Після «Так, на титул» екран
+        /// не повертається на мить перед розрізом: лишається схованим, доки хост не прибере паузу.
+        /// </summary>
+        public bool CoversGame { get { return _settings != null || _dialog != null || _leaving; } }
 
         /// <summary>Для огляду меню.</summary>
         public SettingsPanel Settings { get { return _settings; } }
@@ -250,7 +258,7 @@ namespace Game.Gameplay.Ring.UI.Menus
             _dialog = new MenuDialog(_anim, _t.Get("m.pause.leave.title"), _t.Get(bodyKey),
                 new[]
                 {
-                    new KeyValuePair<string, Action>(_t.Get("m.pause.leave.yes"), () => { _dialog = null; _closing = true; if (_toTitle != null) _toTitle(); }),
+                    new KeyValuePair<string, Action>(_t.Get("m.pause.leave.yes"), () => { _dialog = null; _closing = true; _leaving = true; if (_toTitle != null) _toTitle(); }),
                     new KeyValuePair<string, Action>(_t.Get("m.pause.leave.no"), () => { _dialog = null; ShowPauseUi(true); SyncFocus(); }),
                 }, 1, lossy ? 1 : 0);   // якщо щось втратиться — фокус на «Ні, лишитися»
             Root.Add(_dialog.Root);

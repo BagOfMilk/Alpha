@@ -1462,7 +1462,8 @@ namespace Game.Tests.EditMode
             {
                 string h = Ui(RingSettingsTabs.GameHints[i]);
                 float widest;
-                int lines = TextFont.Lines(h, BrandTokens.TypeLabel, RingSettingsTabs.RowW - RenderSlack, 0f, out widest);
+                // підказка — на підкладці з бічними полями HintPad (кадри 15.11.2026: без підкладки текст заходив на кармінну смугу тла)
+                int lines = TextFont.Lines(h, BrandTokens.TypeLabel, RingSettingsTabs.RowW - 2f * RingSettingsTabs.HintPad - RenderSlack, 0f, out widest);
                 if (lines > 2) bad.Add("підказка «" + h + "»: " + lines + " рядки (не більше двох)");
                 if (TextFont.Missing(h).Count > 0) bad.Add("підказка «" + h + "»: немає літер у шрифті — " + new string(TextFont.Missing(h).ToArray()));
                 TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "підказка {0}: {1} ряд. ({2:0.0} — ширина в один рядок)", RingSettingsTabs.GameHints[i], lines,

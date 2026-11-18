@@ -76,6 +76,12 @@ namespace Game.Gameplay.Ring.Models
         /// <summary>Підказка кожного рядка <see cref="GameRows"/> (той самий номер).</summary>
         public static readonly string[] GameHints = { "m.set.hint.qte", "m.set.hint.actionshots", "m.set.hint.slowmo" };
 
+        /// <summary>
+        /// Бічне поле підкладки під підказкою рядка й приміткою вкладки (<c>SettingsPanel.HintPlate</c>): текст має на
+        /// <c>2 × HintPad</c> менше за <see cref="RowW"/> — стільки ж рахує охоронець рядків підказки.
+        /// </summary>
+        public const float HintPad = 10f;
+
         /// <summary>Значення рядка «Кадри дії»: Вимкнено / Рідко / Помірно / Часто.</summary>
         public static string ActionShotsKey(RingActionShots s)
         {

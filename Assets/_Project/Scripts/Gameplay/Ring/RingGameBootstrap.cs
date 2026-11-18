@@ -308,6 +308,7 @@ namespace Game.Gameplay.Ring
                 // пауза: екран гри стоїть (не тікає, клавіш не бере), меню паузи живе в реальному часі
                 PollPause(Input.GetKeyDown(KeyCode.Escape));
                 if (_pause != null) _pause.Tick(Time.unscaledDeltaTime);
+                SyncPauseCover();
                 return;
             }
             if (ShowStep()) return;
