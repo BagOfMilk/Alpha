@@ -1737,7 +1737,8 @@ namespace Game.Gameplay.Ring.Stage
                 Vector3 f = a.PosePos;
                 y = Venue.CamYOverRopes(pos.x, y, pos.z, f.x, f.z);
             }
-            pos.y = Mathf.Min(y, pos.y + 2.5f);
+            // Стеля підйому — нижче ферм залу (RingVenue.CamCeiling); план, що й так вище, не опускаємо.
+            pos.y = Mathf.Min(Mathf.Min(y, pos.y + 2.5f), Mathf.Max(pos.y, Venue.CamCeiling));
             return pos;
         }
 

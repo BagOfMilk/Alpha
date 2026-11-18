@@ -183,7 +183,13 @@ namespace Game.Gameplay.Ring.Stage
                 // Коридор виходу вільний: борець ішов крізь фанатів, що стояли впритул до доріжки (огляд 05.11.2026).
                 // 1,6 м (було 1,0): біля рингу камера ходи йде над борцем, і фанати впритул до проходу ставали на пів кадру —
                 // зблизька видно спрощену модель (зауваження «Відео огляду» 08.11.2026, кадри 036, 185).
-                if (!f.Operator && NearAisle(f.Pos, 1.6f)) continue;
+                // 3,0 м (власник 18.11.2026 на кадр виходу: «Жах»): камера ходи брала перші два ряди впритул, а натовп — лише LOD1
+                // (~0,9 тис. трикутників: шкіра крізь одяг, скрючені кисті). Зблизька фанатів немає; на загальних планах їх видно.
+                if (!f.Operator && NearAisle(f.Pos, AisleClearFans)) continue;
+                // Оператор упритул до доріжки (anchor_camop_5, 1,1 м) грав ходу з гімбалом на місці — власник 18.11.2026: «при
+                // виході на рампу, зправа від реслера нпц дуже трясеться як баг». Камери в руках у натовпу немає: стоячи він
+                // лише тримав порожні руки біля обличчя поруч із борцем (кадри 034, 039, 040 огляду альфи) — біля проходу його немає.
+                if (f.Operator && NearAisle(f.Pos, AisleClearOperators)) continue;
                 cand.Add(f);
             }
             cand.Sort((a, b) =>
@@ -247,6 +253,12 @@ namespace Game.Gameplay.Ring.Stage
             _warmUntil = Time.frameCount + 3;
             Debug.Log("[Ринг] 3D: фанатів " + _fans.Count + " з " + cand.Count + " кандидатів, типів моделей " + protos.Count);
         }
+
+        /// <summary>Скільки метрів від шляху виходу (обох) не сидить жоден фанат.</summary>
+        internal const float AisleClearFans = 3.0f;
+
+        /// <summary>Скільки метрів від шляху виходу немає операторів (біля рингу вони стоять за 3,2–3,6 м від центру).</summary>
+        internal const float AisleClearOperators = 1.6f;
 
         private static bool NearAisle(Vector3 p, float r)
         {
@@ -480,8 +492,10 @@ namespace Game.Gameplay.Ring.Stage
                 Vector3 g = f.Go.transform.position;
                 Vector3 p = g + Vector3.up * (f.Standing ? 1.2f : 0.8f);
                 float t = Vector3.Dot(p - cam, d);
-                bool hide = (p - cam).magnitude < 2.0f
-                    || (t > 0f && t < len - 0.6f && (p - (cam + d * t)).magnitude < 0.7f)
+                // Запас на повернення (18.11.2026): на межі 2,0 м / 0,7 м фанат, поки камера ходи гойдається, блимав щокадру.
+                float near = f.Hidden ? 2.3f : 2.0f, side = f.Hidden ? 0.9f : 0.7f;
+                bool hide = (p - cam).magnitude < near
+                    || (t > 0f && t < len - 0.6f && (p - (cam + d * t)).magnitude < side)
                     || (_keep && g.x >= _kx0 && g.x <= _kx1 && g.z >= _kz0 && g.z <= _kz1);
                 if (hide == f.Hidden) continue;
                 if (f.Rends == null) f.Rends = f.Go.GetComponentsInChildren<Renderer>(true);

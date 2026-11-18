@@ -65,6 +65,14 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Край бійцівського квадрата (всередині канатів): лінія каната − 0,10 (як у режисера).</summary>
         public float RingHalf { get { return RopeLine - 0.10f; } }
 
+        /// <summary>
+        /// Вище цього камеру матчу не піднімають над канатами (<see cref="CamYOverRopes"/>): спортзал — під нижнім поясом ферм
+        /// стелі (ring_gym.py, roof_truss: x = 0, ±5, ±10, ±15 уздовж z, пояс 6,54 м) і повітропроводом (z ≈ −8,6, 6,7 м). Камера
+        /// загального плану стоїть на x = 0 — у площині ферми: підйом на 2,5 м заводив її у ферму, і через увесь ринг ішла темна
+        /// смуга (огляд альфи 18.11.2026, кадри 076, 160, 170–172). Інші зали — без стелі (ще не в грі).
+        /// </summary>
+        public float CamCeiling { get { return Id == "gym" ? 6.45f : float.MaxValue; } }
+
         private readonly Dictionary<string, float[]> _anchors = new Dictionary<string, float[]>(StringComparer.Ordinal);
         private readonly List<float[]> _soft = new List<float[]>();
 
