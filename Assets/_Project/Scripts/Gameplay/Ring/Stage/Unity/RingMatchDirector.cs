@@ -380,6 +380,9 @@ namespace Game.Gameplay.Ring.Stage
             return ev.Action == MatchActionId.Finisher && ev.Kind == MatchEventKind.Action && ev.Tier != RollTier.Miss;
         }
 
+        /// <summary>Кіно фінішера ввімкнене: лише з ключем огляду (альфа 0.1 — без кіна до У2 правки АД).</summary>
+        private static bool CineOn => RingLaunchArgs.Has("-ring-cine") || RingLaunchArgs.Has("-ring-diag-cine");
+
         /// <summary>Бік уже показував свій фінішер у цьому матчі: вдруге кіно йде без заклику (<c>Request.Repeat</c>).</summary>
         private readonly bool[] _finisherShown = new bool[2];
 
@@ -394,6 +397,10 @@ namespace Game.Gameplay.Ring.Stage
         {
             var cine = _s.FinisherCine;
             if (cine == null || ca == null) return false;
+            // Альфа 0.1 (18.11.2026): кіно вимкнене до У2 правки АД (claude/ring-finishers-58). Огляд «Изучение» показав: план
+            // Impact дивиться на ноги, у After стопа в обличчі лежачого. АД: «неперевірений вигляд у пакет не віддаю». Фінішер —
+            // старими FinisherShot/FinisherFrame. Для огляду кіно вмикається ключем -ring-cine або -ring-diag-cine.
+            if (!CineOn) return false;
             var R = _s.Referee;
             bool repeat = _finisherShown[I(side)];
             _finisherShown[I(side)] = true;
@@ -1417,7 +1424,7 @@ namespace Game.Gameplay.Ring.Stage
 
             var refActor = _s.Referee;
             // Утримання: рефері йде до плечей захисника й стає на коліно сам (RefCount) — паралельно з підходом нападника.
-            if (st.Count) StartCoroutine(RefCount(ev, A, B, PinPelvis(A, pA, yawA), st.RefClip));
+            if (st.Count) StartCoroutine(RefCount(ev, A, B, PinPelvis(A, pA, yawA), st.RefClip, pAStart));
             bool hard = fromCut || st.CutIn || !laneFits || laneCut;
             if (hard)
             {
@@ -2028,7 +2035,7 @@ namespace Game.Gameplay.Ring.Stage
         /// на <see cref="CountReach"/> від них, — стає на коліно (<c>Ref_Kneel_Down</c>) і рахує кліпом, обраним за ступенем
         /// ядра. Звідси ж стартує відлік такту (<see cref="CountBeats"/>), і крок утримання чекає саме його (<see cref="_countT0"/>).
         /// </summary>
-        private IEnumerator RefCount(MatchEvent ev, RingActor A, RingActor B, Vector3 pA, string countClip)
+        private IEnumerator RefCount(MatchEvent ev, RingActor A, RingActor B, Vector3 pA, string countClip, Vector3? aStand = null)
         {
             var R = _s.Referee;
             _countClip = countClip;
@@ -2061,6 +2068,15 @@ namespace Game.Gameplay.Ring.Stage
             };
             // Голова рефері в повному нахилі — на висоті плечей і голови нападника, що лежить на захисникові; лежачий під нею.
             var high = new List<RefPlacement.Seg> { cover };
+            // Звідки нападник стрибає в накриття (старт кліпа): він ще стоїть там, коли рефері вже на коліні. Огляд «Изучение»
+            // 18.11.2026 (утримання героя, кадр 048; героїні — 048 і 120; pin 2 ПМ — кадри 057–059): рефері ставав саме туди, а
+            // нападник підходив і стояв у ньому. Стоячий — і внизу (коліна), і на висоті голови рефері.
+            if (aStand.HasValue)
+            {
+                var stand = new RefPlacement.Seg(aStand.Value.x, aStand.Value.z, aStand.Value.x, aStand.Value.z);
+                bodies.Add(stand);
+                high.Add(stand);
+            }
             float cxs, czs;
             bool freeSpot = RefPlacement.CountSpot(sh.x, sh.z, n.x, n.z, h.x, h.z, bodies, CountReach, CountKneeFwd, CountLeanFwd,
                 CountBodyClear, CountLeanClear, lim, high, CountHeadFwd, CountHeadClear, out cxs, out czs);
@@ -2082,9 +2098,27 @@ namespace Game.Gameplay.Ring.Stage
             }
             var down = _s.Clip("Ref_Kneel_Down");
             bool kneel = down != null && Upright(R);
-            yield return Walk(new[] { new SlideItem(R, kneel ? KneelApproach(R, down, spot, yaw) : spot, yaw) });
+            Vector3 walkTo = kneel ? KneelApproach(R, down, spot, yaw) : spot;
+            // Місце рефері рахується від тіла нападника вже на накритті, а нападник перед стрибком ще стоїть біля голови
+            // захисника — часто саме там. Огляд «Изучение» 18.11.2026 (утримання героя, кадр 048; героїні — 048 і 120): рефері
+            // присідав на місце, де нападник ще стояв, і проходив крізь нього. Тепер чекає, поки той ляже чи відійде.
+            // Рефері займає відрізок від точки підходу до голови в повному нахилі (CountHeadFwd від коліна, до плечей захисника).
+            Vector3 refHead = spot + Rot(yaw, Vector3.forward) * CountHeadFwd;
+            // Нападник іде до старту накриття в обхід тіла (Transit), часто повз голову захисника — крізь місце рефері: огляд
+            // ПМ 18.11.2026 (pin 2, кадри 058–059, обидві статі) — рефері вже на коліні, нападник проходить і стоїть у ньому.
+            // Як у справжньому відліку: рефері рушає, коли нападник дійшов і накриває.
+            if (aStand.HasValue)
+            {
+                yield return WaitAttackerArrived(ev, A, aStand.Value);
+                if (_ev != ev) yield break;
+            }
+            yield return WaitAttackerClear(ev, A, walkTo, refHead);
+            if (_ev != ev) yield break;
+            yield return Walk(new[] { new SlideItem(R, walkTo, yaw) });
             if (kneel && Upright(R))
             {
+                yield return WaitAttackerClear(ev, A, R.PosePos, refHead);
+                if (_ev != ev) yield break;
                 R.PlayAt(down, false, R.PosePos, yaw, RingStage3D.PlaySpeed);
                 yield return new WaitForSeconds(down.length / RingStage3D.PlaySpeed);
             }
@@ -2093,6 +2127,61 @@ namespace Game.Gameplay.Ring.Stage
             _countT0 = Time.time;
             if (Trace) Debug.Log("[Ринг] відлік: " + countClip + " (" + ev.Tier + ")");
             if (_plan.IsCount && !_beatFired) StartCoroutine(CountBeats(ev, _plan));
+        }
+
+        /// <summary>
+        /// Таз нападника, що ще стоїть, не ближче до відрізка, який займає рефері, м (ПЛЕЙСХОЛДЕР до кадрів: капсула борця ~0,3 +
+        /// тулуб рефері ~0,3). Перша спроба 18.11.2026 міряла лише до таза рефері (0,7 м) і не спрацювала ні разу: на коліні
+        /// рефері нахиляється вперед на 0,56 м, і головою й плечима заходив у нападника (огляд pin 2, кадр 059).
+        /// </summary>
+        private const float CountAttackerClear = 0.6f;
+        /// <summary>Довше рефері нападника не чекає, с (запобіжник: крок утримання й так чекає відліку до 14 с).</summary>
+        private const float CountAttackerWait = 2f;
+
+        /// <summary>Нападник стоїть на ногах ближче за <see cref="CountAttackerClear"/> до відрізка <paramref name="p"/>–<paramref name="q"/> (по підлозі).</summary>
+        private static bool AttackerInTheWay(RingActor a, Vector3 p, Vector3 q)
+        {
+            if (a == null || a.Hips == null || !Upright(a)) return false;
+            Vector2 h = new Vector2(a.Hips.position.x, a.Hips.position.z), s0 = new Vector2(p.x, p.z), s1 = new Vector2(q.x, q.z);
+            Vector2 s = s1 - s0;
+            float t = s.sqrMagnitude > 1e-6f ? Mathf.Clamp01(Vector2.Dot(h - s0, s) / s.sqrMagnitude) : 0f;
+            return (h - (s0 + s * t)).sqrMagnitude < CountAttackerClear * CountAttackerClear;
+        }
+
+        /// <summary>Нападник дійшов до старту накриття, якщо ближче за це, м (крок Transit кладе слот точно в точку).</summary>
+        private const float CountAttackerArrived = 0.2f;
+        /// <summary>Довше рефері підходу нападника не чекає, с (запобіжник; Transit — короткий крок або хода через пів рингу).</summary>
+        private const float CountArriveWait = 3f;
+
+        /// <summary>Чекати, поки нападник, що стоїть, не дійде до точки старту накриття <paramref name="aStand"/> (або не ляже), але не довше <see cref="CountArriveWait"/>.</summary>
+        private IEnumerator WaitAttackerArrived(MatchEvent ev, RingActor a, Vector3 aStand)
+        {
+            float t0 = Time.time;
+            bool waited = false;
+            while (_ev == ev && Time.time - t0 < CountArriveWait && a != null && Upright(a))
+            {
+                Vector3 d = a.PosePos - aStand;
+                d.y = 0f;
+                if (d.sqrMagnitude < CountAttackerArrived * CountAttackerArrived) break;
+                waited = true;
+                yield return null;
+            }
+            if (waited && Trace)
+                Debug.Log("[Ринг] відлік: рефері чекав підходу нападника " + (Time.time - t0).ToString("0.00", CultureInfo.InvariantCulture) + " с");
+        }
+
+        /// <summary>Чекати, поки нападник не ляже чи не відійде від відрізка рефері (підхід → голова в нахилі), але не довше <see cref="CountAttackerWait"/>.</summary>
+        private IEnumerator WaitAttackerClear(MatchEvent ev, RingActor a, Vector3 p1, Vector3 p2)
+        {
+            float t0 = Time.time;
+            bool waited = false;
+            while (_ev == ev && Time.time - t0 < CountAttackerWait && AttackerInTheWay(a, p1, p2))
+            {
+                waited = true;
+                yield return null;
+            }
+            if (waited && Trace)
+                Debug.Log("[Ринг] відлік: рефері чекав нападника " + (Time.time - t0).ToString("0.00", CultureInfo.InvariantCulture) + " с");
         }
 
         /// <summary>
