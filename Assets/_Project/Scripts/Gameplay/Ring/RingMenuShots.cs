@@ -97,6 +97,7 @@ namespace Game.Gameplay.Ring
         /// <c>create</c> — афіша створення: кожен ґімік екрана × роль × стать (назва за статтю, кегль назви за місцем до плити ролі);
         /// <c>week</c> — тиждень із сейву: стрічки (стать, зона тіла, чемпіон), шухляда розвитку з підказками атрибутів (ціна),
         /// крамниця з підказками тренерів (крок), далі картка шоу (суперник, рядок тіла). Стан кар'єри бот не чіпає — лише фокус.
+        /// <c>week_closed</c> — той самий тиждень одним кадром із закритою шухлядою (<see cref="WeekClosed"/>).
         /// </summary>
         public static IEnumerator Scene(RingGameBootstrap h, string scene)
         {
@@ -118,7 +119,8 @@ namespace Game.Gameplay.Ring
             if (h.OnTitle) Debug.LogError("[Ринг] сцена огляду: «Продовжити» не відкрило гру");
             else if (scene == "create") yield return CreatePosters(h);
             else if (scene == "week") yield return WeekScene(h);
-            else Debug.LogError("[Ринг] -ring-menu-scene: невідома сцена '" + scene + "' (create, week)");
+            else if (scene == "week_closed") yield return WeekClosed(h);
+            else Debug.LogError("[Ринг] -ring-menu-scene: невідома сцена '" + scene + "' (create, week, week_closed)");
             UI.CareerScreenView.ExpandForShots = false;
             UI.CreateScreenView.PosterRoleBelowForShots = false;
             Debug.Log("[Ринг] сцена огляду " + scene + ": кадри в " + h.MenuShotsDir);
@@ -176,6 +178,21 @@ namespace Game.Gameplay.Ring
                 }
                 create.SetTabForShots(UI.CreateScreenView.TabPoster);
             }
+        }
+
+        /// <summary>
+        /// Тиждень із сейву із закритою шухлядою (<c>-ring-menu-scene week_closed</c>, ПМ 17.11.2026): один кадр — тиждень таким, яким
+        /// його бачить гравець без прапорців огляду (сцена <c>week</c> шухляду відкриває). Потрібен для кадру У2 «букер під афішею з
+        /// трьома рядками умов» на вузьких екранах (охоронець CareerTextFitTests.WeekScene_ClosedDrawer_ShowsTheBookerDownToTheWaist);
+        /// сейв федерації 3 з такою афішею — <c>tools/ring_pm/saves/week_fed3_three_conditions.txt</c>. Стан кар'єри бот не чіпає.
+        /// </summary>
+        private static IEnumerator WeekClosed(RingGameBootstrap h)
+        {
+            var week = h.CurrentView as UI.WeekScreenView;
+            if (week == null) { Debug.LogError("[Ринг] сцена week_closed: після «Продовжити» не тиждень, а " + Name(h)); yield break; }
+            // на широких екранах з очками розвитку шухляда відкривається сама — закриваємо тим самим шляхом, що Esc
+            if (week.OnBack()) yield return Wait(0.5f);
+            yield return Snap(h, "week_closed");
         }
 
         /// <summary>Тиждень із сейву: стрічки, підказки розвитку й крамниці фокусом без миші, картка шоу.</summary>

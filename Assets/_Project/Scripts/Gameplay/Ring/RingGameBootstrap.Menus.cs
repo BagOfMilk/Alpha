@@ -21,7 +21,7 @@ namespace Game.Gameplay.Ring
     {
         private const string MenuShotsArg = "-ring-menu-shots";
         /// <summary>
-        /// Слот 32 (ПМ 13.11.2026): <c>-ring-menu-scene create|week</c> — замість повного туру одна сцена (<see cref="MenuShots.Scene"/>);
+        /// Слот 32 (ПМ 13.11.2026): <c>-ring-menu-scene create|week|week_closed</c> — замість повного туру одна сцена (<see cref="MenuShots.Scene"/>);
         /// <c>-ring-menu-load &lt;файл&gt;</c> — сейв огляду з файлу (стан і «тіло|зачіска», як у грі) замість нової кар'єри.
         /// Лише разом з <c>-ring-menu-shots</c>: сейв огляду — свій (ring_menu_bot.txt), сейв гравця не чіпається.
         /// </summary>
@@ -497,10 +497,26 @@ namespace Game.Gameplay.Ring
             return PauseRules.LeaveBodyKey(_career.Stage, _career.State.Phase, _career.BackstageOpen);
         }
 
+        private bool _pauseCover;
+
+        /// <summary>
+        /// Під налаштуваннями й діалогом паузи екран гри не просвічує (<see cref="PauseOverlay.CoversGame"/>). Як на титулі, де
+        /// під панеллю ховаються лого й колонка: зникає лише шар екрана, 3D-сцена під затемненням лишається. Непрозорість, а не
+        /// display: розкладка екрана не перераховується, а display шару належить показу шоу (ShowStep).
+        /// </summary>
+        private void SyncPauseCover()
+        {
+            bool cover = _pause != null && _pause.CoversGame;
+            if (cover == _pauseCover || _screenLayer == null) return;
+            _pauseCover = cover;
+            _screenLayer.style.opacity = cover ? 0f : 1f;
+        }
+
         /// <summary>Пауза закрилась сама (анімація виходу скінчилась): час і звук повертаються.</summary>
         private void ClosePause()
         {
             _pause = null;
+            SyncPauseCover();
             ResumeTime();
             _appliedScale = -1f;
             // момент результату матчу (2,6 с) рахується реальним часом: якщо пауза його з'їла, перехід «момент → цифри» екран
@@ -525,6 +541,7 @@ namespace Game.Gameplay.Ring
             _wipe.Play(() =>
             {
                 if (_pause != null) { _pause.Root.RemoveFromHierarchy(); _pause = null; }
+                SyncPauseCover();
                 ResumeTime();
                 Save();
                 _onTitle = true;

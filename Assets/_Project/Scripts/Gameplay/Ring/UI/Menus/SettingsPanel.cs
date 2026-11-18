@@ -184,6 +184,7 @@ namespace Game.Gameplay.Ring.UI.Menus
                 var n = MenuKit.Body(_t.Get(noteKey), BrandTokens.TypeLabel, RingTheme.TextDim);
                 n.style.marginTop = 6f;
                 n.style.maxWidth = RowW;
+                HintPlate(n);
                 _rowsBox.Add(n);
             }
             if (_tab == Tab.Game)
@@ -192,6 +193,7 @@ namespace Game.Gameplay.Ring.UI.Menus
                 _rowHint = MenuKit.Body("", BrandTokens.TypeLabel, RingTheme.TextDim);
                 _rowHint.style.marginTop = 6f;
                 _rowHint.style.maxWidth = RowW;
+                HintPlate(_rowHint);
                 _rowsBox.Add(_rowHint);
             }
             if (!keepFocus)
@@ -289,6 +291,18 @@ namespace Game.Gameplay.Ring.UI.Menus
             UpdateHints();
         }
 
+        /// <summary>
+        /// Примітка вкладки й підказка рядка лежать над живим тлом: сірий текст посеред речення заходив на яскраву кармінну смугу
+        /// з растром і на штрихи тла (кадри 15.11.2026, 012 і 013 на 16:9, 4:3 і 3:2). Та сама підкладка, що в підказки клавіш
+        /// (Статут ACC-03); плашка — за шириною тексту, а не рядка.
+        /// </summary>
+        private static void HintPlate(Label l)
+        {
+            MenuKit.Underlay(l);
+            l.style.paddingLeft = RingSettingsTabs.HintPad; l.style.paddingRight = RingSettingsTabs.HintPad;
+            l.style.alignSelf = Align.FlexStart;
+        }
+
         private void UpdateHints()
         {
             bool pad = _device == MenuDevice.Gamepad;
@@ -298,6 +312,8 @@ namespace Game.Gameplay.Ring.UI.Menus
                 int row = _focus.Index;
                 _rowHint.text = row >= 0 && row < _rows.Count && row < RingSettingsTabs.GameHints.Length
                     ? TextBreak.GlueDashes(_t.Get(RingSettingsTabs.GameHints[row])) : "";
+                // фокус на кнопках — підказки рядка немає: порожня плашка не висить
+                _rowHint.style.display = _rowHint.text.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
             }
             if (_capturing != null) { _hints.text = _t.Get("m.footer.capture"); return; }
             _hints.text = _t.Get(pad ? "m.footer.set.pad" : "m.footer.set.keys");

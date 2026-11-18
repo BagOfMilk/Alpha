@@ -1,4 +1,4 @@
 {
   "about": "Звук «Рингу»: у грі звучить лише те, що власник схвалив у бібліотеці звуку (рішення 08.11.2026). Порожній список — уся гра мовчить. Ключ — назва кліпу (ім'я файлу без розширення). Історія рішень — docs/ring/audio/SOUND_APPROVALS.md.",
-  "approved": []
+  "approved": ["applause_hall", "music_hammer_of_the_berserker", "music_rock_city_ransom", "music_rock_theme_loop"]
 }
