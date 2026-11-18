@@ -113,6 +113,49 @@ namespace Game.Gameplay.Ring.Stage
             return Anim != null && Anim.avatar != null && Anim.isHuman ? Anim.GetBoneTransform(b) : null;
         }
 
+        private Transform[] _legs;      // [стопа * 2] — стегно, [стопа * 2 + 1] — гомілка
+
+        /// <summary>
+        /// Стопу <paramref name="i"/> (0 — ліва) зсунути на <paramref name="delta"/> (світ, м) двокістковою IK ноги: стегно й
+        /// гомілка довертаються, коліно лишається у своїй площині згину, орієнтація стопи — як у кліпі (носок іде на той самий
+        /// зсув). Кличеться після тіку постаті: поза кліпа вже стоїть, наступний кадр її перезапише. Недосяжне — стільки,
+        /// скільки дістає нога без повного випрямлення. Повертає зсув, що вийшов.
+        /// </summary>
+        public Vector3 ShiftFoot(int i, Vector3 delta)
+        {
+            if (_legs == null)
+                _legs = new[] { Bone(HumanBodyBones.LeftUpperLeg), Bone(HumanBodyBones.LeftLowerLeg), Bone(HumanBodyBones.RightUpperLeg), Bone(HumanBodyBones.RightLowerLeg) };
+            Transform up = _legs[i * 2], low = _legs[i * 2 + 1], foot = _feet[i];
+            if (up == null || low == null || foot == null || delta.sqrMagnitude < 1e-10f) return Vector3.zero;
+            Vector3 a = up.position, b = low.position, c = foot.position;
+            float l1 = (b - a).magnitude, l2 = (c - b).magnitude;
+            Vector3 at = c + delta - a;
+            float d = at.magnitude;
+            if (l1 < 1e-4f || l2 < 1e-4f || d < 1e-4f) return Vector3.zero;
+            Vector3 dir = at / d;
+            // Нога, у кліпі вже довша за межу (майже пряма задня на поштовху), не стискається від мізерного зсуву: межа — не
+            // менша за її поточну довжину (рецензія 16.11: інакше коліно смикалось на 1–2 см).
+            float dc = Mathf.Clamp(d, Mathf.Abs(l1 - l2) + 1e-3f, Mathf.Max((l1 + l2) * 0.9985f, Mathf.Min((c - a).magnitude, l1 + l2 - 1e-4f)));
+            Vector3 t = a + dir * dc;
+            // Коліно — у площині згину кліпа; нога пряма — згин уперед за курсом пози.
+            Vector3 ac = c - a;
+            Vector3 bend = ac.sqrMagnitude > 1e-8f ? Vector3.ProjectOnPlane(b - a, ac.normalized) : Vector3.zero;
+            // Майже пряма нога: згин із шуму кліпа нестійкий — поріг відносний (3 % стегна), запас — уперед за стопою.
+            if (bend.sqrMagnitude < 0.0009f * l1 * l1) bend = Vector3.ProjectOnPlane(foot.forward, ac.sqrMagnitude > 1e-8f ? ac.normalized : Vector3.up);
+            if (bend.sqrMagnitude < 1e-8f) bend = Quaternion.Euler(0f, PoseYaw, 0f) * Vector3.forward;
+            bend = Vector3.ProjectOnPlane(bend, dir);
+            if (bend.sqrMagnitude < 1e-10f) return Vector3.zero;
+            bend.Normalize();
+            float x = (l1 * l1 - l2 * l2 + dc * dc) / (2f * dc);
+            float h = Mathf.Sqrt(Mathf.Max(0f, l1 * l1 - x * x));
+            Vector3 knee = a + dir * x + bend * h;
+            var footRot = foot.rotation;
+            up.rotation = Quaternion.FromToRotation(b - a, knee - a) * up.rotation;
+            low.rotation = Quaternion.FromToRotation(foot.position - low.position, t - low.position) * low.rotation;
+            foot.rotation = footRot;
+            return foot.position - c;
+        }
+
         public void Destroy()
         {
             if (_graph.IsValid()) _graph.Destroy();
@@ -192,7 +235,7 @@ namespace Game.Gameplay.Ring.Stage
         }
 
         private struct LoopNet { public Vector3 Hip0, HipEnd; public float Yaw; }
-        private static readonly System.Collections.Generic.Dictionary<string, LoopNet> _nets = new System.Collections.Generic.Dictionary<string, LoopNet>();
+        private static readonly System.Collections.Generic.Dictionary<long, LoopNet> _nets = new System.Collections.Generic.Dictionary<long, LoopNet>();
 
         /// <summary>
         /// Хід петлі за один оберт у системі слота: таз на старті й наприкінці (екстраполяція до повної довжини — на самій
@@ -201,7 +244,9 @@ namespace Game.Gameplay.Ring.Stage
         private LoopNet Net(AnimationClip c)
         {
             LoopNet n;
-            string key = Name + "|" + c.name;
+            // Ключ — тіло й сам кліп, а не ім'я постаті й кліпа: «Суперник» щошоу інший (інший зріст — інший хід петлі), а
+            // жіночий і чоловічий кліп мають одне ім'я (огляд 15.11.2026: хода виходу суперника ковзала 0,28–0,30 м).
+            long key = ((long)Model.GetInstanceID() << 32) | (uint)c.GetInstanceID();
             if (_nets.TryGetValue(key, out n)) return n;
             float len = c.length, e = Mathf.Min(1f / 120f, len * 0.25f);
             Vector3 h0, h1;
@@ -678,6 +723,251 @@ namespace Game.Gameplay.Ring.Stage
 
         /// <summary>Іде перехід між кліпами (кросфейд).</summary>
         public bool Blending { get { return _fading || _slotBlend; } }
+
+        // ---------------- розсіяне світло постаті ----------------
+
+        private Renderer[] _renderers;
+        private MaterialPropertyBlock _ambBlock;
+        private bool _ambSet;
+        private Vector4 _ambA, _ambB;
+        private static readonly int ShAr = Shader.PropertyToID("unity_SHAr"), ShAg = Shader.PropertyToID("unity_SHAg"), ShAb = Shader.PropertyToID("unity_SHAb");
+        private static readonly int ShBr = Shader.PropertyToID("unity_SHBr"), ShBg = Shader.PropertyToID("unity_SHBg"), ShBb = Shader.PropertyToID("unity_SHBb");
+        private static readonly int ShC = Shader.PropertyToID("unity_SHC");
+
+        /// <summary>Плавний множник відбитого світла цієї постаті (веде сцена; −1 — ще не ставили).</summary>
+        public float BounceGain = -1f;
+
+        /// <summary>
+        /// Розсіяне світло постаті (лінійний простір): рівне <paramref name="ambient"/> плюс відбите знизу
+        /// <paramref name="bounce"/>. Поверхня, що дивиться вниз, отримує відбите повністю, вертикальна — половину, обернена
+        /// вгору — нічого (світла площина під ногами). Коефіцієнти йдуть рендерерам постаті власним блоком властивостей
+        /// (LightProbeUsage.CustomProvided): зала лишається зі своїм амбієнтом, світлішає лише постать. Очному яблуку —
+        /// відбите з множником <paramref name="eyeBoost"/>: очниця в тіні брови від верхнього світла, і без добавки білок
+        /// тримається на 0,46 яскравості щоки, хоч би який був рівень (рішення АД 15.11.2026: ціль 0,55–0,6, стеля 0,7).
+        /// </summary>
+        public void SetAmbient(Vector4 ambient, Vector4 bounce, float eyeBoost = 1f)
+        {
+            if (_ambSet && (ambient - _ambA).sqrMagnitude < 1e-9f && (bounce - _ambB).sqrMagnitude < 1e-9f) return;
+            _ambSet = true; _ambA = ambient; _ambB = bounce;
+            if (_renderers == null)
+            {
+                _renderers = Model.GetComponentsInChildren<Renderer>(true);
+                _eye = new bool[_renderers.Length];
+                for (int i = 0; i < _renderers.Length; i++)
+                    _eye[i] = _renderers[i] != null && Characters.CharacterAssembler.PartOf(_renderers[i].name).ToLowerInvariant() == "low-poly";
+            }
+            if (_ambBlock == null) _ambBlock = new MaterialPropertyBlock();
+            for (int i = 0; i < _renderers.Length; i++)
+            {
+                var r = _renderers[i];
+                if (r == null) continue;
+                Vector4 b = _eye[i] ? bounce * eyeBoost : bounce;
+                r.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.CustomProvided;
+                r.GetPropertyBlock(_ambBlock);
+                // SampleSH: колір = dot(SHA, (n, 1)) + квадратичні члени (нулі): стала A + B/2 і нахил −B/2 по осі Y.
+                _ambBlock.SetVector(ShAr, new Vector4(0f, -0.5f * b.x, 0f, ambient.x + 0.5f * b.x));
+                _ambBlock.SetVector(ShAg, new Vector4(0f, -0.5f * b.y, 0f, ambient.y + 0.5f * b.y));
+                _ambBlock.SetVector(ShAb, new Vector4(0f, -0.5f * b.z, 0f, ambient.z + 0.5f * b.z));
+                _ambBlock.SetVector(ShBr, Vector4.zero);
+                _ambBlock.SetVector(ShBg, Vector4.zero);
+                _ambBlock.SetVector(ShBb, Vector4.zero);
+                _ambBlock.SetVector(ShC, Vector4.zero);
+                r.SetPropertyBlock(_ambBlock);
+            }
+        }
+
+        private bool[] _eye;
+
+        /// <summary>Вага поточного кліпа в мікшері (0…1; під час кросфейду росте).</summary>
+        public float CurrentWeight { get { return _cur >= 0 && _p[_cur].IsValid() ? Mathf.Clamp01(_mix.GetInputWeight(_cur)) : 0f; } }
+
+        /// <summary>
+        /// Поточний кліп — на час <paramref name="clipTimeTotal"/> від початку його гри (у межах нинішнього оберту петлі) і
+        /// стоїть: хода виходу закінчує відрізок рівно на межі кроку, без перебігу на кадр. Поза оновлюється одразу.
+        /// </summary>
+        public void HoldAt(float clipTimeTotal)
+        {
+            if (_cur < 0 || !_p[_cur].IsValid() || _clip == null) return;
+            // Мить — у наступному оберті петлі (великий кадр перескочив межу): слот переноситься на хід петлі, як у Tick.
+            if (_loop)
+            {
+                int loops = Mathf.FloorToInt(clipTimeTotal / _clip.length);
+                while (_curLoops < loops) { _curLoops++; Carry(_clip, _mix.GetInputWeight(_cur)); }
+            }
+            double t = clipTimeTotal - (double)_curLoops * _clip.length;
+            if (t < 0.0) t = 0.0;
+            if (t > _clip.length - 1e-4) t = _clip.length - 1e-4;
+            _p[_cur].SetTime(t);
+            _p[_cur].SetTime(t);
+            _p[_cur].SetSpeed(0);
+            _graph.Evaluate(0f);
+        }
+
+        /// <summary>
+        /// Кросфейд у кліп з миті <paramref name="t"/> БЕЗ керування слотом: слот веде викликач (крокова хода виходу тримає
+        /// на місці опорний носок — <c>RingShow</c>). <paramref name="freezeOld"/> — старі кліпи завмирають на своїй позі
+        /// (хода, зупинена посеред опори, не починає наступний крок під час переходу).
+        /// </summary>
+        public void PlayFrom(AnimationClip clip, float t, bool loop, float fade, float speed = 1f, bool freezeOld = false)
+        {
+            if (clip == null) return;
+            _slotBlend = false;
+            _easeLeft = 0f;
+            Play(clip, loop, fade, speed);
+            if (_cur >= 0 && _p[_cur].IsValid()) { _p[_cur].SetTime(t); _p[_cur].SetTime(t); }
+            if (freezeOld)
+                for (int i = 0; i < Inputs; i++) if (i != _cur && _p[i].IsValid()) _p[i].SetSpeed(0);
+            _hasPrevHip = false;
+            _hipVel = Vector3.zero;
+        }
+
+        /// <summary>Темп поточного кліпа (розгін на вході в ходу, гальмування перед зупинкою).</summary>
+        public void SetSpeed(float speed)
+        {
+            if (_cur < 0 || !_p[_cur].IsValid()) return;
+            _speed = speed;
+            _p[_cur].SetSpeed(speed);
+        }
+
+        /// <summary>
+        /// Кістки в системі слота на кількох митях кліпа (один тимчасовий граф): <paramref name="pos"/>[мить, кістка];
+        /// <paramref name="yaw"/> — курс пози (лінія стегон) відносно слота на кожній миті.
+        /// </summary>
+        public void SampleBones(AnimationClip clip, float[] times, Transform[] bones, Vector3[,] pos, float[] yaw)
+        {
+            if (clip == null || Anim == null) return;
+            SaveBones();
+            var g = PlayableGraph.Create(Name + ".probe2");
+            g.SetTimeUpdateMode(DirectorUpdateMode.Manual);
+            var o = AnimationPlayableOutput.Create(g, Name + ".probe2", Anim);
+            var pl = AnimationClipPlayable.Create(g, clip);
+            pl.SetApplyFootIK(FootIK);
+            o.SetSourcePlayable(pl);
+            var inv = Quaternion.Inverse(Slot.rotation);
+            for (int i = 0; i < times.Length; i++)
+            {
+                pl.SetTime(times[i]);
+                pl.SetTime(times[i]);
+                g.Evaluate(0f);
+                for (int b = 0; b < bones.Length; b++)
+                    pos[i, b] = bones[b] != null ? inv * (bones[b].position - Slot.position) : Vector3.zero;
+                if (yaw != null) yaw[i] = Mathf.DeltaAngle(Slot.eulerAngles.y, PoseYaw);
+            }
+            g.Destroy();
+            RestoreBones();
+        }
+
+        /// <summary>Носки (немає — стопи): ті самі точки, за якими фаз-тест міряє ковзання (<see cref="FootLift"/>).</summary>
+        private Transform[] ToeBones()
+        {
+            return new[] { _feet[2] != null ? _feet[2] : _feet[0], _feet[3] != null ? _feet[3] : _feet[1] };
+        }
+
+        private static readonly System.Collections.Generic.Dictionary<long, RingWalkPlan.Gait> _gaits = new System.Collections.Generic.Dictionary<long, RingWalkPlan.Gait>();
+
+        /// <summary>
+        /// Петля ходи на цьому тілі для крокової ходи виходу: хід таза за оберт, носки в опорі, вікна одноопорної фази — з
+        /// вибірки кліпа. Null — кліп не схожий на ходу з двох кроків (тоді сцена йде старим способом).
+        /// </summary>
+        public RingWalkPlan.Gait WalkGait(AnimationClip c)
+        {
+            if (c == null || c.length <= 1e-3f || _feet[0] == null || _feet[1] == null) return null;
+            long key = ((long)Model.GetInstanceID() << 32) | (uint)c.GetInstanceID();
+            RingWalkPlan.Gait g;
+            if (_gaits.TryGetValue(key, out g)) return g;
+            g = MeasureGait(c);
+            _gaits[key] = g;
+            return g;
+        }
+
+        private RingWalkPlan.Gait MeasureGait(AnimationClip c)
+        {
+            var n = Net(c);
+            Vector3 stride = n.HipEnd - n.Hip0;
+            stride.y = 0f;
+            float len = c.length, v = stride.magnitude / len;
+            if (stride.magnitude < 0.3f || Hips == null) return null;
+            const int M = 72;
+            var times = new float[M];
+            for (int i = 0; i < M; i++) times[i] = len * i / M;
+            var toes = ToeBones();
+            var pos = new Vector3[M, 3];
+            SampleBones(c, times, new[] { toes[0], toes[1], Hips }, pos, null);
+            // Стопа стоїть: у системі слота майже не рухається (слот за оберт стоїть) і не піднята. Мах — найдовший відрізок, де
+            // це не так; вікно одноопорної фази другої стопи — мах цієї, з відступом від країв.
+            var swing = new float[2, 2];
+            float dt = len / M;
+            for (int f = 0; f < 2; f++)
+            {
+                float minY = float.MaxValue;
+                for (int i = 0; i < M; i++) minY = Mathf.Min(minY, pos[i, f].y);
+                var moving = new bool[M];
+                for (int i = 0; i < M; i++)
+                {
+                    // Сусіди через межу оберту — зі зсувом на хід петлі (поза починається спочатку, слот переноситься).
+                    Vector3 a = i > 0 ? pos[i - 1, f] : pos[M - 1, f] - stride;
+                    Vector3 b = i < M - 1 ? pos[i + 1, f] : pos[0, f] + stride;
+                    Vector3 d = b - a;
+                    d.y = 0f;
+                    float speed = d.magnitude / (2f * dt);
+                    moving[i] = speed > 0.3f * v || pos[i, f].y > minY + 0.035f;
+                }
+                // Найдовший відрізок руху — по колу: мах може закінчуватись на самій межі оберту чи на зразок за нею
+                // (Bouncy, Focused: ліва стопа стає на 0,99–1,01). Короткі сплески посеред опори (перекат стопи) — не мах.
+                int bestA = -1, bestN = 0;
+                for (int i = 0; i < M; i++)
+                {
+                    if (!moving[i] || moving[(i + M - 1) % M]) continue;
+                    int k = 0;
+                    while (k < M && moving[(i + k) % M]) k++;
+                    if (k > bestN) { bestN = k; bestA = i; }
+                }
+                if (bestA < 0 || bestN < M / 6 || bestN > M * 2 / 3) return null;
+                swing[f, 0] = (float)bestA / M;
+                swing[f, 1] = (float)(bestA + bestN) / M;          // може бути трохи за 1: стопа стає вже в наступному оберті
+            }
+            const float margin = 0.03f;
+            var g = new RingWalkPlan.Gait
+            {
+                Stride = new RingWalkPlan.V2(stride.x, stride.z),
+                ToeL = new RingWalkPlan.V2[M], ToeR = new RingWalkPlan.V2[M], Hip = new RingWalkPlan.V2[M],
+                // ліва стоїть сама, поки права в маху, і навпаки; кінець вікна — у межах оберту
+                LA = swing[1, 0] + margin, LB = Mathf.Min(swing[1, 1] - margin, 0.995f),
+                RA = swing[0, 0] + margin, RB = Mathf.Min(swing[0, 1] - margin, 0.995f),
+                // опорою стопа стає через зразок після кінця маху — коли вже напевно стоїть
+                LandL = Mathf.Repeat(swing[0, 1] + 1.2f / M, 1f), LandR = Mathf.Repeat(swing[1, 1] + 1.2f / M, 1f),
+            };
+            for (int i = 0; i < M; i++)
+            {
+                g.ToeL[i] = new RingWalkPlan.V2(pos[i, 0].x, pos[i, 0].z);
+                g.ToeR[i] = new RingWalkPlan.V2(pos[i, 1].x, pos[i, 1].z);
+                g.Hip[i] = new RingWalkPlan.V2(pos[i, 2].x, pos[i, 2].z);
+            }
+            // Вікно опори — щонайменше п'ята частина оберту: за нього стопа встигає стати опорою переходу й повороту.
+            if (g.LB - g.LA < 0.2f || g.RB - g.RA < 0.2f) return null;
+            // Вікна не накладаються й ідуть по одному на півоберту.
+            if (!(g.LB < g.RA || g.RB < g.LA)) return null;
+            return g;
+        }
+
+        /// <summary>
+        /// Нерухомий кліп (жест, зупинка): носки й курс пози на вході (мить <paramref name="tIn"/> — кінець кросфейду, коли
+        /// сцена відпускає опорний носок ходи) і в кінці, система слота.
+        /// </summary>
+        public RingWalkPlan.Stand SampleStand(AnimationClip c, float tIn)
+        {
+            if (c == null) return null;
+            var times = new[] { Mathf.Min(tIn, c.length * 0.5f), Mathf.Max(0f, c.length - 1f / 60f) };
+            var pos = new Vector3[2, 2];
+            var yaw = new float[2];
+            SampleBones(c, times, ToeBones(), pos, yaw);
+            return new RingWalkPlan.Stand
+            {
+                ToeL0 = new RingWalkPlan.V2(pos[0, 0].x, pos[0, 0].z), ToeR0 = new RingWalkPlan.V2(pos[0, 1].x, pos[0, 1].z),
+                ToeL1 = new RingWalkPlan.V2(pos[1, 0].x, pos[1, 0].z), ToeR1 = new RingWalkPlan.V2(pos[1, 1].x, pos[1, 1].z),
+                Yaw0 = yaw[0], Yaw1 = yaw[1],
+            };
+        }
 
         /// <summary>Налагодження руху: входи мікшера (кліп@час×вага), слот і таз — одним рядком.</summary>
         public string DebugMix()

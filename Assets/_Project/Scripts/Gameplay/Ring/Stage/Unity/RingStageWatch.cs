@@ -34,6 +34,7 @@ namespace Game.Gameplay.Ring.Stage
             public Vector3 Hip;
             public bool Has;
             public readonly Vector3[] Foot = new Vector3[2];
+            public readonly Vector3[] PlantAt = new Vector3[2];   // де носок став на початку опори (огляд -ring-diag-slip)
             public readonly bool[] Planted = new bool[2];
             public readonly float[] Drift = new float[2];
             public readonly string[] DriftClip = new string[2];
@@ -124,17 +125,26 @@ namespace Game.Gameplay.Ring.Stage
                         if (t.DriftClip[f] == null) t.DriftClip[f] = Clip(a);
                     }
                     else if (!planted && t.Planted[f]) EndPlant(a, t, f);
-                    if (planted && !t.Planted[f]) { t.Drift[f] = 0f; t.DriftClip[f] = Clip(a); }
+                    if (planted && !t.Planted[f]) { t.Drift[f] = 0f; t.DriftClip[f] = Clip(a); t.PlantAt[f] = p; }
                     t.Planted[f] = planted;
                     t.Foot[f] = p;
                 }
             }
         }
 
+        /// <summary>
+        /// Огляд ходи (<c>-ring-diag-slip</c>): рядок на КОЖНУ опору стопи — шлях носка за опору (сума зсувів, як рахує
+        /// ковзання фаз-тест) і чистий зсув від початку до кінця опори, з міліметрами. Без прапорця — як було.
+        /// </summary>
+        private static readonly bool SlipDiag = RingLaunchArgs.Has("-ring-diag-slip");
+
         private void EndPlant(RingActor a, Track t, int f)
         {
             float d = t.Drift[f];
             t.Drift[f] = 0f;
+            if (SlipDiag && t.DriftClip[f] != null)
+                Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] фаз-тест, опора: {0} {1} шлях {2:0.000} м, зсув {3:0.000} м (стояла в {4}) — {5}",
+                    a.Name, f == 0 ? "ліва" : "права", d, new Vector2(t.Foot[f].x - t.PlantAt[f].x, t.Foot[f].z - t.PlantAt[f].z).magnitude, t.DriftClip[f], Clip(a)));
             if (d <= SlideM1) return;
             bool referee = IsReferee(a, t.DriftClip[f]);
             if (referee)

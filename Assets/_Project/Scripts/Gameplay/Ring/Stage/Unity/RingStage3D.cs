@@ -517,7 +517,11 @@ namespace Game.Gameplay.Ring.Stage
             // Чотири прожектори над кутами рингу (PAR): тепле біле, пляма на полотні й борцях, зала лишається темнішою.
             Vector3[] par = { new Vector3(-2.6f, 6.4f, -2.6f), new Vector3(2.6f, 6.4f, -2.6f), new Vector3(-2.6f, 6.4f, 2.6f), new Vector3(2.6f, 6.4f, 2.6f) };
             for (int i = 0; i < par.Length; i++)
-                AddSpot("PAR" + i, par[i], new Vector3(0f, 1.05f, 0f), new Color(1f, 0.88f, 0.70f), 22f, 46f);
+            {
+                var l = AddSpot("PAR" + i, par[i], new Vector3(0f, 1.05f, 0f), new Color(1f, 0.88f, 0.70f), 22f, 46f);
+                _parLights.Add(l);
+                _parBaseSum += l.intensity;
+            }
 
             // Холодний підсвіт з боку глядачів і тепле контр-світло: відділяють борців від тла.
             // М'яке фронтальне заповнення з боку камери: канати й боки борців не чорніють.
@@ -526,7 +530,7 @@ namespace Game.Gameplay.Ring.Stage
             AddSpot("Rim_warm", new Vector3(6.5f, 5.2f, 5.5f), new Vector3(0f, 1.4f, 0f), new Color(1f, 0.52f, 0.30f), 24f, 44f);
         }
 
-        private void AddSpot(string name, Vector3 pos, Vector3 target, Color c, float intensity, float angle)
+        private Light AddSpot(string name, Vector3 pos, Vector3 target, Color c, float intensity, float angle)
         {
             var l = new GameObject(name).AddComponent<Light>();
             l.transform.SetParent(transform, false);
@@ -539,6 +543,67 @@ namespace Game.Gameplay.Ring.Stage
             l.intensity = intensity;
             l.color = c;
             l.shadows = LightShadows.None;
+            return l;
+        }
+
+        // ---------- відбите світло мату ----------
+
+        private readonly List<Light> _parLights = new List<Light>();
+        private float _parBaseSum;
+
+        /// <summary>
+        /// Рівень відбитого світла мату — множник токена paper у тому ж записі, що й решта амбієнту сцени (колір як на
+        /// палітрі, до переведення в лінійний простір: 0,16 — це ≈ 2 % лінійної яскравості paper). У0 АД 15.11.2026: «усе, що дивиться вниз, без світла» — чорна
+        /// пляма під носом і на щелепі, «челюсть как у скелета», власник 09.11.2026). Усі прилади рингу світять згори, амбієнт
+        /// 0,05; світлий мат під прожекторами в житті світить знизу. <c>-ring-diag-bounce &lt;0–1&gt;</c> — рівні для огляду;
+        /// 0 — як було (постаті беруть амбієнт сцени).
+        /// </summary>
+        private const float BounceRing = 0.22f;
+
+        /// <summary>
+        /// Рівень поза матом — у закуліссі й на підлозі зали: там знизу не світлий мат. Рішення АД за кадрами (15.11.2026): на
+        /// рингу й у палаці 0,22 — чорних дір немає, а верхнє світло лишається жорстким (0,30 — тінь м'яка, 0,40 — обличчя
+        /// пласке); у закуліссі 0,16 — тіньовий бік читається, кімната лишається темною.
+        /// </summary>
+        private const float BounceOffMat = 0.16f;
+
+        /// <summary>Множник відбитого для очного яблука (ціль АД: білок 0,55–0,6 яскравості щоки, стеля 0,7).</summary>
+        private const float EyeBounceDefault = 1.5f;
+
+        private static float DiagFloat(string arg, float fallback, float max = 1f)
+        {
+            float v;
+            string s = ReadArg(arg);
+            return s != null && float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out v) ? Mathf.Clamp(v, 0f, max) : fallback;
+        }
+
+        /// <summary>Огляд рівнів: <c>-ring-diag-bounce</c> (ринг; 0 — вимкнено все, як було), <c>-ring-diag-bounce-floor</c>
+        /// (закулісся й поза матом), <c>-ring-diag-eye-bounce</c> (множник для очного яблука).</summary>
+        private static readonly float BounceLevel = DiagFloat("-ring-diag-bounce", BounceRing);
+        private static readonly float BounceFloor = DiagFloat("-ring-diag-bounce-floor", BounceOffMat);
+        private static readonly float EyeBounce = DiagFloat("-ring-diag-eye-bounce", EyeBounceDefault, 12f);
+
+        /// <summary>
+        /// Розсіяне світло постаті на цей кадр: амбієнт сцени плюс відбите знизу. На маті рівень рингу, і він іде за
+        /// прожекторами (гаснуть вони — гасне й відбите: вихід із темним залом, затемнення); поза матом і в закуліссі — свій,
+        /// нижчий рівень. Перехід між рівнями плавний.
+        /// </summary>
+        public void ApplyBounce(RingActor a)
+        {
+            if (a == null || BounceLevel <= 0f) return;
+            Vector3 p = a.PosePos;
+            float level = BounceFloor, f = 1f;
+            if (p.z <= 30f)                                         // не закулісся (RingShow.BackstageOrigin): там свої лампи
+            {
+                float par = 0f;
+                for (int i = 0; i < _parLights.Count; i++) if (_parLights[i] != null && _parLights[i].enabled) par += _parLights[i].intensity;
+                f = _parBaseSum > 0f ? Mathf.Clamp(par / _parBaseSum, 0f, 1.5f) : 1f;
+                bool onMat = Mathf.Abs(p.x) <= Venue.Plat && Mathf.Abs(p.z) <= Venue.Plat && a.Slot.position.y > MatY - 0.3f;
+                if (onMat) level = BounceLevel;
+            }
+            a.BounceGain = a.BounceGain < 0f ? level : Mathf.Lerp(a.BounceGain, level, 1f - Mathf.Exp(-6f * Time.deltaTime));
+            Vector4 bounce = (Vector4)(RingTheme.Paper * a.BounceGain).linear * f;
+            a.SetAmbient(RenderSettings.ambientLight.linear, bounce, EyeBounce);
         }
 
         /// <summary>Канати, стільці й натовп. Відвідуваність - параметр (-ring-crowd N у командному рядку).</summary>
@@ -600,6 +665,22 @@ namespace Game.Gameplay.Ring.Stage
             return SpawnWith(name, prefab, scale, MakeMaterial(texIndex, tint));
         }
 
+        /// <summary>
+        /// Відтінок білка очей (червоний канал; зелений і синій — у тій самій пропорції 0,62 : 0,6 : 0,58). Діагностика огляду
+        /// облич — <c>-ring-diag-eyewhite &lt;0,3–1&gt;</c> (варіанти під критерій АД «білок ≥ ~60 % освітленої щоки»); без прапорця —
+        /// 0,85 (вибір АД 15.11.2026: 0,62 сіре, 1,0 «мертве»; було 0,62).
+        /// </summary>
+        private static float EyeWhite
+        {
+            get
+            {
+                float v;
+                string arg = ReadArg("-ring-diag-eyewhite");
+                return arg != null && float.TryParse(arg, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out v)
+                    ? Mathf.Clamp(v, 0.3f, 1f) : 0.85f;
+            }
+        }
+
         private RingActor SpawnWith(string name, GameObject prefab, Vector3 scale, Material mat)
         {
             var a = new RingActor(name, prefab, transform);
@@ -620,7 +701,12 @@ namespace Game.Gameplay.Ring.Stage
                     block.SetFloat("_Smoothness", 0f);
                     // Білки очей у темній залі світилися (знімок промо 03.11.2026) — приглушити, не прибираючи текстуру.
                     if (Characters.CharacterAssembler.PartOf(r.name).ToLowerInvariant() == "low-poly")
-                        block.SetColor("_BaseColor", new Color(0.62f, 0.6f, 0.58f));
+                    {
+                        float w = EyeWhite;
+                        block.SetColor("_BaseColor", new Color(w, w * 0.6f / 0.62f, w * 0.58f / 0.62f));
+                        // Діагностика огляду облич: куля ока без чужих тіней (тінь брови в западині — заміри п. 4 АД 15.11.2026).
+                        if (RingLaunchArgs.Has("-ring-diag-eye-noshadow")) r.receiveShadows = false;
+                    }
                     r.SetPropertyBlock(block);
                     continue;
                 }
@@ -896,12 +982,13 @@ namespace Game.Gameplay.Ring.Stage
 
         /// <summary>
         /// Поставити постать прямо (без ковзання) і зіграти кліп. Петлі очікування стартують зі своєї миті й у своєму темпі
-        /// за роллю (<see cref="RingIdlePhase"/>): інакше борці й рефері дихали в такт, як дзеркальні манекени.
+        /// за роллю (<see cref="RingIdlePhase"/>): інакше борці й рефері дихали в такт, як дзеркальні манекени. Кліп — за статтю
+        /// постаті (<see cref="Clip(string, bool)"/>): жінка грає жіночий набір (RING_*_F), а не чоловічий (ПМ 15.11.2026).
         /// </summary>
         public void Place(RingActor a, Vector3 pos, float yaw, string clip, bool loop = true)
         {
             a.Slot.SetPositionAndRotation(pos, Quaternion.Euler(0f, yaw, 0f));
-            var c = Clip(clip);
+            var c = Clip(clip, IsFemale(a));
             if (c == null) return;
             var role = IdleRole(a);
             float t = loop ? RingIdlePhase.StartTime(clip, c.length, role) : 0f;
@@ -963,7 +1050,8 @@ namespace Game.Gameplay.Ring.Stage
             // Переможець — у центрі ближче до камери, руки вгору до залу; рефері поруч; той, хто програв, — нокаут позаду.
             Place(w, new Vector3(-0.3f, MatY, -0.6f), 180f, Clip("Entrance_Corner_Pose") != null ? "Entrance_Corner_Pose" : "Idle_Hype_Loop");
             Place(_ref, new Vector3(0.6f, MatY, -0.3f), 200f, "Ref_Idle_Loop");
-            var ko = Clip("Bump_Back_Sell_KO") ?? Clip("Bump_Back");
+            bool lf = IsFemale(l);
+            var ko = Clip("Bump_Back_Sell_KO", lf) ?? Clip("Bump_Back", lf);
             if (ko != null)
             {
                 l.PlayAt(ko, false, new Vector3(0.4f, MatY, 0.9f), 120f);
@@ -1118,7 +1206,7 @@ namespace Game.Gameplay.Ring.Stage
 
         private System.Collections.IEnumerator GestureThenTalk(RingActor talker, AnimationClip talk)
         {
-            var g = Clip(Gestures[_gestureIx++ % Gestures.Length]);
+            var g = Clip(Gestures[_gestureIx++ % Gestures.Length], IsFemale(talker));
             if (g != null)
             {
                 talker.PlayHere(g, false);
@@ -1140,9 +1228,10 @@ namespace Game.Gameplay.Ring.Stage
             // Мікрофон — у того, хто з рингу говорить; решта (оповідач, букер, ветеран, натовп) — без нього.
             var talker = player ? _player : rival ? _rival : null;
             var listener = player ? _rival : rival ? _player : null;
-            var idle = Clip("Ring_Stance_Loop");
-            var stare = Clip("Promo_Mic_Stare_Loop") ?? idle;
-            var talk = Clip("Promo_Mic_Talk_Loop");
+            // Кліпи — за статтю кожного: той, хто говорить, і той, хто слухає, можуть бути різної статі.
+            bool tf = talker != null && IsFemale(talker), lsf = listener != null && IsFemale(listener);
+            var stare = Clip("Promo_Mic_Stare_Loop", lsf) ?? Clip("Ring_Stance_Loop", lsf);
+            var talk = Clip("Promo_Mic_Talk_Loop", tf);
             if (talker != null)
             {
                 // Кожна нова репліка — жест (вказати на зал, кулак, обернутися до залу), потім розмова; той, хто слухає, —
@@ -1155,7 +1244,9 @@ namespace Game.Gameplay.Ring.Stage
             else
             {
                 // Оповідач, публіка, букер: обидва стоять, мікрофон лишається в руці того, хто говорив останнім.
-                if (idle != null) { _player.PlayHere(idle, true); _rival.PlayHere(idle, true); }
+                var pi = Clip("Ring_Stance_Loop", IsFemale(_player)); var ri = Clip("Ring_Stance_Loop", IsFemale(_rival));
+                if (pi != null) _player.PlayHere(pi, true);
+                if (ri != null) _rival.PlayHere(ri, true);
                 if (_micHolder == null) AttachMic(_player);
             }
 
@@ -1303,7 +1394,7 @@ namespace Game.Gameplay.Ring.Stage
         public void LookbookClip(string clip, bool footIk)
         {
             RingActor.FootIK = footIk;
-            var c = Clip(clip);
+            var c = Clip(clip, _player != null && IsFemale(_player));
             if (c != null && _player != null) _player.PlayAt(c, false, new Vector3(-0.6f, MatY, 0f), 90f);
             RingActor.FootIK = true;
         }
@@ -1800,6 +1891,7 @@ namespace Game.Gameplay.Ring.Stage
             // коли кіно не йде (він сам знімає SlowSuppressed, щойно кліп фінішера догравав).
             if (FinisherCine != null) FinisherCine.Tick();
             if (_show != null) _show.PinWalker();
+            ApplyBounce(_player); ApplyBounce(_rival); ApplyBounce(_ref);
             if (_mode == RingStageMode.Match)
             {
                 _watchActors[0] = _player; _watchActors[1] = _rival; _watchActors[2] = _ref;
