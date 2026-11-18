@@ -35,7 +35,7 @@ namespace Game.Gameplay.Ring.Stage
         /// огляду ділить аргументи на пробілах і комах). Без жодного — <see cref="DefaultSpecs"/> (ті, чиї прийоми є в каталозі).
         /// </summary>
         private static readonly string[] DemoFlags = { "-ring-demo-exchange", "-ring-demo-move", "-ring-demo-pin", "-ring-demo-sub",
-            "-ring-demo-dirty", "-ring-demo-outside", "-ring-demo-nodq", "-ring-demo-finisher", "-ring-demo-end" };
+            "-ring-demo-dirty", "-ring-demo-outside", "-ring-demo-nodq", "-ring-demo-finisher", "-ring-demo-rfinisher", "-ring-demo-end" };
 
         private static List<string> Specs(MoveCatalog moves)
         {
@@ -49,6 +49,8 @@ namespace Game.Gameplay.Ring.Stage
             if (RingLaunchArgs.Has("-ring-demo-outside")) list.Add("outside");
             if (RingLaunchArgs.Has("-ring-demo-nodq")) list.Add("nodq");
             Many(list, "finisher", Val("-ring-demo-finisher"));
+            // Фінішер суперника (сценарій ПМ 4047e16b, огляд кіна фінішера): <c>-ring-demo-rfinisher id[+id…]</c>.
+            Many(list, RingDemoScript.RivalFinisherHead, Val("-ring-demo-rfinisher"));
             Many(list, "end", Val("-ring-demo-end"));
             if (list.Count > 0) return list;
             foreach (string flag in DemoFlags)
@@ -326,9 +328,12 @@ namespace Game.Gameplay.Ring.Stage
             if (RingStage3D.ReadArg("-ring-locotest") != null) { yield return LocoTest(stage, folder); yield break; }
             if (RingStage3D.ReadArg("-ring-entrances") != null) { yield return Entrances(stage, folder); yield break; }
             ApplySex(stage);
+            if (RingLaunchArgs.Has("-ring-diag-pinprobe")) stage.StartCoroutine(PinProbe(stage));
+            if (RingLaunchArgs.Has("-ring-diag-cine")) CineReview(stage, folder);
             if (RingStage3D.ReadArg("-ring-outside") != null) { yield return OutsideReview(stage, folder); yield break; }
             if (RingStage3D.ReadArg("-ring-faces") != null) { yield return FacesReview(stage, folder); yield break; }
             if (RingStage3D.ReadArg("-ring-cast") != null) { yield return CastReview(stage, folder); yield break; }
+            if (RingStage3D.ReadArg("-ring-idle") != null) { yield return IdleReview(stage, folder); yield break; }
 
             // ---- промо ----
             bool probe = RingStage3D.ReadArg("-ring-probe") != null;
@@ -503,6 +508,69 @@ namespace Game.Gameplay.Ring.Stage
             if (dir.IsBusy) Debug.LogWarning(string.Format(CultureInfo.InvariantCulture, "[Ринг] демо: сегмент {0} не скінчився за {1:0} с", tag, cap));
         }
 
+        /// <summary>
+        /// Зонд утримання (<c>-ring-diag-pinprobe</c>, запит ПМ 15.11.2026): після накриття нападник стоїть на колінах у повітрі
+        /// ≈ 0,4 м над матом, на накритті його ноги висять, рефері головою в плечі. Пише: (1) вибірку кліпів накриття й колін
+        /// на тілі гравця в нулі слота — висоти таза, колін, стоп; (2) щочверть секунди, поки хтось у кліпі Cover_* / Kneel_* чи
+        /// рефері рахує, — слот, підйом моделі, масштаб, висоти кісток проти мату, голови й тази всіх трьох.
+        /// </summary>
+        private static IEnumerator PinProbe(RingStage3D stage)
+        {
+            yield return null;
+            var inv = CultureInfo.InvariantCulture;
+            RingActor pl = stage.Actor(MatchSide.Player);
+            if (pl != null)
+            {
+                bool female = stage.IsFemale(pl);
+                var bones = new[]
+                {
+                    pl.GetBone(HumanBodyBones.Hips), pl.GetBone(HumanBodyBones.LeftLowerLeg), pl.GetBone(HumanBodyBones.RightLowerLeg),
+                    pl.GetBone(HumanBodyBones.LeftFoot), pl.GetBone(HumanBodyBones.RightFoot), pl.GetBone(HumanBodyBones.LeftToes), pl.GetBone(HumanBodyBones.RightToes),
+                };
+                foreach (string name in new[] { "Cover_Enter_A", "Cover_Hold_Loop_A", "Cover_Release_A", "Cover_Kickout_A", "Kneel_To_Stance", "Kneel_Disbelief", "Ring_Stance_Loop" })
+                {
+                    var c = stage.Clip(name, female);
+                    if (c == null) { Debug.Log("[Ринг] зонд утримання, вибірка: " + name + " — кліпа немає"); continue; }
+                    var times = new[] { 0f, c.length * 0.25f, c.length * 0.5f, c.length * 0.75f, Mathf.Max(0f, c.length - 1f / 60f) };
+                    var pos = new Vector3[times.Length, bones.Length];
+                    pl.SampleBones(c, times, bones, pos, null);
+                    for (int i = 0; i < times.Length; i++)
+                        Debug.Log(string.Format(inv,
+                            "[Ринг] зонд утримання, вибірка (нуль слота, тіло гравця{8}): {0} t {1:0.00}: таз y {2:0.000}; коліна y {3:0.000}/{4:0.000}; стопи y {5:0.000}/{6:0.000}; носки y {7:0.000}/{9:0.000}",
+                            name, times[i], pos[i, 0].y, pos[i, 1].y, pos[i, 2].y, pos[i, 3].y, pos[i, 4].y, pos[i, 5].y, female ? ", жін." : "", pos[i, 6].y));
+                }
+            }
+            var wait = new WaitForSeconds(0.25f);
+            while (true)
+            {
+                yield return wait;
+                RingActor a = stage.Actor(MatchSide.Player), b = stage.Actor(MatchSide.Rival), rf = stage.Referee;
+                bool any = false;
+                foreach (var x in new[] { a, b })
+                {
+                    if (x == null || x.CurrentClip == null) continue;
+                    string n = x.CurrentClip.name;
+                    if (n.StartsWith("Cover_") || n.StartsWith("Kneel_")) any = true;
+                }
+                if (rf != null && rf.CurrentClip != null && rf.CurrentClip.name.StartsWith("Ref_Count")) any = true;
+                if (!any) continue;
+                foreach (var x in new[] { a, b, rf })
+                {
+                    if (x == null) continue;
+                    Transform kl = x.GetBone(HumanBodyBones.LeftLowerLeg), kr = x.GetBone(HumanBodyBones.RightLowerLeg);
+                    Transform fl = x.GetBone(HumanBodyBones.LeftFoot), fr = x.GetBone(HumanBodyBones.RightFoot);
+                    Vector3 hip = x.Hips != null ? x.Hips.position : x.Slot.position, head = x.HeadPos, sl = x.Slot.position;
+                    Debug.Log(string.Format(inv,
+                        "[Ринг] зонд утримання: {0} {1}@{2:0.00}: слот ({3:0.000}; {4:0.000}; {5:0.000}) курс {6:0}; модель y {7:0.000}, масштаб {8:0.000}; " +
+                        "таз ({9:0.00}; {10:0.000}; {11:0.00}); коліна y {12:0.000}/{13:0.000}; стопи y {14:0.000}/{15:0.000}; голова ({16:0.00}; {17:0.000}; {18:0.00}); мат {19:0.000}",
+                        x.Name, x.CurrentClip != null ? x.CurrentClip.name : "—", x.ClipTime, sl.x, sl.y, sl.z, x.Slot.eulerAngles.y,
+                        x.Model.transform.localPosition.y, x.Model.transform.lossyScale.y, hip.x, hip.y, hip.z,
+                        kl != null ? kl.position.y : 0f, kr != null ? kr.position.y : 0f, fl != null ? fl.position.y : 0f, fr != null ? fr.position.y : 0f,
+                        head.x, head.y, head.z, RingStage3D.MatY));
+                }
+            }
+        }
+
         private static bool _probeColliders;
 
         /// <summary>
@@ -668,8 +736,9 @@ namespace Game.Gameplay.Ring.Stage
         /// </summary>
         private static IEnumerator Faces(RingStage3D stage, string folder, string tag, RingActor a, bool showCam = false)
         {
-            yield return null;
-            yield return null;
+            // Поза має встигнути лягти: після замороженого кліпа (швидкість 0) кістки віддавали старе місце ще кадр-два, і
+            // камера суперника «стоячи» дивилася в порожнечу (кадри 035–039 слоту 14.11.2026).
+            yield return new WaitForSeconds(0.15f);
             Transform head = a.Head, neck = a.GetBone(HumanBodyBones.Neck), chest = a.GetBone(HumanBodyBones.UpperChest);
             if (chest == null) chest = a.GetBone(HumanBodyBones.Chest);
             Transform la = a.GetBone(HumanBodyBones.LeftUpperArm), ra = a.GetBone(HumanBodyBones.RightUpperArm);
@@ -712,6 +781,14 @@ namespace Game.Gameplay.Ring.Stage
                 else stage.Cine(target + dirs[i] * dist, target, 24f, true);
                 yield return Shot(folder, "face_" + tag + "_" + FaceViewNames[i] + (why != null ? "_blocked" : ""), 0.25f);
             }
+            // «Як у кіно фінішера» (АД 15.11.2026): обличчя з 1,8 м, кут 28°, камера на рівні очей — такий план буде в заклику.
+            {
+                Vector3 cam = target + flat * 1.8f;
+                cam.y = target.y;
+                if (showCam) stage.Show.ReviewLook(cam, target, 28f);
+                else stage.Cine(cam, target, 28f, true);
+                yield return Shot(folder, "face_" + tag + "_cine", 0.25f);
+            }
         }
 
         /// <summary>Що загороджує обличчя з камери <paramref name="cam"/>: мат під камерою чи на лінії, або кістка постаті ближче
@@ -750,6 +827,51 @@ namespace Game.Gameplay.Ring.Stage
             yield return new WaitForSeconds(0.2f);
         }
 
+        // ============================ щільна серія очікування ============================
+
+        /// <summary>
+        /// Щільна серія очікування (<c>-ring-demo &lt;тека&gt; -ring-idle 1 [-ring-demo-sex m|f] [-ring-venue hall|arena]</c>;
+        /// ПМ 14–15.11.2026): гравець, суперник і рефері в петлях очікування через <see cref="RingStage3D.Place"/> (фаза й темп за
+        /// роллю — <see cref="RingIdlePhase"/>, кліп — за статтю), загальний план, кадр кожні 0,1 с упродовж 4 с. У журнал — кліп і
+        /// частка петлі кожного на кожному кадрі: пара й рефері не мають дихати в такт, а старт петлі — без стрибка.
+        /// </summary>
+        private static IEnumerator IdleReview(RingStage3D stage, string folder)
+        {
+            stage.BeginDemoMatch();
+            RingActor pl = stage.Actor(MatchSide.Player), rv = stage.Actor(MatchSide.Rival), rf = stage.Referee;
+            float y = RingStage3D.MatY;
+            stage.Place(pl, new Vector3(-1.0f, y, 0.3f), 90f, "Ring_Stance_Loop");
+            stage.Place(rv, new Vector3(1.0f, y, 0.3f), -90f, "Ring_Stance_Loop");
+            stage.Place(rf, new Vector3(0f, y, 1.5f), 180f, "Ref_Idle_Loop");
+            Forget(stage);
+            stage.Cine(new Vector3(0f, y + 1.5f, -4.4f), new Vector3(0f, y + 1.0f, 0.5f), 38f, true);
+            string v = RingStage3D.Venue.Id + "_" + (stage.IsFemale(pl) ? "f" : "m");
+            float t0 = Time.time, next = 0f;
+            int n = 0;
+            while (n < 40)
+            {
+                yield return null;
+                float t = Time.time - t0;
+                if (t < next) continue;
+                next += 0.1f;
+                string tag = string.Format(CultureInfo.InvariantCulture, "idle_{0}_{1:00}", v, n);
+                Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] очікування {0}: t {1:0.00} с, гравець {2}, суперник {3}, рефері {4}",
+                    tag, t, IdlePhase(pl), IdlePhase(rv), IdlePhase(rf)));
+                Capture(folder, tag);
+                n++;
+            }
+            Debug.Log("[Ринг] очікування: огляд скінчено");
+            HardExit.Now(0);
+        }
+
+        /// <summary>Кліп і частка петлі (0–1) постаті для журналу щільної серії.</summary>
+        private static string IdlePhase(RingActor a)
+        {
+            var c = a.CurrentClip;
+            if (c == null || c.length <= 0f) return "—";
+            return string.Format(CultureInfo.InvariantCulture, "{0} {1:0.000}", c.name, Mathf.Repeat(a.ClipTime, c.length) / c.length);
+        }
+
         // ============================ огляд людей кар'єри поза рингом ============================
 
         /// <summary>
@@ -779,6 +901,12 @@ namespace Game.Gameplay.Ring.Stage
                 Debug.Log("[Ринг] огляд людей: букер " + p.Speaker + " у роздягальні — " + (show.Booker != null ? show.BookerId + ", " + p.Body + ", " + p.Hair : "НЕМАЄ"));
                 if (show.Booker != null) yield return Faces(stage, folder, v + "_" + p.Speaker, show.Booker, true);
             }
+
+            // ---- закулісся: обличчя героя при світлі роздягальні (огляд «тіні щелепи», ПМ 15.11.2026) ----
+            stage.SetCareerCast(BackstageCast.DefaultBooker, false);
+            stage.ShowBackstage();
+            stage.SetBackstageScene(null);
+            yield return Faces(stage, folder, v + "_bs_hero", stage.Actor(MatchSide.Player), true);
 
             // ---- закулісся: події з гостем ----
             stage.SetCareerCast(BackstageCast.DefaultBooker, false);
@@ -936,7 +1064,11 @@ namespace Game.Gameplay.Ring.Stage
         {
             var show = stage.Show;
             LogBrightSurfaces();
+            string feet = RingStage3D.ReadArg("-ring-diag-feetcam");
+            bool screens = feet == null && !RingLaunchArgs.Has("-ring-entrance-noscreen");
             // ---- А. екран виходу ----
+            if (screens)
+            {
             string[][] recipes =
             {
                 new[] { "monster", "villain", "Тарас «Молот» Гребінь", "Монстр · Лиходій" },
@@ -952,6 +1084,7 @@ namespace Game.Gameplay.Ring.Stage
             yield return ScreenMoments(show, folder, new EntranceRecipe { Gimmick = "monster", Role = "villain", Tier = "arena", Name = "Тарас «Молот» Гребінь", TagText = "Монстр · Лиходій" }, "_reduce");
             UI.Menus.RingAccessibility.ReduceMotion = false;
             show.ScreenOff();
+            }
 
             // ---- Б. повні виходи ----
             var M = Game.Core.Ring.Career.Gimmick.Monster; var F = Game.Core.Ring.Career.Gimmick.Flyer;
@@ -972,12 +1105,21 @@ namespace Game.Gameplay.Ring.Stage
                 new EntranceCase { Id = "k_rookie_face_f", Npc = "blyskavka", Gimmick = Game.Core.Ring.Career.Gimmick.Rookie, Path = RingPath.Face, Agi = 1, Pop = 2, Tier = "gym" },
                 new EntranceCase { Id = "l_strongman_face_f_player", Body = "body_f_nordic", Gimmick = Game.Core.Ring.Career.Gimmick.Strongman, Path = RingPath.Face, Str = 3, Cha = 1, Pop = 5, Main = true, Tier = "arena", Rgb = CareerLooks.CostumeRgb(3), Player = true, Name = "Ґанна «Їжачиха» Євтушенко-Підгірна" },
                 new EntranceCase { Id = "m_strongman_heel", Npc = "atlant", Gimmick = Game.Core.Ring.Career.Gimmick.Strongman, Path = RingPath.Heel, Str = 3, Heat = 2, Main = true, Tier = "arena" },
+                // Манери ходи на обох статях (умова АД до крокової ходи, 15.11.2026): легка — на чоловікові, зібрана — на жінці.
+                new EntranceCase { Id = "n_flyer_face_m", Body = "body_m_east_asian", Name = "Кента «Стриж» Морі", Gimmick = F, Path = RingPath.Face, Agi = 3, Pop = 3, Tier = "gym", Rgb = 0x2F6FD6 },
+                new EntranceCase { Id = "o_tech_face_f", Body = "body_f_mediterranean", Name = "Софія «Замок» Марино", Gimmick = T, Path = RingPath.Face, Tech = 3, Tier = "gym", Rgb = 0x2E6B4F },
             };
             var text = DemoText();
             string only = RingStage3D.ReadArg("-ring-entrance-only");
             foreach (var c in cases)
             {
-                if (only != null && !c.Id.StartsWith(only)) continue;
+                if (only != null)
+                {
+                    bool take = false;
+                    // Роздільник — «+» або кома (кому з'їдає запуск через PowerShell: з «a,b» до гри доходить лише «a»).
+                    foreach (var pre in only.Split(',', '+')) if (pre.Length > 0 && c.Id.StartsWith(pre)) take = true;
+                    if (!take) continue;
+                }
                 string hair = "";
                 if (c.Npc != null)
                 {
@@ -1009,8 +1151,21 @@ namespace Game.Gameplay.Ring.Stage
                 string beat = null;
                 float beatShot = -1f;
                 float guard = Time.time + 120f;
+                bool walked = false;
                 while (stage.ShowBusy && Time.time < guard)
                 {
+                    if (feet != null)
+                    {
+                        // Стопи зблизька: кадр щодесятої секунди, поки борець іде; після ходи решта виходу пропускається.
+                        if (show.Beat == "walk")
+                        {
+                            walked = true;
+                            if (Time.time >= next) { Capture(folder, "feet_" + feet + "_" + c.Id); next = Time.time + 0.1f; }
+                        }
+                        else if (walked && show.Beat != "barrier") stage.SkipShow();
+                        yield return null;
+                        continue;
+                    }
                     if (show.Beat != beat) { beat = show.Beat; beatShot = Time.time + 0.45f; }
                     if (mi < marks.Length && Time.time >= marks[mi])
                     {
@@ -1128,6 +1283,52 @@ namespace Game.Gameplay.Ring.Stage
             }
             Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] огляд: рефері — стеження скінчено на t={0:0.00} с, від місця {1:0.00} м",
                 t, Flat(rf.PosePos, spot)));
+        }
+
+        /// <summary>
+        /// Огляд кіна фінішера (<c>-ring-diag-cine</c>, запит ПМ 15.11.2026): журнал виконавця (<see cref="RingFinisherCine.Trace"/>),
+        /// кадр на кожну склейку плану (через два кадри після неї — план уже на екрані) і кадр із рядком темпу через 0,6 с
+        /// після кінця кіно: камера повернулась до плану матчу, Time.timeScale — звичайний.
+        /// </summary>
+        private static void CineReview(RingStage3D stage, string folder)
+        {
+            var cine = stage.FinisherCine;
+            if (cine == null) { Debug.LogWarning("[Ринг] огляд кіна фінішера: сцена без виконавця"); return; }
+            RingFinisherCine.Trace = true;
+            cine.Cut += (beat, shot) => stage.StartCoroutine(CineFrame(folder, "cine_" + beat.Kind.ToString().ToLowerInvariant(), 2, 0f, null));
+            stage.StartCoroutine(CineEnds(stage, cine, folder));
+        }
+
+        private static IEnumerator CineFrame(string folder, string tag, int frames, float secs, string line)
+        {
+            for (int i = 0; i < frames; i++) yield return null;
+            if (secs > 0f) yield return new WaitForSecondsRealtime(secs);
+            if (line != null) Debug.Log(line + string.Format(CultureInfo.InvariantCulture, " Time.timeScale {0:0.00}", Time.timeScale));
+            Capture(folder, tag);
+        }
+
+        private static IEnumerator CineEnds(RingStage3D stage, RingFinisherCine cine, string folder)
+        {
+            bool was = false;
+            float t0 = 0f;
+            while (stage != null)
+            {
+                bool on = cine.Active;
+                if (on && !was)
+                {
+                    t0 = Time.unscaledTime;
+                    Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] огляд кіна фінішера: почалось, Time.timeScale {0:0.00}", Time.timeScale));
+                }
+                if (!on && was)
+                {
+                    Debug.Log(string.Format(CultureInfo.InvariantCulture,
+                        "[Ринг] огляд кіна фінішера: скінчилось за {0:0.00} с реального часу, Time.timeScale {1:0.00}, сповільнення вимкнено до кінця кліпа: {2}",
+                        Time.unscaledTime - t0, Time.timeScale, cine.SlowSuppressed ? "так" : "ні"));
+                    stage.StartCoroutine(CineFrame(folder, "cine_after", 0, 0.6f, "[Ринг] огляд кіна фінішера: через 0,6 с після кінця —"));
+                }
+                was = on;
+                yield return null;
+            }
         }
 
         private static void Capture(string folder, string tag)

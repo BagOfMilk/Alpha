@@ -65,10 +65,101 @@ namespace Game.Gameplay.Ring.Stage
         public EntranceRecipe Recipe { get; private set; }
         public EntranceProfile Profile { get; private set; }
 
-        // ---------- хода (таз приколочено до шляху) ----------
-        private RingActor _walker;
+        // ---------- хода виходу ----------
+        private RingActor _walker;      // стара хода (таз приколочено до шляху) — лише огляд «було» (-ring-diag-oldpin)
         private Vector3 _walkPos;
         private float _walkYaw;
+
+        /// <summary>Огляд «було / стало»: стара хода — таз миттєво на шляху за годинником (-ring-diag-oldpin).</summary>
+        private static readonly bool OldPin = RingLaunchArgs.Has("-ring-diag-oldpin");
+
+        /// <summary>До удару борець стоїть за шторою не ближче цієї межі до зали (дверні панелі арки — x ≈ −14,9).</summary>
+        private const float HiddenX = -15.25f;
+
+        /// <summary>Відрізок крокової ходи, що йде зараз (план — <see cref="RingWalkPlan"/>).</summary>
+        private sealed class StepWalk
+        {
+            public RingActor A;
+            public AnimationClip Clip;
+            public RingWalkPlan.Gait Gait;
+            public RingWalkPlan.Leg Leg;
+            public int TurnIx;
+            public float Turned, Partial;       // повернуто завершеними вікнами й у поточному, °
+            public bool Done, Brake;
+            public int Foot;                    // опорна стопа: 0 — ліва
+            public Vector3 Toe;                 // де стоїть її носок (світ)
+            public float NextLand;              // фаза, на якій стане друга стопа й перейме опору
+            public bool FadeIn;                 // вхід у петлю: курс іде від старого слота до плану за вагою кліпа
+            public float YawFrom;
+            public int Tail;
+            public bool Hold;                   // стопа, з якої щойно пішла опора, стоїть на своїй точці до відриву
+            public int HoldFoot;
+            public Vector3 HoldToe;
+            public float HoldPh;                // фаза зміни опори: тримання гасне не пізніше ніж за HoldSpan оберту
+            public float HoldWorst;             // найбільша поправка IK за відрізок, м
+            // огляд -ring-diag-slip: шлях носка за опору за частинами — до того, як стопа стала опорою, опорою, після
+            public readonly float[] DPre = new float[2], DMid = new float[2], DPost = new float[2];
+            public readonly bool[] Down = new bool[2], WasAnchor = new bool[2];
+            public readonly Vector3[] Prev = new Vector3[2];
+        }
+        private StepWalk _sw;
+
+        /// <summary>
+        /// Тримання стопи після зміни опори (<c>-ring-diag-footlock 0</c> — вимкнути, огляд «було»). Перенесення руху на тіло
+        /// борця лишає між стопами зсув 1,5–2 см, поки обидві на землі (у вихідних кліпах — 0,1–0,6 см): слот тримає лише
+        /// опорний носок, тож їхала друга стопа. Тепер вона стоїть у своїй точці, поки носок не підніметься на
+        /// <see cref="HoldLift"/>, і за наступні <see cref="HoldFade"/> м підйому поправка сходить до нуля.
+        /// </summary>
+        private static readonly bool FootLock = RingStage3D.ReadArg("-ring-diag-footlock") != "0";
+        private const float HoldLift = 0.03f, HoldFade = 0.03f, HoldMax = 0.06f;
+
+        /// <summary>Тримання гасне за фазою (рецензія 16.11: низький мах — шарк, кульгання — не піднімав носок на 6 см, і
+        /// стопа тяглася назад увесь мах): повна вага до 0,15 оберту після зміни опори, нуль — на 0,3.</summary>
+        private const float HoldSpan = 0.15f;
+
+        /// <summary>Огляд: зсув миті зміни опори, зразків петлі (1/72 оберту; «m2» — на два раніше) — <c>-ring-diag-landshift</c>.</summary>
+        private static readonly float LandShift = ReadShift("-ring-diag-landshift");
+
+        /// <summary>Огляд: опора переходить, щойно носок наступної стопи опустився нижче цієї висоти, м (0 — за фазою) — <c>-ring-diag-landlift</c>.</summary>
+        private static readonly float LandLift = ReadShift("-ring-diag-landlift");
+
+        private static readonly bool SlipSplit = RingLaunchArgs.Has("-ring-diag-slip");
+
+        private static float ReadShift(string arg)
+        {
+            string s = RingStage3D.ReadArg(arg);
+            if (string.IsNullOrEmpty(s)) return 0f;
+            bool neg = s[0] == 'm';
+            float v;
+            if (!float.TryParse(neg ? s.Substring(1) : s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out v)) return 0f;
+            return neg ? -v : v;
+        }
+
+        /// <summary>Фаза, на якій опора перейде на стопу <paramref name="foot"/> (з оглядовим зсувом).</summary>
+        private static float LandPhase(RingWalkPlan.Gait g, float from, int foot)
+        {
+            return RingWalkPlan.Gait.Next(from, Mathf.Repeat(g.Land(foot) + LandShift / 72f, 1f));
+        }
+
+        /// <summary>Перехід у ходу чи з ходи: опорний носок стоїть у точці, слот іде за ним, курс — від старого до нового.</summary>
+        private struct ToePin
+        {
+            public bool Active;
+            public RingActor A;
+            public AnimationClip Clip;      // кліп, що набирає вагу: змінився — прив'язка сирота, знімається
+            public int Foot, Tail;
+            public Vector3 Toe;
+            public float Yaw0, Yaw1;
+        }
+        private ToePin _pin;
+
+        /// <summary>Хода зупинена ззовні (новий вихід, закулісся, кінець виходу): жодна прив'язка не переживає свою сцену.</summary>
+        private void StopWalk()
+        {
+            _walker = null;
+            _sw = null;
+            _pin.Active = false;
+        }
 
         // ---------- пояс ----------
         private GameObject _belt;
@@ -209,6 +300,8 @@ namespace Game.Gameplay.Ring.Stage
             // Шрифт — лише через роль (ТЗ B00 §2).
             RingFonts.Apply(_tronTitle, RingFontRole.Text);
             RingFonts.Apply(_tronSub, RingFontRole.Text);
+            FitToScreen(_tronTitle);
+            FitToScreen(_tronSub);
             _titleLayer.Add(_tronTitle);
             _titleLayer.Add(_tronSub);
             _tronRoot.Add(_titleLayer);
@@ -273,6 +366,26 @@ namespace Game.Gameplay.Ring.Stage
             _tronLight.intensity = 0f;
         }
 
+        /// <summary>Найширший напис назви на полотні екрана (1024 px) — з полями по 48 px.</summary>
+        private const float TronTextMax = 1024f - 2f * 48f;
+
+        /// <summary>
+        /// Назва й підпис над завісою не ширші за полотно: довгий напис пропорційно стискається, як ім'я в ролику виходу
+        /// (<see cref="EntranceScreenPlayer"/>). Раніше підпис вступу «Місцева федерація. Один борець. Сезон за сезоном.»
+        /// (44 px, ~1080 px) виходив за текстуру й обрізався з обох боків: «ісцева федерація. … Сезон за сезо» (слот 33,
+        /// s33_k_ending_4x3/002–003; від пропорцій екрана не залежить — текстура та сама).
+        /// </summary>
+        private static void FitToScreen(Label l)
+        {
+            l.RegisterCallback<GeometryChangedEvent>(e =>
+            {
+                float w = e.newRect.width;
+                if (w < 1f) return;
+                float k = w > TronTextMax ? TronTextMax / w : 1f;
+                l.style.scale = new Scale(new Vector3(k, k, 1f));
+            });
+        }
+
         /// <summary>Назва гри на екрані (вступ, рецепт B01): напис, підпис і колір тла — токен, прозорістю з кроків екрана.</summary>
         private void ShowTitle(string title, string sub, Color tokenColor)
         {
@@ -291,7 +404,7 @@ namespace Game.Gameplay.Ring.Stage
                 // мерехтіння лампи паркінгу; «Спалахи» вимкнено (Налаштування → Доступність) — рівне світло
                 _lamp.intensity = !_flicker ? 4.5f : !Game.Gameplay.Ring.UI.Menus.RingAccessibility.Flashes ? 3.2f
                     : (Mathf.PerlinNoise(Time.time * 7f, 0.3f) > 0.32f ? 3.2f : 0.6f);
-            if (_guest != null && InBackstage) _guest.Tick(Time.deltaTime);
+            if (_guest != null && InBackstage) { _guest.Tick(Time.deltaTime); _s.ApplyBounce(_guest); }
         }
 
         private Material Lit(Color c)
@@ -343,7 +456,7 @@ namespace Game.Gameplay.Ring.Stage
         {
             StopAllCoroutines();
             BeltOff();
-            _walker = null;
+            StopWalk();
             _skip = false;
             Busy = true;
             Recipe = recipe;
@@ -388,26 +501,48 @@ namespace Game.Gameplay.Ring.Stage
             // жест ґіміка, далі жест шляху.
             SetBeat("curtain");
             Look(new Vector3(-6.5f, 2.2f, -2.4f), new Vector3(-16f, 3.2f, 0f), 42f, true);
-            var hype = _s.Clip("Idle_Hype_Loop") ?? _s.Clip("Ring_Stance_Loop");
+            var hype = _s.Clip("Idle_Hype_Loop", female) ?? _s.Clip("Ring_Stance_Loop", female);
             var walk = ClipF(prof.WalkLoop, female) ?? ClipF(EntranceProfile.WalkFallback, female) ?? _s.Clip("Ref_Walk_Loop");
             float stride = walk != null ? a.LoopSpeed(walk) * walk.length : 1f;
             if (stride < 0.3f) stride = 1f;
+            // Шлях до рингу, жести й зупинка біля бар'єра — потрібні вже тут: крокова хода планує весь вихід наперед (стартова
+            // точка за шторою зсувається так, щоб кінцева мітка вийшла точно цілим числом кроків).
+            var path = prof.UsesSteps ? Path : RollPath;
+            float[] cum = Cumulative(path);
+            float total = cum[cum.Length - 1];
+            var barrier = ClipF(prof.Barrier, female);
+            var gestures = new List<AnimationClip>();
+            foreach (var g in new[] { ClipF(prof.CurtainGimmick, female), ClipF(prof.CurtainPath, female) }) if (g != null) gestures.Add(g);
+            RingWalkPlan.Gait gait = !OldPin && walk != null && gestures.Count > 0 ? a.WalkGait(walk) : null;
+            RingWalkPlan.Entrance plan = gait != null ? PlanSteps(a, walk, gait, gestures, path, cum, barrier) : null;
+            if (plan == null && walk != null && !OldPin)
+                Debug.Log("[Ринг] крокова хода: " + a.Name + " " + walk.name + " — петлю не розібрано на кроки, хода старим способом");
             a.SetHeight(0f);
-            if (hype != null) a.PlayAt(hype, true, CurtainBack, 90f);
+            Vector3 hidden = plan != null ? World(plan.Curtain.Start.At(gait.HipAt(gait.MidL))) : CurtainBack;
+            if (hype != null) a.PlayAt(hype, true, hidden, 90f);
             _s.Watch.Forget(a);
             yield return Wait((float)HitIn);
             float hold = (float)EntranceScreenMath.CurtainHoldSec(HitIn);
+            float walkT0 = Time.time;
             if (walk != null && !_skip)
             {
-                var outPath = new[] { CurtainBack, CurtainOut };
-                yield return WalkLeg(a, walk, outPath, Cumulative(outPath), 0f, Vector3.Distance(CurtainBack, CurtainOut), stride, false);
-                _walker = null;
+                if (plan != null) yield return StepLeg(a, walk, gait, plan.Curtain, false, false);
+                else
+                {
+                    var outPath = new[] { CurtainBack, CurtainOut };
+                    yield return WalkLeg(a, walk, outPath, Cumulative(outPath), 0f, Vector3.Distance(CurtainBack, CurtainOut), stride, false);
+                    _walker = null;
+                }
             }
             bool close = false;
-            foreach (var g in new[] { ClipF(prof.CurtainGimmick, female), ClipF(prof.CurtainPath, female) })
+            int gi = 0;
+            foreach (var g in gestures)
             {
-                if (g == null || _skip) continue;
-                a.PlayAtBlend(g, 0f, false, a.PosePos, 90f, 0.2f);
+                if (_skip) continue;
+                // Жест стає на опорний носок ходи (наступний — на лівий носок попереднього): стопа не їде, друга ставиться.
+                if (plan != null) StandOnToe(a, g, gi == 0 ? plan.Curtain.StopFoot : 0, plan.GestureYaw[gi]);
+                else a.PlayAtBlend(g, 0f, false, a.PosePos, 90f, 0.2f);
+                gi++;
                 float end = Time.time + g.length;
                 while (Time.time < end && !_skip)
                 {
@@ -424,36 +559,67 @@ namespace Game.Gameplay.Ring.Stage
             }
             while (Time.time < t0 + hold && !_skip) yield return null;
 
-            // ---- 2. Хода петлею профілю, цілими циклами; зупинка біля залу — на межі циклу коло точки (-8, 0, 0).
-            var path = prof.UsesSteps ? Path : RollPath;
-            float[] cum = Cumulative(path);
-            float total = cum[cum.Length - 1];
-            float stopAt = total;
-            var barrier = ClipF(prof.Barrier, female);
-            if (barrier != null) stopAt = Mathf.Clamp(Mathf.Round(cum[BarrierVertex] / stride) * stride, stride, total - stride);
+            // ---- 2. Хода петлею профілю. Крокова (план RingWalkPlan): власним ходом петлі, цілим числом кроків, повороти довкола
+            // опорного носка, зупинка біля залу — посеред опори коло точки (-8, 0, 0). Стара (огляд «було») — цілими циклами.
             if (walk != null && !_skip)
             {
                 SetBeat("walk");
-                yield return WalkLeg(a, walk, path, cum, 0f, stopAt, stride, true);
-                if (barrier != null && !_skip)
+                if (plan != null)
                 {
-                    SetBeat("barrier");
-                    _walker = null;
-                    a.PlayAtBlend(barrier, 0f, false, a.PosePos, _walkYaw, 0.2f);
-                    Vector3 p = a.PosePos;
-                    Vector3 fwd = Quaternion.Euler(0f, _walkYaw, 0f) * Vector3.forward;
-                    Vector3 right = Quaternion.Euler(0f, 90f, 0f) * fwd;
-                    // Збоку, з правого плеча: борець і зала ліворуч від нього в одному кадрі.
-                    Look(p + right * 3.0f + fwd * 1.2f + Vector3.up * 1.6f, p - right * 0.6f + Vector3.up * 1.2f, 40f, true);
-                    yield return Wait(barrier.length);
+                    yield return StepLeg(a, walk, gait, plan.ToBarrier ?? plan.ToRing, true, true);
+                    if (plan.ToBarrier != null && barrier != null && !_skip)
+                    {
+                        SetBeat("barrier");
+                        float heading = plan.ToBarrier.Heading;
+                        StandOnToe(a, barrier, plan.ToBarrier.StopFoot, heading);
+                        Vector3 p = a.PosePos;
+                        Vector3 fwd = Quaternion.Euler(0f, heading, 0f) * Vector3.forward;
+                        Vector3 right = Quaternion.Euler(0f, 90f, 0f) * fwd;
+                        // Збоку, з правого плеча: борець і зала ліворуч від нього в одному кадрі.
+                        Look(p + right * 3.0f + fwd * 1.2f + Vector3.up * 1.6f, p - right * 0.6f + Vector3.up * 1.2f, 40f, true);
+                        yield return Wait(barrier.length);
+                        if (!_skip)
+                        {
+                            SetBeat("walk");
+                            yield return StepLeg(a, walk, gait, plan.ToRing, true, true);
+                        }
+                    }
                     if (!_skip)
                     {
-                        SetBeat("walk");
-                        yield return WalkLeg(a, walk, path, cum, stopAt, total, stride, true);
+                        Vector3 mark = path[path.Length - 1], at = a.PosePos;
+                        Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                            "[Ринг] крокова хода: {0} {1} — мітка рингу: таз за {2:0.0} см від неї (план {3:0.0} см); від удару до рингу {4:0.00} с",
+                            a.Name, walk.name, new Vector2(at.x - mark.x, at.z - mark.z).magnitude * 100f, plan.EndError * 100f, Time.time - walkT0));
                     }
                 }
+                else
+                {
+                    float stopAt = total;
+                    if (barrier != null) stopAt = Mathf.Clamp(Mathf.Round(cum[BarrierVertex] / stride) * stride, stride, total - stride);
+                    yield return WalkLeg(a, walk, path, cum, 0f, stopAt, stride, true);
+                    if (barrier != null && !_skip)
+                    {
+                        SetBeat("barrier");
+                        _walker = null;
+                        a.PlayAtBlend(barrier, 0f, false, a.PosePos, _walkYaw, 0.2f);
+                        Vector3 p = a.PosePos;
+                        Vector3 fwd = Quaternion.Euler(0f, _walkYaw, 0f) * Vector3.forward;
+                        Vector3 right = Quaternion.Euler(0f, 90f, 0f) * fwd;
+                        // Збоку, з правого плеча: борець і зала ліворуч від нього в одному кадрі.
+                        Look(p + right * 3.0f + fwd * 1.2f + Vector3.up * 1.6f, p - right * 0.6f + Vector3.up * 1.2f, 40f, true);
+                        yield return Wait(barrier.length);
+                        if (!_skip)
+                        {
+                            SetBeat("walk");
+                            yield return WalkLeg(a, walk, path, cum, stopAt, total, stride, true);
+                        }
+                    }
+                    if (!_skip)
+                        Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                            "[Ринг] хода виходу (стара): {0} {1} — від удару до рингу {2:0.00} с", a.Name, walk.name, Time.time - walkT0));
+                }
             }
-            _walker = null;
+            StopWalk();
 
             // ---- 3. Вхід у ринг.
             float climbYaw = RingStage3D.YawTo(Vector3.zero, ClimbDir);
@@ -502,7 +668,7 @@ namespace Game.Gameplay.Ring.Stage
             {
                 Vector3 here = a.PosePos;
                 float yaw = a.PoseYaw;
-                var stance = _s.Clip("Ring_Stance_Loop") ?? hype;
+                var stance = _s.Clip("Ring_Stance_Loop", female) ?? hype;
                 bool rolled = !prof.UsesSteps;
                 a.SetHeight(RingStage3D.MatY);
                 if (stance != null)
@@ -516,7 +682,7 @@ namespace Game.Gameplay.Ring.Stage
             SetBeat("pose");
             if (fx != null) fx.EntranceRing();
             var pose = ClipF(prof.Pose, female) ?? ClipF(EntranceProfile.PoseFallback, female) ?? hype;
-            var idle = _s.Clip("Ring_Stance_Loop") ?? hype;
+            var idle = _s.Clip("Ring_Stance_Loop", female) ?? hype;
             var dir = _s.Director;
             Vector3 spot = a.PosePos;
             float spotYaw = a.PoseYaw;
@@ -604,7 +770,7 @@ namespace Game.Gameplay.Ring.Stage
 
         private void EndEntrance(RingActor a)
         {
-            _walker = null;
+            StopWalk();
             // Пропущений вихід: тема й гонг удару не мають прозвучати вже в матчі (рецензія 08.11.2026).
             _s.CancelEntranceSound();
             BeltOff();
@@ -746,6 +912,252 @@ namespace Game.Gameplay.Ring.Stage
             return Vector3.Lerp(path[i - 1], path[i], t);
         }
 
+        // ============================ крокова хода ============================
+
+        private static Vector3 World(RingWalkPlan.V2 p) { return new Vector3(p.X, 0f, p.Z); }
+
+        private static float Smooth(float u)
+        {
+            u = Mathf.Clamp01(u);
+            return u * u * (3f - 2f * u);
+        }
+
+        /// <summary>
+        /// План усього виходу для цього тіла: петля ходи й нерухомі кліпи міряються вибіркою, далі — чистий розрахунок
+        /// (<see cref="RingWalkPlan.PlanEntrance"/>). Null — план не влучає в мітку рингу (тоді хода старим способом).
+        /// </summary>
+        private RingWalkPlan.Entrance PlanSteps(RingActor a, AnimationClip walk, RingWalkPlan.Gait gait, List<AnimationClip> gestures,
+            Vector3[] path, float[] cum, AnimationClip barrier)
+        {
+            var stands = new List<RingWalkPlan.Stand>();
+            foreach (var g in gestures) stands.Add(a.SampleStand(g, RingWalkPlan.StandFade));
+            var route = new List<RingWalkPlan.V2>();
+            foreach (var p in path) route.Add(new RingWalkPlan.V2(p.x, p.z));
+            var plan = RingWalkPlan.PlanEntrance(gait, new RingWalkPlan.V2(CurtainOut.x, CurtainOut.z), HiddenX, stands, route,
+                barrier != null ? cum[BarrierVertex] : -1f, barrier != null ? a.SampleStand(barrier, RingWalkPlan.StandFade) : null, RingWalkPlan.LookAhead);
+            Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "[Ринг] крокова хода, план: {0} {1}: крок {2:0.000} м (вікна опори Л {3:0.00}–{4:0.00}, П {5:0.00}–{6:0.00}; стає Л {14:0.00}, П {15:0.00}), кроків {7}+{8}+{9}, " +
+                "зсув старту {10:+0.000;-0.000} м, мітка {11:0.0} мм, поворот за опору до {12:0.0}°, від шляху до {13:0.00} м",
+                a.Name, walk.name, gait.Step, gait.LA, gait.LB, gait.RA, gait.RB, plan.Curtain.Steps, plan.ToBarrier != null ? plan.ToBarrier.Steps : 0,
+                plan.ToRing.Steps, plan.Shift, plan.EndError * 1000f,
+                Mathf.Max(plan.ToRing.MaxTurnDeg, plan.ToBarrier != null ? plan.ToBarrier.MaxTurnDeg : 0f),
+                Mathf.Max(plan.ToRing.MaxOff, plan.ToBarrier != null ? plan.ToBarrier.MaxOff : 0f), gait.LandL, gait.LandR));
+            return plan.EndError <= 0.03f ? plan : null;
+        }
+
+        /// <summary>
+        /// Відрізок крокової ходи. <paramref name="pinStart"/>: вхід у петлю з місця — ліва стопа стоїть, де стояла, права
+        /// робить перший крок; інакше (за шторою, борця не видно) — слот одразу за планом. Далі слот щокадру ставиться від
+        /// носка опорної стопи (<see cref="StepTick"/>): стопа стоїть, таз іде, як у кліпі.
+        /// </summary>
+        private IEnumerator StepLeg(RingActor a, AnimationClip walk, RingWalkPlan.Gait gait, RingWalkPlan.Leg leg, bool pinStart, bool camera)
+        {
+            float len = walk.length;
+            float t0 = Time.time;
+            var sw = new StepWalk
+            {
+                A = a, Clip = walk, Gait = gait, Leg = leg, Foot = leg.StartFoot,
+                NextLand = LandPhase(gait, leg.Phase0, 1 - leg.StartFoot),
+            };
+            _pin.Active = false;
+            if (pinStart)
+            {
+                // Перехід короткий: кліп ходи набирає повну вагу, поки ліва стопа ще стоїть сама.
+                float fade = Mathf.Min(0.25f, 0.2f * len);
+                a.FootLift(leg.StartFoot, out sw.Toe);
+                sw.YawFrom = a.Slot.eulerAngles.y;
+                sw.FadeIn = true;
+                a.PlayFrom(walk, leg.Phase0 * len, true, fade, WalkPlay * StartSpeed);
+            }
+            else
+            {
+                a.PlayFrom(walk, leg.Phase0 * len, true, 0f, WalkPlay * StartSpeed);
+                a.Slot.SetPositionAndRotation(new Vector3(leg.Start.P.X, 0f, leg.Start.P.Z), Quaternion.Euler(0f, leg.Start.Yaw, 0f));
+                sw.Toe = World(leg.StartToe);
+                _s.Watch.Forget(a);
+            }
+            _walkPos = a.PosePos;
+            _walkYaw = leg.StartYaw + gait.TravelYaw;
+            _sw = sw;
+            // Запобіжник: час кліпа став (пауза — не рахується, там стоїть і Time.time) чи кліп підмінили — відрізок не висне.
+            float guard = Time.time + (leg.PhaseStop - leg.Phase0) * len / (WalkPlay * 0.45f) + 3f;
+            while (!_skip && !sw.Done && Time.time < guard && a.CurrentClip == walk)
+            {
+                if (camera) WalkCamera();
+                yield return null;
+            }
+            Vector3 hip = a.PosePos;
+            Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "[Ринг] крокова хода: {0} {1}: кроків {2}, поворотів {3} (до {4:0.0}°), {5:0.00} с; таз ({6:0.00}; {7:0.00}), за планом ({8:0.00}; {9:0.00}){10}",
+                a.Name, walk.name, leg.Steps, leg.Turns.Count, leg.MaxTurnDeg, Time.time - t0, hip.x, hip.z, leg.HipEnd.X, leg.HipEnd.Z,
+                (sw.Done ? "" : " — НЕ ДІЙШОВ (пропуск або запобіжник)")
+                + (FootLock ? string.Format(System.Globalization.CultureInfo.InvariantCulture, "; тримання стопи: поправка до {0:0.0} см", sw.HoldWorst * 100f) : "; тримання стопи вимкнено")));
+            if (_sw == sw) _sw = null;
+        }
+
+        /// <summary>Частка темпу ходи на першому кроці й перед зупинкою (розгін і гальмування замість ривка).</summary>
+        private const float StartSpeed = 0.55f, StopSpeed = 0.45f;
+
+        /// <summary>Гальмівний шлях перед зупинкою, частка оберту петлі (менше за пів вікна опори: до межі оберту не дістає).</summary>
+        private const float BrakeSpan = 0.2f;
+
+        /// <summary>
+        /// Нерухомий кліп після ходи (жест біля завіси, зупинка біля бар'єра): стає на опорний носок — стопа <paramref name="foot"/>
+        /// лишається на місці, друга з повітря ставиться поруч; поза дивиться курсом <paramref name="poseYaw"/>.
+        /// </summary>
+        private void StandOnToe(RingActor a, AnimationClip clip, int foot, float poseYaw)
+        {
+            // Курс слота жесту — за позою тієї миті, коли жест набере повну вагу й прив'язку буде знято (план міряє так само).
+            Vector3 hip, toe;
+            float hy;
+            a.SampleLocal(clip, Mathf.Min(RingWalkPlan.StandFade, clip.length * 0.5f), out hip, out hy);
+            a.FootLift(foot, out toe);
+            _pin = new ToePin { Active = true, A = a, Clip = clip, Foot = foot, Toe = toe, Yaw0 = a.Slot.eulerAngles.y, Yaw1 = poseYaw - hy };
+            a.PlayFrom(clip, 0f, false, RingWalkPlan.StandFade, 1f, true);
+        }
+
+        /// <summary>
+        /// Крокова хода, щокадру після тіку постатей: опорний носок переходу стоїть у своїй точці (слот іде за ним); у ході —
+        /// повороти довкола опорного носка за планом, розгін на першому кроці, гальмування й зупинка рівно посеред опори.
+        /// </summary>
+        private void StepTick()
+        {
+            if (_pin.Active && _pin.A.CurrentClip != _pin.Clip) _pin.Active = false;    // кліп підмінили — прив'язка сирота
+            if (_pin.Active)
+            {
+                var a = _pin.A;
+                float w = a.CurrentWeight;
+                float yaw = Mathf.LerpAngle(_pin.Yaw0, _pin.Yaw1, Smooth(w));
+                Vector3 toe;
+                a.FootLift(_pin.Foot, out toe);
+                Vector3 local = Quaternion.Inverse(a.Slot.rotation) * (toe - a.Slot.position);
+                var rot = Quaternion.Euler(0f, yaw, 0f);
+                Vector3 p = _pin.Toe - rot * local;
+                a.Slot.SetPositionAndRotation(new Vector3(p.x, a.Slot.position.y, p.z), rot);
+                // Знімається через два кадри після повної ваги: поза на екрані відстає від ваг мікшера на кадр.
+                if (w >= 0.999f && ++_pin.Tail > 2) _pin.Active = false;
+            }
+            var sw = _sw;
+            if (sw == null || sw.Done || sw.A.CurrentClip != sw.Clip) return;
+            {
+                var a = sw.A;
+                var leg = sw.Leg;
+                float len = sw.Clip.length;
+                float ph = a.ClipTimeTotal / len;
+                // 1) Темп: розгін на першому кроці, гальмування перед зупинкою. На гальмівному шляху час кліпа веде сцена, а не
+                //    граф: постать стає рівно на фазу середини опори, без перебігу й відкату, хоч би які були кадри.
+                float f = Mathf.Lerp(StartSpeed, 1f, Smooth((ph - leg.Phase0) / 0.2f)) * Mathf.Lerp(StopSpeed, 1f, Smooth((leg.PhaseStop - ph) / BrakeSpan));
+                float speed = WalkPlay * f;
+                if (leg.PhaseStop - ph <= BrakeSpan)
+                {
+                    if (!sw.Brake) { sw.Brake = true; a.SetSpeed(0f); }      // цей кадр граф уже зіграв
+                    else
+                    {
+                        float to = Mathf.Min(leg.PhaseStop, ph + speed * Time.deltaTime / len);
+                        a.HoldAt(to * len);
+                        ph = to;
+                        if (to >= leg.PhaseStop - 1e-5f) sw.Done = true;
+                    }
+                }
+                else a.SetSpeed(speed);
+                // 2) Курс слота: план і повороти у вікнах, де опорна стопа стоїть сама (пропущений кадрами кінець вікна
+                //    доводиться до кінця); на вході в петлю — від курсу старого слота до плану за вагою кліпа.
+                while (sw.TurnIx < leg.Turns.Count)
+                {
+                    var t = leg.Turns[sw.TurnIx];
+                    if (ph < t.A) break;
+                    sw.Partial = t.Deg * Smooth((ph - t.A) / Mathf.Max(1e-4f, t.B - t.A));
+                    if (ph < t.B) break;
+                    sw.Turned += t.Deg;
+                    sw.Partial = 0f;
+                    sw.TurnIx++;
+                }
+                float yaw = leg.StartYaw + sw.Turned + sw.Partial;
+                if (sw.FadeIn)
+                {
+                    float w = a.CurrentWeight;
+                    yaw = Mathf.LerpAngle(sw.YawFrom, yaw, Smooth(w));
+                    // Знімається через два кадри після повної ваги: поза на екрані відстає від ваг мікшера на кадр.
+                    if (w >= 0.999f && ++sw.Tail > 2) sw.FadeIn = false;
+                }
+                // 3) Слот — від носка опорної стопи: носок стоїть у своїй точці, поворот іде довкола нього.
+                Vector3 toe;
+                a.FootLift(sw.Foot, out toe);
+                Vector3 local = Quaternion.Inverse(a.Slot.rotation) * (toe - a.Slot.position);
+                var rot = Quaternion.Euler(0f, yaw, 0f);
+                Vector3 p = sw.Toe - rot * local;
+                a.Slot.SetPositionAndRotation(new Vector3(p.x, a.Slot.position.y, p.z), rot);
+                // 4) Друга стопа стала — опора переходить на неї: її носок лишається там, де він зараз. Стара опора стоїть
+                //    у своїй точці до відриву (крок 5).
+                Vector3 next;
+                bool land = ph >= sw.NextLand;
+                if (!land && LandLift > 0f && ph >= sw.NextLand - 0.1f) land = a.FootLift(1 - sw.Foot, out next) < LandLift;
+                if (land)
+                {
+                    sw.HoldFoot = sw.Foot;
+                    sw.HoldToe = sw.Toe;
+                    sw.HoldPh = ph;
+                    sw.Hold = FootLock;
+                    sw.Foot = 1 - sw.Foot;
+                    a.FootLift(sw.Foot, out sw.Toe);
+                    sw.NextLand = LandPhase(sw.Gait, ph, 1 - sw.Foot);
+                }
+                // 5) Стопа, з якої пішла опора: носок стоїть, де стояв, поки не підніметься; далі поправка сходить до нуля.
+                if (sw.Hold)
+                {
+                    Vector3 toe2;
+                    float lift = a.FootLift(sw.HoldFoot, out toe2);
+                    float w = (1f - Smooth((lift - HoldLift) / HoldFade)) * (1f - Smooth((ph - sw.HoldPh - HoldSpan) / HoldSpan));
+                    if (w <= 0f) sw.Hold = false;
+                    else
+                    {
+                        Vector3 d = sw.HoldToe - toe2;
+                        d.y = 0f;
+                        float m = d.magnitude;
+                        if (m > HoldMax) d *= HoldMax / m;
+                        sw.HoldWorst = Mathf.Max(sw.HoldWorst, Mathf.Min(m, HoldMax) * w);
+                        a.ShiftFoot(sw.HoldFoot, d * w);
+                    }
+                }
+                if (SlipSplit) SplitTick(sw);
+                _walkPos = a.PosePos;
+                _walkYaw = Mathf.LerpAngle(_walkYaw, yaw + sw.Gait.TravelYaw, 1f - Mathf.Exp(-8f * Time.deltaTime));
+            }
+        }
+
+        /// <summary>
+        /// Огляд <c>-ring-diag-slip</c>: шлях носка за опору (ті самі пороги, що у фаз-тесту: носок нижче 3 см, зсув до
+        /// 1 м/с) за частинами — до того, як стопа стала опорою слота, поки нею була, і після. Рядок на кожну опору.
+        /// </summary>
+        private void SplitTick(StepWalk sw)
+        {
+            var a = sw.A;
+            float dt = Time.deltaTime;
+            for (int f = 0; f < 2; f++)
+            {
+                Vector3 p;
+                bool down = a.FootLift(f, out p) < 0.03f;
+                if (down && sw.Down[f] && dt > 0f)
+                {
+                    float st = new Vector2(p.x - sw.Prev[f].x, p.z - sw.Prev[f].z).magnitude;
+                    if (st / dt < 1f)
+                    {
+                        if (f == sw.Foot) sw.DMid[f] += st;
+                        else if (sw.WasAnchor[f]) sw.DPost[f] += st;
+                        else sw.DPre[f] += st;
+                    }
+                }
+                else if (!down && sw.Down[f])
+                    Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                        "[Ринг] крокова хода, опора: {0} {1} {2}: до опори {3:0.0} мм, опорою {4:0.0} мм, після {5:0.0} мм",
+                        a.Name, sw.Clip.name, f == 0 ? "ліва" : "права", sw.DPre[f] * 1000f, sw.DMid[f] * 1000f, sw.DPost[f] * 1000f));
+                if (down && !sw.Down[f]) { sw.DPre[f] = sw.DMid[f] = sw.DPost[f] = 0f; sw.WasAnchor[f] = false; }
+                if (f == sw.Foot) sw.WasAnchor[f] = true;
+                sw.Down[f] = down;
+                sw.Prev[f] = p;
+            }
+        }
+
         /// <summary>
         /// Відрізок ходи від <paramref name="s0"/> до <paramref name="s1"/> метрів шляху. Цілими циклами петлі (на межі циклу
         /// стопи стоять — перехід у наступний кліп не ковзає); залишок до точної довжини — поправкою на швидкість шляху,
@@ -775,8 +1187,22 @@ namespace Game.Gameplay.Ring.Stage
             if (!_skip) _walkPos = PointAt(path, cum, s1, out yaw0);
         }
 
+        /// <summary>Огляд ходи (лише кадри У2): камера на стопи збоку чи спереду — <c>-ring-diag-feetcam side|front</c>.</summary>
+        private static readonly string FeetCam = RingStage3D.ReadArg("-ring-diag-feetcam");
+
         private void WalkCamera()
         {
+            if (FeetCam != null)
+            {
+                Vector3 ahead0 = Quaternion.Euler(0f, _walkYaw, 0f) * Vector3.forward;
+                Vector3 side0 = Quaternion.Euler(0f, 90f, 0f) * ahead0;
+                bool front = FeetCam == "front";
+                // Збоку — всередині проходу (огорожа за ~1,2 м від осі: з 2,4 м стопи закривали її стійки й стільці, слот 15.11.2026).
+                // Склейкою щокадру: згладжування камери (стала ~0,3 с) відставало від ходака, стопи виходили з кадру (рецензія 16.11).
+                if (front) Look(_walkPos + ahead0 * 3.0f + Vector3.up * 0.32f, _walkPos + Vector3.up * 0.14f, 30f, true);
+                else Look(_walkPos + side0 * 0.95f + Vector3.up * 0.22f, _walkPos + Vector3.up * 0.12f, 55f, true);
+                return;
+            }
             Vector3 fwd = Quaternion.Euler(0f, _walkYaw, 0f) * Vector3.forward;
             Vector3 ahead = _walkPos + fwd * 3.4f + new Vector3(0.9f, 1.7f, 0f);
             if (Mathf.Abs(ahead.x) > 4.2f || Mathf.Abs(ahead.z) > 4.2f)
@@ -832,6 +1258,8 @@ namespace Game.Gameplay.Ring.Stage
         /// </summary>
         public void PinWalker()
         {
+            // Крокова хода (план RingWalkPlan): слот веде опорний носок і власний хід петлі; стара — нижче, лише огляд «було».
+            if (!OldPin) { StepTick(); if (_walker == null) return; }
             if (_walker == null) return;
             var a = _walker;
             Vector3 hip = a.PosePos - a.Slot.position;
@@ -901,7 +1329,7 @@ namespace Game.Gameplay.Ring.Stage
         {
             StopAllCoroutines();
             BeltOff();
-            _walker = null;
+            StopWalk();
             _skip = false;
             StartCoroutine(Intro(title, sub));
         }
@@ -965,7 +1393,7 @@ namespace Game.Gameplay.Ring.Stage
         {
             StopAllCoroutines();
             BeltOff();
-            _walker = null;
+            StopWalk();
             _skip = false;
             StartCoroutine(Open(title, sub));
         }
@@ -1014,6 +1442,7 @@ namespace Game.Gameplay.Ring.Stage
         public void ShowBackstage()
         {
             StopAllCoroutines();
+            StopWalk();
             Busy = false;
             if (_backstage == null) BuildBackstage();
             _backstage.SetActive(true);
@@ -1021,7 +1450,11 @@ namespace Game.Gameplay.Ring.Stage
             Vector3 o = BackstageOrigin;
             _s.Place(hero, o + HeroSpot, 70f, "Ring_Stance_Loop");
             if (_booker != null) _s.Place(_booker, o + BookerSpot, -110f, "Ref_Idle_Loop");
-            Look(o + new Vector3(0.6f, 1.75f, -3.6f), o + new Vector3(0f, 1.2f, 0.4f), 46f, true);
+            Look(o + new Vector3(0.6f, 1.75f, -3.6f), o + new Vector3(0.6f, 1.2f, 0.4f), 46f, true);
+            // Загальний план — окремим рядком: виклик Look вище розбирає охоронець мети шухляди тижня (CareerTextFitTests.BackstageView).
+            // Курс камери — прямо вздовж кімнати (ціль була (0; 1,2; 0,4), +8,5°): права межа обличчя букерки (брова → підборіддя)
+            // на 16:9 — 859–864 з 1600, межа АД — 870 (15.11.2026); герой лишається в кадрі (ліве плече 438 на 16:9, 238 на 4:3).
+            BackstageWide = true;
         }
 
         // Місця в роздягальні від BackstageOrigin: герой біля лавки, букер біля свого столу; гість, що стоїть поруч із букером
@@ -1079,7 +1512,7 @@ namespace Game.Gameplay.Ring.Stage
             Vector3 across = Vector3.Cross(Vector3.up, (b - h).normalized);
             if (talker != null) Look(h + (h - b).normalized * 0.9f + across * 0.45f + Vector3.up * 0.1f, b, 34f, true);
             else if (speaker == "player") Look(b + (b - h).normalized * 0.9f - across * 0.45f + Vector3.up * 0.1f, h, 34f, true);
-            else { var o = BackstageOrigin; Look(o + new Vector3(0.6f, 1.75f, -3.6f), o + new Vector3(0f, 1.2f, 0.4f), 46f, false); }
+            else { var o = BackstageOrigin; Look(o + new Vector3(0.6f, 1.75f, -3.6f), o + new Vector3(0.6f, 1.2f, 0.4f), 46f, false); BackstageWide = true; }
         }
 
         private RingActor _guest;
@@ -1131,7 +1564,7 @@ namespace Game.Gameplay.Ring.Stage
             CamActive = false;
         }
 
-        public void TickBooker(float dt) { if (_booker != null) _booker.Tick(dt); }
+        public void TickBooker(float dt) { if (_booker != null) { _booker.Tick(dt); _s.ApplyBounce(_booker); } }
 
         private void BuildBackstage()
         {
@@ -1186,8 +1619,15 @@ namespace Game.Gameplay.Ring.Stage
 
         // ============================ спільне ============================
 
+        /// <summary>
+        /// Загальний план роздягальні (тиждень, оповідач) — камера показу кладе героя між панелями екрана тижня
+        /// (<see cref="RingFrameZone"/>); кадри розмови через плече — ні.
+        /// </summary>
+        public bool BackstageWide { get; private set; }
+
         private void Look(Vector3 pos, Vector3 look, float fov, bool cut)
         {
+            BackstageWide = false;   // загальний план роздягальні вмикає ShowBackstage після виклику
             CamPos = pos;
             CamLook = look;
             CamFov = fov;

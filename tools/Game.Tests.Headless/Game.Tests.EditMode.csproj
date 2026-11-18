@@ -102,6 +102,8 @@
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingOutsideCourse.cs" />
     <!-- Ринг: фаза й темп петель очікування за роллю (живе очікування, 14.11.2026) — чистий C#, охоронці RingIdlePhaseTests. -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingIdlePhase.cs" />
+    <!-- Ринг: крокова хода виходу без ковзання стоп (умови АД 15.11.2026) — чистий C#, охоронці RingWalkPlanTests. -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingWalkPlan.cs" />
     <!-- Ринг: сценарії демо під нове ядро (Ф2, крок 9) — справжній рушій і кубик за сценарієм, охоронці RingDemoScriptTests. -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingDemoScript.cs" />
     <!-- Ринг: екран виходу (ТЗ B07) і персональний вихід (ENTRANCE_PROFILE.md) — чистий C#, охоронці EntranceScreenTests, EntranceProfileTests. -->
@@ -111,6 +113,8 @@
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingVenue.cs" />
     <!-- Ринг: люди кар'єри поза рингом (букери, гості закулісся, менеджерка) — чистий C#, охоронці BackstageCastTests (вигляд NPC — CareerLooks вище). -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/BackstageCast.cs" />
+    <!-- Ринг: вільна зона кадру між панелями UI (герой наодинці, закулісся, картка шоу) — чистий C#, охоронці RingFrameZoneTests. -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingFrameZone.cs" />
     <!-- Ринг: живе очікування (вставки в стійку, власник 14.11.2026) — чистий C#, охоронці RingIdleLifePlanTests. -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingIdleLifePlan.cs" />
     <!-- Ринг: фінішер як кіно (розкадровка, рампа сповільнення, місце камери; власник 14.11.2026) — чистий C#, охоронці RingFinisherCinePlanTests. -->

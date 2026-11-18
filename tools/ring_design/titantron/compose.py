@@ -6,7 +6,7 @@
 """
 import math
 
-from .common import ALPHA, KITS, TIERS
+from .common import ALPHA, KITS, TIERS, H as FRAME_H, slot_map, tag_texts
 from . import timeline as T
 
 G, D, M = ALPHA["ghost"], ALPHA["dim"], ALPHA["mid"]
@@ -104,6 +104,73 @@ def core(c, style, plate_mod, enter=(0.0, -0.95)):
     return out
 
 
+# ----------------------------------------------------------------- тег під плитою: правило зазору (арт-директор, 15.11.2026)
+
+TAG_GAP_MIN = 8      # px на полотні 1024×512: верх чорнила тега нижче за найнижчу точку плити + plate_back — не менше
+TAG_GAP_AIM = 10     # ціль розкладки: запас 2 px на округлення растеризації (поворот, bicubic, _paste) і похибку шрифта в грі
+
+
+def _plate_poly(L, hpx):
+    """Контур плити шару (як render._plate_mask + обертання) у пікселях відносно центру кадру, у найбільшому масштабі
+    пульсу (усталений стан: пульс повторюється, гірший випадок — пік 1 + амплітуда)."""
+    amp = (L.get("mod") or {}).get("pulse", [0, 0.0])[1]
+    sc = 1.0 + amp
+    w, h = round(L["w"] * hpx * sc), round(L["h"] * hpx * sc)
+    shear = math.tan(math.radians(L.get("slant", 12))) * h
+    bw = int(w + abs(shear))
+    if shear >= 0:
+        pts = [(shear, 0), (shear + w, 0), (w, h), (0, h)]
+    else:
+        pts = [(0, 0), (w, 0), (w - shear, h), (-shear, h)]
+    th = math.radians(L.get("rot", 0.0))   # обертання за годинниковою стрілкою на екрані (y вниз), як im.rotate(-rot)
+    ct, st = math.cos(th), math.sin(th)
+    cx, cy = L.get("x", 0.0) * hpx, L.get("y", 0.0) * hpx
+    out = []
+    for px, py in pts:
+        x, y = px - bw / 2.0, py - h / 2.0
+        out.append((cx + x * ct - y * st, cy + x * st + y * ct))
+    return out
+
+
+def _poly_bottom(poly, xa, xb):
+    """Найнижча (найбільший y) точка опуклого багатокутника в смузі x ∈ [xa, xb]."""
+    best = None
+    n = len(poly)
+    cand = [p for p in poly if xa <= p[0] <= xb]
+    for i in range(n):
+        (x0, y0), (x1, y1) = poly[i], poly[(i + 1) % n]
+        if x0 == x1:
+            continue
+        for xv in (xa, xb):
+            if min(x0, x1) <= xv <= max(x0, x1):
+                cand.append((xv, y0 + (y1 - y0) * (xv - x0) / (x1 - x0)))
+    for _, y in cand:
+        best = y if best is None else max(best, y)
+    return best
+
+
+def tag_y(c, tsp):
+    """Центр тега по y (одиниці кадру), щоб верх ЧОРНИЛА найширшого/найвищого справжнього напису був ≥ TAG_GAP_AIM px нижче
+    за низ плити разом з plate_back, у проміжку по x, який займає цей напис. Враховано: поворот плити за роллю, нахил,
+    кегль (×1,35 рукописного шрифту в «спортзалі» й припасування fit — через ту саму растеризацію, що й прев'ю), пульс.
+    Дві моделі центрування, береться гірша: прев'ю (render.text_stamp обрізає штамп по чорнилу — центр шару = центр чорнила)
+    і програвач гри (центр ящика рядка asc + desc — render.player_ink_top_offset; оцінка за метриками, не знімок Unity)."""
+    from . import render
+    plates = [L for L in c.layers if L["k"] == "plate"]
+    slots = slot_map(c.role, c.tier)
+    hpx = FRAME_H
+    need = 0.0
+    for txt in tag_texts(c.g, c.role):
+        im = render.text_stamp(txt, tsp, tsp["size"] * hpx, tsp.get("fit", 0) * hpx, slots, c.tier)
+        xa, xb = -im.width / 2.0, im.width / 2.0
+        bottom = max(_poly_bottom(_plate_poly(L, hpx), xa, xb) for L in plates)
+        need = max(need, bottom + TAG_GAP_AIM + im.height / 2.0)   # модель прев'ю: центр = центр чорнила
+        # Модель програвача: центр = центр ящика рядка (asc + desc); верх чорнила зсувається на off від центра (до ~4 px вгору)
+        off = render.player_ink_top_offset(txt, tsp, tsp["size"] * hpx, tsp.get("fit", 0) * hpx, c.tier)
+        need = max(need, bottom + TAG_GAP_AIM - off)
+    return math.ceil(need / hpx * 1e4) / 1e4
+
+
 def add_texts(c, style, name_size=None):
     H, f = c.H, c.flip
     gym = c.tier == "gym"
@@ -140,7 +207,9 @@ def add_texts(c, style, name_size=None):
         tr(kick, "a", K(0, 0), K(H + 0.55, 0.0), K(H + 1.0, 1.0, "o3"))
         tr(kick, "y", K(0, ky + 0.055), K(H + 0.55, ky + 0.055, "s"), K(H + 1.0, ky, "o3"))
     tsp = {"slot": "tag", "font": "display700", "size": 0.066, "fit": 1.5, "fill": "$cool", "tracking": 0.30, "hand": True}
-    tag = c.add("tag", "text", text=tsp, y=PY + ph_ / 2 + OFFY + 0.045)
+    # Тег — під плитою: y із правила зазору (tag_y), а не з фіксованого відступу — інакше поворот плити, нахил і кегль
+    # рукописного шрифту підсували плиту/смужку plate_back на верх напису.
+    tag = c.add("tag", "text", text=tsp, y=tag_y(c, tsp))
     tr(tag, "a", K(0, 0), K(H + 1.0, 0.0), K(H + 1.4, 1.0, "o3"))
     return name
 

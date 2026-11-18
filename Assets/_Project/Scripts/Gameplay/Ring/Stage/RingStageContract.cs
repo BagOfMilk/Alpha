@@ -128,6 +128,15 @@ namespace Game.Gameplay.Ring.Stage
         /// порожньо), масштаб суперника (1 — як герой). Та сама зовнішність — без перебудови.
         /// </summary>
         void SetWrestlers(string playerBody, int playerRgb, string playerHair, string rivalBody, int rivalRgb, string rivalHair, float rivalScale);
+
+        /// <summary>
+        /// Джерело панелей екрана кар'єри над 3D (огляд слотів 32–33): повертає їхні межі в частках екрана від лівого верхнього
+        /// кута, порожньо — панелей немає. Сцена питає сама, коли рахує кадр (щойно після склейки — щокадру, поки розкладка
+        /// екрана не встоїться; далі — десять разів на секунду), і повертає камеру так, щоб той, кого показує, ліг між панелями:
+        /// героя на створенні й наприкінці сезону, пару на картці шоу, героя в закуліссі. Де все й так видно, кадр не
+        /// змінюється (<see cref="RingFrameZone"/>). <c>null</c> — вимкнути.
+        /// </summary>
+        void SetUiPanelSource(System.Func<System.Collections.Generic.IList<RingFrameZone.Box>> source);
     }
 
     /// <summary>Єдина точка доступу до 3D-сцени з екранів. Пуста, якщо сцена без <c>RingStage3D</c>.</summary>

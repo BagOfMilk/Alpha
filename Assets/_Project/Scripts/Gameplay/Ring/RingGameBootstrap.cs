@@ -105,6 +105,8 @@ namespace Game.Gameplay.Ring
 
         private void OnDestroy()
         {
+            // сцена не питає панелей у знищеного екрана
+            if (_panelStage != null && RingStageHub.Current == _panelStage) _panelStage.SetUiPanelSource(null);
             if (_host != null) Destroy(_host);
             if (_panel != null) Destroy(_panel);
         }
@@ -318,6 +320,58 @@ namespace Game.Gameplay.Ring
             if (_shotsDir != null && !MenuOverlayBusy) ShotsStep();
             if (_view != null) _view.Tick(Time.unscaledDeltaTime);
             Sync();
+            ProbePanels();
+        }
+
+        // ---------------- вільна зона кадру ----------------
+
+        private readonly List<RingFrameZone.Box> _panelRects = new List<RingFrameZone.Box>();
+        private IRingStage _panelStage;
+        private Func<IList<RingFrameZone.Box>> _panelSource;
+
+        /// <summary>Сцені — джерело панелей екрана (<see cref="PanelSource"/>); раз на появу сцени.</summary>
+        private void ProbePanels()
+        {
+            var stage = RingStageHub.Current;
+            if (stage == _panelStage) return;
+            _panelStage = stage;
+            if (stage != null) stage.SetUiPanelSource(_panelSource ?? (_panelSource = PanelSource));
+        }
+
+        /// <summary>
+        /// Панелі екрана кар'єри для сцени (вільна зона кадру, огляд слотів 32–33, ПМ 13.11.2026; У0 арт-директора 14.11.2026):
+        /// непрозорі плити <see cref="ArenaPlate"/> і аркуші <see cref="PaperSheet"/> шару екрана — їхні межі в частках екрана.
+        /// Сцена питає сама, коли рахує кадр. Інші екрани (матч, промо, меню) — порожньо: кадр там свій. <c>null</c> — розкладка
+        /// щойно відкритого екрана ще не порахована (UI Toolkit рахує її перед малюванням): сцена спитає наступного кадру.
+        /// </summary>
+        private IList<RingFrameZone.Box> PanelSource()
+        {
+            _panelRects.Clear();
+            if (_screenLayer == null || _panel == null || _view == null || !(_view is UI.CareerScreenView)) return _panelRects;
+            if (_screenLayer.resolvedStyle.display == DisplayStyle.None) return _panelRects;
+            Rect rb = _view.Root.worldBound;
+            if (float.IsNaN(rb.width) || float.IsNaN(rb.height) || rb.width < 1f) return null;
+            // Координати панелі UI — пікселі екрана, поділені на масштаб, від лівого верхнього кута.
+            float k = Mathf.Max(0.01f, _panel.scale);
+            var screen = new Rect(0f, 0f, Screen.width / k, Screen.height / k);
+            if (screen.width > 1f && screen.height > 1f) CollectPanels(_screenLayer, screen);
+            return _panelRects;
+        }
+
+        private void CollectPanels(VisualElement e, Rect screen)
+        {
+            if (e.resolvedStyle.display == DisplayStyle.None) return;
+            var plate = e as ArenaPlate;
+            if ((plate != null && plate.Fill.a >= 0.3f) || e is PaperSheet)
+            {
+                // плита заповнює свій ящик: її межі — межі панелі; текст і значки — всередині
+                Rect wb = e.worldBound;
+                if (!float.IsNaN(wb.width) && !float.IsNaN(wb.height) && wb.width >= 8f && wb.height >= 8f)
+                    _panelRects.Add(new RingFrameZone.Box((wb.xMin - screen.xMin) / screen.width, (wb.yMin - screen.yMin) / screen.height,
+                        (wb.xMax - screen.xMin) / screen.width, (wb.yMax - screen.yMin) / screen.height));
+                return;
+            }
+            for (int i = 0; i < e.childCount; i++) CollectPanels(e[i], screen);
         }
 
         /// <summary>Шоу 3D (вступ, виходи): true — ще грає, UI сховано.</summary>

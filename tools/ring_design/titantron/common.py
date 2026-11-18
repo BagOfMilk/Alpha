@@ -55,3 +55,23 @@ def resolve(tint, slots):
 
 def allowed_alphas():
     return sorted({0.0, 1.0} | set(ALPHA.values()))
+
+
+# ----------------------------------------------------------------- тексти тега (для розкладки під плитою)
+
+UI_UK = ROOT / "Assets/Resources/Ring/ui_uk.json"
+# Сімейство ролика → ключі ґіміків гри, що виходять цим роликом (EntranceProfile.Families); роль ролика → ключ шляху.
+FAMILY_GIMMICKS = {"monster": ("monster", "hardcore", "strongman"), "flyer": ("flyer",),
+                   "technician": ("technician", "veteran"), "showman": ("showman", "rookie")}
+ROLE_PATH = {"hero": "face", "villain": "heel", "rebel": "rebel"}
+
+
+def tag_texts(family, role):
+    """Усі справжні написи тега «ґімік · шлях» (ВЕЛИКІ, як RingTheme.Caps), що можуть стояти в пулі (сімейство, роль):
+    чоловічий і жіночий рід (рід ґіміка й шляху збігаються — EntranceScreenMath.Tag). Джерело — ui_uk.json гри."""
+    ui = json.loads(UI_UK.read_text(encoding="utf-8"))
+    out = []
+    for g in FAMILY_GIMMICKS[family]:
+        for suf in ("", ".fem"):
+            out.append(("%s · %s" % (ui["gimmick." + g + suf], ui["path." + ROLE_PATH[role] + suf])).upper())
+    return sorted(set(out))
