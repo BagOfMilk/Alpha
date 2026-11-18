@@ -1469,6 +1469,19 @@ namespace Game.Tests.EditMode
                 TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "підказка {0}: {1} ряд. ({2:0.0} — ширина в один рядок)", RingSettingsTabs.GameHints[i], lines,
                     TextFont.Width(h, BrandTokens.TypeLabel)));
             }
+            // Примітки вкладок (SettingsPanel: Керування, Мова, Звук, Доступність) — на тій самій підкладці з полями HintPad. У «Керуванні»
+            // під дев'ятьма рядками клавіш до кнопок лишається один рядок (кадр 019 на 4:3, 17.11.2026): перенос ліг би на кнопки.
+            foreach (var key in new[] { "m.set.note.pad", "m.set.note.lang", "m.set.note.sound", "m.set.note.access" })
+            {
+                string h = Ui(key);
+                float widest;
+                int lines = TextFont.Lines(h, BrandTokens.TypeLabel, RingSettingsTabs.RowW - 2f * RingSettingsTabs.HintPad - RenderSlack, 0f, out widest);
+                int max = key == "m.set.note.pad" ? 1 : 2;
+                if (lines > max) bad.Add("примітка " + key + ": " + lines + " ряд. (не більше " + max + ")");
+                if (TextFont.Missing(h).Count > 0) bad.Add("примітка " + key + ": немає літер у шрифті — " + new string(TextFont.Missing(h).ToArray()));
+                TestContext.WriteLine(string.Format(CultureInfo.InvariantCulture, "примітка {0}: {1} ряд. ({2:0.0} — ширина в один рядок, місце {3:0.0})", key, lines,
+                    TextFont.Width(h, BrandTokens.TypeLabel), RingSettingsTabs.RowW - 2f * RingSettingsTabs.HintPad - RenderSlack));
+            }
             Assert.IsTrue(Ui(RingSettingsTabs.GameHints[0]).Contains("QTE"), "слово QTE — у підказці «Швидких натискань» (АД 15.11.2026)");
             CollectionAssert.AreEqual(new[] { "Вимкнено", "Рідко", "Помірно", "Часто" },
                 new[] { Ui(RingSettingsTabs.ActionShotsKey(RingActionShots.Off)), Ui(RingSettingsTabs.ActionShotsKey(RingActionShots.Rare)),
