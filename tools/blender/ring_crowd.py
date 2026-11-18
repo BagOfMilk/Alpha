@@ -315,6 +315,10 @@ HAIR = {"m": ("short01", "short02", "short03", "short04", "cortu_short_messy_hai
               "cortu_straight_bangs", None),
         "f": ("long01", "ponytail01", "bob01", "bob02", "braid01", "toigo_blunt_bob", "toigo_curled_under_bob",
               "culturalibre_hair_05", "culturalibre_hair_06", "afro01", "toigo_inverted_bob_with_bangs")}
+# Чубчик, що закриває все обличчя (на 1,5–3 м від камери обличчя не видно зовсім) — замінюється в fan_specs. Лишаються в
+# переліку, щоб вибір зачіски решти фанатів (хеш за довжиною переліку) не змінився. Власник 18.11.2026: «чубчик повністю
+# закриває обличчя».
+BANGS = ("toigo_inverted_bob_with_bangs", "cortu_straight_bangs")
 # Вбрання: (верх, низ, взуття). Повний комплект (casualsuit) — одна сітка; футболки — перефарбовуються з екземпляра
 # (мерч промоушену: найчастіше чорні), комплекти лишають свої кольори.
 OUTFITS = {"m": [("male_casualsuit01",), ("male_casualsuit02",), ("male_casualsuit03",), ("male_casualsuit04",),
@@ -348,6 +352,9 @@ def fan_specs():
         skin = "%s_%s_%s" % (stage, rname, "male" if sex == "m" else "female")
         outfit = OUTFITS[sex][int(h01(tag, 12) * len(OUTFITS[sex])) % len(OUTFITS[sex])]
         hair = HAIR[sex][int(h01(tag, 13) * len(HAIR[sex])) % len(HAIR[sex])]
+        if hair in BANGS:                                             # чубчик закриває все обличчя — інша зачіска тієї ж статі
+            pool = [x for x in HAIR[sex] if x not in BANGS]
+            hair = pool[int(h01(tag, 21) * len(pool)) % len(pool)]
         if culture == "west_african" and h01(tag, 14) < 0.5:
             hair = "afro01"
         if i == 21:
@@ -473,6 +480,89 @@ def join(objs, name):
     objs[0].data.name = name
     return objs[0]
 
+def follow_body(body, cloth):
+    """Одяг рухається разом із тілом: ваги кісток — з тіла-проксі під ним (найближча грань, інтерпольовано).
+
+    Ваги одягу MPFB переносить з базової сітки, тіла-проксі — свої; після спрощення вони розходяться, і в крайніх позах
+    (руки вгору) рука виходила крізь рукав біля плеча — тілесні плями на футболці (проба 18.11.2026). Робиться в позі
+    спокою, до hide_under_clothes (джерелу потрібне ціле тіло).
+    """
+    if body is None:
+        return
+    names = [vg.name for vg in body.vertex_groups]
+    for o in cloth:
+        o.vertex_groups.clear()
+        for n in names:
+            o.vertex_groups.new(name=n)
+        md = o.modifiers.new("follow", 'DATA_TRANSFER')
+        md.object = body
+        md.use_vert_data = True
+        md.data_types_verts = {'VGROUP_WEIGHTS'}
+        md.vert_mapping = 'POLYINTERP_NEAREST'
+        md.layers_vgroup_select_src = 'ALL'
+        md.layers_vgroup_select_dst = 'NAME'
+        md.mix_mode = 'REPLACE'
+        md.mix_factor = 1.0
+        o.modifiers.move(len(o.modifiers) - 1, 0)
+        with bpy.context.temp_override(object=o, active_object=o):
+            bpy.ops.object.modifier_apply(modifier=md.name)
+
+def hide_under_clothes(body, cloth, reach=0.08, inside=0.02, sink=0.01):
+    """Тіло під одягом: грані, яких усі вершини вкриті одягом, видалити; вкриті вершини межі — утопити на sink під тканину.
+
+    Замість масок MPFB (вирізали тіло із запасом: у виріз коміра, рукави й під поділ було видно наскрізь) і поверх
+    спрощеного одягу (TRIS), що тонший за тіло (власник 18.11.2026: «Шкіра пробиває футболку на плечах і животі»).
+    Вершина вкрита, якщо промінь назовні по її нормалі (з глибини inside — щоб упіймати й ту, що вже
+    пробила тканину) влучає в одяг ЗСЕРЕДИНИ (нормаль грані тканини — уздовж променя): так внутрішній бік руки, що
+    «дивиться» на футболку тулуба ззовні, вкритим не рахується. Поза спокою, тіло й одяг на одному скелеті.
+    """
+    from mathutils.bvhtree import BVHTree
+    if body is None or not cloth:
+        return 0, 0
+    dg = bpy.context.evaluated_depsgraph_get()
+    verts, polys = [], []
+    for o in cloth:
+        ev = o.evaluated_get(dg)
+        me = ev.to_mesh()
+        mw = o.matrix_world
+        base = len(verts)
+        verts += [mw @ v.co for v in me.vertices]
+        polys += [[base + i for i in p.vertices] for p in me.polygons]
+        ev.to_mesh_clear()
+    if not polys:
+        return 0, 0
+    tree = BVHTree.FromPolygons(verts, polys, all_triangles=False)
+    if body.data.shape_keys:                                          # ключі форми перекрили б правку координат
+        with bpy.context.temp_override(object=body, active_object=body):
+            bpy.ops.object.shape_key_remove(all=True, apply_mix=True)
+    ev = body.evaluated_get(dg)
+    em = ev.to_mesh()
+    mw = body.matrix_world
+    nmat = mw.to_3x3().inverted().transposed()
+    inv = mw.inverted()
+    same = len(em.vertices) == len(body.data.vertices)
+    pos = [mw @ v.co for v in (em.vertices if same else body.data.vertices)]
+    nor = [(nmat @ v.normal).normalized() for v in (em.vertices if same else body.data.vertices)]
+    ev.to_mesh_clear()
+    covered = {}
+    for i, (p, n) in enumerate(zip(pos, nor)):
+        hit, hn, _, d = tree.ray_cast(p - n * inside, n, reach + inside)
+        if hit is not None and hn.dot(n) > 0.2:
+            covered[i] = d - inside                                   # де тканина відносно вершини тіла (< 0 — пробиває)
+    bm = bmesh.new()
+    bm.from_mesh(body.data)
+    bm.verts.ensure_lookup_table()
+    dead = [f for f in bm.faces if all(v.index in covered for v in f.verts)]
+    for v in bm.verts:                                                # межа: під тканину на sink
+        t = covered.get(v.index)
+        if t is not None and t < sink:
+            v.co = inv @ (pos[v.index] + nor[v.index] * (t - sink))
+    bmesh.ops.delete(bm, geom=dead, context='FACES')
+    bm.to_mesh(body.data)
+    bm.free()
+    body.data.update()
+    return len(dead), len(covered)
+
 def build_fan(tag, spec):
     """Фанат MPFB: (арматура, LOD0, LOD1)."""
     bald = spec["hair"] is None
@@ -487,8 +577,15 @@ def build_fan(tag, spec):
     for o in list(rig.children):
         if o.type != 'MESH' or o is base:
             continue
-        apply_masks(o)
         short = o.name.split(".", 1)[-1]
+        if short.startswith(PROXIES):
+            # Маски MPFB на тілі вирізають із запасом — і там, де тіло видно у виріз коміра, у рукави й під поділ: з
+            # відкиданням зворотних граней (URP) у ці отвори видно наскрізь фон і сусідів. Тіло під одягом ріже
+            # hide_under_clothes — лише те, що тканина справді вкриває.
+            for md in [md for md in o.modifiers if md.type == 'MASK']:
+                o.modifiers.remove(md)
+        else:
+            apply_masks(o)
         if short.startswith(PROXIES):
             if skin is not None:
                 o.data.materials.clear()
@@ -522,6 +619,11 @@ def build_fan(tag, spec):
                                 m.node_tree.links.remove(l)
                             bs.inputs["Specular IOR Level"].default_value = 0.25
         keep.append(o)
+    body = next((o for o in keep if o.name.split(".", 1)[-1].startswith(PROXIES)), None)
+    cloth = [o for o in keep if o.name.split(".", 1)[-1].startswith(tuple(spec["clothes"]))]
+    follow_body(body, cloth)
+    gone, cov = hide_under_clothes(body, cloth)
+    print("[натовп] %s: тіло під одягом — вкритих вершин %d, видалено граней %d" % (tag, cov, gone), flush=True)
     if spec.get("cap"):
         head = next((o for o in keep if o.name.split(".", 1)[-1].startswith(PROXIES)), keep[0])
         keep.append(make_cap(rig, head))

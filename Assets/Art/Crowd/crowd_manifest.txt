@@ -1,36 +1,36 @@
 # Натовп (tools/blender/ring_crowd.py). fan <ім'я> <LOD0 трик.> <LOD1 трик.>; clip <ім'я> <сидячи|стоячи>
-fan fan_m_ukrainian_0 6894 899
-fan fan_f_ukrainian_0 6688 900
-fan fan_m_nordic_0 6894 898
-fan fan_f_nordic_0 6520 899
-fan fan_m_mediterranean_0 7473 899
-fan fan_f_mediterranean_0 6639 900
-fan fan_m_middle_eastern_0 6614 900
-fan fan_f_middle_eastern_0 6520 898
-fan fan_m_west_african_0 5616 899
-fan fan_f_west_african_0 7154 899
-fan fan_m_east_asian_0 5895 900
-fan fan_f_east_asian_0 6522 899
-fan fan_m_south_asian_0 5895 900
-fan fan_f_south_asian_0 6837 899
-fan fan_m_latin_0 6468 900
-fan fan_f_latin_0 7165 899
-fan fan_m_ukrainian_1 6632 899
-fan fan_f_ukrainian_1 6911 899
-fan fan_m_nordic_1 5894 899
-fan fan_f_nordic_1 6519 898
-fan fan_m_mediterranean_1 6893 900
-fan fan_f_mediterranean_1 6817 900
-fan fan_m_middle_eastern_1 6658 900
-fan fan_f_middle_eastern_1 6687 900
-fan fan_m_west_african_1 6632 899
-fan fan_f_west_african_1 7154 899
-fan fan_m_east_asian_1 6989 900
-fan fan_f_east_asian_1 6836 900
-fan fan_m_south_asian_1 6866 900
-fan fan_f_south_asian_1 7159 899
-fan fan_m_latin_1 6991 898
-fan fan_f_latin_1 7159 898
+fan fan_m_ukrainian_0 6970 900
+fan fan_f_ukrainian_0 6306 900
+fan fan_m_nordic_0 6930 900
+fan fan_f_nordic_0 6678 899
+fan fan_m_mediterranean_0 6861 898
+fan fan_f_mediterranean_0 6403 899
+fan fan_m_middle_eastern_0 6296 899
+fan fan_f_middle_eastern_0 6676 899
+fan fan_m_west_african_0 5286 899
+fan fan_f_west_african_0 7238 900
+fan fan_m_east_asian_0 5930 899
+fan fan_f_east_asian_0 6668 900
+fan fan_m_south_asian_0 5927 900
+fan fan_f_south_asian_0 6379 900
+fan fan_m_latin_0 6466 899
+fan fan_f_latin_0 7285 900
+fan fan_m_ukrainian_1 6630 900
+fan fan_f_ukrainian_1 6643 900
+fan fan_m_nordic_1 5930 898
+fan fan_f_nordic_1 6609 899
+fan fan_m_mediterranean_1 6969 899
+fan fan_f_mediterranean_1 6601 899
+fan fan_m_middle_eastern_1 6769 899
+fan fan_f_middle_eastern_1 6293 900
+fan fan_m_west_african_1 6614 899
+fan fan_f_west_african_1 7232 900
+fan fan_m_east_asian_1 7021 900
+fan fan_f_east_asian_1 6373 900
+fan fan_m_south_asian_1 5238 899
+fan fan_f_south_asian_1 7019 899
+fan fan_m_latin_1 7027 900
+fan fan_f_latin_1 7019 898
 clip Cam_Walk_Gimbal_Loop стоячи ik_cm 0.0
 clip Cam_Stand_Film_Loop стоячи ik_cm 0.0
 clip Cam_Kneel_Film_Loop стоячи ik_cm 0.0
@@ -39,12 +39,12 @@ clip Sit_Talk_Loop сидячи ik_cm 0.0
 clip Sit_Clap_Loop сидячи ik_cm 0.0
 clip Sit_Cheer_Loop сидячи ik_cm 0.0
 clip Sit_Boo_Loop сидячи ik_cm 0.0
-clip Sit_Point_Loop сидячи ik_cm 0.0
+clip Sit_Point_Loop сидячи ik_cm 0.7
 clip Sit_Phone_Loop сидячи ik_cm 0.0
-clip Sit_Lean_Loop сидячи ik_cm 17.4
+clip Sit_Lean_Loop сидячи ik_cm 18.4
 clip Stand_Idle_Loop стоячи ik_cm 0.0
 clip Stand_Clap_Loop стоячи ik_cm 0.0
-clip Stand_Cheer_Loop стоячи ik_cm 0.0
+clip Stand_Cheer_Loop стоячи ik_cm 1.7
 clip Stand_FistPump_Loop стоячи ik_cm 0.0
 clip Stand_Jump_Loop стоячи ik_cm 0.0
 clip Stand_Sign_Loop стоячи ik_cm 0.0

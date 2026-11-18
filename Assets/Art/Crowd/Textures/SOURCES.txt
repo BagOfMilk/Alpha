@@ -1,7 +1,4 @@
 # Текстури фанатів: бібліотека MakeHuman (MPFB), лише CC0 (asset_license у tools/blender/alpha_people.py).
-BakedHairNORMAL.png <- /data/hair/toigo_inverted_bob_with_bangs/BakedHairNORMAL.png
-BakedHair_spec.png <- /data/hair/toigo_inverted_bob_with_bangs/BakedHair_spec.png
-BlackHair.png <- /data/hair/toigo_inverted_bob_with_bangs/BlackHair.png
 CrudeFemaleTshirtDiffuse.png <- /data/clothes/joepal_crude_t-shirt_female/CrudeFemaleTshirtDiffuse.png
 Giraffe.png <- /data/clothes/toigo_keyhole_tank_top/Giraffe.png
 Pants_wool.png <- /data/clothes/toigo_wool_pants/Pants_wool.png
@@ -62,6 +59,7 @@ middleage_lightskinned_male_diffuse.png <- /data/skins/middleage_caucasian_male/
 middleage_lightskinned_male_diffuse2.png <- /data/skins/middleage_asian_male/middleage_lightskinned_male_diffuse2.png
 old_darkskinned_female_diffuse.png <- /data/skins/old_african_female/old_darkskinned_female_diffuse.png
 old_lightskinned_female_diffuse.png <- /data/skins/old_caucasian_female/old_lightskinned_female_diffuse.png
+pink.png <- /data/hair/culturalibre_hair_06/pink.png
 ponytail01_diffuse.png <- /data/hair/ponytail01/ponytail01_diffuse.png
 shaggy_green_diff.png <- /data/hair/cortu_shaggy_green_hair/shaggy_green_diff.png
 shaggy_green_norm.png <- /data/hair/cortu_shaggy_green_hair/shaggy_green_norm.png
@@ -79,8 +77,6 @@ short03_diffuse.png <- /data/hair/short03/short03_diffuse.png
 short04_diffuse.png <- /data/hair/short04/short04_diffuse.png
 short_messy_diff.png <- /data/hair/cortu_short_messy_hair/short_messy_diff.png
 short_messy_objnorm.png <- /data/hair/cortu_short_messy_hair/short_messy_objnorm.png
-straight_bangs_diff.png <- /data/hair/cortu_straight_bangs/straight_bangs_diff.png
-straight_bangs_objnorm.png <- /data/hair/cortu_straight_bangs/straight_bangs_objnorm.png
 young_lightskinned_female_diffuse.png <- /data/skins/young_caucasian_female/young_lightskinned_female_diffuse.png
 young_lightskinned_female_diffuse3.png <- /data/skins/young_asian_female/young_lightskinned_female_diffuse3.png
 young_lightskinned_male_diffuse.png <- /data/skins/young_caucasian_male/young_lightskinned_male_diffuse.png
