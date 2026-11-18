@@ -548,6 +548,64 @@ namespace Game.Tests.EditMode
             foreach (var k in tr.Keys) if (!uk.ContainsKey(k)) holes.Add(what + ": зайвий ключ " + k);
         }
 
+        /// <summary>
+        /// Вкладка «Гра» (АД 15.11.2026, У0): перша, налаштування відкриваються на ній; три рядки тим самим вибором на полях
+        /// <see cref="RingMatchPrefs"/> — швидкі натискання, кадри дії, сповільнення фінішера; під рядком підпису немає — підказка
+        /// фокусованого рядка під рядками (те саме місце, що примітки інших вкладок); при відкритті фокус на першому рядку; дотик ставить
+        /// фокус (натискання рядка, без «миша рухалась»). Шість вкладок — ніде не лишилось «5».
+        /// </summary>
+        [Test]
+        public void Settings_GameTab_IsFirst_ThreeRowsOnMatchPrefs_HintFollowsFocus_TouchSetsFocus()
+        {
+            var ui = MiniJson.ParseObject(CareerKit.Read("ui_uk.json"));
+            Assert.AreEqual(0, (int)RingSettingsTab.Game, "«Гра» — перша вкладка");
+            Assert.AreEqual(Enum.GetValues(typeof(RingSettingsTab)).Length, RingSettingsTabs.Count, "Count — усі вкладки");
+            var labels = new HashSet<string>();
+            foreach (RingSettingsTab t in Enum.GetValues(typeof(RingSettingsTab)))
+            {
+                string k = RingSettingsTabs.Key(t);
+                Assert.IsTrue(ui.ContainsKey(k), "підпис вкладки " + t + ": " + k);
+                Assert.IsTrue(labels.Add(k), "дві вкладки з одним підписом: " + k);
+                Assert.Greater(RingSettingsTabs.Width(t), 0f, "ширина вкладки " + t);
+            }
+            Assert.AreEqual(3, RingSettingsTabs.GameRows.Length, "три рядки «Гри»");
+            Assert.AreEqual(RingSettingsTabs.GameRows.Length, RingSettingsTabs.GameHints.Length, "у кожного рядка — підказка");
+            foreach (var k in RingSettingsTabs.GameRows) Assert.IsTrue(ui.ContainsKey(k), "назва рядка " + k);
+            foreach (var k in RingSettingsTabs.GameHints) Assert.IsTrue(ui.ContainsKey(k), "підказка " + k);
+            var shots = new HashSet<string>();
+            foreach (RingActionShots s in Enum.GetValues(typeof(RingActionShots)))
+            {
+                string k = RingSettingsTabs.ActionShotsKey(s);
+                Assert.IsTrue(ui.ContainsKey(k), "значення кадрів дії " + s + ": " + k);
+                Assert.IsTrue(shots.Add(k), "два рівні кадрів дії з одним словом: " + k);
+            }
+            Assert.AreEqual("m.val.off", RingSettingsTabs.ActionShotsKey(RingActionShots.Off), "кадри вимкнено — те саме «Вимкнено», що в решти перемикачів");
+
+            string src = File.ReadAllText(Path.Combine(Root(), "Assets", "_Project", "Scripts", "Gameplay", "Ring", "UI", "Menus", "SettingsPanel.cs"));
+            var bad = new List<string>();
+            if (!src.Contains("SwitchTab(Tab.Game, false);")) bad.Add("налаштування відкриваються не на «Грі»");
+            var game = Regex.Match(src, @"case Tab\.Game:(?<b>[\s\S]*?)break;");
+            if (!game.Success) bad.Add("у BuildRows немає вкладки «Гра»");
+            else
+            {
+                string b = game.Groups["b"].Value;
+                for (int i = 0; i < 3; i++)
+                    if (!b.Contains("Choice(RingSettingsTabs.GameRows[" + i + "]")) bad.Add("рядок «Гри» " + i + " — не тим самим вибором (Choice) з RingSettingsTabs.GameRows");
+                foreach (var f in new[] { "D.Qte = !D.Qte", "D.ActionShots = (RingActionShots)Wrap((int)D.ActionShots + d, 4)", "D.FinisherSlowMo = !D.FinisherSlowMo" })
+                    if (!b.Contains(f)) bad.Add("рядок «Гри» не змінює чернетку: " + f);
+            }
+            var hint = Regex.Match(src, @"if \(_rowHint != null\)\s*\{(?<b>[\s\S]*?)\n            \}");
+            if (!hint.Success || !hint.Groups["b"].Value.Contains("_focus.Index") || !hint.Groups["b"].Value.Contains("RingSettingsTabs.GameHints[row]"))
+                bad.Add("підказка «Гри» не йде за фокусом (UpdateHints)");
+            if (!Regex.IsMatch(src, @"void Sync\(\)[\s\S]*?UpdateHints\(\);")) bad.Add("Sync не оновлює підказки");
+            if (!src.Contains("RegisterCallback<PointerDownEvent>(e => { if (OnPress != null) OnPress(); });")) bad.Add("рядок не ловить натискання (дотик)");
+            var press = Regex.Match(src, @"r\.OnPress = \(\) => \{(?<b>[^\n]*)\};");
+            if (!press.Success || press.Groups["b"].Value.Contains("MouseArmed") || !press.Groups["b"].Value.Contains("_focus.Set(idx)") || !press.Groups["b"].Value.Contains("Sync()"))
+                bad.Add("дотик не ставить фокус на рядок (OnPress — без MouseArmed, з _focus.Set(idx) і Sync)");
+            if (Regex.IsMatch(src, @"Wrap\([^;]*, 5\)") || src.Contains("i < 5;")) bad.Add("десь лишилось п'ять вкладок");
+            Assert.IsEmpty(bad, string.Join("\n", bad));
+        }
+
         [Test]
         public void MenuTextKeys_AllExistInUiStrings()
         {
@@ -556,6 +614,7 @@ namespace Game.Tests.EditMode
             var files = new List<string>(Directory.GetFiles(Path.Combine(dir, "UI", "Menus"), "*.cs"));
             files.Add(Path.Combine(dir, "RingGameBootstrap.Menus.cs"));
             files.Add(Path.Combine(dir, "Models", "RingPause.cs"));
+            files.Add(Path.Combine(dir, "Models", "RingSettings.cs"));   // вкладки й рядки «Гри» (RingSettingsTabs)
             var rx = new Regex("\"(m\\.[a-z0-9_.]+[a-z0-9_])\"");
             var missing = new List<string>();
             int seen = 0;

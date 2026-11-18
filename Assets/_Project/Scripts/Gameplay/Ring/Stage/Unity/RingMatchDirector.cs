@@ -143,9 +143,15 @@ namespace Game.Gameplay.Ring.Stage
         public void Begin(MatchEngine e)
         {
             StopAllCoroutines();
+            // Кіно фінішера минулого матчу не лишає по собі сповільнення; заклик перед фінішером — знову для обох.
+            if (_s.FinisherCine != null) _s.FinisherCine.End();
+            _finisherShown[0] = _finisherShown[1] = false;
             _qte.Cancel();
             _noQte = false;
             _walkCo.Clear();
+            // Кеш ходи рахується з тіла (зріст, масштаб), а ключ — ім'я постаті: якщо між матчами тіло під тим самим іменем
+            // змінилось (суперник за кар'єрою, жіночий дивізіон), стара швидкість дала б ковзання стоп («Изучение», 15.11.2026).
+            _gaits.Clear();
             _running = false;
             _ended = false;
             _afterCut = false;
@@ -219,6 +225,7 @@ namespace Game.Gameplay.Ring.Stage
         public void EndMatch()
         {
             StopAllCoroutines();
+            if (_s.FinisherCine != null) _s.FinisherCine.End();   // корутини зупинено — темп кіно фінішера повертаємо тут
             _qte.Cancel();   // без звуку «пропуск»: матч закрито, вікно просто гасне
             _walkCo.Clear();
             _running = false;
@@ -373,6 +380,51 @@ namespace Game.Gameplay.Ring.Stage
             return ev.Action == MatchActionId.Finisher && ev.Kind == MatchEventKind.Action && ev.Tier != RollTier.Miss;
         }
 
+        /// <summary>Бік уже показував свій фінішер у цьому матчі: вдруге кіно йде без заклику (<c>Request.Repeat</c>).</summary>
+        private readonly bool[] _finisherShown = new bool[2];
+
+        /// <summary>
+        /// Кіно фінішера (docs/ring/FINISHER_CINE.md §5) — у кадрі старту кліпа, що несе такт, ДО <c>PlayAtTime</c> /
+        /// <c>PlayInSlot</c>: місця й курс пари на старті кліпа — в аргументах, бо борці ще стоять на старих місцях. true — камеру
+        /// й темп до кінця кіно веде воно; false — розкадровки немає або перший план не став: кадр ставить режисер, як раніше.
+        /// Кидків і результату кіно не читає.
+        /// </summary>
+        private bool BeginFinisherCine(MatchEvent ev, MatchSide side, RingActor A, RingActor B, AnimationClip ca, float tStart,
+            Vector3 aStart, Vector3 bStart, float yawA, Vector3 contactB)
+        {
+            var cine = _s.FinisherCine;
+            if (cine == null || ca == null) return false;
+            var R = _s.Referee;
+            bool repeat = _finisherShown[I(side)];
+            _finisherShown[I(side)] = true;
+            Vector3 mid = (aStart + bStart) * 0.5f;
+            var req = new RingFinisherCine.Request();
+            req.Attacker = A;
+            req.Victim = B;
+            req.Referee = R;
+            req.Clip = ca;
+            req.Contact = _plan.ClipTime;
+            req.StartTime = tStart;
+            req.AttackerStart = aStart;
+            req.VictimStart = bStart;
+            req.AttackerYaw = yawA;
+            req.ContactVictim = contactB;
+            req.Hit = true;
+            req.Repeat = repeat;
+            req.Gimmick = RingClipTable.FinisherGimmick(ev != null ? ev.MoveKey : null);
+            req.PlaceReferee = p =>
+            {
+                // Рефері — у точку поза кадром кіно, стрибком у кадрі склейки першого плану (фаз-тест його забуває).
+                if (R == null) return;
+                Vector3 spot = new Vector3(p.x, RingStage3D.MatY, p.z);
+                StopWalk(R);
+                _s.Place(R, spot, RingStage3D.YawTo(spot, mid), RefIdle(false));
+                _s.Watch.Forget(R);
+            };
+            req.CutToWide = () => _s.CutTo(StageCam.Overview);
+            return cine.Begin(req);
+        }
+
         /// <summary>
         /// Крок <paramref name="idx"/> щойно запустив свої кліпи (з миті <paramref name="startAt"/> часу кліпа): якщо такт події
         /// на ньому — відлік до мітки кліпа.
@@ -459,12 +511,17 @@ namespace Game.Gameplay.Ring.Stage
                 // перехоплення стрибка. Без кроків кліпа немає (null) — звук як раніше.
                 else _s.Sound.OnEvent(ev, 0f, false, RingOutsideCourse.ChooseProp(ev), _plan.Clip);
             }
-            if (_s.Fx != null && ev.Action == MatchActionId.Finisher && (ev.Kind == MatchEventKind.Action || ev.Kind == MatchEventKind.Sell) && ev.Tier != RollTier.Miss)
+            // Поки йде кіно фінішера, строб, тремтіння і спалах — за його розкадровкою («Менше руху», спалахи, найнижча якість);
+            // кіно не йде — як раніше.
+            var fc = _s.FinisherCine;
+            var ftl = fc != null && fc.Active ? fc.Timeline : null;
+            if (_s.Fx != null && ev.Action == MatchActionId.Finisher && (ev.Kind == MatchEventKind.Action || ev.Kind == MatchEventKind.Sell) && ev.Tier != RollTier.Miss
+                && (ftl == null || ftl.Strobe))
                 _s.Fx.Finisher();
             if (IsFinisherHit(ev))
             {
-                _s.Shake(0.09f, 0.7f);
-                if (_s.Fx != null) _s.Fx.Impact(1f);
+                if (ftl == null || ftl.Shake) _s.Shake(0.09f, 0.7f);
+                if (_s.Fx != null && (ftl == null || ftl.Flash)) _s.Fx.Impact(1f);
                 return;
             }
             if (ev.Kind != MatchEventKind.Action && ev.Kind != MatchEventKind.Reverse) return;
@@ -1360,7 +1417,7 @@ namespace Game.Gameplay.Ring.Stage
 
             var refActor = _s.Referee;
             // Утримання: рефері йде до плечей захисника й стає на коліно сам (RefCount) — паралельно з підходом нападника.
-            if (st.Count) StartCoroutine(RefCount(ev, A, B, pA, st.RefClip));
+            if (st.Count) StartCoroutine(RefCount(ev, A, B, PinPelvis(A, pA, yawA), st.RefClip));
             bool hard = fromCut || st.CutIn || !laneFits || laneCut;
             if (hard)
             {
@@ -1385,7 +1442,11 @@ namespace Game.Gameplay.Ring.Stage
 
             // Фінішер — склейкою в кіноплан до старту кліпа: обидва в кадрі від колін, контакт у кадрі (огляд 07.11.2026:
             // такт приходив, поки камера ще летіла з загального плану).
-            if (finisherShot) FinisherShot(A, B, ca, pB, yawA, ia);
+            if (finisherShot)
+            {
+                // Кіно фінішера веде камеру й темп само; розкадровки немає чи перший план не став — кадр режисера, як раніше.
+                if (!BeginFinisherCine(ev, sa, A, B, ca, tStart, pAStart, pB, yawAStart, pB)) FinisherShot(A, B, ca, pB, yawA, ia);
+            }
             else if (outside && !laneFits) HardCut(StageCam.Big);
             else if (outside)
             {
@@ -1679,6 +1740,14 @@ namespace Game.Gameplay.Ring.Stage
             StopWalk(A);
             StopWalk(B);
             if (laneShot) { Snap(A); Snap(B); _s.Watch.Forget(A); _s.Watch.Forget(B); }
+            // Фінішер зі стрибка: такт несе цей крок ланцюга (приземлення) — кіно починається тут; перед кліпом стрибка стояв
+            // кадр режисера (RunAnchored), і він лишається, якщо кіно не стало.
+            if (IsFinisherHit(ev) && idx == _plan.Step && !_m[I(sb)].Outside)
+            {
+                float tHit = Mathf.Clamp(_plan.ClipTime, 0f, Mathf.Max(0f, cb.length - 0.02f));
+                BeginFinisherCine(ev, sa, A, B, ca, 0f, SlotPoint(A, ca, 0f, slotA, rotA), SlotPoint(B, cb, 0f, slotB, rotB), rotA,
+                    SlotPoint(B, cb, tHit, slotB, rotB));
+            }
             PlayInSlot(A, ca, 0f, slotA, rotA, ia.Loop);
             PlayInSlot(B, cb, 0f, slotB, rotB, ib != null && ib.Loop);
             if (laneBig) HardCut(StageCam.Big);
@@ -1797,7 +1866,11 @@ namespace Game.Gameplay.Ring.Stage
             _s.Watch.Forget(A); _s.Watch.Forget(B); _s.Watch.Forget(R);
             // За рингом пара за коренями стає на нові місця (курс у смузі, зсув лежачого) — стрибком, як і має склейка.
             if (outside) { Snap(A); Snap(B); }
-            if (finisherShot) FinisherFrame(A, B, pAc, pBc);
+            if (finisherShot)
+            {
+                // Те саме за коренями: пара стартує з нуля кліпа в pA0 / pB0, удар — у pBc.
+                if (!BeginFinisherCine(ev, sa, A, B, ca, 0f, pA0, pB0, rotA, pBc)) FinisherFrame(A, B, pAc, pBc);
+            }
             else if (outside && !laneFits) HardCut(StageCam.Big);
             else if (outside)
             {
@@ -1928,6 +2001,23 @@ namespace Game.Gameplay.Ring.Stage
         private const float CountLeanFwd = 0.4f;
         /// <summary>Найближче до осі тіла, де голова рефері в нахилі, м (ПЛЕЙСХОЛДЕР, слот 33).</summary>
         private const float CountLeanClear = 0.2f;
+        /// <summary>Де голова рефері в повному нахилі кліпа відліку, уперед від таза, м (замір «Изучение» 15.11.2026: 0,56).</summary>
+        private const float CountHeadFwd = 0.56f;
+        /// <summary>
+        /// Найближче до осі тулуба нападника на накритті, де голова рефері в повному нахилі, м (ПЛЕЙСХОЛДЕР: плече 0,2 + голова
+        /// 0,1 + запас; замір 15.11.2026 — при 0,30 голова входила в плече).
+        /// </summary>
+        private const float CountHeadClear = 0.42f;
+
+        /// <summary>
+        /// Де таз нападника буде в позі накриття, якщо слот пари — <paramref name="slot"/> (старт <c>Cover_Enter</c>): рефері
+        /// обходить тіло на накритті, а не точку старту (замір 15.11.2026: таз у позі — за 0,27 м від слота).
+        /// </summary>
+        private Vector3 PinPelvis(RingActor a, Vector3 slot, float slotYaw)
+        {
+            var hold = _s.Clip("Cover_Hold_Loop_A");
+            return hold != null ? SlotPoint(a, hold, 0f, slot, slotYaw) : slot;
+        }
         /// <summary>На скільки голова й плечі нападника на накритті виходять за вісь захисника, м (ПЛЕЙСХОЛДЕР, слот 33).</summary>
         private const float CoverBeyond = 0.45f;
         /// <summary>Ноги нападника на накритті — назад від таза, м (ПЛЕЙСХОЛДЕР).</summary>
@@ -1963,14 +2053,17 @@ namespace Game.Gameplay.Ring.Stage
             // суперника; слот 33, 13.11.2026: голова рефері впритул до голови нападника, на «два» рефері лежав на героїні). Вісь
             // захисника — від голови до ступнів; нападник — таз біля захисника, тулуб поперек його грудей (CoverBody), а не точка.
             Vector3 feet = hip - h * CountBodyLegs;
+            var cover = RefPlacement.CoverBody(pA.x, pA.z, new RefPlacement.Seg(head.x, head.z, hip.x, hip.z), CoverBeyond, CoverLegs);
             var bodies = new List<RefPlacement.Seg>
             {
                 new RefPlacement.Seg(head.x, head.z, feet.x, feet.z),
-                RefPlacement.CoverBody(pA.x, pA.z, new RefPlacement.Seg(head.x, head.z, hip.x, hip.z), CoverBeyond, CoverLegs),
+                cover,
             };
+            // Голова рефері в повному нахилі — на висоті плечей і голови нападника, що лежить на захисникові; лежачий під нею.
+            var high = new List<RefPlacement.Seg> { cover };
             float cxs, czs;
             bool freeSpot = RefPlacement.CountSpot(sh.x, sh.z, n.x, n.z, h.x, h.z, bodies, CountReach, CountKneeFwd, CountLeanFwd,
-                CountBodyClear, CountLeanClear, lim, out cxs, out czs);
+                CountBodyClear, CountLeanClear, lim, high, CountHeadFwd, CountHeadClear, out cxs, out czs);
             Vector3 spot = new Vector3(Mathf.Clamp(cxs, -lim, lim), RingStage3D.MatY, Mathf.Clamp(czs, -lim, lim));
             float yaw = RingStage3D.YawTo(spot, sh);
             if (Trace && freeSpot) Debug.Log("[Ринг] відлік: рефері біля плечей, вільно (" + spot.x.ToString("0.00", CultureInfo.InvariantCulture) + ", " + spot.z.ToString("0.00", CultureInfo.InvariantCulture) + ")");

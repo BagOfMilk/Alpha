@@ -154,6 +154,47 @@ namespace Game.Tests.EditMode
             }
         }
 
+        /// <summary>
+        /// <c>rfinisher &lt;id&gt;</c> — той самий фінішер проводить суперник (показ кіно фінішера, коли програє герой): останній
+        /// фінішер журналу — суперника, чистий, герой не вирвався; фінішера героя в матчі немає. До <c>all</c> сценарій не входить
+        /// (перелік <see cref="RingDemoScript.RivalFinisherSpecs"/> — окремий), а кидок «Вирватися» героя рахується тим самим
+        /// модифікатором, що записав рушій.
+        /// </summary>
+        [Test]
+        public void RivalFinisherSpec_EndsWithTheRivalsFinisher_AndTheHeroPinned()
+        {
+            var moves = Moves();
+            var fins = moves.All.Where(m => m.Action == MatchActionId.Finisher).ToList();
+            Assert.IsNotEmpty(fins);
+            var specs = RingDemoScript.RivalFinisherSpecs(moves);
+            CollectionAssert.AreEqual(fins.Select(m => RingDemoScript.RivalFinisherHead + " " + m.Id).ToList(), specs);
+            var all = RingDemoScript.Specs(moves);
+            foreach (var spec in specs) CollectionAssert.DoesNotContain(all, spec, "фінішер суперника — окремий показ, не частина all");
+            foreach (var m in fins)
+            {
+                string spec = RingDemoScript.RivalFinisherHead + " " + m.Id;
+                var d = RingDemoScript.Play(spec, moves);
+                Assert.AreEqual(spec, d.Spec);
+                var finishers = d.Events.Where(ev => ev.Kind == MatchEventKind.Action && ev.Action == MatchActionId.Finisher).ToList();
+                Assert.IsNotEmpty(finishers, spec);
+                Assert.IsTrue(finishers.All(ev => ev.Actor == MatchSide.Rival), spec + ": фінішер проводить лише суперник");
+                var last = finishers[finishers.Count - 1];
+                Assert.AreEqual(m.Id, last.MoveKey, spec);
+                Assert.AreEqual(RollTier.Strong, last.Tier, spec);
+                Assert.AreEqual(MatchEndKind.Pin, d.Engine.Result.Kind, spec);
+                Assert.AreEqual(MatchWinner.Rival, d.Engine.Result.Winner, spec);
+                Assert.AreEqual(MatchEventKind.MatchEnd, d.Events[d.Events.Count - 1].Kind, spec + ": журнал закінчується кінцем матчу");
+                var kickMods = d.RollMods.Where(x => x.Key.StartsWith("m:kick:", StringComparison.Ordinal)).Select(x => x.Value).ToArray();
+                var kickEvs = d.Events.Where(ev => ev.Kind == MatchEventKind.Kickout).Select(ev => ev.Modifier).ToArray();
+                Assert.IsNotEmpty(kickEvs, spec + ": герой кидав «Вирватися»");
+                CollectionAssert.AreEqual(kickEvs, kickMods, spec + ": модифікатор «Вирватися» сценарію й рушія");
+                foreach (var ev in Shown(d)) Assert.IsNotNull(RingClipTable.Plan(ev), spec + ": план кліпів події " + ev.Kind);
+            }
+            string strike = moves.All.First(x => x.Action == MatchActionId.Strike).Id;
+            Assert.Throws<ArgumentException>(() => RingDemoScript.Play(RingDemoScript.RivalFinisherHead + " " + strike, moves));
+            Assert.Throws<ArgumentException>(() => RingDemoScript.Play(RingDemoScript.RivalFinisherHead, moves));
+        }
+
         [Test]
         public void Outside_GoesOutAndBack_ItemsOnlyWithoutDq()
         {

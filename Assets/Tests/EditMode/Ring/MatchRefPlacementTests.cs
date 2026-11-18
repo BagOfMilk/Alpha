@@ -110,6 +110,51 @@ namespace Game.Tests.EditMode.Ring
             Assert.GreaterOrEqual(RefPlacement.MinDist(x + fx * LeanFwd, z + fz * LeanFwd, bodies), LeanClear, "голова в нахилі на долоні");
         }
 
+        // Замір «Изучение» 15.11.2026 (зонд утримання, спортзал), світові x; z. Лежачий: голова (0,87; 0,75), таз (0,87; 0,02).
+        // Нападник на накритті: таз (1,26; 0,25), голова (0,64; 0,26). Рефері стояв у (0,25; 0,55) — «вільно» за старою
+        // перевіркою, — а його голова в нахилі кліпа відліку (0,82; 0,57), на 0,56 м попереду таза, входила в плече нападника.
+        private const float HeadFwd = 0.56f, HeadClear = 0.42f;
+        private static readonly RefPlacement.Seg PinUpper = new RefPlacement.Seg(0.87f, 0.75f, 0.87f, 0.02f);
+        private static readonly RefPlacement.Seg PinDefender = new RefPlacement.Seg(0.87f, 0.75f, 0.87f, -0.93f);
+
+        [Test]
+        public void CountSpot_MeasuredPin_RefHeadStaysOffTheAttackersShoulders()
+        {
+            var cover = RefPlacement.CoverBody(1.26f, 0.25f, PinUpper, 0.45f, 0.9f);
+            var bodies = new List<RefPlacement.Seg> { PinDefender, cover };
+            var high = new List<RefPlacement.Seg> { cover };
+            Assert.Less(RefPlacement.MinDist(0.25f + HeadFwd, 0.55f, high), HeadClear, "передумова: у грі голова рефері була над плечем нападника");
+
+            float x, z;
+            Assert.IsTrue(RefPlacement.CountSpot(0.87f, 0.55f, -1f, 0f, 0f, 1f, bodies, Reach, KneeFwd, LeanFwd, Clear, LeanClear, Lim,
+                high, HeadFwd, HeadClear, out x, out z));
+            float fx = 0.87f - x, fz = 0.55f - z, fl = (float)System.Math.Sqrt(fx * fx + fz * fz);
+            fx /= fl; fz /= fl;
+            Assert.GreaterOrEqual(RefPlacement.MinDist(x + fx * HeadFwd, z + fz * HeadFwd, high), HeadClear, "голова в повному нахилі — поза плечима нападника");
+            Assert.GreaterOrEqual(RefPlacement.MinDist(x, z, bodies), Clear, "таз рефері не на тілах");
+            Assert.GreaterOrEqual(RefPlacement.MinDist(x + fx * KneeFwd, z + fz * KneeFwd, bodies), Clear, "коліна не на тілах");
+            Assert.Less(x, 0.87f, "з боку, протилежного тазу нападника");
+            Assert.Greater(z, 0.55f, "зсунутий до голови лежачого");
+        }
+
+        [Test]
+        public void CountSpot_HeadCheck_MovesTheRefFurtherThanTheOldRule()
+        {
+            var cover = RefPlacement.CoverBody(1.26f, 0.25f, PinUpper, 0.45f, 0.9f);
+            var bodies = new List<RefPlacement.Seg> { PinDefender, cover };
+            var high = new List<RefPlacement.Seg> { cover };
+            float xo, zo, xn, zn, xe, ze;
+            Assert.IsTrue(RefPlacement.CountSpot(0.87f, 0.55f, -1f, 0f, 0f, 1f, bodies, Reach, KneeFwd, LeanFwd, Clear, LeanClear, Lim, out xo, out zo));
+            Assert.IsTrue(RefPlacement.CountSpot(0.87f, 0.55f, -1f, 0f, 0f, 1f, bodies, Reach, KneeFwd, LeanFwd, Clear, LeanClear, Lim,
+                high, HeadFwd, HeadClear, out xn, out zn));
+            Assert.Greater(zn, zo + 0.1f, "з перевіркою голови рефері стає далі до голови лежачого, ніж без неї");
+            // без «високих» тіл нова перевірка нічого не міняє
+            Assert.IsTrue(RefPlacement.CountSpot(0.87f, 0.55f, -1f, 0f, 0f, 1f, bodies, Reach, KneeFwd, LeanFwd, Clear, LeanClear, Lim,
+                new List<RefPlacement.Seg>(), HeadFwd, HeadClear, out xe, out ze));
+            Assert.AreEqual(xo, xe, 1e-5f);
+            Assert.AreEqual(zo, ze, 1e-5f);
+        }
+
         [Test]
         public void CountSpot_NoRoom_ReturnsFalse()
         {

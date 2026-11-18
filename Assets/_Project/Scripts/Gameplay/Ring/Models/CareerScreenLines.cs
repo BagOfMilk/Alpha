@@ -450,30 +450,33 @@ namespace Game.Gameplay.Ring.Models
         // ---------------- стрічка дії тижня (АД 15.11.2026, варіант (А)) ----------------
 
         /// <summary>Дельта стрічки дії тижня — місце в таблиці важливості <see cref="WeekDeltaOrder"/>.</summary>
-        public enum WeekDelta { Injury, Turn, Money, DevPoints, Trust, Popularity, Feud, Hype, Rival, Opponent, Plan, Locker, Actions, Coach, PromoChoice }
+        public enum WeekDelta { Injury, Recovery, Turn, Money, DevPoints, Trust, Popularity, Feud, Hype, Rival, Opponent, Plan, Locker, Actions, Coach, PromoChoice }
 
         /// <summary>
         /// Порядок дельт у стрічці дії тижня — однаковий для всіх дій (АД 15.11.2026): що важливіше, те лівіше, а «· ще N» ховає
-        /// найменш важливі. Спершу тіло й роль, далі шкали, які гравець веде щотижня (гроші, очки, довіра, популярність), потім
+        /// найменш важливі. Спершу тіло (нова травма, що дало відновлення) й роль, далі шкали, які гравець веде щотижня (гроші, очки, довіра, популярність), потім
         /// найближче шоу (ворожнеча, ажіотаж, імпульс суперника, суперник, план), наостанок дрібне й те, що вже видно деінде (вибір
         /// нагороди промо стоїть і в шапці ряду).
         /// </summary>
         public static readonly WeekDelta[] WeekDeltaOrder =
         {
-            WeekDelta.Injury, WeekDelta.Turn, WeekDelta.Money, WeekDelta.DevPoints, WeekDelta.Trust, WeekDelta.Popularity,
+            WeekDelta.Injury, WeekDelta.Recovery, WeekDelta.Turn, WeekDelta.Money, WeekDelta.DevPoints, WeekDelta.Trust, WeekDelta.Popularity,
             WeekDelta.Feud, WeekDelta.Hype, WeekDelta.Rival, WeekDelta.Opponent, WeekDelta.Plan, WeekDelta.Locker, WeekDelta.Actions,
             WeekDelta.Coach, WeekDelta.PromoChoice,
         };
 
         /// <summary>
         /// Рядок 1 стрічки: «Дія · Результат» словом — назва рівня кидка з порогом («Провал (до 6)») чи «Зроблено» без кидка. Колір
-        /// стрічки лише в смузі, зміст несе слово (АД 15.11.2026). Відмова — лише назва дії, причина — рядком 2.
+        /// стрічки лише в смузі, зміст несе слово (АД 15.11.2026). Відмова — лише назва дії, причина — рядком 2. Відновлення, що щось
+        /// дало, — «Відновлення · Голова»: зону обирає гра (найгіршу), тож результат — яку зону лікували, а що змінилось — першою
+        /// дельтою (<see cref="RecoveryLine"/>).
         /// </summary>
         public static string WeekResultHead(RingText t, WeekActionResult r)
         {
             string act = t.Get("week.action." + (int)r.Kind);
             if (!r.Ok) return act;
             if (WeekSideJobInjured(r)) return act + " · " + t.Get("c.week.result.injury");
+            if (r.Kind == WeekActionKind.Recovery && WeekRecoveryHealed(r) != WeekHeal.None) return act + " · " + t.Get("bodyzone." + r.RecoveredZone);
             return act + " · " + (WeekRollDecides(r) ? RingLabels.TierName(t, r.Tier) : t.Get("c.week.result.done"));
         }
 
@@ -497,6 +500,38 @@ namespace Game.Gameplay.Ring.Models
             return r != null && r.Ok && r.Kind == WeekActionKind.SideJob && r.InjuredZone >= 0;
         }
 
+        /// <summary>Що «Відновлення» дало зоні: тижні травми, ушкодження чи нічого (<see cref="WeekRecoveryHealed"/>).</summary>
+        public enum WeekHeal { None, Injury, Damage }
+
+        /// <summary>
+        /// Що «Відновлення» дало зоні <see cref="WeekActionResult.RecoveredZone"/> (дані «Кар'єри», 15.11.2026). Правило «Кар'єри»: тижні
+        /// травми, якщо їх поменшало, інакше ушкодження, якщо його поменшало; дія не виконана (відмова: «було» = «стало»), інша дія (зона
+        /// −1) чи нічого не змінилось — <see cref="WeekHeal.None"/>.
+        /// </summary>
+        public static WeekHeal WeekRecoveryHealed(WeekActionResult r)
+        {
+            if (r == null || !r.Ok || r.RecoveredZone < 0) return WeekHeal.None;
+            if (r.InjuryWeeksBefore > r.InjuryWeeksAfter) return WeekHeal.Injury;
+            if (r.ZoneDamageBefore > r.ZoneDamageAfter) return WeekHeal.Damage;
+            return WeekHeal.None;
+        }
+
+        /// <summary>
+        /// Дельта «Відновлення» (АД через ПМ, 15.11.2026: «гравець не бачить, що відновлення щось дало»): «травма 3 → 2 тиж.» або
+        /// «ушкодження 4 → 2» — «було → стало» з ядра; травма дійшла до нуля — «травма зажила» (пропозиція АД 15.11.2026: «це момент, якого
+        /// гравець чекає тижнями, і його варто назвати словом»); зона — у рядку 1. Нічого не дало — null.
+        /// </summary>
+        public static string RecoveryLine(RingText t, WeekActionResult r)
+        {
+            switch (WeekRecoveryHealed(r))
+            {
+                case WeekHeal.Injury:
+                    return r.InjuryWeeksAfter <= 0 ? t.Get("c.delta.recover.healed") : t.Format("c.delta.recover.injury", r.InjuryWeeksBefore, r.InjuryWeeksAfter);
+                case WeekHeal.Damage: return t.Format("c.delta.recover.damage", r.ZoneDamageBefore, r.ZoneDamageAfter);
+            }
+            return null;
+        }
+
         /// <summary>
         /// Дія вдалась — золота смуга стрічки, ні — Signal (АД 15.11.2026: колір лише в смузі, зміст несе слово). Не вдалась — відмова
         /// ядра, провал кидка, що вирішує результат (<see cref="WeekRollDecides"/>), чи травма на підробітку (<see cref="WeekSideJobInjured"/>);
@@ -514,14 +549,15 @@ namespace Game.Gameplay.Ring.Models
         }
 
         /// <summary>
-        /// Рядок 2 стрічки — дельти в порядку <see cref="WeekDeltaOrder"/>; відмова — одна причина ядра (week.reason.*).
+        /// Рядок 2 стрічки — дельти в порядку <see cref="WeekDeltaOrder"/>; відмова — одна причина ядра (week.reason.*), а «лікувати
+        /// нічого» — за ознакою ядра <see cref="WeekActionResult.NothingToHeal"/>, не за словом причини.
         /// <paramref name="opponentName"/> — суперник найближчого шоу (Б6), <paramref name="female"/> — героїня (№11, рід ролі в повороті).
         /// </summary>
         public static List<string> WeekResultDeltas(RingText t, WeekActionResult r, string opponentName, bool female)
         {
             var res = new List<string>();
             if (r == null) return res;
-            if (!r.Ok) { res.Add(t.Get("week.reason." + r.Reason)); return res; }
+            if (!r.Ok) { res.Add(t.Get(r.NothingToHeal ? "week.reason.nothing" : "week.reason." + r.Reason)); return res; }
             foreach (var d in WeekDeltaOrder)
             {
                 string s = WeekDeltaText(t, r, d, opponentName, female);
@@ -536,6 +572,7 @@ namespace Game.Gameplay.Ring.Models
             switch (d)
             {
                 case WeekDelta.Injury: return r.InjuredZone >= 0 ? t.Format("c.delta.injury", t.Get("bodyzone." + r.InjuredZone)) : null;
+                case WeekDelta.Recovery: return RecoveryLine(t, r);   // що дало відновлення (зона — у рядку 1)
                 case WeekDelta.Turn: return TurnLine(t, r, female);   // №11: сцена повернула роль
                 case WeekDelta.Money: return r.MoneyDelta != 0 ? t.Format("c.delta.money", RingChances.Signed(r.MoneyDelta)) : null;
                 case WeekDelta.DevPoints: return r.DevPointsDelta != 0 ? t.Format("c.delta.dev", RingChances.Signed(r.DevPointsDelta)) : null;
