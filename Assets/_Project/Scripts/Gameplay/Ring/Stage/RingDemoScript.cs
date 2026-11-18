@@ -87,6 +87,8 @@ namespace Game.Gameplay.Ring.Stage
     public static class RingDemoScript
     {
         public const string AllSpec = "all";
+        /// <summary>Голова сценарію «фінішер проводить суперник»: <c>rfinisher &lt;id&gt;</c>.</summary>
+        public const string RivalFinisherHead = "rfinisher";
 
         private const MatchSide P = MatchSide.Player;
         private const MatchSide R = MatchSide.Rival;
@@ -97,13 +99,28 @@ namespace Game.Gameplay.Ring.Stage
             "exchange", "pin 1", "pin 2", "pin 3", "sub", "warn", "outside", "nodq", "end countout", "end double", "end dq"
         };
 
-        /// <summary>Усі сценарії: загальні, <c>move &lt;id&gt;</c> для кожного прийому каталогу, <c>finisher &lt;id&gt;</c> для кожного фінішера.</summary>
+        /// <summary>
+        /// Усі сценарії: загальні, <c>move &lt;id&gt;</c> для кожного прийому каталогу, <c>finisher &lt;id&gt;</c> для кожного фінішера.
+        /// Фінішер суперника — окремо, <see cref="RivalFinisherSpecs"/>.
+        /// </summary>
         public static List<string> Specs(MoveCatalog moves)
         {
             if (moves == null) throw new ArgumentNullException("moves");
             var list = new List<string>(Fixed);
             foreach (var m in moves.All) list.Add("move " + m.Id);
             foreach (var m in moves.All) if (m.Action == MatchActionId.Finisher) list.Add("finisher " + m.Id);
+            return list;
+        }
+
+        /// <summary>
+        /// Сценарії <c>rfinisher &lt;id&gt;</c> — фінішер проводить суперник, по одному на фінішер каталогу. До <see cref="Specs"/> і
+        /// <c>all</c> не входять: це окремий показ (кіно фінішера, коли програє герой), а не ще один прохід каталогу.
+        /// </summary>
+        public static List<string> RivalFinisherSpecs(MoveCatalog moves)
+        {
+            if (moves == null) throw new ArgumentNullException("moves");
+            var list = new List<string>();
+            foreach (var m in moves.All) if (m.Action == MatchActionId.Finisher) list.Add(RivalFinisherHead + " " + m.Id);
             return list;
         }
 
@@ -196,17 +213,20 @@ namespace Game.Gameplay.Ring.Stage
                     MoveDemo(r, moves.Get(arg));
                     break;
                 case "finisher":
+                case RivalFinisherHead:
                     var fm = moves.Find(arg);
                     if (fm == null || fm.Action != MatchActionId.Finisher) throw new ArgumentException("не фінішер каталогу: " + arg);
-                    r = new Runner(norm, Setup(false), P, moves);
-                    r.Ready(P);
-                    r.Act(P, MatchActionId.Finisher, RollTier.Strong, fm.Id, RollTier.Miss);
+                    // rfinisher — той самий фінішер, але проводить суперник: герой лежить під утриманням і програє
+                    var fs = head == RivalFinisherHead ? R : P;
+                    r = new Runner(norm, Setup(false), fs, moves);
+                    r.Ready(fs);
+                    r.Act(fs, MatchActionId.Finisher, RollTier.Strong, fm.Id, RollTier.Miss);
                     break;
                 case AllSpec:
                     throw new ArgumentException("all — це перелік сценаріїв: RingDemoScript.Expand / Specs");
                 default:
                     throw new ArgumentException("невідомий сценарій демо «" + spec + "»: " + string.Join(", ", Fixed)
-                                                + ", move <id>, finisher <id>, all");
+                                                + ", move <id>, finisher <id>, " + RivalFinisherHead + " <id>, all");
             }
             if (!r.E.IsOver) throw new DemoScriptException(norm + ": сценарій скінчився, а матч — ні");
             return r.Done();
